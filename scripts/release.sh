@@ -6,8 +6,8 @@ set -euo pipefail
 
 VERSION="${1:?Uso: scripts/release.sh <versão> [notas]}"
 NOTES="${2:-}"
-# O repositório mantém o nome antigo: as versões já instaladas procuram atualizações aqui.
-RELEASES_REPO="GOAThings/GoatTV-Releases"
+# As versões são releases do próprio repositório do código (é aí que a app procura atualizações).
+RELEASES_REPO="GOAThings/GoatTV"
 cd "$(dirname "$0")/.."
 
 if [ -n "$(git status --porcelain)" ]; then
@@ -27,7 +27,7 @@ apk="build/goattv-$VERSION.apk"
 mkdir -p build
 cp app/build/outputs/apk/release/app-release.apk "$apk"
 # Cópia com nome fixo: https://github.com/$RELEASES_REPO/releases/latest/download/goattv.apk dá sempre
-# a versão mais recente (é para aí que aponta o código do Downloader, que nunca muda).
+# a versão mais recente (é para aí que aponta o código do Downloader).
 latest="build/goattv.apk"
 cp "$apk" "$latest"
 

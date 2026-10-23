@@ -25,8 +25,8 @@ import java.io.IOException
 class AppRelease(val version: String, val notes: String, val apkUrl: String, val size: Long)
 
 /**
- * Atualizações da app: as versões são publicadas como releases do repositório público
- * [RELEASES_REPO] (só os APKs; o código é privado). O APK descarregado vai para o instalador do Android,
+ * Atualizações da app: as versões são publicadas como releases do repositório [RELEASES_REPO] (o do código).
+ * O APK descarregado vai para o instalador do Android,
  * que só o aceita se estiver assinado com a mesma chave da app instalada.
  */
 class Updater(private val context: Context, private val http: OkHttpClient, private val gson: Gson) {
@@ -139,8 +139,8 @@ class Updater(private val context: Context, private val http: OkHttpClient, priv
     )
 
     companion object {
-        /** Fica com o nome antigo: as versões já instaladas procuram atualizações aqui. */
-        const val RELEASES_REPO = "GOAThings/GoatTV-Releases"
+        /** Código e versões no mesmo repositório. Até à 0.8.1 as versões estavam em GOAThings/GoatTV-Releases. */
+        const val RELEASES_REPO = "GOAThings/GoatTV"
         private const val RELEASE_APP_ID = "cc.slokker.itv"
 
         /** "0.10.1" > "0.9.3": compara número a número (o que não é número conta como 0). */

@@ -5,6 +5,12 @@ Live TV player for Android TV and Google TV boxes.
 GoatTV does not include, sell or link to any channels or playlists. Each person adds their own
 Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 
+## Install
+
+Latest version: https://github.com/GOAThings/GoatTV/releases/latest/download/goattv.apk
+
+Once installed, the app finds new versions by itself (Settings → Update).
+
 ## Build
 
 Needs Android Studio (for the Android SDK and JDK).
