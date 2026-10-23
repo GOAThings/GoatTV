@@ -1,9 +1,19 @@
 # GoatTV
 
+![GoatTV](docs/screenshots/logo.png)
+
 Live TV player for Android TV and Google TV boxes.
 
 GoatTV does not include, sell or link to any channels or playlists. Each person adds their own
 Xtream Codes or M3U lists, either on the TV or in a GOAT account.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Channels](docs/screenshots/channels.png) | ![Player](docs/screenshots/player.png) |
+| ![TV guide](docs/screenshots/guide.png) | ![Channel guide](docs/screenshots/channel-guide.png) |
+| ![Search](docs/screenshots/search.png) | ![Settings](docs/screenshots/settings.png) |
 
 ## Install
 
