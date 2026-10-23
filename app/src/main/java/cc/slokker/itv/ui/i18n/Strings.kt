@@ -518,6 +518,9 @@ class Strings(context: Context) {
     val bufferSmall get() = s(R.string.buffer_small)
     val bufferNormal get() = s(R.string.buffer_normal)
     val bufferLarge get() = s(R.string.buffer_large)
+    val engine get() = s(R.string.engine)
+    val engineExo get() = s(R.string.engine_exo)
+    val engineVlc get() = s(R.string.engine_vlc)
     val decoder get() = s(R.string.decoder)
     val decoderHw get() = s(R.string.decoder_hw)
     val decoderSw get() = s(R.string.decoder_sw)
@@ -727,6 +730,8 @@ class Strings(context: Context) {
 
     // ---- Conta ----
     val version get() = s(R.string.version)
+    val licenses get() = s(R.string.licenses)
+    val sourceCode get() = s(R.string.source_code)
 
     // ---- Faixas e stream ----
     val none get() = s(R.string.none)

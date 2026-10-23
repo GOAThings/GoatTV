@@ -1,2 +1,5 @@
 # Modelos lidos/escritos pelo Gson por reflexão (API, Xtream e cache em disco).
 -keep class cc.slokker.itv.data.** { *; }
+
+# libVLC: o código nativo chama classes, métodos e campos Java pelo nome (o AAR não traz regras próprias).
+-keep class org.videolan.libvlc.** { *; }

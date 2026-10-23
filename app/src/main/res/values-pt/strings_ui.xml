@@ -299,6 +299,9 @@
     <string name="buffer_small">Pequeno (arranque rápido)</string>
     <string name="buffer_normal">Normal</string>
     <string name="buffer_large">Grande (rede instável)</string>
+    <string name="engine">Player</string>
+    <string name="engine_exo">ExoPlayer (recomendado)</string>
+    <string name="engine_vlc">VLC (abre mais formatos)</string>
     <string name="decoder">Descodificador de vídeo</string>
     <string name="decoder_hw">Hardware (recomendado)</string>
     <string name="decoder_sw">Software</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK para pegar num grupo, ↑/↓ para o mover, OK para largar</string>
     <string name="moving">A mover…</string>
     <string name="version">Versão</string>
+    <string name="licenses">Licenças</string>
+    <string name="source_code">Código-fonte</string>
     <string name="none">Nenhuma</string>
     <string name="subtitles_off">Desligadas</string>
     <string name="no_tracks">Este canal não tem faixas</string>

@@ -127,6 +127,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -152,7 +154,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // Buffer e descodificador só se mudam criando um player novo.
-    val player = remember(prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough, prefs.hdr) { buildPlayer(context, prefs) }
+    val player = remember(prefs.engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough, prefs.hdr) { buildPlayer(context, prefs) }
     val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
     val session = remember { PlaybackSession() }
     val backdrop = remember { GlassBackdrop() }
@@ -257,12 +259,10 @@ fun PlayerScreen(vm: AppViewModel) {
         session.error = null
         session.errorStatus = null
         session.ready = false
-        player.setMediaSource(
-            mediaSourceFor(
-                candidate, session.channel,
-                nearLive = prefs.buffer == Prefs.Buffer.LIVE && !session.catchup,
-                userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
-            ),
+        player.loadStream(
+            candidate, session.channel,
+            nearLive = prefs.buffer == Prefs.Buffer.LIVE && !session.catchup,
+            userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
         )
         player.prepare()
         player.play()
@@ -406,7 +406,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
             override fun onTracksChanged(tracks: Tracks) {
                 // AFR: a TV acompanha a cadência do canal.
-                if (latestPrefs.afr) player.videoFormat?.let { f -> frameRateMatcher?.match(f.frameRate, HdrType.of(f)) }
+                if (latestPrefs.afr) player.videoFormat()?.let { f -> frameRateMatcher?.match(f.frameRate, HdrType.of(f)) }
                 // Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
                 if (latestPrefs.surroundDefault && !session.audioChosen) {
                     session.audioChosen = selectSurroundTrack(player, tracks)
@@ -543,7 +543,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
             // O vidro renova-se ao ritmo do vídeo: à cadência até 30 fps, a meia cadência acima (50 → 25),
             // para ficar alinhado com os frames sem pesar na box.
-            val videoFps = player.videoFormat?.frameRate?.takeIf { it > 0f } ?: DEFAULT_BACKDROP_FPS
+            val videoFps = player.videoFormat()?.frameRate?.takeIf { it > 0f } ?: DEFAULT_BACKDROP_FPS
             val fps = if (videoFps > 30f) videoFps / 2 else videoFps
             val frameMs = (1000f / fps).toLong().coerceIn(33L, 66L)
             delay((frameMs - (SystemClock.uptimeMillis() - started)).coerceAtLeast(4))
@@ -1246,10 +1246,23 @@ private class PlaybackSession {
     var errorStatus by mutableStateOf<String?>(null)
 }
 
-internal fun buildPlayer(context: Context, prefs: Prefs): ExoPlayer {
-    val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr).setEnableDecoderFallback(true)
+/** O player das definições: o ExoPlayer, ou o [VlcPlayer] (Definições → Reprodução → Player). */
+internal fun buildPlayer(context: Context, prefs: Prefs): Player {
     val softwareVideo = isEmulator || prefs.decoder == Prefs.Decoder.SOFTWARE
+    if (prefs.engine == Prefs.Engine.VLC) {
+        val caching = when (prefs.buffer) {
+            Prefs.Buffer.LIVE -> 1_000
+            Prefs.Buffer.SMALL -> 1_500
+            Prefs.Buffer.LARGE -> 8_000
+            else -> 3_000
+        }
+        return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching).apply {
+            playWhenReady = true
+        }
+    }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
+    val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio)
+        .setEnableDecoderFallback(true)
     if (softwareVideo || softwareAudio) renderers.setMediaCodecSelector(decoderSelector(softwareVideo, softwareAudio))
     // Pequeno: arranca depressa; grande: aguenta melhor quebras de rede.
     // Mínimo = máximo e alto em todos: a ligação lê-se sempre. Com um teto baixo (o antigo "Ao vivo", 10 s) a app
@@ -1291,8 +1304,30 @@ private fun decoderSelector(softwareVideo: Boolean, softwareAudio: Boolean) = Me
 /**
  * Sem passthrough, o áudio Dolby/DTS é sempre descodificado na box (só PCM sai para a TV).
  * O vídeo usa o [HdrVideoRenderer] (HDR → SDR quando a TV não aceita o HDR do canal).
+ * O áudio tem também o FFmpeg: depois dos descodificadores da box (só entra quando ela não sabe descodificar
+ * o áudio do canal: MP2, AC-3, E-AC-3, DTS…), ou primeiro com o áudio por software ([ffmpegFirst]).
  */
-private class ItvRenderersFactory(context: Context, private val passthrough: Boolean, private val hdr: String) : DefaultRenderersFactory(context) {
+private class ItvRenderersFactory(
+    context: Context,
+    private val passthrough: Boolean,
+    private val hdr: String,
+    private val ffmpegFirst: Boolean,
+) : DefaultRenderersFactory(context) {
+    override fun buildAudioRenderers(
+        context: Context,
+        extensionRendererMode: Int,
+        mediaCodecSelector: MediaCodecSelector,
+        enableDecoderFallback: Boolean,
+        audioSink: AudioSink,
+        eventHandler: Handler,
+        eventListener: AudioRendererEventListener,
+        out: ArrayList<Renderer>,
+    ) {
+        super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out)
+        val ffmpeg = FfmpegAudioRenderer(eventHandler, eventListener, audioSink)
+        if (ffmpegFirst) out.add(0, ffmpeg) else out.add(ffmpeg)
+    }
+
     override fun buildVideoRenderers(
         context: Context,
         extensionRendererMode: Int,
@@ -1365,6 +1400,17 @@ private fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
     }
     return true
 }
+
+/** Carrega a stream no player, seja o ExoPlayer ou o VLC (o equivalente ao `setMediaSource`). */
+internal fun Player.loadStream(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String) {
+    when (this) {
+        is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer)
+        is ExoPlayer -> setMediaSource(mediaSourceFor(candidate, channel, nearLive, userAgent))
+    }
+}
+
+/** O formato do vídeo a tocar (só o ExoPlayer o dá; com o VLC não há AFR nem a cadência do vidro). */
+internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
 
 /** [nearLive]: nas streams HLS, tocar o mais perto possível do direto. */
 internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String): MediaSource {

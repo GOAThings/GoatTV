@@ -299,6 +299,9 @@
     <string name="buffer_small">Küçük (hızlı başlangıç)</string>
     <string name="buffer_normal">Normal</string>
     <string name="buffer_large">Büyük (dengesiz ağ)</string>
+    <string name="engine">Oynatıcı</string>
+    <string name="engine_exo">ExoPlayer (önerilen)</string>
+    <string name="engine_vlc">VLC (daha çok biçim açar)</string>
     <string name="decoder">Video kod çözücü</string>
     <string name="decoder_hw">Donanım (önerilen)</string>
     <string name="decoder_sw">Yazılım</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">Grubu almak için OK, taşımak için ↑/↓, bırakmak için OK</string>
     <string name="moving">Taşınıyor…</string>
     <string name="version">Sürüm</string>
+    <string name="licenses">Lisanslar</string>
+    <string name="source_code">Kaynak kodu</string>
     <string name="none">Yok</string>
     <string name="subtitles_off">Kapalı</string>
     <string name="no_tracks">Bu kanalda parça yok</string>

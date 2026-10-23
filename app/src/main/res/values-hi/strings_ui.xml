@@ -299,6 +299,9 @@
     <string name="buffer_small">छोटा (जल्दी शुरू)</string>
     <string name="buffer_normal">सामान्य</string>
     <string name="buffer_large">बड़ा (अस्थिर नेटवर्क)</string>
+    <string name="engine">प्लेयर</string>
+    <string name="engine_exo">ExoPlayer (सुझाया गया)</string>
+    <string name="engine_vlc">VLC (ज़्यादा फ़ॉर्मैट खोलता है)</string>
     <string name="decoder">वीडियो डिकोडर</string>
     <string name="decoder_hw">हार्डवेयर (सुझाया गया)</string>
     <string name="decoder_sw">सॉफ़्टवेयर</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">ग्रुप उठाने के लिए OK, हिलाने के लिए ↑/↓, रखने के लिए OK</string>
     <string name="moving">जगह बदल रहे हैं…</string>
     <string name="version">वर्शन</string>
+    <string name="licenses">लाइसेंस</string>
+    <string name="source_code">सोर्स कोड</string>
     <string name="none">कोई नहीं</string>
     <string name="subtitles_off">बंद</string>
     <string name="no_tracks">इस चैनल में कोई ट्रैक नहीं है</string>

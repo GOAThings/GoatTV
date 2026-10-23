@@ -143,6 +143,7 @@ private sealed interface Route {
     data object StreamInfo : Route { override fun title(s: Strings) = s.streamInfo }
     data object General : Route { override fun title(s: Strings) = s.general }
     data object Playback : Route { override fun title(s: Strings) = s.playback }
+    data object Licenses : Route { override fun title(s: Strings) = s.licenses }
     data object GroupsManage : Route { override fun title(s: Strings) = s.manageGroups }
     data object GroupsOrder : Route { override fun title(s: Strings) = s.reorderGroups }
     /** Canais da lista em uso: primeiro escolhe-se o grupo. */
@@ -576,6 +577,11 @@ private fun settingItems(
                 prefs.buffer,
             ),
             pref(
+                Prefs.Key.ENGINE, s.engine,
+                listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc),
+                prefs.engine,
+            ),
+            pref(
                 Prefs.Key.DECODER, s.decoder,
                 listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw),
                 prefs.decoder,
@@ -931,6 +937,7 @@ private fun settingItems(
                 }
             },
             Item.Info("version", s.version, BuildConfig.VERSION_NAME),
+            Item.Nav("licenses", s.licenses, value = "GPL-3.0") { push(Route.Licenses, "licenses") },
             // A mesma chave em todos os estados: a linha muda de texto sem perder o foco.
             updateItem("checkupdate") ?: Item.Action(
                 "checkupdate",
@@ -942,6 +949,18 @@ private fun settingItems(
                     else -> null
                 },
             ) { vm.checkForUpdate(manual = true) },
+        )
+
+        // A app é GPL-3; cada componente com a sua licença (os textos estão no repositório do código).
+        Route.Licenses -> listOf(
+            Item.Info("source", s.sourceCode, "github.com/GOAThings/GoatTV"),
+            Item.Info("goattv", "GoatTV", "GPL-3.0"),
+            Item.Info("media3", "AndroidX, Media3 (ExoPlayer)", "Apache-2.0"),
+            Item.Info("ffmpeg", "FFmpeg, nextlib", "GPL-3.0 / LGPL-2.1"),
+            Item.Info("vlc", "libVLC", "LGPL-2.1"),
+            Item.Info("net", "OkHttp, Retrofit, Gson", "Apache-2.0"),
+            Item.Info("coil", "Coil, ZXing", "Apache-2.0"),
+            Item.Info("font", "Adwaita Sans", "OFL-1.1"),
         )
 
         is Route.Pick -> route.options.mapIndexed { i, (value, label) ->

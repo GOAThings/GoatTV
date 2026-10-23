@@ -44,7 +44,6 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.IPTV_USER_AGENT
@@ -79,7 +78,7 @@ internal fun setAudible(player: Player, audible: Boolean) {
 
 /** O segundo player e o estado dele (a sintonizar / erro), para as etiquetas no ecrã. */
 @Stable
-internal class SecondPlayback(val player: ExoPlayer) {
+internal class SecondPlayback(val player: Player) {
     var ready by mutableStateOf(false)
     var failed by mutableStateOf(false)
 }
@@ -98,7 +97,7 @@ internal fun rememberSecondPlayback(
 ): SecondPlayback? {
     val context = LocalContext.current
     val active = second != null
-    val playback = remember(active, prefs.buffer, prefs.decoder, prefs.audioDecoder) {
+    val playback = remember(active, prefs.engine, prefs.buffer, prefs.decoder, prefs.audioDecoder) {
         if (active) SecondPlayback(buildPlayer(context, prefs.copy(audioPassthrough = false))) else null
     }
     DisposableEffect(playback) { onDispose { playback?.player?.release() } }
@@ -115,9 +114,7 @@ internal fun rememberSecondPlayback(
         fun start() {
             val candidate = candidates.getOrNull(attempt) ?: return
             p.ready = false
-            p.player.setMediaSource(
-                mediaSourceFor(candidate, sv.channel, nearLive = prefs.buffer == Prefs.Buffer.LIVE, userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT }),
-            )
+            p.player.loadStream(candidate, sv.channel, nearLive = prefs.buffer == Prefs.Buffer.LIVE, userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT })
             p.player.prepare()
             p.player.play()
         }

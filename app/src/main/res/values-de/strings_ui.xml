@@ -299,6 +299,9 @@
     <string name="buffer_small">Klein (schneller Start)</string>
     <string name="buffer_normal">Normal</string>
     <string name="buffer_large">Groß (instabiles Netzwerk)</string>
+    <string name="engine">Player</string>
+    <string name="engine_exo">ExoPlayer (empfohlen)</string>
+    <string name="engine_vlc">VLC (öffnet mehr Formate)</string>
     <string name="decoder">Video-Decoder</string>
     <string name="decoder_hw">Hardware (empfohlen)</string>
     <string name="decoder_sw">Software</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK nimmt eine Gruppe auf, ↑/↓ verschiebt sie, OK legt sie ab</string>
     <string name="moving">Wird verschoben…</string>
     <string name="version">Version</string>
+    <string name="licenses">Lizenzen</string>
+    <string name="source_code">Quellcode</string>
     <string name="none">Keine</string>
     <string name="subtitles_off">Aus</string>
     <string name="no_tracks">Dieser Sender hat keine Spuren</string>

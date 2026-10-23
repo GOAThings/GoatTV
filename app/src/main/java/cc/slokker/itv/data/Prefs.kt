@@ -10,6 +10,8 @@ import java.security.MessageDigest
  */
 data class Prefs(
     // Reprodução
+    /** O player: o ExoPlayer (o normal) ou o VLC, para streams que o ExoPlayer não abra. */
+    val engine: String = Engine.EXO,
     val buffer: String = Buffer.NORMAL,
     val decoder: String = Decoder.HARDWARE,
     val aspect: String = Aspect.FIT,
@@ -86,6 +88,7 @@ data class Prefs(
     fun isChannelHidden(playlistId: String, channelKey: String) = "$playlistId:$channelKey" in hiddenChannels
 
     object Key {
+        const val ENGINE = "engine"
         const val BUFFER = "buffer"
         const val DECODER = "decoder"
         const val ASPECT = "aspect"
@@ -132,6 +135,7 @@ data class Prefs(
 
     object Buffer { const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large" }
     object Decoder { const val HARDWARE = "hw"; const val SOFTWARE = "sw" }
+    object Engine { const val EXO = "exo"; const val VLC = "vlc" }
     object Hdr { const val AUTO = "auto"; const val SDR = "sdr" }
     object Aspect { const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill" }
     object UpDown { const val ZAP = "zap"; const val LIST = "list" }
@@ -156,6 +160,7 @@ data class Prefs(
             fun int(k: String, def: Int) =
                 s.get(k)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asInt }.getOrNull() } ?: def
             return Prefs(
+                engine = str(Key.ENGINE, d.engine, setOf(Engine.EXO, Engine.VLC)),
                 buffer = str(Key.BUFFER, d.buffer, setOf(Buffer.LIVE, Buffer.SMALL, Buffer.NORMAL, Buffer.LARGE)),
                 decoder = str(Key.DECODER, d.decoder, setOf(Decoder.HARDWARE, Decoder.SOFTWARE)),
                 aspect = str(Key.ASPECT, d.aspect, setOf(Aspect.FIT, Aspect.ZOOM, Aspect.FILL)),

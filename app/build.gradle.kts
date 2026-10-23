@@ -23,6 +23,10 @@ android {
         targetSdk = 35
         versionCode = 18
         versionName = "0.8.2"
+        // As boxes de TV são ARM. Sem x86 (só emuladores): o FFmpeg e o VLC trazem bibliotecas nativas por arquitetura.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -67,6 +71,14 @@ android {
         compose = true
         buildConfig = true
     }
+    packaging {
+        jniLibs {
+            // Bibliotecas nativas comprimidas no APK (o VLC sem compressão passava de 100 MB); o Android extrai-as ao instalar.
+            useLegacyPackaging = true
+            // O VLC e outras bibliotecas trazem a mesma libc++.
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
 }
 
 dependencies {
@@ -85,6 +97,10 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
+    // Áudio por software no ExoPlayer quando a box não o descodifica (MP2, AC-3, E-AC-3, DTS…).
+    implementation(libs.nextlib.media3ext)
+    // O VLC como player alternativo (Definições → Reprodução).
+    implementation(libs.libvlc)
 
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)

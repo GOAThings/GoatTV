@@ -299,6 +299,9 @@
     <string name="buffer_small">작게(빠른 시작)</string>
     <string name="buffer_normal">보통</string>
     <string name="buffer_large">크게(불안정한 네트워크)</string>
+    <string name="engine">플레이어</string>
+    <string name="engine_exo">ExoPlayer (권장)</string>
+    <string name="engine_vlc">VLC (더 많은 형식 지원)</string>
     <string name="decoder">동영상 디코더</string>
     <string name="decoder_hw">하드웨어(권장)</string>
     <string name="decoder_sw">소프트웨어</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK로 그룹을 집고, ↑/↓로 옮기고, OK로 놓으세요</string>
     <string name="moving">이동 중…</string>
     <string name="version">버전</string>
+    <string name="licenses">라이선스</string>
+    <string name="source_code">소스 코드</string>
     <string name="none">없음</string>
     <string name="subtitles_off">끄기</string>
     <string name="no_tracks">이 채널에는 트랙이 없어요</string>

@@ -299,6 +299,9 @@
     <string name="buffer_small">Kecil (mulai cepat)</string>
     <string name="buffer_normal">Normal</string>
     <string name="buffer_large">Besar (jaringan tidak stabil)</string>
+    <string name="engine">Pemutar</string>
+    <string name="engine_exo">ExoPlayer (disarankan)</string>
+    <string name="engine_vlc">VLC (membuka lebih banyak format)</string>
     <string name="decoder">Decoder video</string>
     <string name="decoder_hw">Hardware (disarankan)</string>
     <string name="decoder_sw">Software</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK untuk mengambil grup, ↑/↓ untuk memindahkan, OK untuk meletakkan</string>
     <string name="moving">Memindahkan…</string>
     <string name="version">Versi</string>
+    <string name="licenses">Lisensi</string>
+    <string name="source_code">Kode sumber</string>
     <string name="none">Tidak ada</string>
     <string name="subtitles_off">Nonaktif</string>
     <string name="no_tracks">Saluran ini tidak punya trek</string>

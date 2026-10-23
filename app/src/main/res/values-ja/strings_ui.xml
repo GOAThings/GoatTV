@@ -299,6 +299,9 @@
     <string name="buffer_small">小（すばやく開始）</string>
     <string name="buffer_normal">標準</string>
     <string name="buffer_large">大（不安定なネットワーク向け）</string>
+    <string name="engine">プレーヤー</string>
+    <string name="engine_exo">ExoPlayer（推奨）</string>
+    <string name="engine_vlc">VLC（より多くの形式に対応）</string>
     <string name="decoder">映像デコーダー</string>
     <string name="decoder_hw">ハードウェア（推奨）</string>
     <string name="decoder_sw">ソフトウェア</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK でグループを選び、↑/↓ で移動、OK で確定</string>
     <string name="moving">移動中…</string>
     <string name="version">バージョン</string>
+    <string name="licenses">ライセンス</string>
+    <string name="source_code">ソースコード</string>
     <string name="none">なし</string>
     <string name="subtitles_off">オフ</string>
     <string name="no_tracks">このチャンネルにはトラックがありません</string>

@@ -299,6 +299,9 @@
     <string name="buffer_small">صغير (بدء سريع)</string>
     <string name="buffer_normal">عادي</string>
     <string name="buffer_large">كبير (شبكة غير مستقرة)</string>
+    <string name="engine">المشغّل</string>
+    <string name="engine_exo">ExoPlayer (مُستحسن)</string>
+    <string name="engine_vlc">VLC (يفتح صيغًا أكثر)</string>
     <string name="decoder">وحدة فك ترميز الفيديو</string>
     <string name="decoder_hw">العتاد (يُنصح به)</string>
     <string name="decoder_sw">البرمجيات</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK لالتقاط مجموعة، ↑/↓ لنقلها، OK لإفلاتها</string>
     <string name="moving">جارٍ النقل…</string>
     <string name="version">الإصدار</string>
+    <string name="licenses">التراخيص</string>
+    <string name="source_code">الشيفرة المصدرية</string>
     <string name="none">لا شيء</string>
     <string name="subtitles_off">متوقفة</string>
     <string name="no_tracks">لا تحتوي هذه القناة على مسارات</string>

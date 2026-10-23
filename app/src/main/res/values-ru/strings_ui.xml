@@ -299,6 +299,9 @@
     <string name="buffer_small">Малый (быстрый старт)</string>
     <string name="buffer_normal">Обычный</string>
     <string name="buffer_large">Большой (нестабильная сеть)</string>
+    <string name="engine">Плеер</string>
+    <string name="engine_exo">ExoPlayer (рекомендуется)</string>
+    <string name="engine_vlc">VLC (открывает больше форматов)</string>
     <string name="decoder">Видеодекодер</string>
     <string name="decoder_hw">Аппаратный (рекомендуется)</string>
     <string name="decoder_sw">Программный</string>
@@ -402,6 +405,8 @@
     <string name="reorder_groups_sub">OK — взять группу, ↑/↓ — переместить, OK — отпустить</string>
     <string name="moving">Перемещение…</string>
     <string name="version">Версия</string>
+    <string name="licenses">Лицензии</string>
+    <string name="source_code">Исходный код</string>
     <string name="none">Нет</string>
     <string name="subtitles_off">Выкл.</string>
     <string name="no_tracks">На этом канале нет дорожек</string>
