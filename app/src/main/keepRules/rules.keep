@@ -1,0 +1,2 @@
+# Modelos lidos/escritos pelo Gson por reflexão (API, Xtream e cache em disco).
+-keep class cc.slokker.itv.data.** { *; }

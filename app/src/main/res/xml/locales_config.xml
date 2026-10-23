@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- As 15 línguas da app, iguais às do site (ver Strings.LANGUAGES). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="es" />
+    <locale android:name="pt-PT" />
+    <locale android:name="pt-BR" />
+    <locale android:name="fr" />
+    <locale android:name="de" />
+    <locale android:name="it" />
+    <locale android:name="ru" />
+    <locale android:name="tr" />
+    <locale android:name="id" />
+    <locale android:name="hi" />
+    <locale android:name="ar" />
+    <locale android:name="zh-CN" />
+    <locale android:name="ja" />
+    <locale android:name="ko" />
+</locale-config>

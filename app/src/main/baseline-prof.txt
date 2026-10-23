@@ -1,0 +1,5 @@
+# Baseline Profile da i-tv: o código da app é compilado logo na instalação (pelo ART ou pelo ProfileInstaller),
+# em vez de correr interpretado até o JIT aquecer. Tira os soluços do arranque e dos primeiros scrolls.
+# As bibliotecas (Compose, Media3, OkHttp…) trazem os seus próprios perfis, que o AGP junta a este.
+HSPLcc/slokker/itv/**->**(**)**
+Lcc/slokker/itv/**;

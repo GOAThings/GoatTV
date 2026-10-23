@@ -1,0 +1,40 @@
+﻿#EXTM3U x-tvg-url="https://example.com/epg.xml"
+#EXTINF:-1 tvg-id="SIC.pt" tvg-name="SIC" tvg-logo="https://example.com/sic.png" group-title="  Portugal  ",SIC HD
+http://example.com/live/user/pass/1001.ts
+#EXTINF:-1 tvg-id="" tvg-logo="" group-title="Portugal",RTP 1
+http://example.com/live/user/pass/1002.ts
+#EXTINF:-1 tvg-name="TVI" group-title="Portugal",TVI
+#EXTVLCOPT:http-user-agent=Foo
+http://example.com/live/user/pass/1003.ts
+#EXTINF:-1 tvg-id="SIC.pt" group-title="Portugal",SIC (backup)
+http://example.com/live/user/pass/1004.ts
+#EXTINF:-1 tvg-id="ESPN.us" group-title="Sports, US",ESPN, East
+http://example.com/live/user/pass/2001.m3u8?token=a
+#EXTINF:-1 tvg-id="Euronews.fr",Euronews
+http://example.com/live/user/pass/3001.ts
+#EXTINF:-1 group-title="",Canal Ação ç
+http://example.com/live/user/pass/ação.ts
+#EXTINF:-1 tvg-id="Film1" group-title="Movies",Some film
+http://example.com/movie/user/pass/9001.mp4
+#EXTINF:-1 tvg-id="Ep1" group-title="Series",Some episode
+http://example.com/series/user/pass/9002.mkv
+#EXTINF:-1 tvg-id="Rec" group-title="Portugal",Recording
+http://example.com/files/rec.MKV
+#EXTINF:-1 tvg-id="ESPN.us" group-title="Sports, US",ESPN 2
+  http://example.com/live/user/pass/2002.ts  
+#EXTINF:-1 tvg-id="Kids1",Kids One
+#EXTGRP:  Infantil  
+http://example.com/live/user/pass/4001.ts
+#EXTINF:-1 tvg-id="Kids2" group-title="",Kids Two
+#EXTVLCOPT:http-user-agent=Foo
+#EXTGRP:Infantil
+http://example.com/live/user/pass/4002.ts
+#EXTINF:-1 tvg-id="News1" group-title="Notícias",News One
+#EXTGRP:Ignorado
+http://example.com/live/user/pass/5001.ts
+#EXTINF:-1 tvg-id="Docs1",Docs One
+#EXTGRP:Primeiro
+#EXTGRP:Documentários
+http://example.com/live/user/pass/6001.ts
+#EXTINF:-1 tvg-id="NoGrp",Sem grupo depois de EXTGRP
+http://example.com/live/user/pass/7001.ts
