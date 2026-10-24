@@ -326,6 +326,16 @@
     <string name="language_auto">تلقائي (النظام)</string>
     <string name="channel_numbers">أرقام القنوات</string>
     <string name="channel_logos">شعارات القنوات</string>
+    <string name="outline_color">لون المحدد</string>
+    <string name="outline_accent">لون التمييز</string>
+    <string name="color_white">أبيض</string>
+    <string name="color_blue">أزرق</string>
+    <string name="color_violet">بنفسجي</string>
+    <string name="color_pink">وردي</string>
+    <string name="color_red">أحمر</string>
+    <string name="color_orange">برتقالي</string>
+    <string name="color_yellow">أصفر</string>
+    <string name="color_green">أخضر</string>
     <string name="epg_extra">دليل إضافي (XMLTV)</string>
     <string name="epg_extra_sub">الصق رابط دليل آخر: يكمل القنوات غير الموجودة في دليل القائمة</string>
     <string name="epg_extra_none">لا شيء</string>

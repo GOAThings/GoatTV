@@ -64,6 +64,8 @@ data class Prefs(
     val channelLogos: Map<String, String> = emptyMap(),
     /** Guia XMLTV extra por lista: playlistId → URL (para os canais que o guia da lista não tem). */
     val extraEpg: Map<String, String> = emptyMap(),
+    /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
+    val outlineColor: String = OutlineColors.WHITE,
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -128,6 +130,7 @@ data class Prefs(
         const val LOGO_SOURCE = "logo_source"
         const val CHANNEL_LOGOS = "channel_logos"
         const val EXTRA_EPG = "extra_epg"
+        const val OUTLINE_COLOR = "outline_color"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -145,6 +148,13 @@ data class Prefs(
     object Buffer { const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large" }
     object Decoder { const val HARDWARE = "hw"; const val SOFTWARE = "sw" }
     object Engine { const val EXO = "exo"; const val VLC = "vlc" }
+
+    /** As cores do contorno do seletor; "accent" segue a cor de destaque (com o gradiente dela). */
+    object OutlineColors {
+        const val WHITE = "white"
+        const val ACCENT = "accent"
+        val IDS = listOf(WHITE, ACCENT, "blue", "violet", "pink", "red", "orange", "yellow", "green")
+    }
 
     /** Origem dos logótipos; fora estes dois valores, é o código de um país do guia (ex.: "pt"). */
     object LogoSource {
@@ -210,6 +220,7 @@ data class Prefs(
                 logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString
                     ?.takeIf { it == LogoSource.PLAYLIST || it == LogoSource.GUIDE || COUNTRY_CODE.matches(it) } ?: d.logoSource,
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
+                outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, setOf(Sort.NUMBER, Sort.NAME)),

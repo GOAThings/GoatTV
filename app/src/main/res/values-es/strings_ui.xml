@@ -326,6 +326,16 @@
     <string name="language_auto">Automático (sistema)</string>
     <string name="channel_numbers">Números de canal</string>
     <string name="channel_logos">Logos de los canales</string>
+    <string name="outline_color">Color del selector</string>
+    <string name="outline_accent">Color de acento</string>
+    <string name="color_white">Blanco</string>
+    <string name="color_blue">Azul</string>
+    <string name="color_violet">Violeta</string>
+    <string name="color_pink">Rosa</string>
+    <string name="color_red">Rojo</string>
+    <string name="color_orange">Naranja</string>
+    <string name="color_yellow">Amarillo</string>
+    <string name="color_green">Verde</string>
     <string name="epg_extra">Guía extra (XMLTV)</string>
     <string name="epg_extra_sub">Pega el enlace de otra guía: completa los canales que la guía de la lista no tiene</string>
     <string name="epg_extra_none">Ninguna</string>

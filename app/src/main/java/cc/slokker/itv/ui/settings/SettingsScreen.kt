@@ -4,6 +4,7 @@ import android.net.Uri
 
 import java.util.Locale
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.ui.theme.outlineBrush
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
@@ -833,6 +834,21 @@ private fun settingItems(
                         pop()
                     },
                     Prefs.Key.ACCENT,
+                )
+            },
+            Item.Nav(Prefs.Key.OUTLINE_COLOR, s.outlineColor, value = s.outlineColorName(prefs.outlineColor)) {
+                val accent = Accent.byId(prefs.accent)
+                push(
+                    Route.Pick(
+                        s.outlineColor,
+                        Prefs.OutlineColors.IDS.map { it to s.outlineColorName(it) },
+                        prefs.outlineColor,
+                        swatches = Prefs.OutlineColors.IDS.associate { id: String -> (id as Any?) to outlineBrush(id, accent) },
+                    ) { v ->
+                        vm.setPref(Prefs.Key.OUTLINE_COLOR, v)
+                        pop()
+                    },
+                    Prefs.Key.OUTLINE_COLOR,
                 )
             },
             pref(

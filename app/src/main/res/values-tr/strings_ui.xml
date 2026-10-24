@@ -326,6 +326,16 @@
     <string name="language_auto">Otomatik (sistem)</string>
     <string name="channel_numbers">Kanal numaraları</string>
     <string name="channel_logos">Kanal logoları</string>
+    <string name="outline_color">Seçici rengi</string>
+    <string name="outline_accent">Vurgu rengi</string>
+    <string name="color_white">Beyaz</string>
+    <string name="color_blue">Mavi</string>
+    <string name="color_violet">Mor</string>
+    <string name="color_pink">Pembe</string>
+    <string name="color_red">Kırmızı</string>
+    <string name="color_orange">Turuncu</string>
+    <string name="color_yellow">Sarı</string>
+    <string name="color_green">Yeşil</string>
     <string name="epg_extra">Ek yayın akışı (XMLTV)</string>
     <string name="epg_extra_sub">Başka bir akışın bağlantısını yapıştırın: listenin akışında olmayan kanalları tamamlar</string>
     <string name="epg_extra_none">Yok</string>

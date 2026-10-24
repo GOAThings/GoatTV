@@ -326,6 +326,16 @@
     <string name="language_auto">स्वचालित (सिस्टम)</string>
     <string name="channel_numbers">चैनल नंबर</string>
     <string name="channel_logos">चैनल लोगो</string>
+    <string name="outline_color">चयनकर्ता का रंग</string>
+    <string name="outline_accent">एक्सेंट रंग</string>
+    <string name="color_white">सफ़ेद</string>
+    <string name="color_blue">नीला</string>
+    <string name="color_violet">बैंगनी</string>
+    <string name="color_pink">गुलाबी</string>
+    <string name="color_red">लाल</string>
+    <string name="color_orange">नारंगी</string>
+    <string name="color_yellow">पीला</string>
+    <string name="color_green">हरा</string>
     <string name="epg_extra">अतिरिक्त गाइड (XMLTV)</string>
     <string name="epg_extra_sub">दूसरी गाइड का लिंक चिपकाएँ: यह उन चैनलों को भरती है जो प्लेलिस्ट की गाइड में नहीं हैं</string>
     <string name="epg_extra_none">कोई नहीं</string>

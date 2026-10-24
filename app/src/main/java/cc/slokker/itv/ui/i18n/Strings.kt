@@ -549,6 +549,20 @@ class Strings(context: Context) {
     val languageAuto get() = s(R.string.language_auto)
     val channelNumbers get() = s(R.string.channel_numbers)
     val channelLogos get() = s(R.string.channel_logos)
+    val outlineColor get() = s(R.string.outline_color)
+    fun outlineColorName(id: String) = s(
+        when (id) {
+            "accent" -> R.string.outline_accent
+            "blue" -> R.string.color_blue
+            "violet" -> R.string.color_violet
+            "pink" -> R.string.color_pink
+            "red" -> R.string.color_red
+            "orange" -> R.string.color_orange
+            "yellow" -> R.string.color_yellow
+            "green" -> R.string.color_green
+            else -> R.string.color_white
+        },
+    )
     val epgExtra get() = s(R.string.epg_extra)
     val epgExtraSub get() = s(R.string.epg_extra_sub)
     val epgExtraNone get() = s(R.string.epg_extra_none)

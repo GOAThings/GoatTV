@@ -2,6 +2,7 @@ package cc.slokker.itv.ui.glass
 
 import cc.slokker.itv.ui.theme.ControlRadius
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import androidx.compose.animation.core.LinearEasing
@@ -265,6 +266,7 @@ fun GlassRow(
     val rest = if (selected && !outlineFocus) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
+    val outlineBrush = LocalOutlineBrush.current
     Surface(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -291,7 +293,7 @@ fun GlassRow(
                     if (outlineFocus) {
                         val outline = shape.createOutline(size, layoutDirection, this)
                         drawOutline(outline, Color.White.copy(alpha = OUTLINE_VEIL * a))
-                        drawOutline(outline, Color.White.copy(alpha = a), style = Stroke(OUTLINE_WIDTH.toPx() * 2))
+                        drawOutline(outline, outlineBrush, alpha = a, style = Stroke(OUTLINE_WIDTH.toPx() * 2))
                     } else {
                         drawRect(Color.White.copy(alpha = a))
                     }

@@ -326,6 +326,16 @@
     <string name="language_auto">Automatisch (System)</string>
     <string name="channel_numbers">Sendernummern</string>
     <string name="channel_logos">Senderlogos</string>
+    <string name="outline_color">Farbe der Auswahl</string>
+    <string name="outline_accent">Akzentfarbe</string>
+    <string name="color_white">Weiß</string>
+    <string name="color_blue">Blau</string>
+    <string name="color_violet">Violett</string>
+    <string name="color_pink">Rosa</string>
+    <string name="color_red">Rot</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Gelb</string>
+    <string name="color_green">Grün</string>
     <string name="epg_extra">Zusätzlicher Guide (XMLTV)</string>
     <string name="epg_extra_sub">Link eines weiteren Guides einfügen: ergänzt die Sender, die im Guide der Playlist fehlen</string>
     <string name="epg_extra_none">Keiner</string>

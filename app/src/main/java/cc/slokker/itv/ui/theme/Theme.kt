@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -63,6 +65,22 @@ data class Accent(val id: String, val start: Color, val end: Color) {
 }
 
 val LocalAccent = compositionLocalOf { Accent.ALL.first() }
+
+/** O pincel do contorno da linha com foco, para a cor escolhida ([accent] para "accent"). */
+fun outlineBrush(id: String, accent: Accent): Brush = when (id) {
+    "accent" -> accent.brush
+    "blue" -> SolidColor(Color(0xFF7DD3FC))
+    "violet" -> SolidColor(Color(0xFFC4B5FD))
+    "pink" -> SolidColor(Color(0xFFF9A8D4))
+    "red" -> SolidColor(Color(0xFFFCA5A5))
+    "orange" -> SolidColor(Color(0xFFFDBA74))
+    "yellow" -> SolidColor(Color(0xFFFDE047))
+    "green" -> SolidColor(Color(0xFF86EFAC))
+    else -> SolidColor(Color.White)
+}
+
+/** O contorno do seletor em uso (Definições → Aspeto → Cor do seletor). */
+val LocalOutlineBrush = staticCompositionLocalOf<Brush> { SolidColor(Color.White) }
 
 /** Margens de segurança de TV (overscan). */
 val TvSafePadding = PaddingValues(horizontal = 48.dp, vertical = 27.dp)

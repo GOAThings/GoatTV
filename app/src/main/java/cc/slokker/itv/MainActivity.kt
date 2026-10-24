@@ -30,6 +30,8 @@ import cc.slokker.itv.ui.activation.ActivationScreen
 import cc.slokker.itv.ui.common.Logo
 import cc.slokker.itv.ui.common.LocalChannelLogos
 import cc.slokker.itv.ui.common.semanticsOnlyForScreenReaders
+import cc.slokker.itv.ui.theme.outlineBrush
+import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import cc.slokker.itv.ui.common.Toast
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
@@ -102,6 +104,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     CompositionLocalProvider(
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
+        LocalOutlineBrush provides outlineBrush(prefs.outlineColor, Accent.byId(prefs.accent)),
         LocalDensity provides scaled,
         LocalChannelLogos provides channelLogos,
     ) {

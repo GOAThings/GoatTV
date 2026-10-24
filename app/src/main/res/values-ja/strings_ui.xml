@@ -326,6 +326,16 @@
     <string name="language_auto">自動（システム）</string>
     <string name="channel_numbers">チャンネル番号</string>
     <string name="channel_logos">チャンネルロゴ</string>
+    <string name="outline_color">選択枠の色</string>
+    <string name="outline_accent">アクセントカラー</string>
+    <string name="color_white">白</string>
+    <string name="color_blue">青</string>
+    <string name="color_violet">紫</string>
+    <string name="color_pink">ピンク</string>
+    <string name="color_red">赤</string>
+    <string name="color_orange">オレンジ</string>
+    <string name="color_yellow">黄</string>
+    <string name="color_green">緑</string>
     <string name="epg_extra">追加の番組表 (XMLTV)</string>
     <string name="epg_extra_sub">別の番組表のリンクを貼り付けると、プレイリストの番組表にないチャンネルを補います</string>
     <string name="epg_extra_none">なし</string>

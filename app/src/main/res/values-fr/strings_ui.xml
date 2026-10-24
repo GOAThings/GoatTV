@@ -326,6 +326,16 @@
     <string name="language_auto">Automatique (système)</string>
     <string name="channel_numbers">Numéros des chaînes</string>
     <string name="channel_logos">Logos des chaînes</string>
+    <string name="outline_color">Couleur du sélecteur</string>
+    <string name="outline_accent">Couleur d\'accent</string>
+    <string name="color_white">Blanc</string>
+    <string name="color_blue">Bleu</string>
+    <string name="color_violet">Violet</string>
+    <string name="color_pink">Rose</string>
+    <string name="color_red">Rouge</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_yellow">Jaune</string>
+    <string name="color_green">Vert</string>
     <string name="epg_extra">Guide supplémentaire (XMLTV)</string>
     <string name="epg_extra_sub">Collez le lien d\'un autre guide : il complète les chaînes absentes du guide de la playlist</string>
     <string name="epg_extra_none">Aucun</string>
