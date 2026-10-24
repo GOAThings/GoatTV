@@ -11,9 +11,13 @@ Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 
 | | |
 |---|---|
-| ![Channels](docs/screenshots/channels.png) | ![Player](docs/screenshots/player.png) |
-| ![TV guide](docs/screenshots/guide.png) | ![Channel guide](docs/screenshots/channel-guide.png) |
-| ![Search](docs/screenshots/search.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Player](docs/screenshots/player.jpg) | ![Channels](docs/screenshots/channels.jpg) |
+| ![TV guide](docs/screenshots/guide.jpg) | ![Channel guide](docs/screenshots/channel-guide.jpg) |
+| ![Search](docs/screenshots/search.jpg) | ![Groups](docs/screenshots/groups.jpg) |
+| ![Settings](docs/screenshots/settings.jpg) | ![Welcome](docs/screenshots/welcome.jpg) |
+
+Screenshots use a demo playlist with made-up channels. Video: Big Buck Bunny, © Blender Foundation
+(CC BY 3.0), [peach.blender.org](https://peach.blender.org).
 
 ## Install
 
