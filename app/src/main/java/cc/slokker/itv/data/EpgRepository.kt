@@ -83,22 +83,93 @@ class EpgRepository(
     /** Guia XMLTV da lista aberta; [loading] enquanto se lê do disco ou se descarrega. */
     private class GuideState(val generation: Int, val playlistId: String, val url: String, val guide: XmltvGuide?, val loading: Boolean)
 
-    private val guide = MutableStateFlow<GuideState?>(null)
-    private var guideJob: Job? = null
-    private var generation = 0
+    /**
+     * Um guia XMLTV de uma lista: o dela (`x-tvg-url` ou o do Xtream) ou o extra das definições. Guarda-se em
+     * disco com [storeSuffix] junto ao id da lista (o extra não pisa o da lista).
+     */
+    private inner class XmltvSlot(private val storeSuffix: String) {
+        val state = MutableStateFlow<GuideState?>(null)
+        private var job: Job? = null
+        private var generation = 0
+
+        fun entries(playlist: Playlist, channel: Channel): List<EpgEntry>? =
+            state.value?.takeIf { it.playlistId == playlist.id }?.guide?.entriesFor(channel)?.takeIf { it.isNotEmpty() }
+
+        /** O guia da lista, esperando só se ainda não há nenhum (primeira vez, a descarregar). */
+        suspend fun ready(playlist: Playlist): XmltvGuide? {
+            if (state.value?.playlistId != playlist.id) return null
+            return state.first { it == null || it.playlistId != playlist.id || it.guide != null || !it.loading }?.guide
+        }
+
+        fun open(
+            scope: CoroutineScope,
+            content: PlaylistContent,
+            url: String?,
+            force: Boolean,
+            isDue: (fetchedAt: Long) -> Boolean,
+            onDone: (Boolean) -> Unit,
+        ) {
+            val id = content.playlist.id
+            val key = id + storeSuffix
+            // Já a tratar do mesmo guia (ex.: a descarregar): não recomeça.
+            val busy = state.value?.let { it.playlistId == id && it.url == url } == true && job?.isActive == true
+            if (busy && !force) return
+            job?.cancel()
+            val gen = ++generation
+            if (url == null) {
+                if (state.value != null) _version.value++
+                state.value = null
+                return
+            }
+            val previous = state.value?.takeIf { it.playlistId == id && it.url == url }?.guide
+            state.value = GuideState(gen, id, url, previous, loading = true)
+            job = scope.launch {
+                try {
+                    val stored = previous ?: store.loadGuide(key, url)
+                    state.value = GuideState(gen, id, url, stored, loading = true)
+                    if (stored != null && previous == null) _version.value++
+                    if (!force && stored != null && !isDue(stored.fetchedAt)) return@launch
+                    val fresh = try {
+                        xmltv.load(url, content.channels).takeIf { it.programmes.isNotEmpty() }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (fresh != null) {
+                        store.saveGuide(key, fresh)
+                        state.value = GuideState(gen, id, url, fresh, loading = true)
+                        _version.value++
+                    }
+                    onDone(fresh != null)
+                } finally {
+                    // Só este pedido pode marcar o fim; um open() mais recente já tem o seu estado.
+                    state.value?.takeIf { it.generation == gen }?.let {
+                        state.value = GuideState(gen, it.playlistId, it.url, it.guide, loading = false)
+                    }
+                }
+            }
+        }
+    }
+
+    /** O guia XMLTV da lista e o extra (Definições → Listas → lista → Guia extra). */
+    private val main = XmltvSlot("")
+    private val extra = XmltvSlot(EXTRA_SUFFIX)
 
     private val _version = MutableStateFlow(0)
 
     /** Muda sempre que chega guia novo (XMLTV ou EPG curto): a grelha volta a ler. */
     val version: StateFlow<Int> = _version.asStateFlow()
 
-    /** Todos os programas do canal no guia XMLTV (passado incluído), ou null se o guia não o tem. */
+    /**
+     * Todos os programas do canal (passado incluído): os do guia da conta, senão os do guia da lista, senão os do
+     * guia extra; null se nenhum o tem.
+     */
     fun guideEntries(playlist: Playlist, channel: Channel): List<EpgEntry>? =
-        accountEntries(playlist, channel)
-            ?: guide.value?.takeIf { it.playlistId == playlist.id }?.guide?.entriesFor(channel)?.takeIf { it.isNotEmpty() }
+        accountEntries(playlist, channel) ?: main.entries(playlist, channel) ?: extra.entries(playlist, channel)
 
     /** Quando o guia foi descarregado (null se não há guia XMLTV ou ainda não chegou). */
-    val guideFetchedAt: Long? get() = guide.value?.guide?.fetchedAt
+    val guideFetchedAt: Long? get() = main.state.value?.guide?.fetchedAt
 
     /**
      * Prepara o guia de [content]: usa o que está em disco e, se [isDue] disser que está velho (ou com
@@ -110,54 +181,25 @@ class EpgRepository(
         force: Boolean = false,
         isDue: (fetchedAt: Long) -> Boolean,
         onDone: (Boolean) -> Unit = {},
-    ) {
-        val url = content.guideUrl
-        val id = content.playlist.id
-        // Já a tratar do mesmo guia (ex.: a descarregar): não recomeça.
-        val busy = guide.value?.let { it.playlistId == id && it.url == url } == true && guideJob?.isActive == true
-        if (busy && !force) return
-        guideJob?.cancel()
-        val gen = ++generation
-        if (url == null) {
-            guide.value = null
-            return
-        }
-        val previous = guide.value?.takeIf { it.playlistId == id && it.url == url }?.guide
-        guide.value = GuideState(gen, id, url, previous, loading = true)
-        guideJob = scope.launch {
-            try {
-                val stored = previous ?: store.loadGuide(id, url)
-                guide.value = GuideState(gen, id, url, stored, loading = true)
-                if (stored != null && previous == null) _version.value++
-                if (!force && stored != null && !isDue(stored.fetchedAt)) return@launch
-                val fresh = try {
-                    xmltv.load(url, content.channels).takeIf { it.programmes.isNotEmpty() }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    null
-                }
-                if (fresh != null) {
-                    store.saveGuide(id, fresh)
-                    guide.value = GuideState(gen, id, url, fresh, loading = true)
-                    _version.value++
-                }
-                onDone(fresh != null)
-            } finally {
-                // Só este pedido pode marcar o fim; um open() mais recente já tem o seu estado.
-                guide.value?.takeIf { it.generation == gen }?.let {
-                    guide.value = GuideState(gen, it.playlistId, it.url, it.guide, loading = false)
-                }
-            }
-        }
-    }
+    ) = main.open(scope, content, content.guideUrl, force, isDue, onDone)
+
+    /** Igual, para o guia extra da lista ([url] null tira-o). */
+    fun openExtra(
+        scope: CoroutineScope,
+        content: PlaylistContent,
+        url: String?,
+        force: Boolean = false,
+        isDue: (fetchedAt: Long) -> Boolean,
+        onDone: (Boolean) -> Unit = {},
+    ) = extra.open(scope, content, url, force, isDue, onDone)
 
     /** O que já se sabe do canal, sem pedidos (para mostrar logo). */
     fun cached(playlist: Playlist, channel: Channel): List<EpgEntry>? {
         val now = System.currentTimeMillis()
         accountEntries(playlist, channel)?.filter { it.endMs > now }?.takeIf { it.isNotEmpty() }?.let { return it }
-        guide.value?.takeIf { it.playlistId == playlist.id }?.guide?.entriesFor(channel)
-            ?.filter { it.endMs > now }?.takeIf { it.isNotEmpty() }?.let { return it }
+        for (slot in listOf(main, extra)) {
+            slot.entries(playlist, channel)?.filter { it.endMs > now }?.takeIf { it.isNotEmpty() }?.let { return it }
+        }
         val c = shortCache[cacheKey(playlist, channel)] ?: return null
         if (now - c.fetchedAt > TTL_MS) return null
         val current = c.entries.filter { it.endMs > now }
@@ -168,11 +210,10 @@ class EpgRepository(
     suspend fun shortEpg(playlist: Playlist, channel: Channel): List<EpgEntry> {
         val now0 = System.currentTimeMillis()
         accountEntries(playlist, channel)?.filter { it.endMs > now0 }?.takeIf { it.isNotEmpty() }?.let { return it }
-        if (guide.value?.playlistId == playlist.id) {
-            // Espera pelo guia só se ainda não há nenhum (primeira vez, a descarregar).
-            val ready = guide.first { it == null || it.playlistId != playlist.id || it.guide != null || !it.loading }
+        for (slot in listOf(main, extra)) {
+            val ready = slot.ready(playlist) ?: continue
             val now = System.currentTimeMillis()
-            ready?.guide?.entriesFor(channel)?.filter { it.endMs > now }?.takeIf { it.isNotEmpty() }?.let { return it }
+            ready.entriesFor(channel).filter { it.endMs > now }.takeIf { it.isNotEmpty() }?.let { return it }
         }
         if (playlist.type != PlaylistType.XTREAM) return emptyList()
         val streamId = channel.streamId ?: return emptyList()
@@ -197,6 +238,8 @@ class EpgRepository(
 
     private companion object {
         const val TTL_MS = 10 * 60 * 1000L
+        /** Junta-se ao id da lista no ficheiro do guia extra. */
+        const val EXTRA_SUFFIX = "extra"
         /** O servidor atualiza os programas de 12 em 12 h; pede-se no máximo de 6 em 6 h (com ETag). */
         const val ACCOUNT_REFRESH_MS = 6 * 3600_000L
     }

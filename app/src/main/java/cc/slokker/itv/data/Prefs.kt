@@ -62,6 +62,8 @@ data class Prefs(
     val logoSource: String = LogoSource.PLAYLIST,
     /** Logótipo escolhido canal a canal: "playlistId:channelKey" → URL ("" = o da lista). Ganha a [logoSource]. */
     val channelLogos: Map<String, String> = emptyMap(),
+    /** Guia XMLTV extra por lista: playlistId → URL (para os canais que o guia da lista não tem). */
+    val extraEpg: Map<String, String> = emptyMap(),
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -125,6 +127,7 @@ data class Prefs(
         const val SHOW_LOGOS = "show_logos"
         const val LOGO_SOURCE = "logo_source"
         const val CHANNEL_LOGOS = "channel_logos"
+        const val EXTRA_EPG = "extra_epg"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -207,6 +210,7 @@ data class Prefs(
                 logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString
                     ?.takeIf { it == LogoSource.PLAYLIST || it == LogoSource.GUIDE || COUNTRY_CODE.matches(it) } ?: d.logoSource,
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
+                extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, setOf(Sort.NUMBER, Sort.NAME)),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),

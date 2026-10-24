@@ -326,6 +326,10 @@
     <string name="language_auto">Автоматически (как в системе)</string>
     <string name="channel_numbers">Номера каналов</string>
     <string name="channel_logos">Логотипы каналов</string>
+    <string name="epg_extra">Дополнительная телепрограмма (XMLTV)</string>
+    <string name="epg_extra_sub">Вставьте ссылку на другую телепрограмму: она дополнит каналы, которых нет в программе плейлиста</string>
+    <string name="epg_extra_none">Нет</string>
+    <string name="epg_extra_remove">Убрать дополнительную телепрограмму</string>
     <string name="logo_source">Источник логотипов</string>
     <string name="logo_from_playlist">Из плейлиста</string>
     <string name="logo_from_guide">Из телепрограммы каждого канала</string>

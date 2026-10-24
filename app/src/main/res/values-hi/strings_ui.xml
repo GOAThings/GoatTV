@@ -326,6 +326,10 @@
     <string name="language_auto">स्वचालित (सिस्टम)</string>
     <string name="channel_numbers">चैनल नंबर</string>
     <string name="channel_logos">चैनल लोगो</string>
+    <string name="epg_extra">अतिरिक्त गाइड (XMLTV)</string>
+    <string name="epg_extra_sub">दूसरी गाइड का लिंक चिपकाएँ: यह उन चैनलों को भरती है जो प्लेलिस्ट की गाइड में नहीं हैं</string>
+    <string name="epg_extra_none">कोई नहीं</string>
+    <string name="epg_extra_remove">अतिरिक्त गाइड हटाएँ</string>
     <string name="logo_source">लोगो का स्रोत</string>
     <string name="logo_from_playlist">प्लेलिस्ट से</string>
     <string name="logo_from_guide">हर चैनल की गाइड से</string>

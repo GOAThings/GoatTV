@@ -656,6 +656,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
             },
         )
+        openExtraGuide(content, force)
+    }
+
+    /** O guia extra da lista (se o tiver), com as mesmas regras de renovação do guia da lista. */
+    private fun openExtraGuide(content: PlaylistContent, force: Boolean = false) {
+        val id = content.playlist.id
+        c.epg.openExtra(
+            viewModelScope, content, _prefs.value.extraEpg[id], force,
+            isDue = { fetchedAt ->
+                val now = System.currentTimeMillis()
+                RefreshPolicy.isDue(_prefs.value.epgRefreshHours, fetchedAt, now, id in extraGuidesChecked) &&
+                    (id !in extraGuidesChecked || now - (lastAttempt["x:$id"] ?: 0L) >= RefreshPolicy.RETRY_MS)
+            },
+            onDone = {
+                extraGuidesChecked += id
+                lastAttempt["x:$id"] = System.currentTimeMillis()
+            },
+        )
+    }
+
+    private val extraGuidesChecked = HashSet<String>()
+
+    /** Guia XMLTV extra de [playlistId] ([url] vazio ou null tira-o); na lista em uso, descarrega-se já. */
+    fun setExtraEpg(playlistId: String, url: String?) {
+        val clean = url?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        val current = _prefs.value.extraEpg
+        setPref(Prefs.Key.EXTRA_EPG, if (clean == null) current - playlistId else current + (playlistId to clean))
+        _content.value?.takeIf { it.playlist.id == playlistId }?.let { openExtraGuide(it, force = true) }
     }
 
     /** A app voltou ao primeiro plano: conta como "abrir a app" para as atualizações. */
@@ -666,6 +694,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         playlistsChecked.clear()
         guidesChecked.clear()
+        extraGuidesChecked.clear()
         mappingsLoadedFor = null // as associações podem ter mudado noutra TV
         val content = _content.value ?: return
         if (loadJob?.isActive == true) return

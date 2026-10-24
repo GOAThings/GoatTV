@@ -326,6 +326,10 @@
     <string name="language_auto">自动（系统）</string>
     <string name="channel_numbers">频道编号</string>
     <string name="channel_logos">频道台标</string>
+    <string name="epg_extra">额外节目指南 (XMLTV)</string>
+    <string name="epg_extra_sub">粘贴另一个节目指南的链接：补充播放列表指南中没有的频道</string>
+    <string name="epg_extra_none">无</string>
+    <string name="epg_extra_remove">移除额外节目指南</string>
     <string name="logo_source">台标来源</string>
     <string name="logo_from_playlist">来自播放列表</string>
     <string name="logo_from_guide">来自各频道的节目指南</string>

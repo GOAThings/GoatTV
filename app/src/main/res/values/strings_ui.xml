@@ -326,6 +326,10 @@
     <string name="language_auto">Automatic (system)</string>
     <string name="channel_numbers">Channel numbers</string>
     <string name="channel_logos">Channel logos</string>
+    <string name="epg_extra">Extra guide (XMLTV)</string>
+    <string name="epg_extra_sub">Paste the link of another guide: it fills in the channels the playlist\'s guide doesn\'t have</string>
+    <string name="epg_extra_none">None</string>
+    <string name="epg_extra_remove">Remove the extra guide</string>
     <string name="logo_source">Logo source</string>
     <string name="logo_from_playlist">From the playlist</string>
     <string name="logo_from_guide">From each channel\'s guide</string>

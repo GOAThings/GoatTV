@@ -326,6 +326,10 @@
     <string name="language_auto">تلقائي (النظام)</string>
     <string name="channel_numbers">أرقام القنوات</string>
     <string name="channel_logos">شعارات القنوات</string>
+    <string name="epg_extra">دليل إضافي (XMLTV)</string>
+    <string name="epg_extra_sub">الصق رابط دليل آخر: يكمل القنوات غير الموجودة في دليل القائمة</string>
+    <string name="epg_extra_none">لا شيء</string>
+    <string name="epg_extra_remove">إزالة الدليل الإضافي</string>
     <string name="logo_source">مصدر الشعارات</string>
     <string name="logo_from_playlist">من قائمة التشغيل</string>
     <string name="logo_from_guide">من دليل كل قناة</string>

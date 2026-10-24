@@ -326,6 +326,10 @@
     <string name="language_auto">Automático (sistema)</string>
     <string name="channel_numbers">Números de canal</string>
     <string name="channel_logos">Logos de los canales</string>
+    <string name="epg_extra">Guía extra (XMLTV)</string>
+    <string name="epg_extra_sub">Pega el enlace de otra guía: completa los canales que la guía de la lista no tiene</string>
+    <string name="epg_extra_none">Ninguna</string>
+    <string name="epg_extra_remove">Quitar la guía extra</string>
     <string name="logo_source">Origen de los logotipos</string>
     <string name="logo_from_playlist">De la lista</string>
     <string name="logo_from_guide">De la guía de cada canal</string>

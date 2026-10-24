@@ -326,6 +326,10 @@
     <string name="language_auto">Otomatis (sistem)</string>
     <string name="channel_numbers">Nomor saluran</string>
     <string name="channel_logos">Logo saluran</string>
+    <string name="epg_extra">Panduan tambahan (XMLTV)</string>
+    <string name="epg_extra_sub">Tempel tautan panduan lain: melengkapi saluran yang tidak ada di panduan playlist</string>
+    <string name="epg_extra_none">Tidak ada</string>
+    <string name="epg_extra_remove">Hapus panduan tambahan</string>
     <string name="logo_source">Sumber logo</string>
     <string name="logo_from_playlist">Dari playlist</string>
     <string name="logo_from_guide">Dari panduan tiap saluran</string>

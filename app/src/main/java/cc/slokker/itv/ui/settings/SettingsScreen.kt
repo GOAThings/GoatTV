@@ -1,5 +1,7 @@
 package cc.slokker.itv.ui.settings
 
+import android.net.Uri
+
 import java.util.Locale
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.UpdateState
@@ -954,9 +956,17 @@ private fun settingItems(
             } else {
                 add(Item.Info("orgfirst", s.organizeUseFirst, ""))
             }
-            // Com conta: trocar o guia da lista inteira pelo de um país (canal a canal é em Canal atual → Guia).
+            // Guia: um XMLTV extra (qualquer lista, com ou sem conta); com conta, também o de um país (canal a canal
+            // é em Canal atual → Guia).
+            add(Item.Header("hepg", s.guide))
+            val extraUrl = prefs.extraEpg[p.id]
+            add(
+                Item.Nav("epgextra", s.epgExtra, value = extraUrl?.let { Uri.parse(it).host } ?: s.epgExtraNone, subtitle = s.epgExtraSub) {
+                    push(Route.TextEdit(s.epgExtra, extraUrl.orEmpty(), TextKind.URL) { v -> vm.setExtraEpg(p.id, v) }, "epgextra")
+                },
+            )
+            if (extraUrl != null) add(Item.Action("epgextraoff", s.epgExtraRemove) { vm.setExtraEpg(p.id, null) })
             if (isCurrent && vm.epgPickerAvailable) {
-                add(Item.Header("hepg", s.guide))
                 add(Item.Nav("epgcountry", s.epgCountryGuide, subtitle = s.epgCountryGuideSub) { push(Route.EpgCountries, "epgcountry") })
                 if (epgMappings.isNotEmpty()) {
                     add(

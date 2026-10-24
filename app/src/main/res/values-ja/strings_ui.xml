@@ -326,6 +326,10 @@
     <string name="language_auto">自動（システム）</string>
     <string name="channel_numbers">チャンネル番号</string>
     <string name="channel_logos">チャンネルロゴ</string>
+    <string name="epg_extra">追加の番組表 (XMLTV)</string>
+    <string name="epg_extra_sub">別の番組表のリンクを貼り付けると、プレイリストの番組表にないチャンネルを補います</string>
+    <string name="epg_extra_none">なし</string>
+    <string name="epg_extra_remove">追加の番組表を外す</string>
     <string name="logo_source">ロゴの取得元</string>
     <string name="logo_from_playlist">プレイリストから</string>
     <string name="logo_from_guide">各チャンネルの番組表から</string>

@@ -326,6 +326,10 @@
     <string name="language_auto">Automatisch (System)</string>
     <string name="channel_numbers">Sendernummern</string>
     <string name="channel_logos">Senderlogos</string>
+    <string name="epg_extra">Zusätzlicher Guide (XMLTV)</string>
+    <string name="epg_extra_sub">Link eines weiteren Guides einfügen: ergänzt die Sender, die im Guide der Playlist fehlen</string>
+    <string name="epg_extra_none">Keiner</string>
+    <string name="epg_extra_remove">Zusätzlichen Guide entfernen</string>
     <string name="logo_source">Herkunft der Logos</string>
     <string name="logo_from_playlist">Aus der Playlist</string>
     <string name="logo_from_guide">Aus dem Programmführer jedes Senders</string>

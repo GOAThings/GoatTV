@@ -326,6 +326,10 @@
     <string name="language_auto">자동(시스템)</string>
     <string name="channel_numbers">채널 번호</string>
     <string name="channel_logos">채널 로고</string>
+    <string name="epg_extra">추가 편성표 (XMLTV)</string>
+    <string name="epg_extra_sub">다른 편성표 링크를 붙여 넣으면 재생목록 편성표에 없는 채널을 채웁니다</string>
+    <string name="epg_extra_none">없음</string>
+    <string name="epg_extra_remove">추가 편성표 제거</string>
     <string name="logo_source">로고 출처</string>
     <string name="logo_from_playlist">재생목록에서</string>
     <string name="logo_from_guide">각 채널의 편성표에서</string>

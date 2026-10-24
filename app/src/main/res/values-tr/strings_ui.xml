@@ -326,6 +326,10 @@
     <string name="language_auto">Otomatik (sistem)</string>
     <string name="channel_numbers">Kanal numaraları</string>
     <string name="channel_logos">Kanal logoları</string>
+    <string name="epg_extra">Ek yayın akışı (XMLTV)</string>
+    <string name="epg_extra_sub">Başka bir akışın bağlantısını yapıştırın: listenin akışında olmayan kanalları tamamlar</string>
+    <string name="epg_extra_none">Yok</string>
+    <string name="epg_extra_remove">Ek yayın akışını kaldır</string>
     <string name="logo_source">Logo kaynağı</string>
     <string name="logo_from_playlist">Listeden</string>
     <string name="logo_from_guide">Her kanalın yayın akışından</string>
