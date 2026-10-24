@@ -1848,19 +1848,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveLastJob?.cancel()
         pendingLast = playlistId to channel.key
         saveLastJob = viewModelScope.launch {
-            delay(3_000) // só grava se ficar no canal (evita um PATCH por cada CH+)
-            saveLast()
+            delay(WATCHED_MS) // só grava se ficar no canal (evita um PATCH por cada CH+)
+            saveLast(watched = true)
         }
     }
 
-    /** A app vai para segundo plano: grava já o canal atual (em vez de esperar os 3 s). */
+    /**
+     * A app vai para segundo plano: grava já o canal atual como último (para abrir onde se saiu); nos Recentes
+     * só entra se já se ficou nele [WATCHED_MS].
+     */
     fun flushLastChannel() {
         if (pendingLast == null) return
         saveLastJob?.cancel()
-        viewModelScope.launch { saveLast() }
+        val watched = System.currentTimeMillis() - playingSince >= WATCHED_MS
+        viewModelScope.launch { saveLast(watched) }
     }
 
-    private suspend fun saveLast() {
+    private suspend fun saveLast(watched: Boolean) {
         val (playlistId, channelKey) = pendingLast ?: return
         pendingLast = null
         c.session.saveLast(playlistId, channelKey)
@@ -1870,9 +1874,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             settings.addProperty("last_channel", channelKey)
             changed = true
         }
-        // Recentes: só entram os canais em que se ficou (os mesmos 3 s do último canal).
+        // Recentes: só entram os canais em que se ficou (os mesmos WATCHED_MS do último canal).
         val recents = (listOf(channelKey) + _recents.value[playlistId].orEmpty().filter { it != channelKey }).take(MAX_RECENTS)
-        if (recents != _recents.value[playlistId]) {
+        if (watched && recents != _recents.value[playlistId]) {
             _recents.value = _recents.value + (playlistId to recents)
             settings.add(RECENTS_KEY, c.gson.toJsonTree(_recents.value))
             changed = true
@@ -2058,7 +2062,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val MAX_RECENTS = 20
         const val MAX_SEARCH = 40
         /** Tempo num canal para contar como visto (anterior e Recentes). */
-        const val WATCHED_MS = 3_000L
+        const val WATCHED_MS = 5_000L
         /** O servidor precisa de uns minutos para ter um programa em arquivo. */
         const val CATCHUP_MIN_AGE_MS = 2 * 60_000L
         const val REMINDER_AHEAD_MS = 60_000L
