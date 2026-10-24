@@ -46,6 +46,7 @@ import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.api.EpgMapping
 import cc.slokker.itv.data.api.EpgMappingRequest
 import cc.slokker.itv.data.api.PlaylistDto
+import cc.slokker.itv.data.api.unescaped
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -1271,15 +1272,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Países com um canal de guia com esse nome (o país da pessoa primeiro). */
     suspend fun epgSearch(query: String): EpgResult<List<EpgCountryResult>> =
-        if (query.trim().length < 2) EpgResult.Ok(emptyList()) else epgCall { c.backend.epgSearch(query.trim()) }
+        if (query.trim().length < 2) EpgResult.Ok(emptyList()) else epgCall { c.backend.epgSearch(query.trim()).map { it.unescaped() } }
 
     /** Canais de guia prováveis para [channel] (só para mostrar como opções; nada se associa sozinho). */
     suspend fun epgSuggest(channel: Channel): EpgResult<List<EpgGuideChannel>> {
         val id = _content.value?.playlist?.id ?: return EpgResult.Ok(emptyList())
-        return epgCall { c.backend.epgSuggest(id, channel.key, channel.name) }
+        return epgCall { c.backend.epgSuggest(id, channel.key, channel.name).map { it.unescaped() } }
     }
 
-    suspend fun epgCountries(): EpgResult<List<EpgCountryInfo>> = epgCall { c.backend.epgCountries() }
+    suspend fun epgCountries(): EpgResult<List<EpgCountryInfo>> = epgCall { c.backend.epgCountries().map { it.unescaped() } }
 
     /**
      * A lista inteira passa a usar o guia de [country]: cada canal com o mesmo tvg-id ou o mesmo nome
@@ -1395,7 +1396,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Todos os canais de guia de um país. */
-    suspend fun epgCountryChannels(country: String): EpgResult<EpgCountryResult> = epgCall { c.backend.epgCountryChannels(country) }
+    suspend fun epgCountryChannels(country: String): EpgResult<EpgCountryResult> = epgCall { c.backend.epgCountryChannels(country).unescaped() }
 
     /** O guia de [channel] passa a ser o do canal de guia [guide] (de [country]). Grava na conta. */
     suspend fun setEpgMapping(channel: Channel, country: String, guide: EpgGuideChannel): Boolean {

@@ -166,6 +166,18 @@ data class EpgGuideChannel(
     val score: Double?,
 )
 
+/** Os nomes do IPTV-EPG.org às vezes vêm com entidades HTML ("Trinidad &amp; Tobago"). */
+internal fun String.unescapeHtml(): String =
+    if ('&' !in this) {
+        this
+    } else {
+        replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'").replace("&amp;", "&")
+    }
+
+fun EpgCountryInfo.unescaped() = copy(name = name?.unescapeHtml())
+fun EpgGuideChannel.unescaped() = copy(name = name?.unescapeHtml(), now = now?.unescapeHtml(), countryName = countryName?.unescapeHtml())
+fun EpgCountryResult.unescaped() = copy(countryName = countryName?.unescapeHtml(), channels = channels?.map { it.unescaped() })
+
 data class EpgMapping(
     val country: String?,
     @SerializedName("channel_id") val channelId: String?,
