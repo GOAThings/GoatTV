@@ -234,7 +234,8 @@ private const val FOCUS_FADE_MS = 150
  * [selected] marca o item atual (ex.: o canal a ver) com um fundo subtil.
  * O título fica sempre numa linha (anda para o lado com o foco); o [subtitle] tem até [subtitleLines]
  * linhas, e com 1 também anda.
- * [outlineFocus]: com foco, só um contorno branco (e um véu leve) em vez da placa branca; o texto fica claro.
+ * [outlineFocus]: com foco, só um contorno branco (e um véu leve) em vez da placa branca; o texto fica claro,
+ * e o [selected] deixa de ter fundo.
  * Na lista de canais, assim os logótipos brancos continuam a ver-se sem placa por trás.
  */
 @Composable
@@ -259,7 +260,9 @@ fun GlassRow(
     // recompor a linha a cada frame) e o texto troca de cor uma vez, a meio.
     val fade = animateFloatAsState(if (focused && enabled) 1f else 0f, tween(FOCUS_FADE_MS), label = "row")
     val dark by remember(outlineFocus) { derivedStateOf { !outlineFocus && fade.value > 0.5f } }
-    val rest = if (selected) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
+    // (ex.: o ponto azul e o "A ver agora" na lista de canais).
+    val rest = if (selected && !outlineFocus) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
     Surface(
