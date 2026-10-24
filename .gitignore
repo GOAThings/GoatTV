@@ -23,3 +23,6 @@ keystore.properties
 
 # Ficheiros do Android Studio (têm caminhos do PC de quem desenvolve)
 /.idea
+
+# Scripts de publicação (só locais)
+/scripts
