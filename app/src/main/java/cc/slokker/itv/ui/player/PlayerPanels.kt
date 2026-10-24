@@ -72,6 +72,7 @@ import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.SpecialCategory
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ChannelLogo
+import cc.slokker.itv.ui.common.LocalChannelLogos
 import cc.slokker.itv.ui.common.PinPad
 import cc.slokker.itv.ui.glass.GlassIconButton
 import cc.slokker.itv.ui.glass.GlassRow
@@ -220,7 +221,9 @@ private fun ChannelList(
     // Logos das linhas à volta da vista pedidos antes de aparecerem (mesmo tamanho → cache de memória).
     val context = LocalContext.current
     val logoPx = with(LocalDensity.current) { LIST_LOGO_SIZE.roundToPx() }
-    LaunchedEffect(channels, prefs.showLogos) {
+    // O logótipo que a linha vai mesmo mostrar: o do guia/país/escolhido, se houver, senão o da lista.
+    val logoOverrides = LocalChannelLogos.current
+    LaunchedEffect(channels, prefs.showLogos, logoOverrides) {
         if (!prefs.showLogos) return@LaunchedEffect
         val loader = SingletonImageLoader.get(context)
         val requested = HashSet<String>()
@@ -228,7 +231,7 @@ private fun ChannelList(
             val from = (first - 10).coerceAtLeast(0)
             val to = (first + 25).coerceAtMost(channels.lastIndex)
             for (i in from..to) {
-                val url = channels[i].logo ?: continue
+                val url = logoOverrides[channels[i].key] ?: channels[i].logo ?: continue
                 if (requested.add(url)) loader.enqueue(ImageRequest.Builder(context).data(url).size(logoPx).build())
             }
         }
