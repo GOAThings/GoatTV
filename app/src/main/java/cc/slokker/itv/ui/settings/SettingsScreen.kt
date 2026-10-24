@@ -82,6 +82,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -102,6 +103,7 @@ import cc.slokker.itv.ui.common.PinPad
 import cc.slokker.itv.ui.common.onBackKey
 import cc.slokker.itv.ui.glass.AuroraBackground
 import cc.slokker.itv.ui.glass.GlassRow
+import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.glass.SectionLabel
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.glass.rowText
@@ -232,7 +234,15 @@ private fun logoSourceLabel(source: String, s: Strings): String = when (source) 
 /** Uma linha de definições. [key] serve para devolver o foco à linha certa ao voltar atrás. */
 private sealed class Item(val key: String) {
     class Nav(key: String, val title: String, val value: String? = null, val subtitle: String? = null, val onClick: () -> Unit) : Item(key)
-    class Toggle(key: String, val title: String, val checked: Boolean, val subtitle: String? = null, val onToggle: (Boolean) -> Unit) : Item(key)
+    /** Sim/não. Com [eye], um olho (visível) ou um olho riscado e esbatido (escondido) em vez do interruptor. */
+    class Toggle(
+        key: String,
+        val title: String,
+        val checked: Boolean,
+        val subtitle: String? = null,
+        val eye: Boolean = false,
+        val onToggle: (Boolean) -> Unit,
+    ) : Item(key)
     class Check(
         key: String,
         val title: String,
@@ -904,13 +914,13 @@ private fun settingItems(
             add(Item.Action("resetorder", s.resetOrder, s.resetOrderSub) { vm.resetGroupOrder() })
             add(Item.Header("h", s.visibleGroups))
             // Os dois grupos especiais valem para todas as listas.
-            add(Item.Toggle(Prefs.Key.SHOW_FAVORITES_GROUP, s.favoritesStar, prefs.showFavoritesGroup) { vm.setPref(Prefs.Key.SHOW_FAVORITES_GROUP, it) })
-            add(Item.Toggle(Prefs.Key.SHOW_ALL_GROUP, s.all, prefs.showAllGroup) { vm.setPref(Prefs.Key.SHOW_ALL_GROUP, it) })
-            add(Item.Toggle(Prefs.Key.SHOW_RECENT_GROUP, s.recents, prefs.showRecentGroup) { vm.setPref(Prefs.Key.SHOW_RECENT_GROUP, it) })
+            add(Item.Toggle(Prefs.Key.SHOW_FAVORITES_GROUP, s.favoritesStar, prefs.showFavoritesGroup, eye = true) { vm.setPref(Prefs.Key.SHOW_FAVORITES_GROUP, it) })
+            add(Item.Toggle(Prefs.Key.SHOW_ALL_GROUP, s.all, prefs.showAllGroup, eye = true) { vm.setPref(Prefs.Key.SHOW_ALL_GROUP, it) })
+            add(Item.Toggle(Prefs.Key.SHOW_RECENT_GROUP, s.recents, prefs.showRecentGroup, eye = true) { vm.setPref(Prefs.Key.SHOW_RECENT_GROUP, it) })
             val data = content ?: return@buildList
             vm.orderedGroups(includeHidden = true).forEach { g ->
                 val name = if (g.id == PlaylistContent.OTHERS) s.others else g.name
-                add(Item.Toggle("g:" + g.id, name, !prefs.isHidden(data.playlist.id, g.id)) { visible -> vm.setGroupHidden(g.id, !visible) })
+                add(Item.Toggle("g:" + g.id, name, !prefs.isHidden(data.playlist.id, g.id), eye = true) { visible -> vm.setGroupHidden(g.id, !visible) })
             }
         }
 
@@ -933,7 +943,7 @@ private fun settingItems(
             add(Item.Action("resetorder", s.resetOrder, s.resetOrderSub) { vm.resetChannelOrder(route.groupId) })
             add(Item.Header("h", s.visibleChannels))
             vm.orderedChannels(route.groupId, includeHidden = true).forEach { ch ->
-                add(Item.Toggle("c:" + ch.key, ch.name, !prefs.isChannelHidden(data.playlist.id, ch.key)) { visible -> vm.setChannelHidden(ch, !visible) })
+                add(Item.Toggle("c:" + ch.key, ch.name, !prefs.isChannelHidden(data.playlist.id, ch.key), eye = true) { visible -> vm.setChannelHidden(ch, !visible) })
             }
         }
 
@@ -1057,7 +1067,7 @@ private fun settingItems(
                 add(text("url", s.playlistUrl, form.url, TextKind.URL) { f, v -> f.copy(url = v) })
             }
             add(text("epg", s.epgUrl, form.epgUrl, TextKind.URL, optional = true) { f, v -> f.copy(epgUrl = v) })
-            add(Item.Action("save", s.save, form.problem() ?: if (local) s.playlistOnlyHere else s.playlistAccountHint) {
+            add(Item.Action("save", s.save, form.problem() ?: if (vm.epgPickerAvailable) s.playlistAccountHint else s.playlistOnlyHere) {
                 if (route.saving.value) return@Action
                 route.saving.value = true
                 scope.launch {
@@ -1156,7 +1166,7 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
                     title = item.title,
                     subtitle = item.subtitle,
                     subtitleLines = 1,
-                    trailing = { Switch(item.checked) },
+                    trailing = { if (item.eye) Eye(item.checked) else Switch(item.checked) },
                     modifier = mod,
                 )
                 is Item.Check -> GlassRow(
@@ -1332,6 +1342,17 @@ private fun TrailingValue(value: String, color: Color) {
         color = color,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Visível (olho) ou escondido (olho riscado, esbatido): nos grupos e canais a mostrar na lista. */
+@Composable
+private fun Eye(visible: Boolean) {
+    Icon(
+        if (visible) ItvIcons.Visible else ItvIcons.Hidden,
+        contentDescription = null,
+        modifier = Modifier.size(22.dp),
+        tint = LocalContentColor.current.copy(alpha = if (visible) 1f else 0.4f),
     )
 }
 
