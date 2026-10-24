@@ -100,6 +100,7 @@ import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.common.Format
 import android.media.MediaFormat
 import android.os.Handler
+import android.util.Log
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -1256,8 +1257,13 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
             Prefs.Buffer.LARGE -> 8_000
             else -> 3_000
         }
-        return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching).apply {
-            playWhenReady = true
+        // Se o VLC não arrancar (biblioteca nativa, box sem suporte…), fica o ExoPlayer em vez de fechar a app.
+        try {
+            return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching).apply {
+                playWhenReady = true
+            }
+        } catch (e: Throwable) {
+            Log.w("itv", "O VLC não arrancou; fica o ExoPlayer", e)
         }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE

@@ -44,13 +44,10 @@ internal class VlcPlayer(
     private val networkCachingMs: Int,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
 
+    // O LibVLC junta as suas opções a esta lista: tem de poder ser alterada (com buildList fechava a app).
     private val libVlc = LibVLC(
         context.applicationContext,
-        buildList {
-            add("--http-reconnect")
-            add("--audio-time-stretch")
-            if (passthrough) add("--spdif")
-        },
+        arrayListOf("--http-reconnect", "--audio-time-stretch").apply { if (passthrough) add("--spdif") },
     )
     private val vlc = MediaPlayer(libVlc)
     private val main = Handler(Looper.getMainLooper())
@@ -71,6 +68,13 @@ internal class VlcPlayer(
     private var params = TrackSelectionParameters.DEFAULT
     private var firstFrame = false
     private var surface: SurfaceView? = null
+
+    /**
+     * Depois de [release] o VLC já não existe: chamá-lo fecha a app ("can't get VLCObject instance"). Ao trocar de
+     * player nas definições, a app ainda pede a posição ou o estado ao antigo, e há eventos do VLC a caminho.
+     */
+    private var released = false
+    private var lastTimeMs = 0L
 
     /** O VLC precisa de saber o tamanho da janela para desenhar a imagem com a proporção certa. */
     private val surfaceLayout = View.OnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
@@ -111,6 +115,7 @@ internal class VlcPlayer(
     }
 
     private fun onEvent(type: Int, buffering: Float, voutCount: Int) {
+        if (released) return
         when (type) {
             MediaPlayer.Event.Opening -> playbackState = Player.STATE_BUFFERING
             MediaPlayer.Event.Buffering -> if (playbackState != Player.STATE_IDLE) {
@@ -140,6 +145,7 @@ internal class VlcPlayer(
 
     /** As faixas do VLC como [Tracks] do Media3 (o menu de áudio e legendas é o mesmo dos dois players). */
     private fun refreshTracks() {
+        if (released) return
         val groups = mutableListOf<Tracks.Group>()
         vlc.currentVideoTrack?.let { v ->
             val format = Format.Builder()
@@ -207,7 +213,7 @@ internal class VlcPlayer(
                 )
                 .setCurrentMediaItemIndex(0)
                 .setPlaybackState(playbackState)
-                .setContentPositionMs { vlc.time.coerceAtLeast(0) }
+                .setContentPositionMs { if (released) lastTimeMs else vlc.time.coerceAtLeast(0).also { lastTimeMs = it } }
         }
         if (firstFrame) {
             builder.setNewlyRenderedFirstFrame(true)
@@ -217,7 +223,7 @@ internal class VlcPlayer(
     }
 
     override fun handlePrepare(): ListenableFuture<*> {
-        val url = url ?: return Futures.immediateVoidFuture()
+        val url = url?.takeIf { !released } ?: return Futures.immediateVoidFuture()
         error = null
         playbackState = Player.STATE_BUFFERING
         val media = Media(libVlc, Uri.parse(url)).apply {
@@ -234,20 +240,24 @@ internal class VlcPlayer(
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         this.playWhenReady = playWhenReady
-        if (playbackState != Player.STATE_IDLE) {
+        if (playbackState != Player.STATE_IDLE && !released) {
             if (playWhenReady) vlc.play() else vlc.pause()
         }
         return Futures.immediateVoidFuture()
     }
 
     override fun handleStop(): ListenableFuture<*> {
-        vlc.stop()
+        if (!released) vlc.stop()
         playbackState = Player.STATE_IDLE
         return Futures.immediateVoidFuture()
     }
 
     override fun handleRelease(): ListenableFuture<*> {
+        if (released) return Futures.immediateVoidFuture()
         detachSurface()
+        lastTimeMs = vlc.time.coerceAtLeast(0)
+        released = true
+        main.removeCallbacksAndMessages(null)
         vlc.setEventListener(null)
         vlc.release()
         libVlc.release()
@@ -255,7 +265,7 @@ internal class VlcPlayer(
     }
 
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> {
-        if (videoOutput is SurfaceView && videoOutput != surface) {
+        if (videoOutput is SurfaceView && videoOutput != surface && !released) {
             detachSurface()
             surface = videoOutput
             vlc.vlcVout.setVideoView(videoOutput)
@@ -273,12 +283,17 @@ internal class VlcPlayer(
 
     private fun detachSurface() {
         val view = surface ?: return
+        if (released) {
+            surface = null
+            return
+        }
         view.removeOnLayoutChangeListener(surfaceLayout)
         vlc.vlcVout.detachViews()
         surface = null
     }
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
+        if (released) return Futures.immediateVoidFuture()
         if (positionMs == C.TIME_UNSET) {
             // "Voltar ao direto": num live, recomeçar a stream é o que leva ao ponto atual.
             if (playbackState != Player.STATE_IDLE) {
@@ -300,6 +315,7 @@ internal class VlcPlayer(
     /** Escolher faixas de áudio e legendas, e desligar o áudio (só um dos dois canais tem som). */
     override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
         params = trackSelectionParameters
+        if (released) return Futures.immediateVoidFuture()
         applyVolume()
         if (C.TRACK_TYPE_TEXT in params.disabledTrackTypes) vlc.spuTrack = -1
         params.overrides.values.forEach { override ->
@@ -315,6 +331,7 @@ internal class VlcPlayer(
     }
 
     private fun applyVolume() {
+        if (released) return
         val muted = C.TRACK_TYPE_AUDIO in params.disabledTrackTypes
         vlc.volume = if (muted) 0 else (volume * 100).toInt().coerceIn(0, 100)
     }
