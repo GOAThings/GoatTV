@@ -237,7 +237,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val playlistId = content?.playlist?.id ?: return@combine emptyMap()
             val logos = when {
                 p.logoSource == Prefs.LogoSource.GUIDE -> mappings.mapNotNull { (key, m) -> m.icon?.let { key to it } }.toMap()
-                Prefs.LogoSource.isCountry(p.logoSource) && country?.first == "$playlistId:${p.logoSource}" -> country.second
+                Prefs.LogoSource.isCountry(p.logoSource) -> {
+                    // Pelo nome, e por cima os canais com guia escolhido nesse país (acerta mesmo com o nome diferente).
+                    val byName = country?.takeIf { it.first == "$playlistId:${p.logoSource}" }?.second.orEmpty()
+                    byName + mappings.mapNotNull { (key, m) -> m.icon?.takeIf { m.country.equals(p.logoSource, ignoreCase = true) }?.let { key to it } }
+                }
                 else -> emptyMap()
             }.toMutableMap()
             val prefix = "$playlistId:"
