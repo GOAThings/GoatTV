@@ -12,6 +12,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import cc.slokker.itv.IPTV_USER_AGENT
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import cc.slokker.itv.ui.i18n.Strings
@@ -219,6 +222,51 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _epgMappings = MutableStateFlow<Map<String, EpgMapping>>(emptyMap())
     val epgMappings: StateFlow<Map<String, EpgMapping>> = _epgMappings.asStateFlow()
     private var mappingsLoadedFor: String? = null
+
+    /** Logótipos do país escolhido em "Origem dos logótipos", para a lista em uso: ("playlistId:país", channelKey → URL). */
+    private val _countryLogos = MutableStateFlow<Pair<String, Map<String, String>>?>(null)
+    private var countryGuide: Pair<String, List<EpgGuideChannel>>? = null
+
+    /**
+     * Os logótipos que substituem os da lista (channelKey → URL), na lista em uso: os da [Prefs.logoSource]
+     * e, por cima, os escolhidos canal a canal ("" num canal volta ao da lista). Canais fora do mapa usam o da lista.
+     */
+    val channelLogos: StateFlow<Map<String, String>> =
+        combine(_content, _prefs, _epgMappings, _countryLogos) { content, p, mappings, country ->
+            val playlistId = content?.playlist?.id ?: return@combine emptyMap()
+            val logos = when {
+                p.logoSource == Prefs.LogoSource.GUIDE -> mappings.mapNotNull { (key, m) -> m.icon?.let { key to it } }.toMap()
+                Prefs.LogoSource.isCountry(p.logoSource) && country?.first == "$playlistId:${p.logoSource}" -> country.second
+                else -> emptyMap()
+            }.toMutableMap()
+            val prefix = "$playlistId:"
+            p.channelLogos.forEach { (k, url) ->
+                if (k.startsWith(prefix)) {
+                    val key = k.removePrefix(prefix)
+                    if (url.isEmpty()) logos.remove(key) else logos[key] = url
+                }
+            }
+            logos
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    init {
+        // Com um país em "Origem dos logótipos", vai buscar os canais de guia desse país e associa-os aos da lista
+        // pelo tvg-id ou pelo nome (como em "Usar <país> na lista inteira", mas sem gravar associações).
+        viewModelScope.launch {
+            combine(_content, _prefs) { content, p -> content?.takeIf { Prefs.LogoSource.isCountry(p.logoSource) }?.let { it to p.logoSource } }
+                .distinctUntilChanged { a, b -> a?.first === b?.first && a?.second == b?.second }
+                .collectLatest { pair ->
+                    val (content, country) = pair ?: return@collectLatest
+                    if (!epgPickerAvailable) return@collectLatest
+                    // Os canais de guia do país ficam em memória: uma lista atualizada só volta a associar.
+                    val guide = countryGuide?.takeIf { it.first == country }?.second
+                        ?: ((epgCountryChannels(country) as? EpgResult.Ok)?.value?.channels ?: return@collectLatest)
+                            .filter { it.icon != null }
+                            .also { countryGuide = country to it }
+                    _countryLogos.value = "${content.playlist.id}:$country" to matchGuide(content.channels, guide).associate { (ch, g) -> ch.key to g.icon!! }
+                }
+        }
+    }
 
     /** Muda quando chega guia novo: a grelha e as listas voltam a ler. */
     val epgVersion: StateFlow<Int> get() = c.epg.version
@@ -1114,7 +1162,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             is Map<*, *> -> settings.add(
                 key,
                 JsonObject().apply {
-                    value.forEach { (k, v) -> add(k.toString(), JsonArray().apply { (v as Collection<*>).forEach { add(it.toString()) } }) }
+                    value.forEach { (k, v) ->
+                        if (v is Collection<*>) add(k.toString(), JsonArray().apply { v.forEach { add(it.toString()) } }) else addProperty(k.toString(), v.toString())
+                    }
                 },
             )
             else -> error("Tipo não suportado: ${value::class}")
@@ -1252,15 +1302,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 is EpgResult.Ok -> r.value.channels.orEmpty().filter { it.id != null }
             }
-            val byId = guide.associateBy { it.id!!.lowercase() }
-            val byName = HashMap<String, EpgGuideChannel>()
-            guide.forEach { g -> g.name?.let { XmltvGuide.normalizeName(it) }?.takeIf { it.isNotEmpty() }?.let { byName.putIfAbsent(it, g) } }
             val already = _epgMappings.value
-            val matches = content.channels.asSequence()
-                .filter { it.key !in already }
-                .mapNotNull { ch -> (ch.epgId?.lowercase()?.let(byId::get) ?: byName[XmltvGuide.normalizeName(ch.name)])?.let { ch to it } }
-                .distinctBy { it.first.key }
-                .toList()
+            val matches = matchGuide(content.channels.filter { it.key !in already }, guide)
             if (matches.isEmpty()) {
                 showToast(I18n.s.epgCountryNone(countryName))
                 return@launch
@@ -1294,6 +1337,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             delay(EPG_NEW_COUNTRY_MS)
             if (_content.value?.playlist?.id == playlistId) c.epg.openAccount(viewModelScope, playlistId, mapped = _epgMappings.value.isNotEmpty(), force = true)
         }
+    }
+
+    /** Pares canal da lista → canal de guia com o mesmo tvg-id ou o mesmo nome (normalizado: "PT: SIC HD" = "SIC"). */
+    private fun matchGuide(channels: List<Channel>, guide: List<EpgGuideChannel>): List<Pair<Channel, EpgGuideChannel>> {
+        val byId = guide.filter { it.id != null }.associateBy { it.id!!.lowercase() }
+        val byName = HashMap<String, EpgGuideChannel>()
+        guide.forEach { g -> g.name?.let { XmltvGuide.normalizeName(it) }?.takeIf { it.isNotEmpty() }?.let { byName.putIfAbsent(it, g) } }
+        return channels.asSequence()
+            .mapNotNull { ch -> (ch.epgId?.lowercase()?.let(byId::get) ?: byName[XmltvGuide.normalizeName(ch.name)])?.let { ch to it } }
+            .distinctBy { it.first.key }
+            .toList()
+    }
+
+    /** Logótipo escolhido para [channel] na lista em uso: um URL, "" para o da lista, ou null para seguir a origem geral. */
+    fun channelLogoChoice(channel: Channel): String? {
+        val playlistId = _content.value?.playlist?.id ?: return null
+        return _prefs.value.channelLogos["$playlistId:${channel.key}"]
+    }
+
+    fun setChannelLogo(channel: Channel, url: String?) {
+        val playlistId = _content.value?.playlist?.id ?: return
+        val key = "$playlistId:${channel.key}"
+        val current = _prefs.value.channelLogos
+        setPref(Prefs.Key.CHANNEL_LOGOS, if (url == null) current - key else current + (key to url))
     }
 
     /** Todos os canais da lista voltam ao guia da lista. */
@@ -1465,9 +1532,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = _content.value ?: return
         val items = channelsOf(SpecialCategory.RECENT).take(HOME_ITEMS).map { ch ->
             val now = System.currentTimeMillis()
-            // Com "Logótipos do guia", o launcher mostra o mesmo logótipo que a app.
-            val guideLogo = _epgMappings.value[ch.key]?.icon?.takeIf { _prefs.value.guideLogos }
-            HomeItem(if (guideLogo != null) ch.copy(logo = guideLogo) else ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
+            // O launcher mostra o mesmo logótipo que a app.
+            val logo = channelLogos.value[ch.key]
+            HomeItem(if (logo != null) ch.copy(logo = logo) else ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
         }
         viewModelScope.launch { c.home.update(items) }
     }

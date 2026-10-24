@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.settings
 
+import java.util.Locale
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
@@ -93,6 +94,7 @@ import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.AppViewModel
+import cc.slokker.itv.ui.common.LogoImage
 import cc.slokker.itv.ui.common.PinPad
 import cc.slokker.itv.ui.common.onBackKey
 import cc.slokker.itv.ui.glass.AuroraBackground
@@ -160,17 +162,29 @@ private sealed interface Route {
     data object LockedGroups : Route { override fun title(s: Strings) = s.lockedGroups }
     data object Lists : Route { override fun title(s: Strings) = s.playlists }
     class PlaylistDetail(val id: String, private val name: String) : Route { override fun title(s: Strings) = name }
-    /** Escolher o guia de um canal (só com conta): pesquisa pelo nome → país → canal de guia. */
-    class EpgPick(val channel: Channel) : Route {
+    /**
+     * Escolher o guia de um canal (só com conta): pesquisa pelo nome → país → canal de guia.
+     * Com [logo], escolhe-se da mesma maneira o logótipo do canal (o do canal de guia), sem mexer no guia.
+     */
+    class EpgPick(val channel: Channel, val logo: Boolean = false) : Route {
         /** O nome a procurar (começa pelo do canal; "Procurar outro nome" muda-o). */
         val query = mutableStateOf(channel.name)
-        override fun title(s: Strings) = s.epgGuideChannel
+        override fun title(s: Strings) = if (logo) s.channelLogo else s.epgGuideChannel
     }
 
-    /** Canais de guia de um país: os da pesquisa ([matches]), ou todos (null). */
-    class EpgCountry(val channel: Channel, val country: String, private val name: String, val matches: List<EpgGuideChannel>?) : Route {
+    /** Canais de guia de um país: os da pesquisa ([matches]), ou todos (null). [logo] como em [EpgPick]. */
+    class EpgCountry(
+        val channel: Channel,
+        val country: String,
+        private val name: String,
+        val matches: List<EpgGuideChannel>?,
+        val logo: Boolean = false,
+    ) : Route {
         override fun title(s: Strings) = name
     }
+
+    /** De onde vêm os logótipos de todos os canais: a lista, o guia de cada canal, ou um país. */
+    data object LogoSource : Route { override fun title(s: Strings) = s.logoSource }
 
     /** A lista inteira com o guia de um país (só com conta, lista em uso). */
     data object EpgCountries : Route { override fun title(s: Strings) = s.epgCountryGuide }
@@ -205,11 +219,28 @@ private sealed interface Route {
 
 private enum class TextKind { PLAIN, URL, PASSWORD }
 
+/** Nome da origem dos logótipos: a lista, o guia de cada canal, ou o país (pelo código). */
+private fun logoSourceLabel(source: String, s: Strings): String = when (source) {
+    Prefs.LogoSource.PLAYLIST -> s.logoFromPlaylist
+    Prefs.LogoSource.GUIDE -> s.logoFromGuide
+    else -> Locale("", source.uppercase()).displayCountry.takeIf { it.isNotBlank() && !it.equals(source, ignoreCase = true) } ?: source.uppercase()
+}
+
 /** Uma linha de definições. [key] serve para devolver o foco à linha certa ao voltar atrás. */
 private sealed class Item(val key: String) {
     class Nav(key: String, val title: String, val value: String? = null, val subtitle: String? = null, val onClick: () -> Unit) : Item(key)
     class Toggle(key: String, val title: String, val checked: Boolean, val subtitle: String? = null, val onToggle: (Boolean) -> Unit) : Item(key)
-    class Check(key: String, val title: String, val checked: Boolean, val subtitle: String? = null, val swatch: Brush? = null, val onClick: () -> Unit) : Item(key)
+    class Check(
+        key: String,
+        val title: String,
+        val checked: Boolean,
+        val subtitle: String? = null,
+        val swatch: Brush? = null,
+        /** Logótipo à esquerda (URL; null mostra as iniciais do título). Só com [showLogo]. */
+        val logo: String? = null,
+        val showLogo: Boolean = false,
+        val onClick: () -> Unit,
+    ) : Item(key)
     class Action(key: String, val title: String, val subtitle: String? = null, val onClick: () -> Unit) : Item(key)
     class Info(key: String, val title: String, val value: String) : Item(key)
     class Header(key: String, val text: String) : Item(key)
@@ -441,39 +472,78 @@ private fun settingItems(
             } else {
                 add(Item.Action("epg", s.epgGuideChannel, s.epgNeedsAccount) { vm.showToast(s.epgNeedsAccount) })
             }
+            // O logótipo escolhe-se como o guia: por defeito segue a origem geral (Aspeto → Origem dos logótipos).
+            if (vm.epgPickerAvailable) {
+                val choice = vm.channelLogoChoice(ch)
+                val value = when {
+                    choice == null -> s.logoAutomatic
+                    choice.isEmpty() -> s.logoFromPlaylist
+                    else -> s.logoChosen
+                }
+                add(Item.Nav("logo", s.channelLogo, value = value) { push(Route.EpgPick(ch, logo = true), "logo") })
+            }
         }
 
         is Route.EpgPick -> {
             val ch = route.channel
+            val logo = route.logo
             val query by route.query
             val mapping = epgMappings[ch.key]
+            val logoChoice = vm.channelLogoChoice(ch)
             val suggestions by produceState<AppViewModel.EpgResult<List<EpgGuideChannel>>?>(null, ch.key) { value = vm.epgSuggest(ch) }
             val search by produceState<AppViewModel.EpgResult<List<EpgCountryResult>>?>(null, query) {
                 value = null
                 value = vm.epgSearch(query)
             }
             fun choose(country: String, guide: EpgGuideChannel) {
-                scope.launch { if (vm.setEpgMapping(ch, country, guide)) popToCurrent() }
+                if (logo) {
+                    vm.setChannelLogo(ch, guide.icon)
+                    popToCurrent()
+                } else {
+                    scope.launch { if (vm.setEpgMapping(ch, country, guide)) popToCurrent() }
+                }
             }
+            // Para o logótipo só contam os canais de guia que o têm.
+            fun usable(g: EpgGuideChannel) = !logo || g.icon != null
+            fun chosen(country: String?, g: EpgGuideChannel) =
+                if (logo) logoChoice == g.icon else mapping?.country == country && mapping?.channelId == g.id
             buildList {
-                // O guia da lista é o normal; escolhê-lo desfaz a troca.
-                add(
-                    Item.Check("playlist", s.epgFromPlaylist, mapping == null, subtitle = mapping?.let { s.epgUsingNow(guideLabel(it.guideName ?: it.channelId, it.country)) }) {
-                        if (mapping != null) scope.launch { if (vm.removeEpgMapping(ch)) popToCurrent() }
-                    },
-                )
+                if (logo) {
+                    // Automático: o que diz Aspeto → Origem dos logótipos; o da lista fixa-o neste canal.
+                    add(
+                        Item.Check("auto", s.logoAutomatic, logoChoice == null, subtitle = logoSourceLabel(prefs.logoSource, s)) {
+                            vm.setChannelLogo(ch, null)
+                            popToCurrent()
+                        },
+                    )
+                    add(
+                        Item.Check("playlist", s.logoFromPlaylist, logoChoice == "", logo = ch.logo, showLogo = true) {
+                            vm.setChannelLogo(ch, "")
+                            popToCurrent()
+                        },
+                    )
+                } else {
+                    // O guia da lista é o normal; escolhê-lo desfaz a troca.
+                    add(
+                        Item.Check("playlist", s.epgFromPlaylist, mapping == null, subtitle = mapping?.let { s.epgUsingNow(guideLabel(it.guideName ?: it.channelId, it.country)) }) {
+                            if (mapping != null) scope.launch { if (vm.removeEpgMapping(ch)) popToCurrent() }
+                        },
+                    )
+                }
                 if (suggestions == null || search == null) {
                     add(Item.Info(LOADING_KEY, s.loadingShort, ""))
                     return@buildList
                 }
-                (suggestions as? AppViewModel.EpgResult.Ok)?.value?.filter { it.id != null && it.country != null }?.takeIf { it.isNotEmpty() }?.let { list ->
+                (suggestions as? AppViewModel.EpgResult.Ok)?.value?.filter { it.id != null && it.country != null && usable(it) }?.takeIf { it.isNotEmpty() }?.let { list ->
                     add(Item.Header("hs", s.epgSuggestions))
                     list.forEach { g ->
                         add(
                             Item.Check(
                                 "s:${g.country}:${g.id}", g.name ?: g.id.orEmpty(),
-                                mapping?.country == g.country && mapping?.channelId == g.id,
+                                chosen(g.country, g),
                                 subtitle = listOfNotNull(g.countryName, g.now).joinToString(" · "),
+                                logo = g.icon,
+                                showLogo = logo,
                             ) { choose(g.country!!, g) },
                         )
                     }
@@ -482,13 +552,15 @@ private fun settingItems(
                 when (val r = search) {
                     is AppViewModel.EpgResult.Error -> add(Item.Info("err", r.message, ""))
                     is AppViewModel.EpgResult.Ok -> {
-                        val countries = r.value.filter { it.country != null && !it.channels.isNullOrEmpty() }
+                        val countries = r.value
+                            .map { it.copy(channels = it.channels?.filter(::usable)) }
+                            .filter { it.country != null && !it.channels.isNullOrEmpty() }
                         if (countries.isEmpty()) add(Item.Info("none", s.epgNoResults(query), ""))
                         countries.forEach { c ->
                             val code = c.country!!
                             val name = c.countryName ?: code.uppercase()
                             add(Item.Nav("c:$code", name, value = c.channels!!.size.toString()) {
-                                push(Route.EpgCountry(ch, code, name, c.channels), "c:$code")
+                                push(Route.EpgCountry(ch, code, name, c.channels, logo), "c:$code")
                             })
                         }
                     }
@@ -497,6 +569,40 @@ private fun settingItems(
                 add(Item.Action("other", s.epgSearchOther) {
                     push(Route.TextEdit(s.epgSearchOther, query, TextKind.PLAIN) { v -> if (v.isNotBlank()) route.query.value = v.trim() }, "other")
                 })
+            }
+        }
+
+        Route.LogoSource -> {
+            val countries by produceState<AppViewModel.EpgResult<List<EpgCountryInfo>>?>(null) {
+                if (vm.epgPickerAvailable) value = vm.epgCountries()
+            }
+            fun choose(source: String?) {
+                vm.setPref(Prefs.Key.LOGO_SOURCE, source)
+                popNested()
+            }
+            buildList {
+                add(Item.Check(Prefs.LogoSource.PLAYLIST, s.logoFromPlaylist, prefs.logoSource == Prefs.LogoSource.PLAYLIST) { choose(null) })
+                // Os outros vêm do guia da GoatTV (IPTV-EPG.org), que precisa de conta.
+                if (!vm.epgPickerAvailable) {
+                    add(Item.Action("account", s.logoByCountry, s.epgNeedsAccount) { vm.showToast(s.epgNeedsAccount) })
+                    return@buildList
+                }
+                add(
+                    Item.Check(Prefs.LogoSource.GUIDE, s.logoFromGuide, prefs.logoSource == Prefs.LogoSource.GUIDE, s.logoFromGuideSub) {
+                        choose(Prefs.LogoSource.GUIDE)
+                    },
+                )
+                add(Item.Header("hc", s.logoByCountry))
+                when (val r = countries) {
+                    null -> add(Item.Info(LOADING_KEY, s.loadingShort, ""))
+                    is AppViewModel.EpgResult.Error -> add(Item.Info("err", r.message, ""))
+                    is AppViewModel.EpgResult.Ok -> r.value
+                        .filter { it.code != null && (it.channels ?: 0) > 0 }
+                        .sortedBy { it.name ?: it.code }
+                        .forEach { c ->
+                            add(Item.Check("k:${c.code}", c.name ?: c.code!!.uppercase(), prefs.logoSource == c.code) { choose(c.code) })
+                        }
+                }
             }
         }
 
@@ -520,7 +626,9 @@ private fun settingItems(
 
         is Route.EpgCountry -> {
             val ch = route.channel
+            val logo = route.logo
             val mapping = epgMappings[ch.key]
+            val logoChoice = vm.channelLogoChoice(ch)
             val all by produceState<AppViewModel.EpgResult<EpgCountryResult>?>(null, route.country) {
                 if (route.matches == null) value = vm.epgCountryChannels(route.country)
             }
@@ -536,23 +644,39 @@ private fun settingItems(
                     }
                     is AppViewModel.EpgResult.Ok -> r.value.channels.orEmpty()
                 }
-                channels.filter { it.id != null }.forEach { g ->
-                    add(
-                        Item.Check("g:${g.id}", g.name ?: g.id!!, mapping?.country == route.country && mapping?.channelId == g.id, subtitle = g.now) {
-                            scope.launch { if (vm.setEpgMapping(ch, route.country, g)) popToCurrent() }
-                        },
-                    )
+                channels.filter { it.id != null && (!logo || it.icon != null) }.forEach { g ->
+                    if (logo) {
+                        add(
+                            Item.Check("g:${g.id}", g.name ?: g.id!!, logoChoice == g.icon, subtitle = g.now, logo = g.icon, showLogo = true) {
+                                vm.setChannelLogo(ch, g.icon)
+                                popToCurrent()
+                            },
+                        )
+                    } else {
+                        add(
+                            Item.Check("g:${g.id}", g.name ?: g.id!!, mapping?.country == route.country && mapping?.channelId == g.id, subtitle = g.now) {
+                                scope.launch { if (vm.setEpgMapping(ch, route.country, g)) popToCurrent() }
+                            },
+                        )
+                    }
                 }
                 if (route.matches != null) {
                     add(Item.Nav("all", s.epgAllCountry(route.title(s))) {
-                        push(Route.EpgCountry(ch, route.country, route.title(s), null), "all")
+                        push(Route.EpgCountry(ch, route.country, route.title(s), null, logo), "all")
                     })
                 }
                 // Atalho: o mesmo país para todos os canais da lista com o mesmo nome.
-                add(Item.Action("whole", s.epgCountryApply(route.title(s)), s.epgCountryGuideSub) {
-                    vm.applyEpgCountry(route.country, route.title(s))
-                    popToCurrent()
-                })
+                if (logo) {
+                    add(Item.Action("whole", s.logoCountryApply(route.title(s)), s.logoCountryApplySub) {
+                        vm.setPref(Prefs.Key.LOGO_SOURCE, route.country)
+                        popToCurrent()
+                    })
+                } else {
+                    add(Item.Action("whole", s.epgCountryApply(route.title(s)), s.epgCountryGuideSub) {
+                        vm.applyEpgCountry(route.country, route.title(s))
+                        popToCurrent()
+                    })
+                }
             }
         }
 
@@ -679,7 +803,7 @@ private fun settingItems(
             ),
             Item.Toggle(Prefs.Key.SHOW_NUMBERS, s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) },
             Item.Toggle(Prefs.Key.SHOW_LOGOS, s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) },
-            Item.Toggle(Prefs.Key.GUIDE_LOGOS, s.guideLogos, prefs.guideLogos, s.guideLogosSub) { vm.setPref(Prefs.Key.GUIDE_LOGOS, it) },
+            Item.Nav(Prefs.Key.LOGO_SOURCE, s.logoSource, value = logoSourceLabel(prefs.logoSource, s)) { push(Route.LogoSource, Prefs.Key.LOGO_SOURCE) },
             pref(
                 Prefs.Key.SORT, s.sortChannels,
                 listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName),
@@ -1015,11 +1139,20 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
                     title = item.title,
                     subtitle = item.subtitle,
                     subtitleLines = 1,
-                    leading = item.swatch?.let { swatch ->
-                        {
-                            Box(Modifier.size(22.dp).clip(CircleShape).background(swatch))
-                            Spacer(Modifier.width(12.dp))
+                    leading = when {
+                        item.showLogo -> {
+                            {
+                                LogoImage(item.logo, item.title, 32.dp)
+                                Spacer(Modifier.width(14.dp))
+                            }
                         }
+                        item.swatch != null -> {
+                            {
+                                Box(Modifier.size(22.dp).clip(CircleShape).background(item.swatch))
+                                Spacer(Modifier.width(12.dp))
+                            }
+                        }
+                        else -> null
                     },
                     trailing = if (item.checked) {
                         { Text("✓", color = LocalAccent.current.start) }

@@ -28,7 +28,7 @@ import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.Screen
 import cc.slokker.itv.ui.activation.ActivationScreen
 import cc.slokker.itv.ui.common.Logo
-import cc.slokker.itv.ui.common.LocalGuideLogos
+import cc.slokker.itv.ui.common.LocalChannelLogos
 import cc.slokker.itv.ui.common.Toast
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
@@ -82,10 +82,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val strings by vm.strings.collectAsStateWithLifecycle()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val epgMappings by vm.epgMappings.collectAsStateWithLifecycle()
-    val guideLogos = remember(prefs.guideLogos, epgMappings) {
-        if (prefs.guideLogos) epgMappings.mapNotNull { (key, m) -> m.icon?.let { key to it } }.toMap() else emptyMap()
-    }
+    val channelLogos by vm.channelLogos.collectAsStateWithLifecycle()
     val local by vm.local.collectAsStateWithLifecycle()
     val api = (LocalContext.current.applicationContext as ItvApp).container.backend
 
@@ -105,7 +102,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
         LocalDensity provides scaled,
-        LocalGuideLogos provides guideLogos,
+        LocalChannelLogos provides channelLogos,
     ) {
     // A abertura passa uma vez por arranque (sobrevive a rodar/recriar a atividade); qualquer tecla salta-a.
     var introDone by rememberSaveable { mutableStateOf(false) }

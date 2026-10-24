@@ -58,8 +58,10 @@ data class Prefs(
     // Aspeto
     val showNumbers: Boolean = true,
     val showLogos: Boolean = true,
-    /** Nos canais com guia associado, o logótipo do guia em vez do da lista. */
-    val guideLogos: Boolean = false,
+    /** De onde vêm os logótipos: os da lista, os do guia de cada canal, ou os de um país do guia (ver LogoSource). */
+    val logoSource: String = LogoSource.PLAYLIST,
+    /** Logótipo escolhido canal a canal: "playlistId:channelKey" → URL ("" = o da lista). Ganha a [logoSource]. */
+    val channelLogos: Map<String, String> = emptyMap(),
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -121,7 +123,8 @@ data class Prefs(
         const val STARTUP = "startup"
         const val SHOW_NUMBERS = "show_numbers"
         const val SHOW_LOGOS = "show_logos"
-        const val GUIDE_LOGOS = "guide_logos"
+        const val LOGO_SOURCE = "logo_source"
+        const val CHANNEL_LOGOS = "channel_logos"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -139,6 +142,13 @@ data class Prefs(
     object Buffer { const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large" }
     object Decoder { const val HARDWARE = "hw"; const val SOFTWARE = "sw" }
     object Engine { const val EXO = "exo"; const val VLC = "vlc" }
+
+    /** Origem dos logótipos; fora estes dois valores, é o código de um país do guia (ex.: "pt"). */
+    object LogoSource {
+        const val PLAYLIST = "playlist"
+        const val GUIDE = "guide"
+        fun isCountry(source: String) = source != PLAYLIST && source != GUIDE
+    }
     object Hdr { const val AUTO = "auto"; const val SDR = "sdr" }
     object Aspect { const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill" }
     object UpDown { const val ZAP = "zap"; const val LIST = "list" }
@@ -194,7 +204,9 @@ data class Prefs(
                 startup = str(Key.STARTUP, d.startup, setOf(Startup.LAST, Startup.LIST)),
                 showNumbers = bool(Key.SHOW_NUMBERS, d.showNumbers),
                 showLogos = bool(Key.SHOW_LOGOS, d.showLogos),
-                guideLogos = bool(Key.GUIDE_LOGOS, d.guideLogos),
+                logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString
+                    ?.takeIf { it == LogoSource.PLAYLIST || it == LogoSource.GUIDE || COUNTRY_CODE.matches(it) } ?: d.logoSource,
+                channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, setOf(Sort.NUMBER, Sort.NAME)),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
@@ -214,6 +226,13 @@ data class Prefs(
             s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
                 ?.associate { (k, v) -> k to (if (v.isJsonArray) v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString } else emptyList()) }
                 .orEmpty()
+
+        private fun stringMap(s: JsonObject, key: String): Map<String, String> =
+            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
+                ?.mapNotNull { (k, v) -> v.takeIf { it.isJsonPrimitive }?.asString?.let { k to it } }?.toMap()
+                .orEmpty()
+
+        private val COUNTRY_CODE = Regex("[A-Za-z]{2,3}")
 
         private fun stringSet(s: JsonObject, key: String): Set<String> =
             s.get(key)?.takeIf { it.isJsonArray }?.asJsonArray

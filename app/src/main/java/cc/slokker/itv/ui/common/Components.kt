@@ -89,10 +89,15 @@ fun Logo(modifier: Modifier = Modifier, size: Int = 32) {
     }
 }
 
-/** Logo do canal, ou as iniciais quando não há logo / falha a carregar. */
+/** Logo do canal (o escolhido nas Definições, ou o da lista), ou as iniciais quando não há logo / falha a carregar. */
 @Composable
 fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
-    val logo = LocalGuideLogos.current[channel.key] ?: channel.logo
+    LogoImage(LocalChannelLogos.current[channel.key] ?: channel.logo, channel.name, size, modifier)
+}
+
+/** Um logótipo [logo], ou as iniciais de [name] quando é null ou falha a carregar. */
+@Composable
+fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
     // As iniciais só aparecem sem logo ou se falhar: muitos logos têm fundo transparente.
     var showInitials by remember(logo) { mutableStateOf(logo == null) }
     // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: ganham uma placa escura,
@@ -122,7 +127,7 @@ fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
     ) {
         if (showInitials) {
             Text(
-                text = channel.name.take(2).uppercase(),
+                text = name.take(2).uppercase(),
                 color = ItvColors.TextDim,
                 fontSize = (size.value / 3).sp,
                 fontWeight = FontWeight.Bold,
@@ -142,11 +147,8 @@ fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
 
 private val LOGO_PLATE = Color(0xFF1A1D24)
 
-/**
- * Logótipos do guia por channelKey (Definições → Aspeto → Logótipos do guia), para a lista aberta;
- * vazio com a opção desligada.
- */
-val LocalGuideLogos = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
+/** Logótipos que substituem os da lista aberta, por channelKey (ver AppViewModel.channelLogos). */
+val LocalChannelLogos = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
 
 /** Relógio que atualiza a cada 15 s (barras de progresso do EPG). */
 @Composable

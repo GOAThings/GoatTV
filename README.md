@@ -19,6 +19,8 @@ Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 
 Latest version: https://github.com/GOAThings/GoatTV/releases/latest/download/goattv.apk
 
+On the TV, open the [Downloader](https://www.aftvnews.com/downloader/) app and enter the code **8269333**.
+
 Once installed, the app finds new versions by itself (Settings → Update).
 
 ## Build
