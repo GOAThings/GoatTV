@@ -73,6 +73,7 @@ import cc.slokker.itv.data.SpecialCategory
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ChannelLogo
 import cc.slokker.itv.ui.common.LocalChannelLogos
+import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.common.PinPad
 import cc.slokker.itv.ui.glass.GlassIconButton
 import cc.slokker.itv.ui.glass.GlassRow
@@ -177,9 +178,11 @@ private fun PanelLayer(visible: () -> Float, shift: () -> Float, active: Boolean
 private const val PANEL_ANIM_MS = 260
 private val LIST_LOGO_SIZE = 34.dp
 
-private fun List<EpgEntry>.currentTitle(): String? {
+private fun List<EpgEntry>.currentTitle(): String? = current()?.title
+
+private fun List<EpgEntry>.current(): EpgEntry? {
     val now = System.currentTimeMillis()
-    return firstOrNull { it.startMs <= now && it.endMs > now }?.title
+    return firstOrNull { it.startMs <= now && it.endMs > now }
 }
 
 /** Aplica o "Tamanho do texto" das definições só dentro dos painéis. */
@@ -210,10 +213,12 @@ private fun ChannelList(
     val startIndex = remember(channels) { channels.indexOfFirst { it.uid == playing.uid }.coerceAtLeast(0) }
     val state = remember(channels) { LazyListState((startIndex - 3).coerceAtLeast(0)) }
     val initialFocus = remember { FocusRequester() }
-    // O canal com foco e o seu programa são estados lidos só dentro das linhas: mudar o foco
-    // recompõe as duas linhas envolvidas, não a lista toda (o scroll fica fluido).
+    // O canal com foco é um estado lido só dentro das linhas: mudar o foco recompõe as duas linhas
+    // envolvidas, não a lista toda (o scroll fica fluido).
     var focusedUid by remember { mutableIntStateOf(-1) }
-    val nowTitle = remember { mutableStateOf<String?>(null) }
+    // O programa de cada linha vem do guia já em memória; volta a ler-se quando chega guia novo e de minuto a minuto.
+    val epgVersion by vm.epgVersion.collectAsStateWithLifecycle()
+    val minute = rememberNow() / 60_000
     val byUid = remember(channels) { channels.associateBy { it.uid } }
     val indexByUid = remember(channels) { channels.withIndex().associate { (i, ch) -> ch.uid to i } }
     val scope = rememberCoroutineScope()
@@ -238,11 +243,13 @@ private fun ChannelList(
     }
     LaunchedEffect(channels, prefs.epgInList) {
         if (!prefs.epgInList) return@LaunchedEffect
+        // Canais sem guia em memória (ex.: Xtream sem XMLTV): pede-se o EPG curto do que fica com foco; quando
+        // chega, o epgVersion muda e a linha mostra-o.
         snapshotFlow { focusedUid }.collectLatest { uid ->
             val ch = byUid[uid] ?: return@collectLatest
-            nowTitle.value = vm.cachedEpg(ch).currentTitle()
+            if (vm.cachedEpg(ch).currentTitle() != null) return@collectLatest
             delay(250) // não pedir EPG de cada canal por onde o foco passa a correr
-            nowTitle.value = vm.epgFor(ch).currentTitle()
+            vm.epgFor(ch)
         }
     }
 
@@ -318,7 +325,7 @@ private fun ChannelList(
         ) {
             items(channels, key = { it.uid }) { ch ->
                 val isPlaying = ch.uid == playing.uid
-                val isFocused by remember { derivedStateOf { focusedUid == ch.uid } }
+                val programme = if (prefs.epgInList) remember(ch.key, epgVersion, minute) { vm.cachedEpg(ch).current() } else null
                 GlassRow(
                     onClick = { onPlay(ch) },
                     onLongClick = { vm.toggleFavorite(ch) },
@@ -326,11 +333,18 @@ private fun ChannelList(
                     // Só contorno no foco: os logótipos (muitos brancos sobre transparente) não precisam de placa.
                     outlineFocus = true,
                     title = ch.name,
+                    // Todas as linhas com a mesma altura: o programa numa linha (anda para o lado na que tem foco),
+                    // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
                     subtitle = when {
-                        isFocused && nowTitle.value != null -> nowTitle.value
+                        programme != null -> programme.title
                         isPlaying -> LocalStrings.current.watchingNow
+                        prefs.epgInList -> LocalStrings.current.noGuideInfo
                         else -> null
                     },
+                    subtitleLines = 1,
+                    // Barra do programa (o espaço fica reservado sem guia, para as linhas terem todas a mesma altura).
+                    progress = programme?.let { e -> ((minute * 60_000 - e.startMs).toFloat() / (e.endMs - e.startMs)).coerceIn(0f, 1f) },
+                    reserveProgress = prefs.epgInList,
                     leading = if (prefs.showNumbers || prefs.showLogos) {
                         {
                             if (prefs.showNumbers) {

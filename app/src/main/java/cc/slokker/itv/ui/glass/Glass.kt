@@ -53,6 +53,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
@@ -223,6 +224,8 @@ fun Modifier.rowText(): Modifier =
 
 private const val MARQUEE_DELAY_MS = 900
 
+private val PROGRESS_HEIGHT = 2.dp
+
 /** O contorno da linha com foco em [GlassRow] com outlineFocus (o traço é cortado a meio pela forma da linha). */
 private val OUTLINE_WIDTH = 2.dp
 private const val OUTLINE_VEIL = 0.12f
@@ -251,6 +254,10 @@ fun GlassRow(
     subtitleLines: Int = 2,
     enabled: Boolean = true,
     outlineFocus: Boolean = false,
+    /** Barra fina por baixo do texto (ex.: quanto já passou do programa), de 0 a 1. */
+    progress: Float? = null,
+    /** Guarda o lugar da barra mesmo sem [progress] (linhas com a mesma altura numa lista). */
+    reserveProgress: Boolean = false,
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -312,6 +319,21 @@ fun GlassRow(
                         color = LocalContentColor.current.copy(alpha = 0.82f),
                         maxLines = subtitleLines,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (progress != null || reserveProgress) {
+                    val ink = LocalContentColor.current
+                    Spacer(
+                        Modifier
+                            .padding(top = 4.dp)
+                            .fillMaxWidth()
+                            .height(PROGRESS_HEIGHT)
+                            .drawBehind {
+                                val p = progress ?: return@drawBehind
+                                val r = CornerRadius(size.height / 2)
+                                drawRoundRect(ink.copy(alpha = 0.18f), cornerRadius = r)
+                                drawRoundRect(ink.copy(alpha = 0.85f), size = size.copy(width = size.width * p), cornerRadius = r)
+                            },
                     )
                 }
             }
