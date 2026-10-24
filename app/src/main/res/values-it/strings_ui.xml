@@ -326,6 +326,8 @@
     <string name="language_auto">Automatica (sistema)</string>
     <string name="channel_numbers">Numeri dei canali</string>
     <string name="channel_logos">Loghi dei canali</string>
+    <string name="guide_logos">Loghi della guida</string>
+    <string name="guide_logos_sub">Nei canali con guida, usa il logo della guida</string>
     <string name="sort_channels">Ordina canali</string>
     <string name="sort_number">Ordine della playlist</string>
     <string name="sort_name">Per nome (A–Z)</string>

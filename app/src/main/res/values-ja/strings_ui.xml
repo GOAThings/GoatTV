@@ -326,6 +326,8 @@
     <string name="language_auto">自動（システム）</string>
     <string name="channel_numbers">チャンネル番号</string>
     <string name="channel_logos">チャンネルロゴ</string>
+    <string name="guide_logos">番組表のロゴ</string>
+    <string name="guide_logos_sub">番組表のあるチャンネルでは番組表のロゴを使う</string>
     <string name="sort_channels">チャンネルの並び順</string>
     <string name="sort_number">プレイリストの順</string>
     <string name="sort_name">名前順（A–Z）</string>

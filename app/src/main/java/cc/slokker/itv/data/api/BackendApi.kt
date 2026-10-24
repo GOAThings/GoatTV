@@ -171,6 +171,8 @@ data class EpgMapping(
     @SerializedName("channel_id") val channelId: String?,
     @SerializedName("channel_name") val channelName: String?,
     @SerializedName("guide_name") val guideName: String?,
+    /** Logótipo do canal de guia (PNG, muitas vezes branco sobre transparente); null se não houver. */
+    val icon: String? = null,
 )
 
 data class EpgMappingRequest(

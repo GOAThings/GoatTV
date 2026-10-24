@@ -1465,7 +1465,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = _content.value ?: return
         val items = channelsOf(SpecialCategory.RECENT).take(HOME_ITEMS).map { ch ->
             val now = System.currentTimeMillis()
-            HomeItem(ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
+            // Com "Logótipos do guia", o launcher mostra o mesmo logótipo que a app.
+            val guideLogo = _epgMappings.value[ch.key]?.icon?.takeIf { _prefs.value.guideLogos }
+            HomeItem(if (guideLogo != null) ch.copy(logo = guideLogo) else ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
         }
         viewModelScope.launch { c.home.update(items) }
     }

@@ -326,6 +326,8 @@
     <string name="language_auto">Automatisch (System)</string>
     <string name="channel_numbers">Sendernummern</string>
     <string name="channel_logos">Senderlogos</string>
+    <string name="guide_logos">Logos aus dem Programmführer</string>
+    <string name="guide_logos_sub">Bei Sendern mit Programmführer dessen Logo verwenden</string>
     <string name="sort_channels">Sender sortieren</string>
     <string name="sort_number">Playlist-Reihenfolge</string>
     <string name="sort_name">Nach Name (A–Z)</string>

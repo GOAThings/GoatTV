@@ -326,6 +326,8 @@
     <string name="language_auto">स्वचालित (सिस्टम)</string>
     <string name="channel_numbers">चैनल नंबर</string>
     <string name="channel_logos">चैनल लोगो</string>
+    <string name="guide_logos">गाइड के लोगो</string>
+    <string name="guide_logos_sub">जिन चैनलों का गाइड है, उनमें गाइड का लोगो दिखाएँ</string>
     <string name="sort_channels">चैनल क्रम से लगाएँ</string>
     <string name="sort_number">प्लेलिस्ट का क्रम</string>
     <string name="sort_name">नाम से (A–Z)</string>

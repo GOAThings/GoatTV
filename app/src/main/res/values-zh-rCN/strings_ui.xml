@@ -326,6 +326,8 @@
     <string name="language_auto">自动（系统）</string>
     <string name="channel_numbers">频道编号</string>
     <string name="channel_logos">频道台标</string>
+    <string name="guide_logos">节目指南台标</string>
+    <string name="guide_logos_sub">有节目指南的频道使用指南中的台标</string>
     <string name="sort_channels">频道排序</string>
     <string name="sort_number">播放列表顺序</string>
     <string name="sort_name">按名称（A–Z）</string>

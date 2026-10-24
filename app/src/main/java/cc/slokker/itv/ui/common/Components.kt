@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,8 +92,9 @@ fun Logo(modifier: Modifier = Modifier, size: Int = 32) {
 /** Logo do canal, ou as iniciais quando não há logo / falha a carregar. */
 @Composable
 fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
+    val logo = LocalGuideLogos.current[channel.key] ?: channel.logo
     // As iniciais só aparecem sem logo ou se falhar: muitos logos têm fundo transparente.
-    var showInitials by remember(channel.logo) { mutableStateOf(channel.logo == null) }
+    var showInitials by remember(logo) { mutableStateOf(logo == null) }
     // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: ganham uma placa escura,
     // desenhada por fora do tamanho para não mexer no alinhamento.
     val onLight = !showInitials && LocalContentColor.current.luminance() < 0.5f
@@ -126,9 +128,9 @@ fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Bold,
             )
         }
-        if (channel.logo != null) {
+        if (logo != null) {
             AsyncImage(
-                model = channel.logo,
+                model = logo,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 onError = { showInitials = true },
@@ -139,6 +141,12 @@ fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
 }
 
 private val LOGO_PLATE = Color(0xFF1A1D24)
+
+/**
+ * Logótipos do guia por channelKey (Definições → Aspeto → Logótipos do guia), para a lista aberta;
+ * vazio com a opção desligada.
+ */
+val LocalGuideLogos = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
 
 /** Relógio que atualiza a cada 15 s (barras de progresso do EPG). */
 @Composable

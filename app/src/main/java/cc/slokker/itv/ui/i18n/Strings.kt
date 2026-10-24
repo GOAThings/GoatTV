@@ -549,6 +549,8 @@ class Strings(context: Context) {
     val languageAuto get() = s(R.string.language_auto)
     val channelNumbers get() = s(R.string.channel_numbers)
     val channelLogos get() = s(R.string.channel_logos)
+    val guideLogos get() = s(R.string.guide_logos)
+    val guideLogosSub get() = s(R.string.guide_logos_sub)
     val sortChannels get() = s(R.string.sort_channels)
     val sortNumber get() = s(R.string.sort_number)
     val sortName get() = s(R.string.sort_name)

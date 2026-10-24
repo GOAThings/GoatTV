@@ -326,6 +326,8 @@
     <string name="language_auto">Автоматически (как в системе)</string>
     <string name="channel_numbers">Номера каналов</string>
     <string name="channel_logos">Логотипы каналов</string>
+    <string name="guide_logos">Логотипы из телепрограммы</string>
+    <string name="guide_logos_sub">Для каналов с телепрограммой брать её логотип</string>
     <string name="sort_channels">Сортировка каналов</string>
     <string name="sort_number">Порядок плейлиста</string>
     <string name="sort_name">По названию (А–Я)</string>

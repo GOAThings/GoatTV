@@ -326,6 +326,8 @@
     <string name="language_auto">자동(시스템)</string>
     <string name="channel_numbers">채널 번호</string>
     <string name="channel_logos">채널 로고</string>
+    <string name="guide_logos">편성표 로고</string>
+    <string name="guide_logos_sub">편성표가 있는 채널은 편성표 로고 사용</string>
     <string name="sort_channels">채널 정렬</string>
     <string name="sort_number">재생목록 순서</string>
     <string name="sort_name">이름순(A–Z)</string>

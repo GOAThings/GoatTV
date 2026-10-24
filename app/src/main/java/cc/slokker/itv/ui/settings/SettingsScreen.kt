@@ -679,6 +679,7 @@ private fun settingItems(
             ),
             Item.Toggle(Prefs.Key.SHOW_NUMBERS, s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) },
             Item.Toggle(Prefs.Key.SHOW_LOGOS, s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) },
+            Item.Toggle(Prefs.Key.GUIDE_LOGOS, s.guideLogos, prefs.guideLogos, s.guideLogosSub) { vm.setPref(Prefs.Key.GUIDE_LOGOS, it) },
             pref(
                 Prefs.Key.SORT, s.sortChannels,
                 listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName),

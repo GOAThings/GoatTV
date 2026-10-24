@@ -326,6 +326,8 @@
     <string name="language_auto">Otomatik (sistem)</string>
     <string name="channel_numbers">Kanal numaraları</string>
     <string name="channel_logos">Kanal logoları</string>
+    <string name="guide_logos">Rehber logoları</string>
+    <string name="guide_logos_sub">Rehberi olan kanallarda rehberin logosunu kullan</string>
     <string name="sort_channels">Kanalları sırala</string>
     <string name="sort_number">Oynatma listesi sırası</string>
     <string name="sort_name">Ada göre (A–Z)</string>

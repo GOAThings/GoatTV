@@ -326,6 +326,8 @@
     <string name="language_auto">Automático (sistema)</string>
     <string name="channel_numbers">Números dos canais</string>
     <string name="channel_logos">Logos dos canais</string>
+    <string name="guide_logos">Logótipos do guia</string>
+    <string name="guide_logos_sub">Nos canais com guia, usar o logótipo do guia</string>
     <string name="sort_channels">Ordenar canais</string>
     <string name="sort_number">Pela ordem da lista</string>
     <string name="sort_name">Por nome (A–Z)</string>

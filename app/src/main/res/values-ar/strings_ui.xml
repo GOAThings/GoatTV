@@ -326,6 +326,8 @@
     <string name="language_auto">تلقائي (النظام)</string>
     <string name="channel_numbers">أرقام القنوات</string>
     <string name="channel_logos">شعارات القنوات</string>
+    <string name="guide_logos">شعارات الدليل</string>
+    <string name="guide_logos_sub">في القنوات التي لها دليل، استخدم شعار الدليل</string>
     <string name="sort_channels">ترتيب القنوات</string>
     <string name="sort_number">ترتيب قائمة التشغيل</string>
     <string name="sort_name">حسب الاسم (A–Z)</string>

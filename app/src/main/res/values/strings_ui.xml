@@ -326,6 +326,8 @@
     <string name="language_auto">Automatic (system)</string>
     <string name="channel_numbers">Channel numbers</string>
     <string name="channel_logos">Channel logos</string>
+    <string name="guide_logos">Guide logos</string>
+    <string name="guide_logos_sub">On channels with a guide, use the guide\'s logo</string>
     <string name="sort_channels">Sort channels</string>
     <string name="sort_number">Playlist order</string>
     <string name="sort_name">By name (A–Z)</string>

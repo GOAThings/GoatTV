@@ -326,6 +326,8 @@
     <string name="language_auto">Otomatis (sistem)</string>
     <string name="channel_numbers">Nomor saluran</string>
     <string name="channel_logos">Logo saluran</string>
+    <string name="guide_logos">Logo panduan</string>
+    <string name="guide_logos_sub">Pada saluran dengan panduan, gunakan logo panduan</string>
     <string name="sort_channels">Urutkan saluran</string>
     <string name="sort_number">Urutan playlist</string>
     <string name="sort_name">Menurut nama (A–Z)</string>

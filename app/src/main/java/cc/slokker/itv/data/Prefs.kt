@@ -58,6 +58,8 @@ data class Prefs(
     // Aspeto
     val showNumbers: Boolean = true,
     val showLogos: Boolean = true,
+    /** Nos canais com guia associado, o logótipo do guia em vez do da lista. */
+    val guideLogos: Boolean = false,
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -119,6 +121,7 @@ data class Prefs(
         const val STARTUP = "startup"
         const val SHOW_NUMBERS = "show_numbers"
         const val SHOW_LOGOS = "show_logos"
+        const val GUIDE_LOGOS = "guide_logos"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -191,6 +194,7 @@ data class Prefs(
                 startup = str(Key.STARTUP, d.startup, setOf(Startup.LAST, Startup.LIST)),
                 showNumbers = bool(Key.SHOW_NUMBERS, d.showNumbers),
                 showLogos = bool(Key.SHOW_LOGOS, d.showLogos),
+                guideLogos = bool(Key.GUIDE_LOGOS, d.guideLogos),
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, setOf(Sort.NUMBER, Sort.NAME)),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),

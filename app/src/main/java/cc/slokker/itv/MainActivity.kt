@@ -28,6 +28,7 @@ import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.Screen
 import cc.slokker.itv.ui.activation.ActivationScreen
 import cc.slokker.itv.ui.common.Logo
+import cc.slokker.itv.ui.common.LocalGuideLogos
 import cc.slokker.itv.ui.common.Toast
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
@@ -81,6 +82,10 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val strings by vm.strings.collectAsStateWithLifecycle()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val epgMappings by vm.epgMappings.collectAsStateWithLifecycle()
+    val guideLogos = remember(prefs.guideLogos, epgMappings) {
+        if (prefs.guideLogos) epgMappings.mapNotNull { (key, m) -> m.icon?.let { key to it } }.toMap() else emptyMap()
+    }
     val local by vm.local.collectAsStateWithLifecycle()
     val api = (LocalContext.current.applicationContext as ItvApp).container.backend
 
@@ -96,7 +101,12 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val scaled = remember(baseDensity, prefs.uiScale) {
         Density(baseDensity.density * prefs.uiScale / 100f, baseDensity.fontScale)
     }
-    CompositionLocalProvider(LocalStrings provides strings, LocalAccent provides Accent.byId(prefs.accent), LocalDensity provides scaled) {
+    CompositionLocalProvider(
+        LocalStrings provides strings,
+        LocalAccent provides Accent.byId(prefs.accent),
+        LocalDensity provides scaled,
+        LocalGuideLogos provides guideLogos,
+    ) {
     // A abertura passa uma vez por arranque (sobrevive a rodar/recriar a atividade); qualquer tecla salta-a.
     var introDone by rememberSaveable { mutableStateOf(false) }
     // A tecla que salta a abertura é consumida inteira (também o largar), para não fazer nada no ecrã de baixo.
