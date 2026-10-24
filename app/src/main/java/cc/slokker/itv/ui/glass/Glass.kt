@@ -222,6 +222,10 @@ fun Modifier.rowText(): Modifier =
 
 private const val MARQUEE_DELAY_MS = 900
 
+/** O contorno da linha com foco em [GlassRow] com outlineFocus (o traço é cortado a meio pela forma da linha). */
+private val OUTLINE_WIDTH = 2.dp
+private const val OUTLINE_VEIL = 0.12f
+
 /** Transição do destaque de foco nas linhas. */
 private const val FOCUS_FADE_MS = 150
 
@@ -230,6 +234,8 @@ private const val FOCUS_FADE_MS = 150
  * [selected] marca o item atual (ex.: o canal a ver) com um fundo subtil.
  * O título fica sempre numa linha (anda para o lado com o foco); o [subtitle] tem até [subtitleLines]
  * linhas, e com 1 também anda.
+ * [outlineFocus]: com foco, só um contorno branco (e um véu leve) em vez da placa branca; o texto fica claro.
+ * Na lista de canais, assim os logótipos brancos continuam a ver-se sem placa por trás.
  */
 @Composable
 fun GlassRow(
@@ -242,6 +248,7 @@ fun GlassRow(
     subtitle: String? = null,
     subtitleLines: Int = 2,
     enabled: Boolean = true,
+    outlineFocus: Boolean = false,
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -251,7 +258,7 @@ fun GlassRow(
     // destaque não saltar de linha em linha enquanto a lista desliza. Pinta-se só no desenho (sem
     // recompor a linha a cada frame) e o texto troca de cor uma vez, a meio.
     val fade = animateFloatAsState(if (focused && enabled) 1f else 0f, tween(FOCUS_FADE_MS), label = "row")
-    val dark by remember { derivedStateOf { fade.value > 0.5f } }
+    val dark by remember(outlineFocus) { derivedStateOf { !outlineFocus && fade.value > 0.5f } }
     val rest = if (selected) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
@@ -276,7 +283,16 @@ fun GlassRow(
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
             Modifier
-                .drawBehind { fade.value.takeIf { it > 0f }?.let { drawRect(Color.White.copy(alpha = it)) } }
+                .drawBehind {
+                    val a = fade.value.takeIf { it > 0f } ?: return@drawBehind
+                    if (outlineFocus) {
+                        val outline = shape.createOutline(size, layoutDirection, this)
+                        drawOutline(outline, Color.White.copy(alpha = OUTLINE_VEIL * a))
+                        drawOutline(outline, Color.White.copy(alpha = a), style = Stroke(OUTLINE_WIDTH.toPx() * 2))
+                    } else {
+                        drawRect(Color.White.copy(alpha = a))
+                    }
+                }
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

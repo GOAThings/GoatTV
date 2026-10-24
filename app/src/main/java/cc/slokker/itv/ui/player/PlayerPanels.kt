@@ -320,6 +320,8 @@ private fun ChannelList(
                     onClick = { onPlay(ch) },
                     onLongClick = { vm.toggleFavorite(ch) },
                     selected = isPlaying,
+                    // Só contorno no foco: os logótipos (muitos brancos sobre transparente) não precisam de placa.
+                    outlineFocus = true,
                     title = ch.name,
                     subtitle = when {
                         isFocused && nowTitle.value != null -> nowTitle.value
