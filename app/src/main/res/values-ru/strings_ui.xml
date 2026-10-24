@@ -29,7 +29,7 @@
     <string name="loading_session">Проверка сеанса…</string>
     <string name="loading_playlists">Загрузка плейлистов…</string>
     <string name="loading_playlist">Загрузка «%1$s»…</string>
-    <string name="playlist_load_failed">Не удалось загрузить плейлист «%1$s».\\n%2$s</string>
+    <string name="playlist_load_failed">Не удалось загрузить плейлист «%1$s».\n%2$s</string>
     <string name="session_ended">Вы вышли из аккаунта. Активируйте этот ТВ снова.</string>
     <string name="m3u_no_url">У плейлиста M3U нет ссылки.</string>
     <string name="m3u_bad_url">Неверная ссылка на плейлист M3U.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Не удалось открыть канал.</string>
     <string name="group_locked">«%1$s» заблокирована</string>
     <string name="wrong_pin_retry">Неверный PIN-код. Попробуйте ещё раз.</string>
-    <string name="no_favorites_yet">В избранном пока пусто.\\nУдерживайте OK на канале (или нажмите «Меню»), чтобы добавить его.</string>
+    <string name="no_favorites_yet">В избранном пока пусто.\nУдерживайте OK на канале (или нажмите «Меню»), чтобы добавить его.</string>
     <string name="no_channels_in_group">В этой группе нет каналов.</string>
     <string name="see_groups">Показать группы</string>
     <string name="watching_now">Сейчас смотрите</string>

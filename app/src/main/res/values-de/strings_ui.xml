@@ -29,7 +29,7 @@
     <string name="loading_session">Deine Sitzung wird geprüft…</string>
     <string name="loading_playlists">Deine Playlists werden abgerufen…</string>
     <string name="loading_playlist">„%1$s“ wird geladen…</string>
-    <string name="playlist_load_failed">Die Playlist „%1$s“ konnte nicht geladen werden.\\n%2$s</string>
+    <string name="playlist_load_failed">Die Playlist „%1$s“ konnte nicht geladen werden.\n%2$s</string>
     <string name="session_ended">Du wurdest abgemeldet. Aktiviere diesen TV erneut.</string>
     <string name="m3u_no_url">Die M3U-Playlist hat keine URL.</string>
     <string name="m3u_bad_url">Ungültige URL der M3U-Playlist.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Der Sender konnte nicht geöffnet werden.</string>
     <string name="group_locked">„%1$s“ ist gesperrt</string>
     <string name="wrong_pin_retry">Falsche PIN. Versuch es erneut.</string>
-    <string name="no_favorites_yet">Noch keine Favoriten.\\nHalte OK auf einem Sender gedrückt (oder drücke Menü), um ihn hinzuzufügen.</string>
+    <string name="no_favorites_yet">Noch keine Favoriten.\nHalte OK auf einem Sender gedrückt (oder drücke Menü), um ihn hinzuzufügen.</string>
     <string name="no_channels_in_group">Keine Sender in dieser Gruppe.</string>
     <string name="see_groups">Gruppen anzeigen</string>
     <string name="watching_now">Läuft gerade</string>

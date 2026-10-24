@@ -29,7 +29,7 @@
     <string name="loading_session">आपका सेशन जाँचा जा रहा है…</string>
     <string name="loading_playlists">आपकी प्लेलिस्ट लाई जा रही हैं…</string>
     <string name="loading_playlist">\"%1$s\" लोड हो रही है…</string>
-    <string name="playlist_load_failed">प्लेलिस्ट \"%1$s\" लोड नहीं हो सकी।\\n%2$s</string>
+    <string name="playlist_load_failed">प्लेलिस्ट \"%1$s\" लोड नहीं हो सकी।\n%2$s</string>
     <string name="session_ended">आप साइन आउट हो गए। इस TV को फिर से सक्रिय करें।</string>
     <string name="m3u_no_url">M3U प्लेलिस्ट में कोई URL नहीं है।</string>
     <string name="m3u_bad_url">M3U प्लेलिस्ट का URL अमान्य है।</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">चैनल नहीं खुल सका।</string>
     <string name="group_locked">\"%1$s\" लॉक है</string>
     <string name="wrong_pin_retry">गलत PIN। फिर से कोशिश करें।</string>
-    <string name="no_favorites_yet">अभी कोई पसंदीदा नहीं।\\nजोड़ने के लिए किसी चैनल पर OK दबाकर रखें (या मेन्यू दबाएँ)।</string>
+    <string name="no_favorites_yet">अभी कोई पसंदीदा नहीं।\nजोड़ने के लिए किसी चैनल पर OK दबाकर रखें (या मेन्यू दबाएँ)।</string>
     <string name="no_channels_in_group">इस ग्रुप में कोई चैनल नहीं।</string>
     <string name="see_groups">ग्रुप देखें</string>
     <string name="watching_now">अभी देख रहे हैं</string>

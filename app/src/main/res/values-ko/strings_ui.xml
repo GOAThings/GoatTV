@@ -29,7 +29,7 @@
     <string name="loading_session">세션을 확인하는 중…</string>
     <string name="loading_playlists">재생목록을 가져오는 중…</string>
     <string name="loading_playlist">\'%1$s\' 불러오는 중…</string>
-    <string name="playlist_load_failed">재생목록 \'%1$s\'을(를) 불러올 수 없어요.\\n%2$s</string>
+    <string name="playlist_load_failed">재생목록 \'%1$s\'을(를) 불러올 수 없어요.\n%2$s</string>
     <string name="session_ended">로그아웃되었어요. 이 TV를 다시 활성화하세요.</string>
     <string name="m3u_no_url">M3U 재생목록에 URL이 없어요.</string>
     <string name="m3u_bad_url">M3U 재생목록 URL이 유효하지 않아요.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">채널을 열 수 없어요.</string>
     <string name="group_locked">\'%1$s\'은(는) 잠겨 있어요</string>
     <string name="wrong_pin_retry">PIN이 틀렸어요. 다시 시도하세요.</string>
-    <string name="no_favorites_yet">아직 즐겨찾기가 없어요.\\n채널에서 OK를 길게 누르거나 Menu를 눌러 추가하세요.</string>
+    <string name="no_favorites_yet">아직 즐겨찾기가 없어요.\n채널에서 OK를 길게 누르거나 Menu를 눌러 추가하세요.</string>
     <string name="no_channels_in_group">이 그룹에 채널이 없어요.</string>
     <string name="see_groups">그룹 보기</string>
     <string name="watching_now">지금 시청 중</string>

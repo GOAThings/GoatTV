@@ -29,7 +29,7 @@
     <string name="loading_session">جارٍ التحقق من جلستك…</string>
     <string name="loading_playlists">جارٍ جلب قوائم التشغيل…</string>
     <string name="loading_playlist">جارٍ تحميل «%1$s»…</string>
-    <string name="playlist_load_failed">تعذّر تحميل قائمة التشغيل «%1$s».\\n%2$s</string>
+    <string name="playlist_load_failed">تعذّر تحميل قائمة التشغيل «%1$s».\n%2$s</string>
     <string name="session_ended">تم تسجيل خروجك. فعّل هذا التلفزيون مرة أخرى.</string>
     <string name="m3u_no_url">لا تحتوي قائمة تشغيل M3U على URL.</string>
     <string name="m3u_bad_url">URL قائمة تشغيل M3U غير صالح.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">تعذّر فتح القناة.</string>
     <string name="group_locked">«%1$s» مقفلة</string>
     <string name="wrong_pin_retry">رمز سري خاطئ. حاول مرة أخرى.</string>
-    <string name="no_favorites_yet">لا توجد مفضلة بعد.\\nاضغط مطولًا على OK فوق قناة (أو اضغط Menu) لإضافتها.</string>
+    <string name="no_favorites_yet">لا توجد مفضلة بعد.\nاضغط مطولًا على OK فوق قناة (أو اضغط Menu) لإضافتها.</string>
     <string name="no_channels_in_group">لا توجد قنوات في هذه المجموعة.</string>
     <string name="see_groups">عرض المجموعات</string>
     <string name="watching_now">تشاهد الآن</string>

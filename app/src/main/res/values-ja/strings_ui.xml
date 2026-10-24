@@ -29,7 +29,7 @@
     <string name="loading_session">セッションを確認しています…</string>
     <string name="loading_playlists">プレイリストを取得しています…</string>
     <string name="loading_playlist">「%1$s」を読み込んでいます…</string>
-    <string name="playlist_load_failed">プレイリスト「%1$s」を読み込めませんでした。\\n%2$s</string>
+    <string name="playlist_load_failed">プレイリスト「%1$s」を読み込めませんでした。\n%2$s</string>
     <string name="session_ended">サインアウトされました。このテレビをもう一度有効化してください。</string>
     <string name="m3u_no_url">M3U プレイリストに URL がありません。</string>
     <string name="m3u_bad_url">M3U プレイリストの URL が無効です。</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">チャンネルを開けませんでした。</string>
     <string name="group_locked">「%1$s」はロックされています</string>
     <string name="wrong_pin_retry">PIN が違います。もう一度お試しください。</string>
-    <string name="no_favorites_yet">お気に入りはまだありません。\\nチャンネルで OK を長押し（またはメニューを押す）すると追加できます。</string>
+    <string name="no_favorites_yet">お気に入りはまだありません。\nチャンネルで OK を長押し（またはメニューを押す）すると追加できます。</string>
     <string name="no_channels_in_group">このグループにチャンネルはありません。</string>
     <string name="see_groups">グループを見る</string>
     <string name="watching_now">視聴中</string>

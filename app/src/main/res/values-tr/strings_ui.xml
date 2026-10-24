@@ -29,7 +29,7 @@
     <string name="loading_session">Oturumunuz kontrol ediliyor…</string>
     <string name="loading_playlists">Oynatma listeleriniz alınıyor…</string>
     <string name="loading_playlist">\"%1$s\" yükleniyor…</string>
-    <string name="playlist_load_failed">\"%1$s\" oynatma listesi yüklenemedi.\\n%2$s</string>
+    <string name="playlist_load_failed">\"%1$s\" oynatma listesi yüklenemedi.\n%2$s</string>
     <string name="session_ended">Oturumunuz kapatıldı. Bu TV\'yi yeniden etkinleştirin.</string>
     <string name="m3u_no_url">M3U oynatma listesinin URL\'si yok.</string>
     <string name="m3u_bad_url">Geçersiz M3U oynatma listesi URL\'si.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Kanal açılamadı.</string>
     <string name="group_locked">\"%1$s\" kilitli</string>
     <string name="wrong_pin_retry">Yanlış PIN. Tekrar deneyin.</string>
-    <string name="no_favorites_yet">Henüz favori yok.\\nEklemek için bir kanalda OK\'u basılı tutun (veya Menü\'ye basın).</string>
+    <string name="no_favorites_yet">Henüz favori yok.\nEklemek için bir kanalda OK\'u basılı tutun (veya Menü\'ye basın).</string>
     <string name="no_channels_in_group">Bu grupta kanal yok.</string>
     <string name="see_groups">Grupları gör</string>
     <string name="watching_now">Şu an izlenen</string>

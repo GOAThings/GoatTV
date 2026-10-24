@@ -29,7 +29,7 @@
     <string name="loading_session">Vérification de votre session…</string>
     <string name="loading_playlists">Récupération de vos playlists…</string>
     <string name="loading_playlist">Chargement de \"%1$s\"…</string>
-    <string name="playlist_load_failed">Impossible de charger la playlist \"%1$s\".\\n%2$s</string>
+    <string name="playlist_load_failed">Impossible de charger la playlist \"%1$s\".\n%2$s</string>
     <string name="session_ended">Vous avez été déconnecté. Activez à nouveau cette TV.</string>
     <string name="m3u_no_url">La playlist M3U n\'a pas d\'URL.</string>
     <string name="m3u_bad_url">URL de playlist M3U non valide.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Impossible d\'ouvrir la chaîne.</string>
     <string name="group_locked">\"%1$s\" est verrouillé</string>
     <string name="wrong_pin_retry">Code PIN incorrect. Réessayez.</string>
-    <string name="no_favorites_yet">Aucun favori pour l\'instant.\\nMaintenez OK sur une chaîne (ou appuyez sur Menu) pour l\'ajouter.</string>
+    <string name="no_favorites_yet">Aucun favori pour l\'instant.\nMaintenez OK sur une chaîne (ou appuyez sur Menu) pour l\'ajouter.</string>
     <string name="no_channels_in_group">Aucune chaîne dans ce groupe.</string>
     <string name="see_groups">Voir les groupes</string>
     <string name="watching_now">En cours de visionnage</string>

@@ -29,7 +29,7 @@
     <string name="loading_session">Checking your session…</string>
     <string name="loading_playlists">Getting your playlists…</string>
     <string name="loading_playlist">Loading \"%1$s\"…</string>
-    <string name="playlist_load_failed">Couldn\'t load the playlist \"%1$s\".\\n%2$s</string>
+    <string name="playlist_load_failed">Couldn\'t load the playlist \"%1$s\".\n%2$s</string>
     <string name="session_ended">You were signed out. Activate this TV again.</string>
     <string name="m3u_no_url">The M3U playlist has no URL.</string>
     <string name="m3u_bad_url">Invalid M3U playlist URL.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Couldn\'t open the channel.</string>
     <string name="group_locked">\"%1$s\" is locked</string>
     <string name="wrong_pin_retry">Wrong PIN. Try again.</string>
-    <string name="no_favorites_yet">No favourites yet.\\nHold OK on a channel (or press Menu) to add it.</string>
+    <string name="no_favorites_yet">No favourites yet.\nHold OK on a channel (or press Menu) to add it.</string>
     <string name="no_channels_in_group">No channels in this group.</string>
     <string name="see_groups">See groups</string>
     <string name="watching_now">Watching now</string>

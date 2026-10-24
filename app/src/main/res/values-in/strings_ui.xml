@@ -29,7 +29,7 @@
     <string name="loading_session">Memeriksa sesi Anda…</string>
     <string name="loading_playlists">Mengambil playlist Anda…</string>
     <string name="loading_playlist">Memuat \"%1$s\"…</string>
-    <string name="playlist_load_failed">Gagal memuat playlist \"%1$s\".\\n%2$s</string>
+    <string name="playlist_load_failed">Gagal memuat playlist \"%1$s\".\n%2$s</string>
     <string name="session_ended">Anda telah keluar. Aktifkan TV ini lagi.</string>
     <string name="m3u_no_url">Playlist M3U tidak punya URL.</string>
     <string name="m3u_bad_url">URL playlist M3U tidak valid.</string>
@@ -255,7 +255,7 @@
     <string name="cant_open_channel">Tidak dapat membuka saluran.</string>
     <string name="group_locked">\"%1$s\" terkunci</string>
     <string name="wrong_pin_retry">PIN salah. Coba lagi.</string>
-    <string name="no_favorites_yet">Belum ada favorit.\\nTahan OK pada saluran (atau tekan Menu) untuk menambahkannya.</string>
+    <string name="no_favorites_yet">Belum ada favorit.\nTahan OK pada saluran (atau tekan Menu) untuk menambahkannya.</string>
     <string name="no_channels_in_group">Tidak ada saluran di grup ini.</string>
     <string name="see_groups">Lihat grup</string>
     <string name="watching_now">Sedang ditonton</string>
