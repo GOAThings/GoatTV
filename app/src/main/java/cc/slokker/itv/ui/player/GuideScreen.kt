@@ -4,6 +4,16 @@ import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.ui.input.key.nativeKeyCode
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -276,7 +286,6 @@ internal fun TvGuide(
                                 isPlaying = ch.key == playing.key,
                                 windowStart = windowStart,
                                 timelineWidth = timelineWidth,
-                                x = ::x,
                                 now = now,
                                 showNumbers = prefs.showNumbers,
                                 showLogos = prefs.showLogos,
@@ -375,13 +384,12 @@ private fun GuideRow(
     isPlaying: Boolean,
     windowStart: Long,
     timelineWidth: Dp,
-    x: (Long) -> Dp,
     now: Long,
     showNumbers: Boolean,
     showLogos: Boolean,
-    @Suppress("UNUSED_PARAMETER") reminders: Int, // só para recompor quando os lembretes mudam
+    /** Só para voltar a ver os ícones quando os lembretes mudam. */
+    reminders: Int,
 ) {
-    val windowEnd = windowStart + WINDOW_MS
     val rowSelected = selectedSlot != null
     Row(Modifier.fillMaxWidth().height(ROW_HEIGHT).padding(vertical = 2.dp)) {
         Row(
@@ -414,86 +422,144 @@ private fun GuideRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Box(Modifier.width(timelineWidth).fillMaxHeight()) {
+        GuideTimeline(vm, channel, entries, selectedSlot, windowStart, now, reminders, Modifier.width(timelineWidth).fillMaxHeight())
+    }
+}
+
+/** Um bloco da linha do tempo: um programa, ou um espaço sem informação. */
+private class Cell(
+    val title: String,
+    /** A hora de início a mostrar por baixo do título (null se o programa começou antes da grelha). */
+    val startMs: Long?,
+    val start: Long,
+    val end: Long,
+    val past: Boolean,
+    val live: Boolean,
+    val selected: Boolean,
+    val icon: Int,
+)
+
+private const val ICON_NONE = 0
+private const val ICON_BELL = 1
+private const val ICON_HISTORY = 2
+
+/**
+ * Os programas de um canal na janela visível, desenhados num só Canvas (o texto medido com cache). Antes era
+ * uma Row com duas linhas de texto por programa: ao andar no guia, compor e medir dezenas de nós por linha
+ * fazia saltar frames na SHIELD.
+ */
+@Composable
+private fun GuideTimeline(
+    vm: AppViewModel,
+    channel: Channel,
+    entries: List<EpgEntry>,
+    selectedSlot: Slot?,
+    windowStart: Long,
+    now: Long,
+    reminders: Int,
+    modifier: Modifier,
+) {
+    val noInfo = LocalStrings.current.noGuideInfo
+    val windowEnd = windowStart + WINDOW_MS
+    val cells = remember(entries, selectedSlot, windowStart, now / 60_000, reminders) {
+        buildList {
             val visible = entries.filter { it.endMs > windowStart && it.startMs < windowEnd }
             if (visible.isEmpty() && selectedSlot?.entry == null) {
-                GuideCell(LocalStrings.current.noGuideInfo, null, 0.dp, timelineWidth, past = false, live = false, selected = false, icon = null)
+                add(Cell(noInfo, null, windowStart, windowEnd, past = false, live = false, selected = false, icon = ICON_NONE))
             }
             for (e in visible) {
-                val start = maxOf(e.startMs, windowStart)
-                val end = minOf(e.endMs, windowEnd)
-                val selected = selectedSlot?.entry == e
-                val live = e.startMs <= now && e.endMs > now
                 val past = e.endMs <= now
                 val icon = when {
-                    e.startMs > now && vm.hasReminder(channel, e) -> ItvIcons.Bell
-                    past && vm.canCatchup(channel, e) -> ItvIcons.History
-                    else -> null
+                    e.startMs > now && vm.hasReminder(channel, e) -> ICON_BELL
+                    past && vm.canCatchup(channel, e) -> ICON_HISTORY
+                    else -> ICON_NONE
                 }
-                GuideCell(e.title, e.startMs.takeIf { it >= windowStart }, x(start), x(end) - x(start), past, live, selected, icon)
+                add(
+                    Cell(
+                        e.title, e.startMs.takeIf { it >= windowStart }, maxOf(e.startMs, windowStart), minOf(e.endMs, windowEnd),
+                        past, live = e.startMs <= now && e.endMs > now, selected = selectedSlot?.entry == e, icon = icon,
+                    ),
+                )
             }
             // Bloco vazio escolhido (sem informação nessa hora).
             if (selectedSlot != null && selectedSlot.entry == null) {
-                val start = maxOf(selectedSlot.start, windowStart)
-                val end = minOf(selectedSlot.end, windowEnd)
-                GuideCell(LocalStrings.current.noGuideInfo, null, x(start), x(end) - x(start), past = false, live = false, selected = true, icon = null)
+                add(Cell(noInfo, null, maxOf(selectedSlot.start, windowStart), minOf(selectedSlot.end, windowEnd), past = false, live = false, selected = true, icon = ICON_NONE))
             }
+        }
+    }
+    val measurer = rememberTextMeasurer(cacheSize = TEXT_CACHE)
+    val title = MaterialTheme.typography.bodyMedium
+    val titleSelected = title.copy(fontWeight = FontWeight.SemiBold)
+    val time = MaterialTheme.typography.labelSmall
+    val bell = rememberVectorPainter(ItvIcons.Bell)
+    val history = rememberVectorPainter(ItvIcons.History)
+    Canvas(modifier) {
+        val pxPerMs = size.width / WINDOW_MS
+        val gap = 3.dp.toPx()
+        val pad = 8.dp.toPx()
+        val radius = CornerRadius(4.dp.toPx())
+        val iconSize = 14.dp.toPx()
+        for (c in cells) {
+            val left = (c.start - windowStart) * pxPerMs
+            val width = (c.end - c.start) * pxPerMs - gap
+            if (width < 4.dp.toPx()) continue
+            drawRoundRect(
+                when {
+                    c.selected -> Color.White
+                    c.live -> Color.White.copy(alpha = 0.13f)
+                    c.past -> Color.White.copy(alpha = 0.04f)
+                    else -> Color.White.copy(alpha = 0.08f)
+                },
+                Offset(left, 0f),
+                Size(width, size.height),
+                radius,
+            )
+            val ink = when {
+                c.selected -> Color.Black
+                c.past -> ItvColors.TextDim
+                else -> ItvColors.Text
+            }
+            var x = left + pad
+            val painter = when (c.icon) {
+                ICON_BELL -> bell
+                ICON_HISTORY -> history
+                else -> null
+            }
+            if (painter != null && width > 40.dp.toPx()) {
+                translate(x, (size.height - iconSize) / 2) {
+                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(if (c.selected) Color.Black else ItvColors.TextDim)) }
+                }
+                x += iconSize + 6.dp.toPx()
+            }
+            val maxWidth = (left + width - pad - x).toInt()
+            if (maxWidth <= 0) continue
+            val titleLayout = measurer.measure(
+                c.title,
+                (if (c.selected) titleSelected else title).copy(color = ink),
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                constraints = Constraints(maxWidth = maxWidth),
+            )
+            val timeLayout = if (c.startMs != null && width > 90.dp.toPx()) {
+                measurer.measure(
+                    formatTime(c.startMs),
+                    time.copy(color = if (c.selected) Color.Black.copy(alpha = 0.6f) else ItvColors.TextFaint),
+                    maxLines = 1,
+                    constraints = Constraints(maxWidth = maxWidth),
+                )
+            } else {
+                null
+            }
+            val textHeight = titleLayout.size.height + (timeLayout?.size?.height ?: 0)
+            val top = (size.height - textHeight) / 2
+            drawText(titleLayout, topLeft = Offset(x, top))
+            if (timeLayout != null) drawText(timeLayout, topLeft = Offset(x, top + titleLayout.size.height))
         }
     }
 }
 
-@Composable
-private fun GuideCell(
-    title: String,
-    startMs: Long?,
-    offset: Dp,
-    width: Dp,
-    past: Boolean,
-    live: Boolean,
-    selected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
-) {
-    if (width < 4.dp) return
-    val shape = ItvShapes.Small
-    Row(
-        Modifier
-            .offset(x = offset)
-            .width(width - 3.dp)
-            .fillMaxHeight()
-            .clip(shape)
-            .background(
-                when {
-                    selected -> Color.White
-                    live -> Color.White.copy(alpha = 0.13f)
-                    past -> Color.White.copy(alpha = 0.04f)
-                    else -> Color.White.copy(alpha = 0.08f)
-                },
-            )
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null && width > 40.dp) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = if (selected) Color.Black else ItvColors.TextDim)
-            Spacer(Modifier.width(6.dp))
-        }
-        Column {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
-                color = when {
-                    selected -> Color.Black
-                    past -> ItvColors.TextDim
-                    else -> ItvColors.Text
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (startMs != null && width > 90.dp) {
-                Text(formatTime(startMs), style = MaterialTheme.typography.labelSmall, color = if (selected) Color.Black.copy(alpha = 0.6f) else ItvColors.TextFaint, maxLines = 1)
-            }
-        }
-    }
-}
+/** Textos medidos guardados (títulos e horas das linhas à vista e das que acabaram de sair). */
+private const val TEXT_CACHE = 256
 
 private fun floorHalfHour(t: Long): Long {
     val c = Calendar.getInstance().apply { timeInMillis = t }

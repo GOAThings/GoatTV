@@ -29,6 +29,7 @@ import cc.slokker.itv.ui.Screen
 import cc.slokker.itv.ui.activation.ActivationScreen
 import cc.slokker.itv.ui.common.Logo
 import cc.slokker.itv.ui.common.LocalChannelLogos
+import cc.slokker.itv.ui.common.semanticsOnlyForScreenReaders
 import cc.slokker.itv.ui.common.Toast
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
@@ -111,6 +112,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     Box(
         Modifier
             .fillMaxSize()
+            .semanticsOnlyForScreenReaders()
             .background(ItvColors.Background)
             .onPreviewKeyEvent { e ->
                 when {
