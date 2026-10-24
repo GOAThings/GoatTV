@@ -302,6 +302,7 @@
     <string name="engine">Player</string>
     <string name="engine_exo">ExoPlayer (recomendado)</string>
     <string name="engine_vlc">VLC (abre mais formatos)</string>
+    <string name="using_vlc">Este canal toca com o VLC</string>
     <string name="decoder">Descodificador de vídeo</string>
     <string name="decoder_hw">Hardware (recomendado)</string>
     <string name="decoder_sw">Software</string>

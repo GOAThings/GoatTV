@@ -130,6 +130,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegVideoRenderer
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -154,8 +155,21 @@ fun PlayerScreen(vm: AppViewModel) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Buffer e descodificador só se mudam criando um player novo.
-    val player = remember(prefs.engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough, prefs.hdr) { buildPlayer(context, prefs) }
+    // Canal em que o ExoPlayer não consegue descodificar o áudio ou o vídeo (ex.: áudio MP2): toca com o VLC.
+    // Só nesse canal; ao mudar de canal volta ao player das definições.
+    var vlcForChannel by remember { mutableStateOf<String?>(null) }
+    val engine = if (vlcForChannel == current.key) Prefs.Engine.VLC else prefs.engine
+    // Player, buffer e descodificador só se mudam criando um player novo.
+    val player = remember(engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough, prefs.hdr) {
+        buildPlayer(context, prefs.copy(engine = engine))
+    }
+    val latestKey by rememberUpdatedState(current.key)
+
+    fun playWithVlc() {
+        if (player is VlcPlayer || vlcForChannel == latestKey) return
+        vlcForChannel = latestKey
+        vm.showToast(I18n.s.usingVlc)
+    }
     val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
     val session = remember { PlaybackSession() }
     val backdrop = remember { GlassBackdrop() }
@@ -406,6 +420,10 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             override fun onTracksChanged(tracks: Tracks) {
+                if (player !is VlcPlayer && tracks.cannotDecode()) {
+                    playWithVlc()
+                    return
+                }
                 // AFR: a TV acompanha a cadência do canal.
                 if (latestPrefs.afr) player.videoFormat()?.let { f -> frameRateMatcher?.match(f.frameRate, HdrType.of(f)) }
                 // Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
@@ -429,6 +447,8 @@ fun PlayerScreen(vm: AppViewModel) {
                         player.seekToDefaultPosition()
                         player.prepare()
                     }
+                    // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
+                    player !is VlcPlayer && error.errorCode in DECODER_ERRORS -> playWithVlc()
                     // Ainda não começou: tenta o outro formato (ts ⇄ m3u8) uma vez.
                     !session.ready && session.attempt + 1 < session.candidates.size -> start(session.attempt + 1)
                     // Catch-up caiu a meio: pede de novo a partir de onde ia.
@@ -1354,6 +1374,8 @@ private class ItvRenderersFactory(
             .setEventListener(eventListener)
             .setMaxDroppedFramesToNotify(MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY)
         out.add(HdrVideoRenderer(builder, context.applicationContext, hdr))
+        // FFmpeg depois do descodificador da box: abre por software o vídeo que ela não descodifica (MPEG-2, HEVC 10-bit, AV1…).
+        out.add(FfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY))
     }
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink? =
@@ -1414,6 +1436,21 @@ internal fun Player.loadStream(candidate: StreamCandidate, channel: Channel?, ne
         is ExoPlayer -> setMediaSource(mediaSourceFor(candidate, channel, nearLive, userAgent))
     }
 }
+
+/** Há áudio ou vídeo, mas nenhuma faixa desse tipo que este player consiga descodificar. */
+internal fun Tracks.cannotDecode(): Boolean {
+    fun none(type: Int) = groups.filter { it.type == type }.let { g -> g.isNotEmpty() && g.none { it.isSupported(true) } }
+    return none(C.TRACK_TYPE_AUDIO) || none(C.TRACK_TYPE_VIDEO)
+}
+
+/** Erros de descodificação: o canal abre, mas este player não sabe descodificar o que lá vem. */
+private val DECODER_ERRORS = setOf(
+    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+)
 
 /** O formato do vídeo a tocar (só o ExoPlayer o dá; com o VLC não há AFR nem a cadência do vidro). */
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat

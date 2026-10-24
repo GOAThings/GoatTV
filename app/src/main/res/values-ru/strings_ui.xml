@@ -302,6 +302,7 @@
     <string name="engine">Плеер</string>
     <string name="engine_exo">ExoPlayer (рекомендуется)</string>
     <string name="engine_vlc">VLC (открывает больше форматов)</string>
+    <string name="using_vlc">Этот канал воспроизводится через VLC</string>
     <string name="decoder">Видеодекодер</string>
     <string name="decoder_hw">Аппаратный (рекомендуется)</string>
     <string name="decoder_sw">Программный</string>

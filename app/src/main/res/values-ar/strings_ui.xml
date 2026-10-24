@@ -302,6 +302,7 @@
     <string name="engine">المشغّل</string>
     <string name="engine_exo">ExoPlayer (مُستحسن)</string>
     <string name="engine_vlc">VLC (يفتح صيغًا أكثر)</string>
+    <string name="using_vlc">تُشغَّل هذه القناة باستخدام VLC</string>
     <string name="decoder">وحدة فك ترميز الفيديو</string>
     <string name="decoder_hw">العتاد (يُنصح به)</string>
     <string name="decoder_sw">البرمجيات</string>

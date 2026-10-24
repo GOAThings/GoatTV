@@ -302,6 +302,7 @@
     <string name="engine">プレーヤー</string>
     <string name="engine_exo">ExoPlayer（推奨）</string>
     <string name="engine_vlc">VLC（より多くの形式に対応）</string>
+    <string name="using_vlc">このチャンネルは VLC で再生しています</string>
     <string name="decoder">映像デコーダー</string>
     <string name="decoder_hw">ハードウェア（推奨）</string>
     <string name="decoder_sw">ソフトウェア</string>

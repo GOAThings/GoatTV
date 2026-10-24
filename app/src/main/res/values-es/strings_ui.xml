@@ -302,6 +302,7 @@
     <string name="engine">Reproductor</string>
     <string name="engine_exo">ExoPlayer (recomendado)</string>
     <string name="engine_vlc">VLC (abre más formatos)</string>
+    <string name="using_vlc">Este canal se reproduce con VLC</string>
     <string name="decoder">Decodificador de vídeo</string>
     <string name="decoder_hw">Hardware (recomendado)</string>
     <string name="decoder_sw">Software</string>

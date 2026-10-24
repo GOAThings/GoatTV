@@ -302,6 +302,7 @@
     <string name="engine">Player</string>
     <string name="engine_exo">ExoPlayer (empfohlen)</string>
     <string name="engine_vlc">VLC (öffnet mehr Formate)</string>
+    <string name="using_vlc">Dieser Sender läuft mit VLC</string>
     <string name="decoder">Video-Decoder</string>
     <string name="decoder_hw">Hardware (empfohlen)</string>
     <string name="decoder_sw">Software</string>

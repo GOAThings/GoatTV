@@ -302,6 +302,7 @@
     <string name="engine">प्लेयर</string>
     <string name="engine_exo">ExoPlayer (सुझाया गया)</string>
     <string name="engine_vlc">VLC (ज़्यादा फ़ॉर्मैट खोलता है)</string>
+    <string name="using_vlc">यह चैनल VLC से चल रहा है</string>
     <string name="decoder">वीडियो डिकोडर</string>
     <string name="decoder_hw">हार्डवेयर (सुझाया गया)</string>
     <string name="decoder_sw">सॉफ़्टवेयर</string>

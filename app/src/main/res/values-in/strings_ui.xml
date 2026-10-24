@@ -302,6 +302,7 @@
     <string name="engine">Pemutar</string>
     <string name="engine_exo">ExoPlayer (disarankan)</string>
     <string name="engine_vlc">VLC (membuka lebih banyak format)</string>
+    <string name="using_vlc">Saluran ini diputar dengan VLC</string>
     <string name="decoder">Decoder video</string>
     <string name="decoder_hw">Hardware (disarankan)</string>
     <string name="decoder_sw">Software</string>

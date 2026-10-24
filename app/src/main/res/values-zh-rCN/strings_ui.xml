@@ -302,6 +302,7 @@
     <string name="engine">播放器</string>
     <string name="engine_exo">ExoPlayer（推荐）</string>
     <string name="engine_vlc">VLC（支持更多格式）</string>
+    <string name="using_vlc">此频道使用 VLC 播放</string>
     <string name="decoder">视频解码器</string>
     <string name="decoder_hw">硬件（推荐）</string>
     <string name="decoder_sw">软件</string>

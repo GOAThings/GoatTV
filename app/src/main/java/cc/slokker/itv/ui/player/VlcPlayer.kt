@@ -47,7 +47,13 @@ internal class VlcPlayer(
     // O LibVLC junta as suas opções a esta lista: tem de poder ser alterada (com buildList fechava a app).
     private val libVlc = LibVLC(
         context.applicationContext,
-        arrayListOf("--http-reconnect", "--audio-time-stretch").apply { if (passthrough) add("--spdif") },
+        arrayListOf(
+            "--http-reconnect",
+            "--audio-time-stretch",
+            // Canais entrelaçados (1080i, 576i): desentrelaça só esses, a 50/60 imagens por segundo.
+            "--deinterlace=-1",
+            "--deinterlace-mode=yadif2x",
+        ).apply { if (passthrough) add("--spdif") },
     )
     private val vlc = MediaPlayer(libVlc)
     private val main = Handler(Looper.getMainLooper())

@@ -71,6 +71,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // Classes do Media3 (ex.: TrackGroup) chamam funções do Android que nos testes no PC não existem: devolvem o neutro.
+        unitTests.isReturnDefaultValues = true
+    }
     packaging {
         jniLibs {
             // Bibliotecas nativas comprimidas no APK (o VLC sem compressão passava de 100 MB); o Android extrai-as ao instalar.
