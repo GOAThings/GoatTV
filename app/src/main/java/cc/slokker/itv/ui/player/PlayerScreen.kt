@@ -139,6 +139,7 @@ internal enum class Panel { None, Channels, Groups }
  * Ecrã principal: o vídeo em ecrã inteiro com painéis de vidro por cima.
  *  - ←: canais do grupo, encostados à esquerda; ← outra vez: grupos no mesmo painel.
  *  - ↑/↓, CH+/CH−: mudar de canal; OK: informação do programa; Menu: favorito.
+ *  - Guia, Pesquisa, Legendas, Áudio e Definições abrem o seu painel; Stop sai do catch-up; números: canal.
  *  - Voltar: fecha um nível; com tudo fechado, duas vezes para sair.
  */
 @Composable
@@ -777,6 +778,26 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         AndroidKeyEvent.KEYCODE_SEARCH -> {
                             showSearch = true; return@onKeyEvent true
+                        }
+                        // Teclas de comandos com mais botões (ou do GoatRemote, no telemóvel).
+                        AndroidKeyEvent.KEYCODE_CAPTIONS -> {
+                            infoVisible = false
+                            trackPicker = C.TRACK_TYPE_TEXT; return@onKeyEvent true
+                        }
+                        AndroidKeyEvent.KEYCODE_MEDIA_AUDIO_TRACK -> {
+                            infoVisible = false
+                            trackPicker = C.TRACK_TYPE_AUDIO; return@onKeyEvent true
+                        }
+                        AndroidKeyEvent.KEYCODE_SETTINGS -> {
+                            infoVisible = false
+                            showSettings = true
+                            vm.refreshConfig()
+                            return@onKeyEvent true
+                        }
+                        AndroidKeyEvent.KEYCODE_MEDIA_STOP -> {
+                            if (catchup != null) {
+                                vm.exitCatchup(); return@onKeyEvent true
+                            }
                         }
                     }
                     // Catch-up: ← → recuam/avançam 1 minuto, OK pausa.
