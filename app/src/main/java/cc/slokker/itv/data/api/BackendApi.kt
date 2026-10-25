@@ -3,6 +3,7 @@ package cc.slokker.itv.data.api
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -37,8 +38,20 @@ interface BackendApi {
     @POST("api/collections/devices/auth-refresh")
     suspend fun authRefresh(): AuthRefreshResponse
 
+    /** Com [etag] (o `ETag` da última resposta), 304 sem corpo quando nada mudou. */
     @GET("api/goattv/config")
-    suspend fun config(): ConfigResponse
+    suspend fun config(@Header("If-None-Match") etag: String? = null): Response<ConfigResponse>
+
+    /**
+     * O índice de grupos e canais de uma lista, em gzip (ver ChannelIndex), para o site a poder organizar.
+     * Responde `{hash, groups, channels, received_at}`.
+     */
+    @PUT("api/goattv/playlists/{pid}/index")
+    suspend fun putPlaylistIndex(
+        @Path("pid") playlistId: String,
+        @Body body: RequestBody,
+        @Header("Content-Encoding") encoding: String = "gzip",
+    ): Response<JsonObject>
 
     /**
      * Grava no perfil GoatTV. `settings_merge` junta só as chaves enviadas (JSON Merge Patch) e, com
@@ -144,6 +157,8 @@ data class PlaylistDto(
     val password: String?,
     val url: String?,
     @SerializedName("epg_url") val epgUrl: String?,
+    /** O hash do índice de canais que a conta tem desta lista (null: nenhuma TV o enviou ainda). */
+    @SerializedName("index_hash") val indexHash: String? = null,
 )
 
 data class EpgCountryInfo(val code: String?, val name: String?, val channels: Int?, val guide: Boolean?)

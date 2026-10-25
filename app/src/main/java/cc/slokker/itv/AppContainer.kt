@@ -55,18 +55,20 @@ class AppContainer(context: Context) {
     /** Emite quando o backend responde 401 (ex.: "Terminar sessão em todas as TVs" no site). */
     val sessionEnded: SharedFlow<Unit> = _sessionEnded
 
+    /** `goattv/<versão> (<plataforma>)`, por exemplo `goattv/0.8.8 (android-tv)`. */
+    private val goatClient =
+        "goattv/${BuildConfig.VERSION_NAME} (${if (android.os.Build.MANUFACTURER.equals("Amazon", true)) "fire-tv" else "android-tv"})"
+
     private val backendHttp = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val current = token
-            val request = if (current != null) {
-                // Sem "Bearer": o backend espera o token tal como está.
-                chain.request().newBuilder().header("Authorization", current).build()
-            } else {
-                chain.request()
-            }
-            val response = chain.proceed(request)
+            // Sem "Bearer": o backend espera o token tal como está. O X-Goat-Client diz ao site a app, a versão e o
+            // tipo de TV (aparece em Dispositivos).
+            val builder = chain.request().newBuilder().header("X-Goat-Client", goatClient)
+            if (current != null) builder.header("Authorization", current)
+            val response = chain.proceed(builder.build())
             if (response.code == 401 && current != null) _sessionEnded.tryEmit(Unit)
             response
         }

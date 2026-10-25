@@ -46,6 +46,8 @@ public final class Backend: @unchecked Sendable {
         public var settingsRev: Int64?
         /// A resposta tal como veio (para guardar em cache).
         public var raw: JSON
+        /// O `index_hash` que a conta tem de cada lista (nil: nenhuma TV enviou ainda o índice de canais dela).
+        public var indexHashes: [String: String?] = [:]
     }
 
     public enum Failure: Error, Equatable, Sendable {
@@ -116,11 +118,31 @@ public final class Backend: @unchecked Sendable {
 
     // MARK: Perfil GoatTV
 
-    public func config() async throws -> Config {
-        let (status, json, _) = try await send("GET", "api/goattv/config", body: nil)
+    /// O `ETag` da última config lida.
+    public private(set) var configETag: String?
+
+    /// A config da conta; com `ifChanged`, nil (304) quando nada mudou desde a última leitura.
+    public func config(ifChanged: Bool = false) async throws -> Config? {
+        let etag = ifChanged ? configETag : nil
+        let (status, json, response) = try await send("GET", "api/goattv/config", headers: etag.map { ["If-None-Match": $0] } ?? [:], body: nil)
+        if status == 304 { return nil }
         guard status == 200 else { throw Failure.http(status) }
         guard let json else { throw Failure.badResponse }
+        configETag = response.value(forHTTPHeaderField: "ETag")
         return Self.parseConfig(json)
+    }
+
+    /// Manda à conta o índice de grupos e canais de uma lista (ver ChannelIndex). Devolve o código HTTP.
+    public func putPlaylistIndex(_ playlistId: String, _ index: ChannelIndex) async throws -> Int {
+        let path = "api/goattv/playlists/\(playlistId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? playlistId)/index"
+        var request = URLRequest(url: URL(string: path, relativeTo: Self.baseURL)!)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = index.body()
+        authorize(&request)
+        let (_, response) = try await HTTP.fetch(session, request)
+        checkSession(response.statusCode)
+        return response.statusCode
     }
 
     public static func parseConfig(_ json: JSON) -> Config {
@@ -132,7 +154,11 @@ public final class Backend: @unchecked Sendable {
             favorites: parseKeyLists(json["favorites"]),
             settings: json["settings"]?.object ?? [:],
             settingsRev: json["settings_rev"]?.int.map(Int64.init),
-            raw: json
+            raw: json,
+            indexHashes: Dictionary((json["playlists"]?.array ?? []).compactMap { p -> (String, String?)? in
+                guard let id = p["id"]?.text else { return nil }
+                return (id, p["index_hash"]?.text)
+            }, uniquingKeysWith: { a, _ in a })
         )
     }
 
@@ -261,7 +287,7 @@ public final class Backend: @unchecked Sendable {
 
     // MARK: Pedidos
 
-    private func send(_ method: String, _ path: String, query: [(String, String)] = [], body: [String: JSON]?) async throws -> (Int, JSON?, HTTPURLResponse) {
+    private func send(_ method: String, _ path: String, query: [(String, String)] = [], headers: [String: String] = [:], body: [String: JSON]?) async throws -> (Int, JSON?, HTTPURLResponse) {
         var components = URLComponents(url: Self.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } }
         var request = URLRequest(url: components.url!)
@@ -271,6 +297,7 @@ public final class Backend: @unchecked Sendable {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = JSON.object(body).encoded()
         }
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         authorize(&request)
         let (data, response) = try await HTTP.fetch(session, request)
         checkSession(response.statusCode)
@@ -278,7 +305,11 @@ public final class Backend: @unchecked Sendable {
         return (response.statusCode, json, response)
     }
 
+    /// `goattv/<versão> (apple-tv)`: diz ao site a app, a versão e o tipo de TV (aparece em Dispositivos).
+    public var client: String?
+
     private func authorize(_ request: inout URLRequest) {
+        if let client { request.setValue(client, forHTTPHeaderField: "X-Goat-Client") }
         if let token { request.setValue(token, forHTTPHeaderField: "Authorization") }
     }
 

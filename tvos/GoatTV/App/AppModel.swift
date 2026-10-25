@@ -94,6 +94,9 @@ final class AppModel {
     @ObservationIgnored private var settings: [String: JSON] = [:]
     @ObservationIgnored private var syncedSettings: [String: JSON] = [:]
     @ObservationIgnored private var settingsRev: Int64?
+    /// O `index_hash` que a conta tem de cada lista, para só enviar o índice de canais quando muda.
+    @ObservationIgnored private var indexHashes: [String: String?] = [:]
+    @ObservationIgnored private var indexTask: Task<Void, Never>?
     @ObservationIgnored private var accountGuide: AccountGuide?
     @ObservationIgnored private var mainGuide: XMLTVGuide?
     @ObservationIgnored private var extraGuide: XMLTVGuide?
@@ -148,6 +151,8 @@ final class AppModel {
     }
 
     init() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        backend.client = "goattv/\(version) (apple-tv)"
         backend.onSessionEnded = { [weak self] in
             Task { @MainActor in self?.sessionEnded() }
         }
@@ -432,7 +437,13 @@ final class AppModel {
             // Sem rede agora: segue com o token que há.
         }
         do {
-            let config = try await backend.config()
+            // Com uma lista já no ecrã, só se lê a config se mudou (304 quando não).
+            guard let config = try await backend.config(ifChanged: content != nil) else {
+                if let playlist = content?.playlist, isDue(prefs.playlistRefreshHours, since: content?.fetchedAt) {
+                    await load(playlist, resume: true, quiet: true)
+                }
+                return
+            }
             cache.save(config.raw, as: "config")
             let previousPlaylist = content?.playlist
             apply(config)
@@ -497,6 +508,7 @@ final class AppModel {
     }
 
     private func apply(_ config: Backend.Config) {
+        indexHashes = config.indexHashes
         playlists = config.playlists
         favorites = config.favorites
         settings = config.settings
@@ -794,10 +806,27 @@ final class AppModel {
         }
     }
 
+    /// Manda à conta o índice de grupos e canais (para o site o poder organizar), se for diferente do que ela tem.
+    /// Corre por trás; sem rede ou com erro, tenta-se na próxima carga.
+    private func uploadIndex(_ content: PlaylistContent) {
+        let id = content.playlist.id
+        guard !isLocal, UserDefaults.standard.string(forKey: "UITestPlaylist") == nil, let known = indexHashes[id] else { return }
+        indexTask?.cancel()
+        let backend = backend
+        indexTask = Task { [weak self] in
+            guard let index = await Task.detached(priority: .utility, operation: { ChannelIndex(content) }).value,
+                  index.hash != known, !Task.isCancelled else { return }
+            if let status = try? await backend.putPlaylistIndex(id, index), status == 200 {
+                self?.indexHashes[id] = index.hash
+            }
+        }
+    }
+
     /// Põe a lista no ecrã. [resume]: abre o último canal visto (ou o primeiro).
     private func show(_ loaded: PlaylistContent, resume: Bool) {
         let samePlaylist = content?.playlist.id == loaded.playlist.id
         content = loaded
+        uploadIndex(loaded)
         screen = .player
         if !samePlaylist {
             accountGuide = nil

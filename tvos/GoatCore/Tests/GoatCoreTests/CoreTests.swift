@@ -13,6 +13,7 @@ enum CoreTests {
 
     static let all: [(String, () throws -> Void)] = [
         ("hashes", hashes),
+        ("channelIndex", channelIndex),
         ("appUpdate", appUpdate),
         ("m3u", m3u),
         ("m3uKeys", m3uKeys),
@@ -337,5 +338,23 @@ enum CoreTests {
         try expect(AppUpdate.version(fromLatest: withIpa), "0.8.7")
         let apkOnly = try JSON.parse(Data(#"{"tag_name":"v0.8.7","assets":[{"name":"goattv.apk"}]}"#.utf8))
         try expect(AppUpdate.version(fromLatest: apkOnly), nil)
+    }
+
+    /// O hash do índice de canais é o mesmo do Android (ChannelIndexTest) para a mesma lista.
+    static func channelIndex() throws {
+        let playlist = Playlist(id: "p1", type: .m3u, name: "Demo", url: "https://example.com/list.m3u")
+        let content = PlaylistContent(
+            playlist: playlist,
+            categories: [Category(id: "1", name: "News"), Category(id: "Outros", name: "Outros")],
+            channels: [
+                Channel(uid: 0, key: "101", num: 1, name: "RTP 1", logo: "https://x/rtp1.png", categoryId: "1"),
+                Channel(uid: 1, key: "u0a1b2c", num: 2, name: "Canal ç", logo: "logo.png", categoryId: "Outros"),
+            ]
+        )
+        guard let index = ChannelIndex(content) else { throw Failure(description: "sem índice") }
+        try expect(index.hash, "ea9f8cc27edc2e37f03ba70062966b66b503be16")
+        let body = try JSON.parse(index.body())
+        try expect(body["channels"]?.array?.count, 2)
+        try expect(body["channels"]?.array?[1]["logo"] == nil, true)
     }
 }

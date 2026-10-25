@@ -52,6 +52,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +61,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import android.util.Log
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import cc.slokker.itv.data.ChannelIndex
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -133,6 +138,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O `settings` tal como está no servidor (o último que se leu ou gravou) e a versão dele: grava-se só a diferença. */
     private var syncedSettings = JsonObject()
     private var settingsRev: Long? = null
+    /** O `ETag` da última config lida (para o servidor responder 304 quando nada mudou). */
+    private var configEtag: String? = null
+    /** Que índice de canais a conta tem de cada lista (`index_hash`), para só enviar quando muda. */
+    private val indexHashes = HashMap<String, String?>()
+    private var indexJob: Job? = null
     private val _streamFormat = MutableStateFlow<String?>(null)
     val streamFormat: StateFlow<String?> = _streamFormat.asStateFlow()
 
@@ -459,7 +469,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (!renewToken()) return@launch
 
                 _screen.value = Screen.Loading(I18n.s.loadingPlaylists)
-                val config = c.backend.config()
+                val config = fetchConfig(null) ?: return@launch
                 applyConfig(config)
                 c.cache.saveConfig(config)
                 pendingLocalProfile?.let { localProfile ->
@@ -573,7 +583,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /** A config da conta; null quando [etag] ainda é o atual (304). Erros HTTP saem como HttpException. */
+    private suspend fun fetchConfig(etag: String?): ConfigResponse? {
+        val res = c.backend.config(etag)
+        if (res.code() == 304) return null
+        val config = res.body() ?: throw HttpException(res)
+        configEtag = res.headers()["ETag"]
+        return config
+    }
+
+    /**
+     * Manda à conta o índice de grupos e canais de [content] (para o site o poder organizar), se for diferente do
+     * que ela tem. Corre por trás e nunca atrapalha a TV: sem rede ou com erro, tenta-se na próxima carga.
+     */
+    private fun uploadIndex(content: PlaylistContent) {
+        if (_local.value || c.testMode) return
+        val playlistId = content.playlist.id
+        if (!indexHashes.containsKey(playlistId)) return // lista que a conta não conhece
+        indexJob?.cancel()
+        indexJob = viewModelScope.launch(Dispatchers.Default) {
+            val index = ChannelIndex.of(content) ?: return@launch
+            if (indexHashes[playlistId] == index.hash) return@launch
+            try {
+                val res = c.backend.putPlaylistIndex(playlistId, index.gzipBody().toRequestBody(JSON_MEDIA))
+                if (res.isSuccessful) indexHashes[playlistId] = index.hash
+                else Log.w(TAG, "Índice de canais: HTTP ${res.code()}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Índice de canais: ${e.message}")
+            }
+        }
+    }
+
+    /** Lembra o `index_hash` que a conta tem de cada lista. */
+    private fun rememberIndexHashes(config: ConfigResponse) {
+        for (p in config.playlists.orEmpty()) p.id?.let { indexHashes[it] = p.indexHash }
+    }
+
     private fun applyConfig(config: ConfigResponse) {
+        rememberIndexHashes(config)
         lastConfig = config
         config.user?.id?.let { userId = it }
         config.user?.email?.let { _email.value = it }
@@ -715,6 +764,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.epg.clearShort()
         openGuide(loaded)
         _content.value = loaded
+        uploadIndex(loaded)
         _selectedCategory.value = SpecialCategory.ALL
         _playing.value = null
         if (loaded.channels.isEmpty()) {
@@ -766,6 +816,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             c.cache.savePlaylist(fresh)
             val guideChanged = fresh.guideUrl != _content.value?.guideUrl
             _content.value = fresh
+            uploadIndex(fresh)
             if (guideChanged) openGuide(fresh)
             // O canal a tocar continua o mesmo (pela chave); o zapping passa a usar a lista nova.
             _playing.value?.let { p -> fresh.byKey[p.key]?.let { _playing.value = it } }
@@ -986,7 +1037,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Lê a config da conta e reage a listas apagadas ou alteradas no site. */
     private suspend fun syncConfig() {
         val config = try {
-            c.backend.config()
+            fetchConfig(configEtag) ?: return // 304: nada mudou na conta
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -994,6 +1045,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         c.cache.saveConfig(config)
         lastConfig = config
+        rememberIndexHashes(config)
         config.device?.name?.let { _deviceName.value = it }
         val playlists = config.playlists.orEmpty().mapNotNull { it.toPlaylist() }
         _playlists.value = playlists
@@ -2052,6 +2104,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val TAG = "GoatTV"
+        val JSON_MEDIA = "application/json".toMediaType()
         /** Tentativas de gravar as definições quando o servidor responde 409 (igual ao site). */
         const val SETTINGS_ATTEMPTS = 4
         const val UPDATE_FIRST_CHECK_MS = 20_000L
