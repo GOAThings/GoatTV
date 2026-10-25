@@ -1,0 +1,29 @@
+#EXTM3U x-tvg-url="http://127.0.0.1:8765/guide.xml"
+#EXTINF:-1 tvg-id="lumen" tvg-name="Lumen Cinema" tvg-logo="http://127.0.0.1:8765/logos/lumen.png" group-title="Movies",Lumen Cinema
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="orbit" tvg-name="Orbit Movies" tvg-logo="http://127.0.0.1:8765/logos/orbit.png" group-title="Movies",Orbit Movies
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="nova" tvg-name="Nova Films" tvg-logo="http://127.0.0.1:8765/logos/nova.png" group-title="Movies",Nova Films
+https://download.blender.org/durian/trailer/sintel_trailer-720p.mp4
+#EXTINF:-1 tvg-id="reel" tvg-name="Reel 24" tvg-logo="http://127.0.0.1:8765/logos/reel.png" group-title="Movies",Reel 24
+https://download.blender.org/demo/movies/ToS/tears_of_steel_720p.mov
+#EXTINF:-1 tvg-id="bright" tvg-name="Bright TV" tvg-logo="http://127.0.0.1:8765/logos/bright.png" group-title="Entertainment",Bright TV
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="atlas" tvg-name="Atlas Plus" tvg-logo="http://127.0.0.1:8765/logos/atlas.png" group-title="Entertainment",Atlas Plus
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="fable" tvg-name="Fable Kids" tvg-logo="http://127.0.0.1:8765/logos/fable.png" group-title="Entertainment",Fable Kids
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="meadow" tvg-name="Meadow" tvg-logo="http://127.0.0.1:8765/logos/meadow.png" group-title="Entertainment",Meadow
+https://download.blender.org/durian/trailer/sintel_trailer-720p.mp4
+#EXTINF:-1 tvg-id="arena1" tvg-name="Arena Sport 1" tvg-logo="http://127.0.0.1:8765/logos/arena1.png" group-title="Sports",Arena Sport 1
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="arena2" tvg-name="Arena Sport 2" tvg-logo="http://127.0.0.1:8765/logos/arena2.png" group-title="Sports",Arena Sport 2
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 tvg-id="pulse" tvg-name="Pulse Sports" tvg-logo="http://127.0.0.1:8765/logos/pulse.png" group-title="Sports",Pulse Sports
+https://download.blender.org/demo/movies/ToS/tears_of_steel_720p.mov
+#EXTINF:-1 tvg-id="daily" tvg-name="Daily World" tvg-logo="http://127.0.0.1:8765/logos/daily.png" group-title="News",Daily World
+https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+#EXTINF:-1 tvg-id="metro" tvg-name="Metro News" tvg-logo="http://127.0.0.1:8765/logos/metro.png" group-title="News",Metro News
+https://download.blender.org/durian/trailer/sintel_trailer-720p.mp4
+#EXTINF:-1 tvg-id="harbor" tvg-name="Harbor 360" tvg-logo="http://127.0.0.1:8765/logos/harbor.png" group-title="News",Harbor 360
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8

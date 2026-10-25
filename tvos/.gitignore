@@ -1,0 +1,13 @@
+.DS_Store
+/build/
+/Frameworks/
+/GoatTV.xcodeproj/
+.build/
+.swiftpm/
+*.ipa
+xcuserdata/
+DerivedData/
+/GoatTV/Info.plist
+/GoatTV/GoatTV.entitlements
+/TopShelf/Info.plist
+/TopShelf/TopShelf.entitlements

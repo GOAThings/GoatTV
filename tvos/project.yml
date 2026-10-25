@@ -1,0 +1,79 @@
+# Projeto Xcode gerado pelo XcodeGen (`xcodegen generate`): o .xcodeproj não vai para o git.
+name: GoatTV
+options:
+  bundleIdPrefix: cc.slokker
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  GoatCore:
+    path: GoatCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.8.7"
+    CURRENT_PROJECT_VERSION: "23"
+targets:
+  GoatTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: GoatTV
+      - path: Shared
+    dependencies:
+      - package: GoatCore
+      # VLC para tvOS (LGPL): descarregado por scripts/fetch-vlckit.sh, não vai para o git.
+      - framework: Frameworks/TVVLCKit.xcframework
+        embed: true
+      - sdk: libc++.tbd
+      - sdk: libxml2.tbd
+      - sdk: libz.tbd
+      - sdk: libbz2.tbd
+      - sdk: libiconv.tbd
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreText.framework
+      - sdk: VideoToolbox.framework
+      - sdk: OpenGLES.framework
+    info:
+      path: GoatTV/Info.plist
+      properties:
+        CFBundleDisplayName: GoatTV
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIRequiredDeviceCapabilities: [arm64]
+        UIUserInterfaceStyle: Dark
+        UILaunchScreen: {}
+        # goattv://play?playlist=…&channel=… abre um canal (os cartões da Top Shelf).
+        CFBundleURLTypes:
+          - CFBundleURLName: cc.slokker.goattv
+            CFBundleURLSchemes: [goattv]
+        # As listas IPTV são quase sempre http://.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsArbitraryLoadsForMedia: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv
+        PRODUCT_NAME: GoatTV
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        ENABLE_BITCODE: NO
+        CODE_SIGN_STYLE: Manual
+    scheme:
+      testTargets: [GoatTVUITests]
+  # Testes de interface no simulador (.github/workflows/ui-tests.yml): só em Debug, com a lista de UITests/Demo.
+  GoatTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources:
+      - path: UITests/GoatTVUITests.swift
+    dependencies:
+      - target: GoatTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: GoatTV
+        CODE_SIGN_STYLE: Manual

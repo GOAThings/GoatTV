@@ -1,0 +1,97 @@
+name: Apple TV
+
+# A app do Apple TV (tvos/): testes do núcleo em Linux e a IPA sem assinatura (assina-se depois com o certificado de
+# quem instala). Cada versão do GoatTV leva esta IPA ao lado da APK (scripts de publicação, fora do repositório).
+on:
+  push:
+    branches: [main]
+    paths: ["tvos/**", ".github/workflows/tvos.yml"]
+  pull_request:
+    paths: ["tvos/**", ".github/workflows/tvos.yml"]
+  workflow_dispatch:
+    inputs:
+      topshelf:
+        description: "Com a Top Shelf (extensão + App Group)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: tvos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    # O núcleo (listas, guia, conta) corre em Linux: minutos baratos.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes do GoatCore
+        working-directory: tvos/GoatCore
+        run: |
+          swift --version
+          mkdir -p /tmp/run
+          for f in Tests/GoatCoreTests/*.swift; do sed '/@testable import GoatCore/d' "$f" > /tmp/run/$(basename "$f"); done
+          cat > /tmp/run/main.swift <<'M'
+          import Foundation
+          @main struct Runner {
+              static func main() {
+                  var failed = 0
+                  for (name, test) in CoreTests.all {
+                      do { try test(); print("ok   \(name)") } catch { failed += 1; print("FAIL \(name): \(error)") }
+                  }
+                  exit(failed == 0 ? 0 : 1)
+              }
+          }
+          M
+          swiftc -parse-as-library -module-name GoatCore Sources/GoatCore/*.swift /tmp/run/*.swift -o /tmp/run/tests
+          /tmp/run/tests
+
+  ipa:
+    needs: core-tests
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: tvos
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: tvos/build/tvvlckit.tar.xz
+          key: tvvlckit-3.7.4
+      - name: TVVLCKit
+        run: scripts/fetch-vlckit.sh
+      - name: Gerar o projeto
+        run: /tmp/xcodegen/xcodegen/bin/xcodegen generate --spec ${{ inputs.topshelf && 'topshelf.yml' || 'project.yml' }}
+      - name: Compilar
+        run: |
+          set -o pipefail
+          xcodebuild -project GoatTV.xcodeproj -scheme GoatTV -configuration Release \
+            -sdk appletvos -destination 'generic/platform=tvOS' -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build/xcodebuild.log | grep -E "error:|warning: .*GoatTV/|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+      - name: Erros de compilação
+        if: failure()
+        run: grep -E "error:" -A3 build/xcodebuild.log | head -150 || tail -100 build/xcodebuild.log
+      - name: IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/dd/Build/Products/Release-appletvos/GoatTV.app build/ipa/Payload/
+          if [ "${{ inputs.topshelf }}" = "true" ]; then
+            # Sem assinatura não há entitlements: assina-se ad hoc com o App Group, para quem reassina o manter.
+            codesign --force --sign - --entitlements TopShelf/TopShelf.entitlements build/ipa/Payload/GoatTV.app/PlugIns/TopShelf.appex
+            codesign --force --sign - --entitlements GoatTV/GoatTV.entitlements build/ipa/Payload/GoatTV.app
+            codesign -d --entitlements - build/ipa/Payload/GoatTV.app/PlugIns/TopShelf.appex
+          fi
+          cd build/ipa && zip -qry ../GoatTV.ipa Payload
+          ls -la ../GoatTV.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.topshelf && 'GoatTV-topshelf-ipa' || 'GoatTV-ipa' }}
+          path: tvos/build/GoatTV.ipa
+          retention-days: 30

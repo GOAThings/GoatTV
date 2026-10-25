@@ -40,7 +40,8 @@ Both apps share the same GOAT account, playlists, favourites and settings.
 
 ## Build
 
-This repository has the Android TV app. It needs Android Studio (for the Android SDK and JDK).
+The Apple TV app is in [`tvos/`](tvos) (Swift, built with Xcode; see its README). The Android TV app needs
+Android Studio (for the Android SDK and JDK).
 
 ```bash
 ./gradlew assembleDebug

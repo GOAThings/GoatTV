@@ -1,0 +1,44 @@
+# A IPA com a Top Shelf (favoritos e recentes no ecrã principal): `xcodegen generate --spec topshelf.yml`.
+# É o project.yml mais a extensão; as duas partilham um App Group, por isso a assinatura tem de o permitir.
+include:
+  - project.yml
+targets:
+  GoatTV:
+    dependencies:
+      - target: TopShelf
+    entitlements:
+      path: GoatTV/GoatTV.entitlements
+      properties:
+        com.apple.security.application-groups: [group.cc.slokker.goattv]
+  TopShelf:
+    type: tv-app-extension
+    platform: tvOS
+    sources:
+      - path: TopShelf
+      - path: Shared
+    dependencies:
+      - sdk: TVServices.framework
+    info:
+      path: TopShelf/Info.plist
+      properties:
+        CFBundleDisplayName: GoatTV
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+    entitlements:
+      path: TopShelf/TopShelf.entitlements
+      properties:
+        com.apple.security.application-groups: [group.cc.slokker.goattv]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv.topshelf
+        PRODUCT_NAME: TopShelf
+        # Com um só ficheiro Swift, o compilador fazia dele o programa (um main vazio): a extensão abria e saía logo.
+        # Biblioteca, e a entrada é a das extensões.
+        OTHER_SWIFT_FLAGS: -parse-as-library
+        OTHER_LDFLAGS: -e _NSExtensionMain
+        ENABLE_DEBUG_DYLIB: NO
+        TARGETED_DEVICE_FAMILY: "3"
+        CODE_SIGN_STYLE: Manual

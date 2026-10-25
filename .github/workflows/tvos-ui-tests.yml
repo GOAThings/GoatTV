@@ -1,0 +1,106 @@
+name: Apple TV UI tests
+
+# Uma volta pela app no simulador da Apple TV com screenshots de cada passo (artefacto "screenshots").
+# Só corre quando se pede (demora uns minutos).
+on:
+  workflow_dispatch:
+    inputs:
+      topshelf:
+        description: "Com a Top Shelf (extensão + App Group)"
+        type: boolean
+        default: false
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: tvos
+    steps:
+      - uses: actions/checkout@v4
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: tvos/build/tvvlckit.tar.xz
+          key: tvvlckit-3.7.4
+      - name: TVVLCKit
+        run: scripts/fetch-vlckit.sh
+      - name: Gerar o projeto
+        run: /tmp/xcodegen/xcodegen/bin/xcodegen generate --spec ${{ inputs.topshelf && 'topshelf.yml' || 'project.yml' }}
+      - name: Lista de demonstração
+        run: |
+          mkdir -p build/demo && cp -R UITests/Demo/. build/demo/
+          python3 UITests/Demo/make-guide.py build/demo
+          cd build/demo && nohup python3 -m http.server 8765 --bind 127.0.0.1 > ../http.log 2>&1 &
+          sleep 2 && curl -fsS http://127.0.0.1:8765/demo.m3u | head -3
+      - name: Simulador
+        run: |
+          xcrun simctl list devices available | grep -i "apple tv" || true
+          echo "SIM=$(xcrun simctl list devices available | grep -i 'Apple TV 4K' | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')" >> "$GITHUB_ENV"
+          # Ligado por nós, o xcodebuild não o desliga no fim (o diagnóstico ainda lê os logs).
+          SIM=$(xcrun simctl list devices available | grep -i 'Apple TV 4K' | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          xcrun simctl boot "$SIM" && xcrun simctl bootstatus "$SIM" -b
+      - name: Testes
+        run: |
+          set -o pipefail
+          xcodebuild -project GoatTV.xcodeproj -scheme GoatTV -configuration Debug \
+            -destination "platform=tvOS Simulator,id=$SIM" -derivedDataPath build/dd \
+            -resultBundlePath build/UITests.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            test 2>&1 | tee build/xcodebuild.log | grep -E "error:|Test Case|XCTAssert|failed|TEST (SUCCEEDED|FAILED)|BUILD FAILED" || true
+          grep -qE "TEST (SUCCEEDED|FAILED)" build/xcodebuild.log
+      - name: Erros
+        if: failure()
+        run: grep -E "error:" -A3 build/xcodebuild.log | head -150 || tail -150 build/xcodebuild.log
+      - name: Diagnóstico da Top Shelf
+        if: always() && inputs.topshelf
+        run: |
+          set +e
+          {
+            APP=$(find build/dd/Build/Products -path '*simulator*' -name GoatTV.app -maxdepth 3 | head -1)
+            echo "== $APP"; ls -la "$APP/PlugIns" || true
+            echo "== entitlements app"; codesign -d --entitlements - "$APP" 2>&1 || true
+            echo "== entitlements extensão"; codesign -d --entitlements - "$APP/PlugIns/TopShelf.appex" 2>&1 || true
+            echo "== App Group no binário (simulador)"; strings "$APP/GoatTV" | grep -A3 application-groups | head; strings "$APP/PlugIns/TopShelf.appex/TopShelf" | grep -A3 application-groups | head
+            echo "== pluginkit"; xcrun simctl spawn "$SIM" pluginkit -m -v -p com.apple.tv-top-shelf 2>&1 | head
+            echo "== App Group"
+            G=$(xcrun simctl get_app_container "$SIM" cc.slokker.goattv group.cc.slokker.goattv 2>&1 </dev/null); echo "$G"
+            D=$(xcrun simctl get_app_container "$SIM" cc.slokker.goattv data 2>&1 </dev/null); echo "data: $D"
+            ls -laR "$G" 2>/dev/null | head -40; cat "$G/topshelf.json" 2>/dev/null | head -c 2000; echo
+            echo "== a extensão sozinha (stderr)"
+            EXT=$(xcrun simctl get_app_container "$SIM" cc.slokker.goattv app </dev/null)/PlugIns/TopShelf.appex/TopShelf
+            B="$APP/PlugIns/TopShelf.appex/TopShelf"
+            ls -la "$APP/PlugIns/TopShelf.appex"
+            echo "-- LC_MAIN"; otool -l "$B" | grep -A3 LC_MAIN
+            echo "-- libs"; otool -L "$B"
+            echo "-- main symbols"; nm -m "$B" | grep -i -E "main|ContentProvider" | head
+            echo "-- spawn"
+            perl -e 'alarm 8; exec @ARGV' xcrun simctl spawn "$SIM" "$EXT" </dev/null 2>&1 | head -40; echo "exit=${PIPESTATUS[0]}"
+            echo "== logs do processo TopShelf"
+            xcrun simctl spawn "$SIM" log show --last 20m --style compact --info --debug \
+              --predicate 'process == "TopShelf" OR (process == "launchd_sim" AND eventMessage CONTAINS "topshelf") OR eventMessage CONTAINS "GoatTV TopShelf"' </dev/null 2>&1 | grep -v runningboard | tail -80
+            echo "== logs HeadBoard"
+            xcrun simctl spawn "$SIM" log show --last 20m --style compact \
+              --predicate 'process == "HeadBoard" AND eventMessage CONTAINS[c] "goattv"' </dev/null 2>&1 | grep -v -E "runningboard|FetchTimer" | cut -c1-400 | tail -40
+            echo "== crashes"; ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i -E "topshelf|goattv" || true
+          } > build/topshelf-diag.txt 2>&1
+          tail -80 build/topshelf-diag.txt
+      - name: Screenshots
+        if: always()
+        run: |
+          mkdir -p build/shots
+          xcrun xcresulttool export attachments --path build/UITests.xcresult --output-path build/shots || true
+          ls build/shots | head -80
+          cp build/http.log build/shots/ 2>/dev/null || true
+          cp build/topshelf-diag.txt build/shots/ 2>/dev/null || true
+          tail -300 build/xcodebuild.log > build/shots/xcodebuild-tail.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: tvos/build/shots
+          retention-days: 14
