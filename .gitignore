@@ -21,8 +21,8 @@ keystore.properties
 /.idea/vcs.xml
 /screenshots
 
-# Ficheiros do Android Studio (têm caminhos do PC de quem desenvolve)
+# Android Studio files (contain local machine paths)
 /.idea
 
-# Scripts de publicação (só locais)
+# Local release scripts, not part of the source.
 /scripts
