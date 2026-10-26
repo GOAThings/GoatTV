@@ -586,7 +586,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A config da conta; null quando [etag] ainda é o atual (304). Erros HTTP saem como HttpException. */
     private suspend fun fetchConfig(etag: String?): ConfigResponse? {
         val res = c.backend.config(etag)
-        if (res.code() == 304) return null
+        if (res.code() == 304) {
+            Log.i(TAG, "Config: sem alterações (304)")
+            return null
+        }
         val config = res.body() ?: throw HttpException(res)
         configEtag = res.headers()["ETag"]
         return config
@@ -606,8 +609,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (indexHashes[playlistId] == index.hash) return@launch
             try {
                 val res = c.backend.putPlaylistIndex(playlistId, index.gzipBody().toRequestBody(JSON_MEDIA))
-                if (res.isSuccessful) indexHashes[playlistId] = index.hash
-                else Log.w(TAG, "Índice de canais: HTTP ${res.code()}")
+                if (res.isSuccessful) {
+                    indexHashes[playlistId] = index.hash
+                    Log.i(TAG, "Índice de canais enviado: ${content.channels.size} canais")
+                } else {
+                    Log.w(TAG, "Índice de canais: HTTP ${res.code()}")
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
