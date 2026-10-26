@@ -178,6 +178,21 @@ public final class Backend: @unchecked Sendable {
         return (status, json)
     }
 
+    // MARK: Relatórios
+
+    public enum ReportFailure: Error {
+        case tooMany
+        case http(Int)
+    }
+
+    /// Envia um relatório para a zona admin do site (com o token, fica ligado à conta) e devolve o id.
+    public func sendReport(_ body: [String: JSON]) async throws -> String {
+        let (status, json, _) = try await send("POST", "api/reports", body: body)
+        if status == 429 { throw ReportFailure.tooMany }
+        guard (200..<300).contains(status), let id = json?["id"]?.text else { throw ReportFailure.http(status) }
+        return id
+    }
+
     // MARK: Guia da conta
 
     /// XMLTV só com os canais associados da lista (ids = channelKeys). Com [etag], 304 sem corpo se nada mudou.

@@ -49,6 +49,8 @@ struct SettingsPanel: View {
         case playlistEdit(String?)
         /// Escrever um campo do formulário da lista.
         case formField(String)
+        /// Enviar um relatório: o que aconteceu (opcional).
+        case report
     }
 
     /// O que veio do servidor do guia para a página aberta.
@@ -147,6 +149,20 @@ struct SettingsPanel: View {
     }
 
     // MARK: Navegação
+
+    /// Enviar um relatório, com o estado do último envio por baixo.
+    private var reportItem: Item {
+        let status: String
+        switch model.report {
+        case .idle: status = s.r("send_report_sub")
+        case .sending: status = s.r("report_sending")
+        case .sent(let id): status = s.r("report_sent", id)
+        case .failed(let why): status = why
+        }
+        return .action("report", s.r("send_report"), subtitle: status) {
+            if model.report != .sending { push(.report, from: "report") }
+        }
+    }
 
     private func push(_ next: Page, from row: String) {
         if case .playlistEdit(let id?) = next, let p = model.playlists.first(where: { $0.id == id }) { form = PlaylistForm(p) }
@@ -259,6 +275,10 @@ struct SettingsPanel: View {
                      hint: "", initial: fieldValue(key), secure: key == "pass") { value in
                 setField(key, value)
             }
+        case .report:
+            textPage(placeholder: s.r("report_what"), hint: s.r("send_report_sub"), initial: "", action: s.r("report_send")) { value in
+                model.sendReport(value)
+            }
         case .groupsOrder:
             orderList(model.allGroups.map { ($0.id, $0.name) }) { id, delta in model.moveGroup(id, delta) }
         case .channelsOrder(let g):
@@ -317,7 +337,8 @@ struct SettingsPanel: View {
         }
     }
 
-    private func textPage(placeholder: String, hint: String, initial: String, secure: Bool = false, save: @escaping (String) -> Void) -> some View {
+    private func textPage(placeholder: String, hint: String, initial: String, secure: Bool = false, action: String? = nil,
+                          save: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 20) {
             Group {
                 if secure {
@@ -339,7 +360,7 @@ struct SettingsPanel: View {
                 save(text)
                 back()
             } label: {
-                RowContent(title: s.t("Save", "Guardar"))
+                RowContent(title: action ?? s.t("Save", "Guardar"))
             }
             .buttonStyle(FillRowStyle())
             .focused($focus, equals: "save")
@@ -458,6 +479,7 @@ struct SettingsPanel: View {
         case .newPlaylistType: return s.t("New playlist", "Lista nova")
         case .playlistEdit(let id): return id == nil ? s.t("New playlist", "Lista nova") : s.t("Edit playlist", "Editar lista")
         case .formField(let key): return fieldTitle(key)
+        case .report: return s.r("send_report")
         case .channelsOrder(let g): return model.allGroups.first { $0.id == g }?.name ?? s.t("Reorder channels", "Reordenar canais")
         case .extraEpg: return s.t("Extra guide", "Guia extra")
         }
@@ -760,6 +782,7 @@ struct SettingsPanel: View {
                         subtitle: s.t("Playlists and settings on every device", "Listas e definições em todos os aparelhos")) { model.connectAccount() },
                 .info("version", s.t("Version", "Versão"), model.appVersion),
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
+                reportItem,
             ]
             if model.topShelfStatus != nil { list.append(.nav("topshelf", "Top Shelf", to: .topShelf)) }
             return list
@@ -773,6 +796,7 @@ struct SettingsPanel: View {
                 },
                 .info("version", s.t("Version", "Versão"), model.appVersion),
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
+                reportItem,
             ]
             if model.topShelfStatus != nil { list.append(.nav("topshelf", "Top Shelf", to: .topShelf)) }
             return list

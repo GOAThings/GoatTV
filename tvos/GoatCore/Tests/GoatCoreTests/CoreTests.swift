@@ -14,6 +14,7 @@ enum CoreTests {
     static let all: [(String, () throws -> Void)] = [
         ("hashes", hashes),
         ("channelIndex", channelIndex),
+        ("bugReport", bugReport),
         ("appUpdate", appUpdate),
         ("m3u", m3u),
         ("m3uKeys", m3uKeys),
@@ -341,6 +342,30 @@ enum CoreTests {
     }
 
     /// O hash do índice de canais é o mesmo do Android (ChannelIndexTest) para a mesma lista.
+    /// Como o BugReportTest do Android: as credenciais saem do registo e ficam as linhas mais recentes.
+    static func bugReport() throws {
+        let log = """
+            Opening http://iptv.example:8080/live/joao/s3cr3t/123.ts
+            GET http://iptv.example/player_api.php?username=joao&password=s3cr3t&action=get_live_streams
+            M3U https://lists.example/get.php?token=abcdef123&type=m3u
+            Proxy http://bob:hunter2@proxy.example/x
+            Authorization: tok_live_999 sent
+            Error with tok_live_999 and myplaylistpass
+            """
+        let out = BugReport.redact(log, secrets: ["tok_live_999", "myplaylistpass", "ab"])
+        for secret in ["joao", "s3cr3t", "abcdef123", "hunter2", "tok_live_999", "myplaylistpass", "bob:"] {
+            try expect(out.contains(secret), false, secret)
+        }
+        try expect(out.contains("http://iptv.example:8080/live/***/***/123.ts"), true, "xtream")
+        try expect(out.contains("action=get_live_streams"), true, "action")
+        try expect(out.contains("Opening"), true, "curto")
+        let lines = (1...100).map { "line \($0)" }.joined(separator: "\n")
+        let trimmed = BugReport.trim(head: "HEAD\n", log: lines, max: 60)
+        try expect(trimmed.hasPrefix("HEAD\n"), true, "head")
+        try expect(trimmed.hasSuffix("line 100"), true, "tail")
+        try expect(trimmed.utf8.count <= 60, true, "max")
+    }
+
     static func channelIndex() throws {
         let playlist = Playlist(id: "p1", type: .m3u, name: "Demo", url: "https://example.com/list.m3u")
         let content = PlaylistContent(

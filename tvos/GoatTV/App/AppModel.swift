@@ -431,10 +431,12 @@ final class AppModel {
                 session.saveToken(token)
             }
         } catch Backend.Failure.http(let code) where code == 401 || code == 404 {
+            DebugLog.add("Account: token refused (HTTP \(code))")
             sessionEnded()
             return
         } catch {
             // Sem rede agora: segue com o token que há.
+            DebugLog.add("Account: token refresh failed: \(error)")
         }
         do {
             // Com uma lista já no ecrã, só se lê a config se mudou (304 quando não).
@@ -460,8 +462,10 @@ final class AppModel {
                 await load(playlist, resume: true, quiet: true)
             }
         } catch Backend.Failure.http(let code) {
+            DebugLog.add("Account: config HTTP \(code)")
             if content == nil { screen = .error(strings.errBackend(code)) }
         } catch {
+            DebugLog.add("Account: config failed: \(error)")
             if content == nil { screen = .error(strings.errBackendOffline()) }
         }
     }
@@ -791,8 +795,10 @@ final class AppModel {
     /// Descarrega a lista. [quiet]: já há canais no ecrã, só se trocam quando chegar a nova.
     private func load(_ playlist: Playlist, resume: Bool, quiet: Bool = false) async {
         if !quiet || content == nil { screen = .loading(playlist.name) }
+        DebugLog.add("Playlist \(playlist.type.rawValue) loading\(quiet ? " (quiet)" : "")")
         do {
             let loaded = try await loader.load(playlist)
+            DebugLog.add("Playlist loaded: \(loaded.categories.count) groups, \(loaded.channels.count) channels")
             if loaded.channels.isEmpty {
                 if content == nil || !quiet { screen = .error(strings.errPlaylistEmpty(playlist.name)) }
                 return
@@ -802,6 +808,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch {
+            DebugLog.add("Playlist failed: \(error)")
             if content == nil || !quiet { screen = .error(strings.explainPlaylistError(playlist.name, error)) }
         }
     }
@@ -1357,6 +1364,55 @@ final class AppModel {
     }
 
     var hasAccount: Bool { backend.token != nil && !isLocal }
+
+    // MARK: Relatórios
+
+    enum ReportState: Equatable {
+        case idle, sending
+        case sent(String)
+        case failed(String)
+    }
+
+    /// O último envio de um relatório (Definições → Conta).
+    private(set) var report: ReportState = .idle
+
+    /// Envia um relatório para a zona admin do site: o registo desta app e o do sistema (sem palavras-passe,
+    /// utilizadores, tokens nem URLs das listas) e o que a pessoa escreveu. Com conta, fica ligado a ela.
+    func sendReport(_ message: String) {
+        guard report != .sending else { return }
+        report = .sending
+        var machine = utsname()
+        uname(&machine)
+        let model = withUnsafeBytes(of: machine.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let device = "tvOS \(UIDevice.current.systemVersion) · \(model)"
+        let header = "GoatTV \(appVersion) · \(device)\n" +
+            "Account: \(hasAccount ? "yes" : "no") · playlists: \(playlists.isEmpty ? "none" : playlists.map(\.type.rawValue).joined(separator: ", "))"
+        let secrets = playlists.flatMap { [$0.username, $0.password, $0.url, $0.epgUrl].compactMap { $0 } } + [backend.token, email].compactMap { $0 }
+        let backend = backend
+        let strings = strings
+        Task {
+            let system = await Task.detached { DebugLog.system() }.value
+            let head = header + "\n\n--- App ---\n" + DebugLog.text + "\n\n--- System ---\n"
+            let log = BugReport.trim(head: BugReport.redact(head, secrets: secrets), log: BugReport.redact(system, secrets: secrets))
+            var body: [String: JSON] = [
+                "app": .string("goattv"), "version": .string(appVersion), "platform": .string("apple-tv"),
+                "device": .string(device), "log": .string(log),
+            ]
+            let text = String(message.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
+            if !text.isEmpty { body["message"] = .string(text) }
+            do {
+                let id = try await backend.sendReport(body)
+                DebugLog.add("Report \(id) sent")
+                report = .sent(id)
+            } catch Backend.ReportFailure.tooMany {
+                report = .failed(strings.r("report_too_many"))
+            } catch Backend.ReportFailure.http(let status) {
+                report = .failed(strings.r("report_failed", "HTTP \(status)"))
+            } catch {
+                report = .failed(strings.r("report_failed", error.localizedDescription))
+            }
+        }
+    }
 
     /// O guia da conta volta a ser pedido (mudou uma associação). Com [again], pede-o outra vez daqui a 90 s: um país
     /// que ainda não estava em uso só tem programas no servidor no minuto seguinte.

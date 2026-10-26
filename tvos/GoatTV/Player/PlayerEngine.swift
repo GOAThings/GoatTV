@@ -266,6 +266,7 @@ final class PlayerEngine: NSObject {
     /// Nenhuma forma abriu. Caiu a meio: volta a ligar de N em N segundos, sempre. Não chegou a abrir: mostra o
     /// erro e tenta mais umas vezes (sem martelar o servidor).
     private func fail() {
+        DebugLog.add("Player: failed (\(backend), was playing: \(wasPlaying), HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
         watchdog?.cancel()
         if lastHTTPStatus == nil, backend == .apple { lastHTTPStatus = appleHTTPStatus }
         stopBackends()
@@ -307,6 +308,7 @@ final class PlayerEngine: NSObject {
     /// Começou a dar: a forma que funcionou passa a ser a primeira (ao voltar a ligar, começa por ela).
     private func becamePlaying() {
         guard state != .playing else { return }
+        DebugLog.add("Player: playing (\(backend))")
         watchdog?.cancel()
         state = .playing
         wasPlaying = true
@@ -357,6 +359,7 @@ final class PlayerEngine: NSObject {
         case .playing:
             becamePlaying()
         case .error:
+            DebugLog.add("Player: VLC error")
             next()
         case .ended:
             // Uma stream em direto que "acaba" caiu: volta a ligar.
@@ -414,12 +417,14 @@ final class PlayerEngine: NSObject {
     private func appleStatus(_ item: AVPlayerItem) {
         guard backend == .apple, item === avPlayer.currentItem, item.status == .failed else { return }
         lastHTTPStatus = appleHTTPStatus
+        DebugLog.add("Player: AVPlayer item failed: \(item.error.map { "\($0)" } ?? "-")")
         next()
     }
 
     private func appleFailed() {
         guard backend == .apple else { return }
         lastHTTPStatus = appleHTTPStatus
+        DebugLog.add("Player: AVPlayer stopped with an error (HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
         if state == .playing { fail() } else { next() }
     }
 
