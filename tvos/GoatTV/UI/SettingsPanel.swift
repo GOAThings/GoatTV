@@ -220,7 +220,7 @@ struct SettingsPanel: View {
         switch page {
         case .groupsOrder: return model.allGroups.first.map { "o:" + $0.id }
         case .channelsOrder(let g): return model.groupChannels(g, includeHidden: true).first.map { "o:" + $0.key }
-        case .epgSearchOther, .formField: return "field"
+        case .epgSearchOther, .formField, .report: return "field"
         default: break
         }
         let list = items(page)
@@ -884,7 +884,7 @@ struct SettingsPanel: View {
             })
             return list
 
-        case .settingsGate, .parentalGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField:
+        case .settingsGate, .parentalGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report:
             return []
         }
     }
