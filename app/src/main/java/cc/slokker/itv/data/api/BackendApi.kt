@@ -38,6 +38,10 @@ interface BackendApi {
     @POST("api/collections/devices/auth-refresh")
     suspend fun authRefresh(): AuthRefreshResponse
 
+    /** Um relatório para a zona admin do site (ver BugReport); com o token, fica ligado à conta. Responde `{id, created_at}`. */
+    @POST("api/reports")
+    suspend fun sendReport(@Body body: JsonObject): Response<JsonObject>
+
     /** Com [etag] (o `ETag` da última resposta), 304 sem corpo quando nada mudou. */
     @GET("api/goattv/config")
     suspend fun config(@Header("If-None-Match") etag: String? = null): Response<ConfigResponse>

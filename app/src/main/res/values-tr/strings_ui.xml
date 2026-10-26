@@ -531,4 +531,12 @@
     <string name="playlist_limit">En fazla %1$d listeniz olabilir.</string>
     <string name="playlist_gone">Bu liste artık hesabınızda yok.</string>
     <string name="too_many_requests">Çok fazla istek: bir dakika bekleyip tekrar deneyin.</string>
+    <string name="send_report">Rapor gönder</string>
+    <string name="send_report_sub">Neyin yanlış gittiğini görmemiz için bu TV\'nin kaydını gönderir</string>
+    <string name="report_what">Ne oldu? (isteğe bağlı)</string>
+    <string name="report_send">Gönder</string>
+    <string name="report_sending">Gönderiliyor…</string>
+    <string name="report_sent">Gönderildi. Rapor %1$s</string>
+    <string name="report_too_many">Çok fazla rapor. Daha sonra tekrar deneyin.</string>
+    <string name="report_failed">Gönderilemedi: %1$s</string>
 </resources>

@@ -64,6 +64,8 @@ import kotlinx.coroutines.sync.withLock
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import cc.slokker.itv.BuildConfig
+import cc.slokker.itv.data.BugReport
 import cc.slokker.itv.data.ChannelIndex
 import retrofit2.HttpException
 import java.io.IOException
@@ -77,6 +79,14 @@ sealed interface UpdateState {
     data class Downloading(val release: AppRelease, val progress: Float) : UpdateState
     data class Installing(val release: AppRelease) : UpdateState
     data class Failed(val message: String) : UpdateState
+}
+
+/** O envio de um relatório (Definições → Conta). */
+sealed interface ReportState {
+    data object Idle : ReportState
+    data object Sending : ReportState
+    data class Sent(val id: String) : ReportState
+    data class Failed(val message: String) : ReportState
 }
 
 sealed interface Screen {
@@ -219,6 +229,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
     private var lastUpdateCheck = 0L
+
+    private val _report = MutableStateFlow<ReportState>(ReportState.Idle)
+    val report: StateFlow<ReportState> = _report.asStateFlow()
 
     /** Canal pedido por um link do ecrã inicial, à espera de a lista carregar: (playlistId, channelKey). */
     private var pendingLink: Pair<String, String>? = null
@@ -1856,6 +1869,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 if (manual) UpdateState.Failed(e.message ?: e.javaClass.simpleName) else UpdateState.Idle
+            }
+        }
+    }
+
+    /**
+     * Envia um relatório para a zona admin do site: o registo desta app (sem palavras-passe, utilizadores, tokens
+     * nem URLs das listas) e o que a pessoa escreveu. Com conta, fica ligado a ela.
+     */
+    fun sendReport(message: String) {
+        if (_report.value == ReportState.Sending) return
+        _report.value = ReportState.Sending
+        viewModelScope.launch {
+            _report.value = try {
+                val playlists = _playlists.value
+                val header = "GoatTV ${BuildConfig.VERSION_NAME} · ${BugReport.device}\n" +
+                    "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.name.lowercase() }.ifEmpty { "none" }}" +
+                    (if (c.testMode) " · test mode" else "")
+                val secrets = playlists.flatMap { listOfNotNull(it.username, it.password, it.url, it.epgUrl) } + listOfNotNull(c.token, _email.value)
+                val log = kotlinx.coroutines.withContext(Dispatchers.IO) { BugReport.collect(getApplication(), header, secrets) }
+                val body = JsonObject().apply {
+                    addProperty("app", "goattv")
+                    addProperty("version", BuildConfig.VERSION_NAME)
+                    addProperty("platform", c.platform)
+                    addProperty("device", BugReport.device)
+                    message.trim().take(2000).takeIf { it.isNotEmpty() }?.let { addProperty("message", it) }
+                    addProperty("log", log)
+                }
+                val res = c.backend.sendReport(body)
+                val id = res.body()?.get("id")?.takeIf { it.isJsonPrimitive }?.asString
+                when {
+                    res.code() == 429 -> ReportState.Failed(I18n.s.reportTooMany)
+                    res.isSuccessful && id != null -> ReportState.Sent(id)
+                    else -> ReportState.Failed(I18n.s.reportFailed("HTTP ${res.code()}"))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ReportState.Failed(I18n.s.reportFailed(e.message ?: e.javaClass.simpleName))
             }
         }
     }

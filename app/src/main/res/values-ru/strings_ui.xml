@@ -535,4 +535,12 @@
     <string name="playlist_limit">Можно иметь до %1$d плейлистов.</string>
     <string name="playlist_gone">Этого плейлиста больше нет в аккаунте.</string>
     <string name="too_many_requests">Слишком много запросов: подождите минуту и повторите.</string>
+    <string name="send_report">Отправить отчёт</string>
+    <string name="send_report_sub">Отправляет журнал этого телевизора, чтобы мы увидели, что пошло не так</string>
+    <string name="report_what">Что случилось? (необязательно)</string>
+    <string name="report_send">Отправить</string>
+    <string name="report_sending">Отправка…</string>
+    <string name="report_sent">Отправлено. Отчёт %1$s</string>
+    <string name="report_too_many">Слишком много отчётов. Попробуйте позже.</string>
+    <string name="report_failed">Не удалось отправить: %1$s</string>
 </resources>

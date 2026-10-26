@@ -529,4 +529,12 @@
     <string name="playlist_limit">재생목록은 최대 %1$d개까지 만들 수 있어요.</string>
     <string name="playlist_gone">이 재생목록은 더 이상 계정에 없어요.</string>
     <string name="too_many_requests">요청이 너무 많아요: 1분 뒤에 다시 시도하세요.</string>
+    <string name="send_report">보고서 보내기</string>
+    <string name="send_report_sub">문제를 확인할 수 있도록 이 TV의 로그를 보냅니다</string>
+    <string name="report_what">무슨 일이 있었나요? (선택)</string>
+    <string name="report_send">보내기</string>
+    <string name="report_sending">보내는 중…</string>
+    <string name="report_sent">보냈습니다. 보고서 %1$s</string>
+    <string name="report_too_many">보고서가 너무 많습니다. 나중에 다시 시도하세요.</string>
+    <string name="report_failed">보낼 수 없음: %1$s</string>
 </resources>

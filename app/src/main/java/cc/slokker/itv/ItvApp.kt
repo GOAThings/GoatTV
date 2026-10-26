@@ -3,6 +3,7 @@ package cc.slokker.itv
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.I18n
 import android.app.Application
+import cc.slokker.itv.data.BugReport
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -15,6 +16,7 @@ class ItvApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        BugReport.installCrashHandler(this)
         I18n.s = Strings.of(this)
         container = AppContainer(this)
     }

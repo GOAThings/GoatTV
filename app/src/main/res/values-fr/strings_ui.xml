@@ -533,4 +533,12 @@
     <string name="playlist_limit">Vous pouvez avoir jusqu\'à %1$d playlists.</string>
     <string name="playlist_gone">Cette playlist n\'existe plus dans votre compte.</string>
     <string name="too_many_requests">Trop de demandes : attendez une minute et réessayez.</string>
+    <string name="send_report">Envoyer un rapport</string>
+    <string name="send_report_sub">Envoie le journal de cette TV pour voir ce qui n\'a pas marché</string>
+    <string name="report_what">Que s\'est-il passé ? (facultatif)</string>
+    <string name="report_send">Envoyer</string>
+    <string name="report_sending">Envoi…</string>
+    <string name="report_sent">Envoyé. Rapport %1$s</string>
+    <string name="report_too_many">Trop de rapports. Réessayez plus tard.</string>
+    <string name="report_failed">Envoi impossible : %1$s</string>
 </resources>

@@ -531,4 +531,12 @@
     <string name="playlist_limit">आप ज़्यादा से ज़्यादा %1$d प्लेलिस्ट रख सकते हैं।</string>
     <string name="playlist_gone">यह प्लेलिस्ट अब आपके खाते में नहीं है।</string>
     <string name="too_many_requests">बहुत ज़्यादा अनुरोध: एक मिनट रुककर फिर कोशिश करें।</string>
+    <string name="send_report">रिपोर्ट भेजें</string>
+    <string name="send_report_sub">इस टीवी का लॉग भेजता है ताकि हम देख सकें कि क्या गलत हुआ</string>
+    <string name="report_what">क्या हुआ? (वैकल्पिक)</string>
+    <string name="report_send">भेजें</string>
+    <string name="report_sending">भेजा जा रहा है…</string>
+    <string name="report_sent">भेज दी गई। रिपोर्ट %1$s</string>
+    <string name="report_too_many">बहुत सारी रिपोर्ट। बाद में फिर कोशिश करें।</string>
+    <string name="report_failed">भेजा नहीं जा सका: %1$s</string>
 </resources>

@@ -531,4 +531,12 @@
     <string name="playlist_limit">Du kannst bis zu %1$d Playlists haben.</string>
     <string name="playlist_gone">Diese Playlist gibt es in deinem Konto nicht mehr.</string>
     <string name="too_many_requests">Zu viele Anfragen: warte eine Minute und versuche es erneut.</string>
+    <string name="send_report">Fehlerbericht senden</string>
+    <string name="send_report_sub">Sendet das Protokoll dieses Fernsehers, damit wir sehen, was schiefging</string>
+    <string name="report_what">Was ist passiert? (optional)</string>
+    <string name="report_send">Senden</string>
+    <string name="report_sending">Wird gesendet…</string>
+    <string name="report_sent">Gesendet. Bericht %1$s</string>
+    <string name="report_too_many">Zu viele Berichte. Versuche es später erneut.</string>
+    <string name="report_failed">Senden fehlgeschlagen: %1$s</string>
 </resources>

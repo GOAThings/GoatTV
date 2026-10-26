@@ -539,4 +539,12 @@
     <string name="playlist_limit">يمكنك امتلاك حتى %1$d قائمة.</string>
     <string name="playlist_gone">لم تعد هذه القائمة موجودة في حسابك.</string>
     <string name="too_many_requests">طلبات كثيرة جدًا: انتظر دقيقة ثم حاول مجددًا.</string>
+    <string name="send_report">إرسال تقرير</string>
+    <string name="send_report_sub">يرسل سجل هذا التلفاز لنرى ما الخطأ الذي حدث</string>
+    <string name="report_what">ماذا حدث؟ (اختياري)</string>
+    <string name="report_send">إرسال</string>
+    <string name="report_sending">جارٍ الإرسال…</string>
+    <string name="report_sent">تم الإرسال. التقرير %1$s</string>
+    <string name="report_too_many">تقارير كثيرة جدًا. حاول لاحقًا.</string>
+    <string name="report_failed">تعذّر الإرسال: %1$s</string>
 </resources>

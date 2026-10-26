@@ -533,4 +533,12 @@
     <string name="playlist_limit">Você pode ter até %1$d listas.</string>
     <string name="playlist_gone">Esta lista não existe mais na sua conta.</string>
     <string name="too_many_requests">Pedidos demais: espere um minuto e tente de novo.</string>
+    <string name="send_report">Enviar relatório</string>
+    <string name="send_report_sub">Envia o registro desta TV para vermos o que deu errado</string>
+    <string name="report_what">O que aconteceu? (opcional)</string>
+    <string name="report_send">Enviar</string>
+    <string name="report_sending">Enviando…</string>
+    <string name="report_sent">Enviado. Relatório %1$s</string>
+    <string name="report_too_many">Relatórios demais. Tente mais tarde.</string>
+    <string name="report_failed">Não foi possível enviar: %1$s</string>
 </resources>

@@ -529,4 +529,12 @@
     <string name="playlist_limit">Kamu bisa punya hingga %1$d playlist.</string>
     <string name="playlist_gone">Playlist ini sudah tidak ada di akunmu.</string>
     <string name="too_many_requests">Terlalu banyak permintaan: tunggu sebentar lalu coba lagi.</string>
+    <string name="send_report">Kirim laporan</string>
+    <string name="send_report_sub">Mengirim log TV ini agar kami bisa melihat apa yang salah</string>
+    <string name="report_what">Apa yang terjadi? (opsional)</string>
+    <string name="report_send">Kirim</string>
+    <string name="report_sending">Mengirim…</string>
+    <string name="report_sent">Terkirim. Laporan %1$s</string>
+    <string name="report_too_many">Terlalu banyak laporan. Coba lagi nanti.</string>
+    <string name="report_failed">Tidak dapat mengirim: %1$s</string>
 </resources>

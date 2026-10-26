@@ -5,6 +5,7 @@ import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.outlineBrush
+import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
@@ -205,7 +206,14 @@ private sealed interface Route {
     }
 
     /** Escrever um texto com o teclado da TV. */
-    class TextEdit(private val label: String, val initial: String, val kind: TextKind, val onDone: (String) -> Unit) : Route {
+    class TextEdit(
+        private val label: String,
+        val initial: String,
+        val kind: TextKind,
+        /** O texto do botão (por omissão, Gravar). */
+        val action: String? = null,
+        val onDone: (String) -> Unit,
+    ) : Route {
         override fun title(s: Strings) = label
     }
     data object Account : Route { override fun title(s: Strings) = s.account }
@@ -437,6 +445,7 @@ private fun settingItems(
 
     // Atualização da app: título e estado (a descarregar, a instalar…).
     val updateState by vm.update.collectAsStateWithLifecycle()
+    val reportState by vm.report.collectAsStateWithLifecycle()
     fun updateItem(key: String): Item? = when (val u = updateState) {
         is UpdateState.Available -> Item.Action(key, s.updateTo(u.release.version), u.release.notes.lineSequence().firstOrNull { it.isNotBlank() }?.trimStart('-', '*', ' ')) { vm.installUpdate() }
         is UpdateState.Downloading -> Item.Action(key, s.updateTo(u.release.version), s.downloading((u.progress * 100).toInt())) {}
@@ -1110,6 +1119,21 @@ private fun settingItems(
                     else -> null
                 },
             ) { vm.checkForUpdate(manual = true) },
+            // O que a pessoa escreve vai com o registo desta app para a zona admin do site.
+            Item.Action(
+                "report",
+                s.sendReport,
+                when (val r = reportState) {
+                    ReportState.Idle -> s.sendReportSub
+                    ReportState.Sending -> s.reportSending
+                    is ReportState.Sent -> s.reportSent(r.id)
+                    is ReportState.Failed -> r.message
+                },
+            ) {
+                if (reportState != ReportState.Sending) {
+                    push(Route.TextEdit(s.reportWhat, "", TextKind.PLAIN, action = s.reportSend) { vm.sendReport(it) }, "report")
+                }
+            },
         )
 
         // A app é GPL-3; cada componente com a sua licença (os textos estão no repositório do código).
@@ -1328,7 +1352,7 @@ private fun TextEditPage(route: Route.TextEdit, enabled: Boolean, onDone: (Strin
             color = ItvColors.TextDim,
             modifier = Modifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp),
         )
-        GlassRow(onClick = { onDone(value.text) }, title = LocalStrings.current.save, enabled = enabled)
+        GlassRow(onClick = { onDone(value.text) }, title = route.action ?: LocalStrings.current.save, enabled = enabled)
     }
 }
 

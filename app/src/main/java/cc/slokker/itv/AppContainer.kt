@@ -56,8 +56,8 @@ class AppContainer(context: Context) {
     val sessionEnded: SharedFlow<Unit> = _sessionEnded
 
     /** `goattv/<versão> (<plataforma>)`, por exemplo `goattv/0.8.8 (android-tv)`. */
-    private val goatClient =
-        "goattv/${BuildConfig.VERSION_NAME} (${if (android.os.Build.MANUFACTURER.equals("Amazon", true)) "fire-tv" else "android-tv"})"
+    val platform = if (android.os.Build.MANUFACTURER.equals("Amazon", true)) "fire-tv" else "android-tv"
+    private val goatClient = "goattv/${BuildConfig.VERSION_NAME} ($platform)"
 
     private val backendHttp = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
