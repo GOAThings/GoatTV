@@ -25,10 +25,6 @@ jobs:
           path: tvos/build/mobilevlckit.tar.xz
           key: mobilevlckit-3.7.5
       - run: scripts/fetch-mobilevlckit.sh
-      - name: Ícone
-        run: |
-          sips -s format png -z 1024 1024 ../app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp --out iPhone/Phone.xcassets/AppIcon.appiconset/icon.png
-          sips -s hasAlpha no iPhone/Phone.xcassets/AppIcon.appiconset/icon.png || true
       - run: /tmp/xcodegen/xcodegen/bin/xcodegen generate --spec iphone.yml
       - name: Compilar para o iPhone
         run: |
