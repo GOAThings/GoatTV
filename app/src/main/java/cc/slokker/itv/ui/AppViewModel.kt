@@ -1228,6 +1228,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Bloqueado pelo controlo parental e ainda não desbloqueado nesta sessão. */
+    /** O grupo está marcado como bloqueado, mesmo que já tenha sido desbloqueado com o PIN nesta sessão. */
+    fun isGroupLockedSetting(groupId: String): Boolean = _content.value?.let { "${it.playlist.id}:$groupId" in _prefs.value.lockedGroups } == true
+
     fun isGroupLocked(groupId: String): Boolean {
         val playlistId = _content.value?.playlist?.id ?: return false
         return _prefs.value.isLocked(playlistId, groupId) && "$playlistId:$groupId" !in _unlocked.value

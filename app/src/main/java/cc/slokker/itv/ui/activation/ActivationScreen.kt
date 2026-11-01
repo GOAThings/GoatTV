@@ -38,6 +38,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.api.BackendApi
@@ -79,6 +86,8 @@ fun ActivationScreen(
     backLabel: String,
     onBack: () -> Unit,
     onApproved: (token: String, user: BackendUser?, device: BackendDevice?) -> Unit,
+    /** Telemóvel: em coluna, sem QR (é este o aparelho que lê), e tocar no endereço abre-o já. */
+    phone: Boolean = false,
 ) {
     val state = remember { ActivationState() }
     val context = LocalContext.current
@@ -96,6 +105,31 @@ fun ActivationScreen(
     }
 
     val s = LocalStrings.current
+    if (phone) {
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Logo(size = 28)
+            Text(s.activateTitle, color = ItvColors.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text(s.activateGoTo, color = ItvColors.TextDim, fontSize = 15.sp)
+            Text(
+                state.verificationUrl, color = ItvColors.Sky, fontSize = 18.sp,
+                modifier = Modifier.clickable(enabled = state.verificationUrl.isNotEmpty()) {
+                    val url = state.verificationUrl.let { if ("://" in it) it else "https://$it" }
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                },
+            )
+            Text(s.activateEnterCode, color = ItvColors.TextDim, fontSize = 15.sp)
+            Text(state.code ?: "· · ·", color = ItvColors.Text, fontSize = 48.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+            state.error?.let { Text(it, color = ItvColors.Error, fontSize = 15.sp) }
+            Text(
+                backLabel, color = ItvColors.Text, fontSize = 16.sp,
+                modifier = Modifier.clickable(onClick = onBack).padding(vertical = 12.dp),
+            )
+        }
+        return
+    }
     AuroraBackground {
         Row(
             Modifier

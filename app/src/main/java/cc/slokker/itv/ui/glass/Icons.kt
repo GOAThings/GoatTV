@@ -134,6 +134,8 @@ object ItvIcons {
         )
     }
 
+    val Fullscreen: ImageVector by lazy { icon("Fullscreen", "M7,14H5v5h5v-2H7v-3zM5,10h2V7h3V5H5v5zm12,7h-3v2h5v-5h-2v3zM14,5v2h3v3h2V5h-5z") }
+
     val Play: ImageVector by lazy { icon("Play", "M8,5v14l11,-7z") }
 
     val Pause: ImageVector by lazy { icon("Pause", "M6,19h4V5H6v14zm8,-14v14h4V5h-4z") }

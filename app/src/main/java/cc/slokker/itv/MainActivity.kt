@@ -8,6 +8,11 @@ import cc.slokker.itv.ui.theme.Accent
 import androidx.compose.runtime.CompositionLocalProvider
 import cc.slokker.itv.ui.i18n.LocalStrings
 import android.content.Intent
+import androidx.lifecycle.lifecycleScope
+import cc.slokker.itv.data.PlaylistForm
+import cc.slokker.itv.data.PlaylistType
+import kotlinx.coroutines.launch
+import androidx.activity.ComponentActivity
 import android.os.Bundle
 import androidx.activity.viewModels
 import cc.slokker.itv.data.HomeScreen
@@ -16,6 +21,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,6 +55,12 @@ import cc.slokker.itv.ui.loading.GoatIntro
 import cc.slokker.itv.ui.loading.GoatLoading
 import cc.slokker.itv.ui.player.PlayerScreen
 import cc.slokker.itv.ui.settings.SettingsScreen
+import android.content.pm.PackageManager
+import cc.slokker.itv.ui.mobile.MobileLoadError
+import cc.slokker.itv.ui.mobile.MobileMain
+import cc.slokker.itv.ui.mobile.MobileMenu
+import cc.slokker.itv.ui.mobile.MobileWelcome
+import cc.slokker.itv.ui.mobile.PlaylistFormPage
 import cc.slokker.itv.ui.welcome.WelcomeScreen
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.ItvTheme
@@ -59,6 +72,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG && intent.getBooleanExtra("test_mode", false)) {
             (application as ItvApp).container.testMode = true
+        }
+        // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
+        if (BuildConfig.DEBUG && savedInstanceState == null) {
+            intent.getStringExtra("demo_m3u")?.let { url ->
+                lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = "Demo", url = url)) }
+            }
         }
         // Aberta a partir do ecrã inicial (um canal da linha da GoatTV ou do "A seguir").
         if (savedInstanceState == null) openLink(intent)
@@ -88,6 +107,12 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val channelLogos by vm.channelLogos.collectAsStateWithLifecycle()
     val local by vm.local.collectAsStateWithLifecycle()
     val api = (LocalContext.current.applicationContext as ItvApp).container.backend
+    // Telemóveis e tablets têm interface de toque; as TVs (leanback) a do comando.
+    val activity = LocalContext.current as? ComponentActivity
+    val phone = remember {
+        val forced = BuildConfig.DEBUG && activity?.intent?.getBooleanExtra("phone_ui", false) == true
+        forced || activity?.packageManager?.hasSystemFeature(PackageManager.FEATURE_LEANBACK) == false
+    }
 
     // Ao voltar à app, apanha listas/favoritos alterados no site ou noutra TV.
     LifecycleStartEffect(vm) {
@@ -99,7 +124,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     // Escala da interface (Definições → Aspeto): muda o tamanho de tudo, como se o ecrã tivesse outra densidade.
     val baseDensity = LocalDensity.current
     val scaled = remember(baseDensity, prefs.uiScale) {
-        Density(baseDensity.density * prefs.uiScale / 100f, baseDensity.fontScale)
+        Density(baseDensity.density * (if (phone) 100 else prefs.uiScale) / 100f, baseDensity.fontScale)
     }
     CompositionLocalProvider(
         LocalStrings provides strings,
@@ -135,14 +160,27 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         when (val s = screen) {
             // O mesmo logo da abertura e do carregamento, parado: a abertura acaba exatamente aqui.
             Screen.Starting -> GoatLoading("")
-            Screen.Welcome -> WelcomeScreen(onAccount = vm::chooseAccount, onLocal = vm::chooseLocal)
+            Screen.Welcome -> if (phone) {
+                MobileWelcome(onAccount = vm::chooseAccount, onLocal = vm::chooseLocal)
+            } else {
+                WelcomeScreen(onAccount = vm::chooseAccount, onLocal = vm::chooseLocal)
+            }
             Screen.Activation -> ActivationScreen(
                 api,
                 backLabel = if (local) strings.backKeyName else strings.useWithoutAccount,
                 onBack = vm::leaveActivation,
                 onApproved = vm::onActivated,
+                phone = phone,
             )
-            is Screen.Loading -> LoadingScreen(
+            is Screen.Loading -> if (phone && s.error != null) {
+                MobileLoadError(
+                    s.error,
+                    onRetry = vm::retry,
+                    onSettings = vm::openSettings.takeIf { playlists.isNotEmpty() },
+                    onLogout = vm::logoutThisTv.takeIf { !local },
+                    onAddPlaylist = vm::openAddPlaylist.takeIf { !local && playlists.isEmpty() },
+                )
+            } else LoadingScreen(
                 state = s,
                 canOpenSettings = playlists.isNotEmpty(),
                 onRetry = vm::retry,
@@ -151,8 +189,12 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
                 onLogout = vm::logoutThisTv.takeIf { !local },
                 onAddPlaylist = vm::openAddPlaylist.takeIf { !local && playlists.isEmpty() && s.error != null },
             )
-            Screen.Player -> PlayerScreen(vm)
-            Screen.Settings -> SettingsScreen(vm)
+            Screen.Player -> if (phone) MobileMain(vm) else PlayerScreen(vm)
+            Screen.Settings -> when {
+                !phone -> SettingsScreen(vm)
+                playlists.isEmpty() -> PlaylistFormPage(vm, onDone = vm::closeSettings)
+                else -> Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) { MobileMenu(vm) }
+            }
         }
         // Abertura: uma vez por arranque, por cima de tudo (o que está por baixo vai carregando). Acaba com o logo
         // parado no sítio do ecrã de carregamento, por isso, se ainda estiver a carregar, a passagem não se nota.
