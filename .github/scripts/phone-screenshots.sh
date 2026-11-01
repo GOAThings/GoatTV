@@ -3,6 +3,8 @@
 set -u
 OUT=build/phone
 mkdir -p "$OUT"
+adb wait-for-device
+sleep 30
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb reverse tcp:8765 tcp:8765
 read -r W H < <(adb shell wm size | sed -E 's/.* ([0-9]+)x([0-9]+).*/\1 \2/' | tr -d '\r')

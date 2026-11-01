@@ -57,7 +57,7 @@ jobs:
           SIM=$(xcrun simctl list devices available | grep -E 'iPhone 1[0-9]' | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           xcrun simctl boot "$SIM"; xcrun simctl bootstatus "$SIM" -b
           xcodebuild -project GoatTVPhone.xcodeproj -scheme GoatTV -configuration Debug \
-            -destination "id=$SIM" -derivedDataPath build/sim CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+            -destination "id=$SIM" -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build > build/sim.log 2>&1 || { tail -40 build/sim.log; exit 1; }
           xcrun simctl install "$SIM" build/sim/Build/Products/Debug-iphonesimulator/GoatTV.app
           ID=cc.slokker.goattv.phone
           xcrun simctl launch "$SIM" $ID -UITestPlaylist http://127.0.0.1:8765/demo.m3u; sleep 30
