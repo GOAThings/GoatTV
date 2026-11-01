@@ -539,4 +539,6 @@
     <string name="report_sent">Sent. Report %1$s</string>
     <string name="report_too_many">Too many reports. Try again later.</string>
     <string name="report_failed">Couldn\'t send: %1$s</string>
+    <string name="welcome_local_phone">Playlists on this phone</string>
+    <string name="welcome_local_phone_sub">No account: add Xtream or M3U playlists here. Everything stays on this phone only.</string>
 </resources>

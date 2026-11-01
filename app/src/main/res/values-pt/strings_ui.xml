@@ -541,4 +541,6 @@
     <string name="report_sent">Enviado. Relatório %1$s</string>
     <string name="report_too_many">Demasiados relatórios. Tenta mais tarde.</string>
     <string name="report_failed">Não deu para enviar: %1$s</string>
+    <string name="welcome_local_phone">Listas neste telemóvel</string>
+    <string name="welcome_local_phone_sub">Sem conta: adiciona listas Xtream ou M3U aqui. Tudo fica só neste telemóvel.</string>
 </resources>

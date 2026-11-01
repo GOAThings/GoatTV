@@ -116,7 +116,7 @@ fun MobileWelcome(onAccount: () -> Unit, onLocal: () -> Unit) {
         Text(s.welcomeSub, color = ItvColors.TextDim, fontSize = 15.sp)
         Spacer(Modifier.height(8.dp))
         ChoiceCard(s.welcomeAccount, s.welcomeAccountSub, s.recommended, onAccount)
-        ChoiceCard(s.welcomeLocal, s.welcomeLocalSub, null, onLocal)
+        ChoiceCard(s.welcomeLocalPhone, s.welcomeLocalPhoneSub, null, onLocal)
     }
 }
 

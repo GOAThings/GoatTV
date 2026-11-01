@@ -35,6 +35,8 @@ class Strings(context: Context) {
 
     // ---- Geral ----
     val settings get() = s(R.string.settings)
+    val welcomeLocalPhone get() = s(R.string.welcome_local_phone)
+    val welcomeLocalPhoneSub get() = s(R.string.welcome_local_phone_sub)
     val save get() = s(R.string.save)
     val automaticWord get() = s(R.string.automatic_word)
     val videoFormatWord get() = s(R.string.video_format_word)

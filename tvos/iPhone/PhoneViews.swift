@@ -51,7 +51,7 @@ private struct PhoneWelcome: View {
                 Text(s.r("welcome_title")).font(.title.bold())
                 Text(s.r("welcome_sub")).foregroundStyle(Theme.textDim)
                 choice(s.r("welcome_account"), s.r("welcome_account_sub"), model.connectAccount)
-                choice(s.r("welcome_local"), s.r("welcome_local_sub"), model.startLocal)
+                choice(s.t("Playlists on this phone", "Listas neste telemóvel"), s.t("No account: add Xtream or M3U playlists here. Everything stays on this phone only.", "Sem conta: adiciona listas Xtream ou M3U aqui. Tudo fica só neste telemóvel."), model.startLocal)
             }
             .padding(20)
         }
