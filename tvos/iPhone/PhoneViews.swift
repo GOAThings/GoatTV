@@ -328,7 +328,7 @@ private struct ChannelCard: View {
                     Text(channel.name).font(.body.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
                     if let now {
                         Text(now.title).font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
-                        ProgressView(value: Double(now.progress(Int64(Date().timeIntervalSince1970 * 1000)))).tint(Theme.sky)
+                        ProgressView(value: Double(now.progress(now: Int64(Date().timeIntervalSince1970 * 1000)))).tint(Theme.sky)
                     }
                 }
                 Spacer(minLength: 0)
