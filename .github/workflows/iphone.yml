@@ -1,0 +1,74 @@
+name: iPhone
+
+# A app de iPhone (tvos/iphone.yml): compila, faz a IPA sem assinatura e tira prints no simulador.
+on:
+  workflow_dispatch:
+  push:
+    branches: [mobile]
+    paths: ["tvos/**", ".github/workflows/iphone.yml"]
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: tvos
+    steps:
+      - uses: actions/checkout@v4
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: tvos/build/mobilevlckit.tar.xz
+          key: mobilevlckit-3.7.5
+      - run: scripts/fetch-mobilevlckit.sh
+      - run: /tmp/xcodegen/xcodegen/bin/xcodegen generate --spec iphone.yml
+      - name: Compilar para o iPhone
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild -project GoatTVPhone.xcodeproj -scheme GoatTV -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build/xcodebuild.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+      - name: Erros
+        if: failure()
+        run: grep -E "error:" -A3 build/xcodebuild.log | head -120 || tail -80 build/xcodebuild.log
+      - name: IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/dd/Build/Products/Release-iphoneos/GoatTV.app build/ipa/Payload/
+          cd build/ipa && zip -qry ../GoatTV-iPhone.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GoatTV-iPhone-ipa
+          path: tvos/build/GoatTV-iPhone.ipa
+          retention-days: 30
+      - name: Prints no simulador
+        run: |
+          set -x
+          mkdir -p build/demo build/shots && cp -R UITests/Demo/. build/demo/
+          python3 UITests/Demo/make-guide.py build/demo
+          (cd build/demo && nohup python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          SIM=$(xcrun simctl list devices available | grep -E 'iPhone 1[0-9]' | tail -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          xcrun simctl boot "$SIM"; xcrun simctl bootstatus "$SIM" -b
+          xcodebuild -project GoatTVPhone.xcodeproj -scheme GoatTV -configuration Debug \
+            -destination "id=$SIM" -derivedDataPath build/sim CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
+          xcrun simctl install "$SIM" build/sim/Build/Products/Debug-iphonesimulator/GoatTV.app
+          ID=cc.slokker.goattv.phone
+          xcrun simctl launch "$SIM" $ID -UITestPlaylist http://127.0.0.1:8765/demo.m3u; sleep 30
+          xcrun simctl io "$SIM" screenshot build/shots/01-tv.png
+          for t in favorites search menu; do
+            xcrun simctl terminate "$SIM" $ID
+            xcrun simctl launch "$SIM" $ID -UITestPlaylist http://127.0.0.1:8765/demo.m3u -PhoneTab $t; sleep 20
+            xcrun simctl io "$SIM" screenshot build/shots/02-$t.png
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iphone-screenshots
+          path: tvos/build/shots

@@ -1,0 +1,74 @@
+# A app de iPhone (`xcodegen generate --spec iphone.yml`): o mesmo modelo e leitor da Apple TV, com ecrãs de toque.
+name: GoatTVPhone
+options:
+  bundleIdPrefix: cc.slokker
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  GoatCore:
+    path: GoatCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.8.9"
+    CURRENT_PROJECT_VERSION: "25"
+targets:
+  GoatTV:
+    type: application
+    platform: iOS
+    sources:
+      - path: iPhone
+      - path: Shared
+      - path: GoatTV/Resources
+        type: folder
+        buildPhase: resources
+      - path: GoatTV/Assets.xcassets
+      - path: GoatTV/App
+        excludes: [GoatTVApp.swift]
+      - path: GoatTV/Player
+      - path: GoatTV/UI/Strings.swift
+      - path: GoatTV/UI/Translations.swift
+      - path: GoatTV/UI/Theme.swift
+      - path: GoatTV/UI/GoatLogo.swift
+      - path: GoatTV/UI/ErrorPanel.swift
+      - path: GoatTV/UI/PlayerParts.swift
+      - path: GoatTV/UI/RootView.swift
+    dependencies:
+      - package: GoatCore
+      - framework: Frameworks/MobileVLCKit.xcframework
+        embed: true
+      - sdk: libc++.tbd
+      - sdk: libxml2.tbd
+      - sdk: libz.tbd
+      - sdk: libbz2.tbd
+      - sdk: libiconv.tbd
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreText.framework
+      - sdk: VideoToolbox.framework
+      - sdk: OpenGLES.framework
+    info:
+      path: iPhone/Info.plist
+      properties:
+        CFBundleDisplayName: GoatTV
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIUserInterfaceStyle: Dark
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        CFBundleURLTypes:
+          - CFBundleURLName: cc.slokker.goattv
+            CFBundleURLSchemes: [goattv]
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsArbitraryLoadsForMedia: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv.phone
+        PRODUCT_NAME: GoatTV
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_BITCODE: NO
+        CODE_SIGN_STYLE: Manual

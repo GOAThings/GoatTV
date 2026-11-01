@@ -4,7 +4,11 @@ import CoreMedia
 import Foundation
 import GoatCore
 import Observation
+#if os(tvOS)
 import TVVLCKit
+#else
+import MobileVLCKit
+#endif
 import UIKit
 
 /// O leitor de vídeo, com dois motores:
