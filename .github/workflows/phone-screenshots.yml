@@ -37,7 +37,7 @@ jobs:
           ram-size: 4096M
           heap-size: 512M
           disable-animations: true
-          emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot
+          emulator-options: -no-window -no-audio -gpu guest -no-snapshot
           script: bash .github/scripts/phone-screenshots.sh
       - uses: actions/upload-artifact@v4
         if: always()

@@ -7,8 +7,9 @@ adb wait-for-device
 sleep 30
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb reverse tcp:8765 tcp:8765
+adb logcat > "$OUT/logcat-live.txt" 2>&1 &
 read -r W H < <(adb shell wm size | sed -E 's/.* ([0-9]+)x([0-9]+).*/\1 \2/' | tr -d '\r')
-shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
+shot() { timeout 40 adb exec-out screencap -p > "$OUT/$1.png"; }
 tab() { adb shell input tap $((W * (2 * $1 + 1) / 8)) $((H - 130)); sleep 3; }
 
 adb shell am start -n cc.slokker.itv.debug/cc.slokker.itv.MainActivity >/dev/null
