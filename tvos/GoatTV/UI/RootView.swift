@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if os(tvOS)
 struct RootView: View {
     @Environment(AppModel.self) private var model
     /// A abertura (o logo animado) só passa uma vez, ao abrir a app.
@@ -41,6 +42,8 @@ struct RootView: View {
     }
 }
 
+#endif
+
 /// O logótipo GOAT TV com uma mensagem por baixo (arranque e a carregar).
 struct BrandView: View {
     let caption: String?
@@ -76,6 +79,7 @@ struct BrandMark: View {
     }
 }
 
+#if os(tvOS)
 /// Ecrã de erro (arranque, listas): o erro explicado e os botões do Android (Juntar lista, Tentar de novo,
 /// Definições, Terminar sessão). As Definições abrem por cima, à direita.
 struct ErrorScreen: View {
@@ -148,3 +152,4 @@ struct ToastView: View {
         .allowsHitTesting(false)
     }
 }
+#endif

@@ -434,6 +434,7 @@ final class PlayerEngine: NSObject {
 
     // MARK: Modo da TV (frame rate e HDR)
 
+    #if os(tvOS)
     /// Pede à TV a cadência (e o HDR) do canal. Só funciona com "Igualar conteúdo" ligado no Apple TV.
     private func applyDisplayCriteria() {
         guard controlsDisplay, let manager = displayManager else { return }
@@ -483,6 +484,11 @@ final class PlayerEngine: NSObject {
         guard status == noErr, let description else { return nil }
         return AVDisplayCriteria(refreshRate: Float(fps), formatDescription: description)
     }
+    #else
+    // O iPhone não muda o modo do ecrã.
+    private func applyDisplayCriteria() {}
+    private func clearDisplayCriteria() {}
+    #endif
 }
 
 /// A vista do leitor da Apple (a camada é a do vídeo).

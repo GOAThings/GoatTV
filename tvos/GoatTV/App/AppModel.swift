@@ -1,5 +1,7 @@
 import Foundation
+#if os(tvOS)
 import TVServices
+#endif
 import GoatCore
 import Observation
 import UIKit
@@ -1384,7 +1386,7 @@ final class AppModel {
         var machine = utsname()
         uname(&machine)
         let model = withUnsafeBytes(of: machine.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
-        let device = "tvOS \(UIDevice.current.systemVersion) · \(model)"
+        let device = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion) · \(model)"
         let header = "GoatTV \(appVersion) · \(device)\n" +
             "Account: \(hasAccount ? "yes" : "no") · playlists: \(playlists.isEmpty ? "none" : playlists.map(\.type.rawValue).joined(separator: ", "))"
         let secrets = playlists.flatMap { [$0.username, $0.password, $0.url, $0.epgUrl].compactMap { $0 } } + [backend.token, email].compactMap { $0 }
@@ -1762,7 +1764,9 @@ final class AppModel {
         } catch {
             NSLog("GoatTV TopShelf: não deu para gravar: %@", "\(error)")
         }
+        #if os(tvOS)
         TVTopShelfContentProvider.topShelfContentDidChange()
+        #endif
     }
 
     /// Para o diagnóstico (Definições → Conta → Top Shelf): a extensão, os App Groups da assinatura e o que a
