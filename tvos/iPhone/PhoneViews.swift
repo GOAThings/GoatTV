@@ -544,6 +544,16 @@ private struct MenuRow: View {
     }
 }
 
+private struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
 /// Definições do telemóvel: o essencial, em lista agrupada.
 private struct MenuTab: View {
     @Environment(AppModel.self) private var model
@@ -554,6 +564,33 @@ private struct MenuTab: View {
     @State private var reporting = false
     @State private var message = ""
     @State private var picking: Picking?
+    @State private var downloadingUpdate = false
+    @State private var downloadedIPA: DownloadedFile?
+
+    struct DownloadedFile: Identifiable {
+        let url: URL
+        var id: URL { url }
+    }
+
+    /// Descarrega a IPA da release e abre a folha de partilha, para a passar à app que a assina e instala.
+    /// Sem conseguir, abre a página da release no navegador.
+    private func downloadUpdate() {
+        guard !downloadingUpdate else { return }
+        downloadingUpdate = true
+        Task {
+            defer { downloadingUpdate = false }
+            do {
+                let (file, response) = try await URLSession.shared.download(from: AppUpdate.iPhoneIPA)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                let target = FileManager.default.temporaryDirectory.appendingPathComponent("GoatTV-iPhone.ipa")
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: file, to: target)
+                downloadedIPA = DownloadedFile(url: target)
+            } catch {
+                await UIApplication.shared.open(AppUpdate.releasePage)
+            }
+        }
+    }
     @State private var managingGroups = false
     @State private var editingAgent = false
     @State private var agentText = ""
@@ -580,16 +617,16 @@ private struct MenuTab: View {
             VStack(spacing: 14) {
                 if let version = model.updateVersion {
                     Button {
-                        UIApplication.shared.open(AppUpdate.releasePage)
+                        downloadUpdate()
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "arrow.down.circle.fill").font(.title2).foregroundStyle(Theme.sky)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(s.t("Version %@ is available", "Há uma versão nova: %@", version)).foregroundStyle(Theme.text)
-                                Text(s.t("Download it on GitHub", "Descarrega no GitHub")).font(.footnote).foregroundStyle(Theme.textDim)
+                                Text(downloadingUpdate ? s.t("Downloading…", "A descarregar…") : s.t("Tap to download", "Toca para descarregar")).font(.footnote).foregroundStyle(Theme.textDim)
                             }
                             Spacer(minLength: 0)
-                            Image(systemName: "arrow.up.right").foregroundStyle(Theme.textDim)
+                            if downloadingUpdate { ProgressView() }
                         }
                         .padding(14)
                         .background(cardFill, in: cardShape)
@@ -657,6 +694,7 @@ private struct MenuTab: View {
             .padding(12)
         }
         .sheet(isPresented: $adding) { PlaylistFormPage { adding = false } }
+        .sheet(item: $downloadedIPA) { ShareSheet(url: $0.url) }
         .sheet(item: $picking) { pick in
             NavigationStack {
                 List(pick.options.indices, id: \.self) { i in

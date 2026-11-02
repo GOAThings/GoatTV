@@ -5,6 +5,7 @@ import Foundation
 public enum AppUpdate {
     public static let latestRelease = URL(string: "https://api.github.com/repos/GOAThings/GoatTV/releases/latest")!
     public static let ipaName = "GoatTV.ipa"
+    public static let iPhoneIPA = URL(string: "https://github.com/GOAThings/GoatTV/releases/latest/download/GoatTV-iPhone.ipa")!
     /// A página da versão mais recente, onde o iPhone vai buscar a sua IPA.
     public static let releasePage = URL(string: "https://github.com/GOAThings/GoatTV/releases/latest")!
 
