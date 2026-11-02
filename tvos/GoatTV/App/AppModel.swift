@@ -659,7 +659,18 @@ final class AppModel {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     }
 
+    /// O canal mudou aqui depois do que a conta diz (a gravação não chegou, ou a config é antiga): vale o daqui.
+    private func adoptNewerLastChannel() {
+        guard session.lastAt > Int64(settings["last_channel_at"]?.int ?? 0),
+              let playlistId = session.lastPlaylist, let channelKey = session.lastChannel else { return }
+        settings["last_playlist"] = .string(playlistId)
+        settings["last_channel"] = .string(channelKey)
+        settings["last_channel_at"] = .number(Double(session.lastAt))
+        saveSettings()
+    }
+
     private func startPlaylist() -> Playlist? {
+        adoptNewerLastChannel()
         let lastId = pendingOpen?.playlist ?? settings["last_playlist"]?.text ?? session.lastPlaylist
         return playlists.first { $0.id == lastId } ?? playlists.first
     }
@@ -1511,12 +1522,16 @@ final class AppModel {
 
     private func saveLast(_ channel: Channel, watched: Bool) {
         guard let playlistId = content?.playlist.id else { return }
-        session.lastPlaylist = playlistId
-        session.lastChannel = channel.key
         var changed = false
-        if settings["last_playlist"]?.text != playlistId || settings["last_channel"]?.text != channel.key {
+        // Só quando o canal mudou neste aparelho: uma TV ligada não desfaz o que se escolheu noutro.
+        if session.lastPlaylist != playlistId || session.lastChannel != channel.key {
+            let now = nowMs()
+            session.lastPlaylist = playlistId
+            session.lastChannel = channel.key
+            session.lastAt = now
             settings["last_playlist"] = .string(playlistId)
             settings["last_channel"] = .string(channel.key)
+            settings["last_channel_at"] = .number(Double(now))
             changed = true
         }
         if watched {

@@ -664,9 +664,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         applyLanguage()
     }
 
+    /** O canal mudou aqui depois do que a conta diz (a gravação não chegou, ou a config é antiga): vale o daqui. */
+    private suspend fun adoptNewerLastChannel() {
+        val at = c.session.lastAt()
+        val saved = settings.get(LAST_AT_KEY)?.takeIf { it.isJsonPrimitive }?.runCatching { asLong }?.getOrNull() ?: 0L
+        val playlistId = c.session.lastPlaylist()
+        val channelKey = c.session.lastChannel()
+        if (at <= saved || playlistId == null || channelKey == null) return
+        settings.addProperty("last_playlist", playlistId)
+        settings.addProperty("last_channel", channelKey)
+        settings.addProperty(LAST_AT_KEY, at)
+        saveSettings()
+    }
+
     private suspend fun lastPlaylist(): Playlist {
         // Um link do ecrã inicial manda na lista a abrir (se ainda existir).
         pendingLink?.first?.let { id -> _playlists.value.firstOrNull { it.id == id }?.let { return it } }
+        adoptNewerLastChannel()
         val lastId = settings.string("last_playlist") ?: c.session.lastPlaylist()
         return _playlists.value.firstOrNull { it.id == lastId } ?: _playlists.value.first()
     }
@@ -1985,11 +1999,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun saveLast(watched: Boolean) {
         val (playlistId, channelKey) = pendingLast ?: return
         pendingLast = null
-        c.session.saveLast(playlistId, channelKey)
         var changed = false
-        if (settings.string("last_playlist") != playlistId || settings.string("last_channel") != channelKey) {
+        // Só quando o canal mudou neste aparelho: uma TV ligada não desfaz o que se escolheu noutro.
+        if (c.session.lastPlaylist() != playlistId || c.session.lastChannel() != channelKey) {
+            val now = System.currentTimeMillis()
+            c.session.saveLast(playlistId, channelKey, now)
             settings.addProperty("last_playlist", playlistId)
             settings.addProperty("last_channel", channelKey)
+            settings.addProperty(LAST_AT_KEY, now)
             changed = true
         }
         // Recentes: só entram os canais em que se ficou (os mesmos WATCHED_MS do último canal).
@@ -2197,6 +2214,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         /** De quanto em quanto tempo ver se a lista ou o guia já passaram do intervalo. */
         const val REFRESH_TICK_MS = 10 * 60_000L
+        const val LAST_AT_KEY = "last_channel_at"
 
         fun PlaylistDto.toPlaylist(): Playlist? {
             val id = id ?: return null

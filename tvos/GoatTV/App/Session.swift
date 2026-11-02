@@ -49,6 +49,12 @@ struct SessionStore {
 
     // MARK: Último canal (cópia local; a conta tem o mesmo em settings)
 
+    /// Quando o último canal mudou neste aparelho (ms; 0 = nunca).
+    var lastAt: Int64 {
+        get { Int64(defaults.double(forKey: "last_at")) }
+        nonmutating set { defaults.set(Double(newValue), forKey: "last_at") }
+    }
+
     var lastPlaylist: String? {
         get { defaults.string(forKey: "last.playlist") }
         nonmutating set { defaults.set(newValue, forKey: "last.playlist") }

@@ -26,6 +26,7 @@ class SessionStore(private val context: Context) {
         val TOKEN_KIND = stringPreferencesKey("token_kind")
         val LAST_PLAYLIST = stringPreferencesKey("last_playlist")
         val LAST_CHANNEL = stringPreferencesKey("last_channel")
+        val LAST_AT = androidx.datastore.preferences.core.longPreferencesKey("last_at")
         val AUTO_START = booleanPreferencesKey("auto_start")
         /** Sem conta: as listas estão nesta TV (LocalStore). */
         val LOCAL = booleanPreferencesKey("local")
@@ -67,10 +68,14 @@ class SessionStore(private val context: Context) {
 
     suspend fun lastChannel(): String? = prefs()[Keys.LAST_CHANNEL]
 
-    suspend fun saveLast(playlistId: String, channelKey: String) {
+    /** Quando o último canal mudou neste aparelho (0 = nunca). */
+    suspend fun lastAt(): Long = prefs()[Keys.LAST_AT] ?: 0L
+
+    suspend fun saveLast(playlistId: String, channelKey: String, at: Long) {
         context.dataStore.edit {
             it[Keys.LAST_PLAYLIST] = playlistId
             it[Keys.LAST_CHANNEL] = channelKey
+            it[Keys.LAST_AT] = at
         }
     }
 
