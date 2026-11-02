@@ -63,6 +63,7 @@ object BugReport {
         for (secret in secrets.filter { it.length >= 3 }.distinct().sortedByDescending { it.length }) out = out.replace(secret, "***")
         out = QUERY.replace(out) { "${it.groupValues[1]}=***" }
         out = XTREAM_PATH.replace(out) { "/${it.groupValues[1]}/***/***/" }
+        out = STALKER_PATH.replace(out, "/stalker/***/***/")
         out = USER_INFO.replace(out) { "${it.groupValues[1]}***@" }
         out = AUTH.replace(out) { "${it.groupValues[1]} ***" }
         return out
@@ -70,6 +71,7 @@ object BugReport {
 
     private val QUERY = Regex("(?i)\\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey)=([^&\\s\"']+)")
     private val XTREAM_PATH = Regex("/(live|movie|series|timeshift)/[^/\\s]+/[^/\\s]+/")
+    private val STALKER_PATH = Regex("/stalker/[^/\\s]+/[^/\\s]+/")
     private val USER_INFO = Regex("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\\s:@]+:[^/\\s@]+@")
     private val AUTH = Regex("(?i)(authorization:?|bearer)\\s+[^\\s,]+")
 }

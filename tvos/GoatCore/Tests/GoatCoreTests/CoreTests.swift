@@ -350,13 +350,15 @@ enum CoreTests {
             M3U https://lists.example/get.php?token=abcdef123&type=m3u
             Proxy http://bob:hunter2@proxy.example/x
             Authorization: tok_live_999 sent
+            Portal https://thegoat.systems/api/goattv/stalker/abc/gwsecret9/play/s1.ts
             Error with tok_live_999 and myplaylistpass
             """
         let out = BugReport.redact(log, secrets: ["tok_live_999", "myplaylistpass", "ab"])
-        for secret in ["joao", "s3cr3t", "abcdef123", "hunter2", "tok_live_999", "myplaylistpass", "bob:"] {
+        for secret in ["joao", "s3cr3t", "abcdef123", "hunter2", "tok_live_999", "myplaylistpass", "bob:", "gwsecret9"] {
             try expect(out.contains(secret), false, secret)
         }
         try expect(out.contains("http://iptv.example:8080/live/***/***/123.ts"), true, "xtream")
+        try expect(out.contains("/stalker/***/***/play/s1.ts"), true, "stalker")
         try expect(out.contains("action=get_live_streams"), true, "action")
         try expect(out.contains("Opening"), true, "curto")
         let lines = (1...100).map { "line \($0)" }.joined(separator: "\n")
