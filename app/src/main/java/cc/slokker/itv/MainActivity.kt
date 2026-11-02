@@ -134,7 +134,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalChannelLogos provides channelLogos,
     ) {
     // A abertura passa uma vez por arranque (sobrevive a rodar/recriar a atividade); qualquer tecla salta-a.
-    var introDone by rememberSaveable { mutableStateOf(false) }
+    var introDone by rememberSaveable { mutableStateOf(vm.testMode) }
     // A tecla que salta a abertura é consumida inteira (também o largar), para não fazer nada no ecrã de baixo.
     var skipKey by remember { mutableStateOf(false) }
     Box(

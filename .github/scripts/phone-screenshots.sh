@@ -12,12 +12,12 @@ read -r W H < <(adb shell wm size | sed -E 's/.* ([0-9]+)x([0-9]+).*/\1 \2/' | t
 shot() { timeout 40 adb exec-out screencap -p > "$OUT/$1.png"; }
 tab() { adb shell input tap $((W * (2 * $1 + 1) / 8)) $((H - 130)); sleep 3; }
 
-adb shell am start -n cc.slokker.itv.debug/cc.slokker.itv.MainActivity >/dev/null
+adb shell am start -n cc.slokker.itv.debug/cc.slokker.itv.MainActivity --ez test_mode true >/dev/null
 sleep 12
 shot 01-welcome
 adb shell am force-stop cc.slokker.itv.debug
 adb shell am start -n cc.slokker.itv.debug/cc.slokker.itv.MainActivity --ez test_mode true --es demo_m3u http://127.0.0.1:8765/demo.m3u >/dev/null
-sleep 35
+sleep 20
 shot 02-channels
 adb shell input tap $((W / 2)) $((H * 60 / 100))
 sleep 6
