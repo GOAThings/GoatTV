@@ -216,10 +216,11 @@ public actor StalkerClient {
     }
 
     private static func profileParams(_ id: Stalker.Identity, random: String) -> [(String, String)] {
-        [("hd", "1"), ("ver", "ImageDescription: 0.2.18-r14-pub-250; PORTAL version: 5.6.0; API Version: JS API version: 328"),
+        [("hd", "1"), ("ver", "ImageDescription: 0.2.18-r14-pub-250; ImageDate: Fri Jan 15 15:20:44 EET 2016; PORTAL version: 5.1.0; API Version: JS API version: 328; STB API version: 134; Player Engine version: 0x566"),
          ("num_banks", "2"), ("sn", id.serial), ("stb_type", "MAG250"), ("image_version", "218"), ("video_out", "hdmi"),
          ("device_id", id.deviceId), ("device_id2", id.deviceId2), ("signature", id.signature), ("auth_second_step", "1"),
-         ("hw_version", "1.7-BD-00"), ("not_valid_token", "0"), ("api_signature", "263"), ("prehash", "0"),
+         ("hw_version", "1.7-BD-" + SHA.hex(SHA.md5(Array(id.mac.utf8))).uppercased().prefix(2)), ("hw_version_2", SHA.hex(SHA.md5(Array((id.serial + id.mac).lowercased().utf8)))),
+         ("client_type", "STB"), ("metrics", "{\"mac\":\"\(id.mac)\",\"sn\":\"\(id.serial)\",\"model\":\"MAG250\",\"type\":\"STB\",\"uid\":\"\",\"random\":\"\(random)\"}"), ("not_valid_token", "0"), ("api_signature", "263"), ("prehash", "0"),
          ("timestamp", String(Int(Date().timeIntervalSince1970))), ("random", random)]
     }
 }

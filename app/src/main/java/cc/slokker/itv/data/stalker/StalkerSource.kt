@@ -198,7 +198,7 @@ class StalkerSource(http: OkHttpClient) {
                 )
             }
 
-            private fun hash(algorithm: String, text: String): String =
+            fun hash(algorithm: String, text: String): String =
                 MessageDigest.getInstance(algorithm).digest(text.toByteArray()).joinToString("") { "%02X".format(it) }
         }
     }
@@ -231,10 +231,11 @@ class StalkerSource(http: OkHttpClient) {
         }
 
         private fun profileParams(id: Identity, random: String): List<Pair<String, String>> = listOf(
-            "hd" to "1", "ver" to "ImageDescription: 0.2.18-r14-pub-250; PORTAL version: 5.6.0; API Version: JS API version: 328",
+            "hd" to "1", "ver" to "ImageDescription: 0.2.18-r14-pub-250; ImageDate: Fri Jan 15 15:20:44 EET 2016; PORTAL version: 5.1.0; API Version: JS API version: 328; STB API version: 134; Player Engine version: 0x566",
             "num_banks" to "2", "sn" to id.serial, "stb_type" to "MAG250", "image_version" to "218", "video_out" to "hdmi",
             "device_id" to id.deviceId, "device_id2" to id.deviceId2, "signature" to id.signature, "auth_second_step" to "1",
-            "hw_version" to "1.7-BD-00", "not_valid_token" to "0", "api_signature" to "263", "prehash" to "0",
+            "hw_version" to "1.7-BD-" + Identity.hash("MD5", id.mac).take(2), "hw_version_2" to Identity.hash("MD5", (id.serial + id.mac).lowercase()).lowercase(),
+            "client_type" to "STB", "metrics" to """{"mac":"${id.mac}","sn":"${id.serial}","model":"MAG250","type":"STB","uid":"","random":"$random"}""", "not_valid_token" to "0", "api_signature" to "263", "prehash" to "0",
             "timestamp" to (System.currentTimeMillis() / 1000).toString(), "random" to random,
         )
 
