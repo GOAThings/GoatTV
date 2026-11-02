@@ -1038,7 +1038,7 @@ private fun settingItems(
         }
 
         // O formulário substitui esta página: ao gravar (ou Voltar) regressa-se às Listas.
-        Route.NewPlaylistType -> listOf(
+        Route.NewPlaylistType -> listOfNotNull(
             Item.Action("xtream", "Xtream Codes", s.xtreamSub) {
                 replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.XTREAM))))
             },
@@ -1047,7 +1047,7 @@ private fun settingItems(
             },
             Item.Action("stalker", "Stalker / MAC", s.stalkerSub) {
                 replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.STALKER))))
-            },
+            }.takeIf { vm.canAddStalker },
         )
 
         is Route.PlaylistEdit -> buildList {
@@ -1064,7 +1064,7 @@ private fun settingItems(
                 ) { push(Route.TextEdit(title, value, kind) { v -> set { update(it, v) } }, key) }
 
             val typeOptions = listOf<Pair<Any?, String>>(PlaylistType.XTREAM to "Xtream Codes", PlaylistType.M3U to s.m3uPlaylist) +
-                if (local || form.type == PlaylistType.STALKER) listOf<Pair<Any?, String>>(PlaylistType.STALKER to "Stalker / MAC") else emptyList()
+                if (vm.canAddStalker || form.type == PlaylistType.STALKER) listOf<Pair<Any?, String>>(PlaylistType.STALKER to "Stalker / MAC") else emptyList()
             if (route.id != null && !local) {
                 // Na conta, o tipo de uma lista não muda (para outro tipo cria-se uma lista nova).
                 add(Item.Info("type", s.type, typeOptions.first { it.first == form.type }.second))

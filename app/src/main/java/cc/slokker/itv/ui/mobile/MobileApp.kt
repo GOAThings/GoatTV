@@ -773,7 +773,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
     ) {
         Text(s.addPlaylist, color = ItvColors.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (listOf(PlaylistType.XTREAM to "Xtream", PlaylistType.M3U to "M3U") + if (vm.local.value) listOf(PlaylistType.STALKER to "Stalker") else emptyList()).forEach { (type, label) ->
+            (listOf(PlaylistType.XTREAM to "Xtream", PlaylistType.M3U to "M3U") + if (vm.canAddStalker) listOf(PlaylistType.STALKER to "Stalker") else emptyList()).forEach { (type, label) ->
                 val on = form.type == type
                 Text(
                     label, color = if (on) Color.Black else ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,

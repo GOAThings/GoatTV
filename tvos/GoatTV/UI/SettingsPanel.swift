@@ -835,7 +835,7 @@ struct SettingsPanel: View {
             return remoteItems(p)
 
         case .newPlaylistType:
-            return [
+            var types: [Item] = [
                 .action("xtream", "Xtream Codes", subtitle: s.t("Server, username and password", "Servidor, utilizador e password")) {
                     form = PlaylistForm(type: .xtream)
                     replace(.playlistEdit(nil))
@@ -844,11 +844,15 @@ struct SettingsPanel: View {
                     form = PlaylistForm(type: .m3u)
                     replace(.playlistEdit(nil))
                 },
-                .action("stalker", "Stalker / MAC", subtitle: s.t("Portal address and authorized MAC address", "Endereço do portal e endereço MAC autorizado")) {
+            ]
+            // As listas Stalker só existem sem conta: com conta, o site expõe o portal como M3U.
+            if !model.hasAccount {
+                types.append(.action("stalker", "Stalker / MAC", subtitle: s.t("Portal address and authorized MAC address", "Endereço do portal e endereço MAC autorizado")) {
                     form = PlaylistForm(type: .stalker)
                     replace(.playlistEdit(nil))
-                },
-            ]
+                })
+            }
+            return types
 
         case .playlistEdit(let id):
             func field(_ key: String, optional: Bool = false) -> Item {
