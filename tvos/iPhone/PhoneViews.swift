@@ -150,7 +150,8 @@ struct PhoneMain: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
-                TabRow(tab: $tab)
+                // A barra flutua por cima da lista: o conteúdo passa por baixo do vidro.
+                .safeAreaInset(edge: .bottom, spacing: 0) { TabRow(tab: $tab) }
             }
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0) }
@@ -424,26 +425,50 @@ private struct TabRow: View {
 
     var body: some View {
         let s = model.strings
-        HStack {
+        HStack(spacing: 0) {
             item(.tv, "TV", "tv")
             item(.favorites, s.r("favorites"), "star")
             item(.search, s.r("search"), "magnifyingglass")
             item(.menu, s.r("settings"), "gearshape")
         }
-        .padding(.top, 6)
-        .background(Color(red: 0.05, green: 0.055, blue: 0.08))
+        .padding(5)
+        .liquidGlass(Capsule(), interactive: false)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
     }
 
     private func item(_ t: PhoneTab, _ label: String, _ icon: String) -> some View {
-        Button {
+        let on = tab == t
+        return Button {
             tab = t
         } label: {
-            VStack(spacing: 3) {
-                Image(systemName: tab == t && icon != "magnifyingglass" ? "\(icon).fill" : icon).font(.title3)
+            VStack(spacing: 2) {
+                Image(systemName: on && icon != "magnifyingglass" ? "\(icon).fill" : icon).font(.system(size: 19))
                 Text(label).font(.caption2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .foregroundStyle(tab == t ? Theme.sky : Theme.textFaint)
+            .padding(.vertical, 6)
+            .foregroundStyle(on ? Theme.sky : Theme.textDim)
+            .background(on ? Color.white.opacity(0.12) : .clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// O mesmo vidro do GoatRemote: Liquid Glass no iOS 26, vidro escuro antes.
+private extension View {
+    @ViewBuilder
+    func liquidGlass<S: InsettableShape>(_ shape: S, interactive: Bool = true) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            self.background(
+                shape
+                    .fill(LinearGradient(colors: [Theme.hex(0x26262A), Theme.hex(0x18181B)], startPoint: .top, endPoint: .bottom))
+                    .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.7), radius: 10, y: 5)
+            )
         }
     }
 }

@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -50,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -177,9 +180,10 @@ fun MobileMain(vm: AppViewModel) {
                     Tab.Search -> SearchTab(vm, current) { epgFor = it }
                     Tab.Menu -> MobileMenu(vm)
                 }
+                // A barra flutua por cima da lista, como os botões de vidro do GoatRemote.
+                BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
                 epgFor?.let { EpgSheet(vm, it) { epgFor = null } }
             }
-            BottomBar(tab) { tab = it }
         }
     }
     var reminder by remember { mutableStateOf<Reminder?>(null) }
@@ -352,7 +356,7 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
         return
     }
     val list = rememberLazyListState()
-    LazyColumn(state = list, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(state = list, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(channels, key = { it.uid }) { channel ->
             ChannelCard(vm, channel, channel.key == current.key, onClick = { vm.play(channel, groupId) }, onLong = { onEpg(channel) })
         }
@@ -454,7 +458,7 @@ private fun SearchTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Un
         when {
             query.trim().length < 2 -> Note(s.searchMinChars)
             hits.isEmpty() -> Note(s.searchNoResults)
-            else -> LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            else -> LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(hits) { hit ->
                     ChannelCard(vm, hit.channel, hit.channel.key == current.key, onClick = { vm.play(hit.channel, vm.groupFor(hit.channel)) }, onLong = { onEpg(hit.channel) })
                 }
@@ -483,9 +487,19 @@ private fun Field(hint: String, value: String, modifier: Modifier = Modifier, se
 }
 
 @Composable
-private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit) {
+private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> Unit) {
     val s = LocalStrings.current
-    Row(Modifier.fillMaxWidth().background(Color(0xFF0C0E15)).navigationBarsPadding().padding(vertical = 6.dp)) {
+    Row(
+        modifier
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .shadow(10.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF26262A), Color(0xFF18181B))))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f))), CircleShape)
+            .padding(5.dp),
+    ) {
         BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }
         BarItem(s.favorites, ItvIcons.Star, tab == Tab.Favorites) { onTab(Tab.Favorites) }
         BarItem(s.search, ItvIcons.Search, tab == Tab.Search) { onTab(Tab.Search) }
@@ -495,9 +509,12 @@ private fun BottomBar(tab: Tab, onTab: (Tab) -> Unit) {
 
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.BarItem(label: String, icon: ImageVector, on: Boolean, onClick: () -> Unit) {
-    val tint = if (on) LocalAccent.current.start else ItvColors.TextFaint
-    Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+    val tint = if (on) LocalAccent.current.start else ItvColors.TextDim
+    Column(
+        Modifier.weight(1f).clip(CircleShape).background(if (on) Color.White.copy(alpha = 0.12f) else Color.Transparent).clickable(onClick = onClick).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         Text(label, color = tint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -530,7 +547,7 @@ fun MobileMenu(vm: AppViewModel) {
             true
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Section(s.playlists) {
             playlists.forEach { p ->
                 MenuRow(p.name, if (p.id == content?.playlist?.id) "✓" else null) { vm.switchPlaylist(p) }
@@ -674,6 +691,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
     }
 }
 
+private val BAR_SPACE = 92.dp
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 5 * 60_000L
 private const val ZAP_DRAG_PX = 120f
