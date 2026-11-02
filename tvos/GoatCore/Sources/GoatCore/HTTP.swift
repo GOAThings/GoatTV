@@ -7,9 +7,6 @@ import FoundationNetworking
 public let iptvUserAgent = "VLC/3.0.20 LibVLC/3.0.20"
 
 public enum HTTP {
-    /// Só para diagnóstico: o domínio e o código do último erro de rede (sem URL).
-    nonisolated(unsafe) public static var lastError: String?
-
     public static func makeSession(timeout: TimeInterval = 30) -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = timeout
@@ -43,7 +40,6 @@ public enum HTTP {
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch {
-            lastError = "\((error as NSError).domain) \((error as NSError).code)"
             throw SourceError.offline
         }
         guard let http = response as? HTTPURLResponse else { throw SourceError.badResponse }

@@ -127,7 +127,6 @@ private struct PhoneError: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(info.title).font(.title2.bold())
                 if let cause = info.cause { Text(cause).foregroundStyle(Theme.textDim) }
-                if let code = HTTP.lastError { Text("Error: " + code).font(.subheadline).foregroundStyle(Theme.textDim) }
                 ForEach(info.fixes, id: \.self) { Text("• \($0)").font(.subheadline).foregroundStyle(Theme.textDim) }
                 Group {
                     if model.isLocal || model.playlists.isEmpty { MenuRow(s.r("add_playlist")) { adding = true } }
