@@ -786,6 +786,15 @@ final class AppModel {
     }
 
     func retry() {
+        // Sem conta não há sessão para renovar: o servidor recusava-a e a app voltava às boas-vindas.
+        if isLocal {
+            guard let playlist = startPlaylist() else {
+                screen = .newPlaylist
+                return
+            }
+            Task { await load(playlist, resume: true) }
+            return
+        }
         screen = content == nil ? .loading("") : .player
         Task { await refreshAccount() }
     }
