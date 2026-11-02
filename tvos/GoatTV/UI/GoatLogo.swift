@@ -32,6 +32,14 @@ struct GoatLogoView: View {
         self.onDone = onDone
     }
 
+    #if os(tvOS)
+    private let messageSize: CGFloat = 32
+    private let messagePadding: CGFloat = 96
+    #else
+    private let messageSize: CGFloat = 16
+    private let messagePadding: CGFloat = 24
+    #endif
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
@@ -44,11 +52,11 @@ struct GoatLogoView: View {
                 if let message, !message.isEmpty, !intro {
                     let scale = geo.size.width * frameFraction / frameW
                     Text(message)
-                        .font(.system(size: 32, weight: .medium))
+                        .font(.system(size: messageSize, weight: .medium))
                         .foregroundStyle(Theme.textDim)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .padding(.horizontal, 96)
+                        .padding(.horizontal, messagePadding)
                         .padding(.top, (geo.size.height - frameH * scale) / 2 + (tvBottom + 70) * scale + 56)
                 }
             }
