@@ -377,9 +377,9 @@ enum CoreTests {
         for secret in ["joao", "s3cr3t", "abcdef123", "hunter2", "tok_live_999", "myplaylistpass", "bob:", "gwsecret9"] {
             try expect(out.contains(secret), false, secret)
         }
-        try expect(out.contains("http://iptv.example:8080/live/***/***/123.ts"), true, "xtream")
-        try expect(out.contains("/stalker/***/***/play/s1.ts"), true, "stalker")
-        try expect(out.contains("action=get_live_streams"), true, "action")
+        try expect(out.contains("Opening http://***"), true, "url")
+        try expect(BugReport.redact("/live/joao/s3cr3t/1.ts", secrets: []), "/live/***/***/1.ts")
+        try expect(BugReport.redact("Failed URL=http://10457072.host.example:80/MAGABC/DEF/1474191 (403)", secrets: []), "Failed URL=http://*** (403)")
         try expect(out.contains("Opening"), true, "curto")
         let lines = (1...100).map { "line \($0)" }.joined(separator: "\n")
         let trimmed = BugReport.trim(head: "HEAD\n", log: lines, max: 60)

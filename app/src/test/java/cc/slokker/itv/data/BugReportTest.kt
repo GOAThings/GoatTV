@@ -22,9 +22,9 @@ class BugReportTest {
         for (secret in listOf("joao", "s3cr3t", "abcdef123", "hunter2", "tok_live_999", "myplaylistpass", "bob:", "gwsecret9")) {
             assertFalse("$secret leaked:\n$out", out.contains(secret))
         }
-        assertTrue(out.contains("http://iptv.example:8080/live/***/***/123.ts"))
-        assertTrue(out.contains("/stalker/***/***/play/s1.ts"))
-        assertTrue(out.contains("action=get_live_streams"))
+        assertTrue(out.contains("Opening http://***"))
+        assertEquals("/live/***/***/1.ts", BugReport.redact("/live/joao/s3cr3t/1.ts", emptyList()))
+        assertEquals("Failed URL=http://*** (403)", BugReport.redact("Failed URL=http://10457072.host.example:80/MAGABC/DEF/1474191 (403)", emptyList()))
         // Segredos de menos de 3 caracteres não se trocam (senão apagava letras soltas).
         assertTrue(out.contains("Opening"))
     }

@@ -57,10 +57,12 @@ object BugReport {
         return head + tail
     }
 
-    /** Troca por `***` os [secrets] e o que tem cara de credencial (parâmetros, caminhos Xtream, user:pass@, tokens). */
+    /** Troca por `***` os [secrets] e o que tem cara de credencial (URLs inteiros, parâmetros, caminhos Xtream, tokens). */
     fun redact(text: String, secrets: Collection<String>): String {
         var out = text
         for (secret in secrets.filter { it.length >= 3 }.distinct().sortedByDescending { it.length }) out = out.replace(secret, "***")
+        // Os links dos canais podem ter credenciais em qualquer parte do caminho ou do servidor.
+        out = URL.replace(out) { "${it.groupValues[1]}://***" }
         out = QUERY.replace(out) { "${it.groupValues[1]}=***" }
         out = XTREAM_PATH.replace(out) { "/${it.groupValues[1]}/***/***/" }
         out = STALKER_PATH.replace(out, "/stalker/***/***/")
@@ -70,6 +72,7 @@ object BugReport {
         return out
     }
 
+    private val URL = Regex("\\b([a-zA-Z][a-zA-Z0-9+.-]*)://[^\\s\"'<>]+")
     private val QUERY = Regex("(?i)\\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey|mac|sn|device_id|device_id2|signature|play_token)=([^&\\s\"']+)")
     private val XTREAM_PATH = Regex("/(live|movie|series|timeshift)/[^/\\s]+/[^/\\s]+/")
     private val STALKER_PATH = Regex("/stalker/[^/\\s]+/[^/\\s]+/")
