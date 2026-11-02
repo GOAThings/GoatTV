@@ -311,7 +311,11 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> 
     val shown = groups.firstOrNull { it.id == group }?.id ?: SpecialCategory.ALL
     val channels = remember(content, favorites, shown) { vm.channelsOf(shown) }
     Column(Modifier.fillMaxSize()) {
+        // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
+        val pills = rememberLazyListState()
+        LaunchedEffect(shown, groups) { groups.indexOfFirst { it.id == shown }.takeIf { it >= 0 }?.let { pills.animateScrollToItem(it) } }
         LazyRow(
+            state = pills,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -558,7 +562,7 @@ fun MobileMenu(vm: AppViewModel) {
             CycleRow(s.onStartup, prefs.startup, listOf(Prefs.Startup.LAST to s.startupLast, Prefs.Startup.LIST to s.startupList)) { vm.setPref(Prefs.Key.STARTUP, it) }
             CycleRow(s.language, prefs.language, listOf("auto" to s.languageAuto) + Strings.LANGUAGES) { vm.setPref(Prefs.Key.LANGUAGE, it) }
             CycleRow(s.accent, prefs.accent, Accent.ALL.map { it.id to s.accentName(it.id) }) { vm.setPref(Prefs.Key.ACCENT, it) }
-            MenuRow(s.tvGuide, null, vm::refreshEpg)
+            MenuRow(s.refreshEpg, null, vm::refreshEpg)
         }
         Section(s.parental) {
             MenuRow(if (prefs.pinHash == null) s.newPin else s.parentalOffToast, null) {

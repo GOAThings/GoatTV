@@ -256,6 +256,7 @@ private struct ChannelsTab: View {
         let groups = model.groups
         let shown = group ?? model.groupId
         VStack(spacing: 0) {
+            ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(groups, id: \.id) { g in
@@ -270,9 +271,14 @@ private struct ChannelsTab: View {
                                 .padding(.horizontal, 16).padding(.vertical, 9)
                                 .background(on ? Color.white : cardFill, in: Capsule())
                         }
+                        .id(g.id)
                     }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
+            }
+            // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
+            .onAppear { proxy.scrollTo(shown, anchor: .center) }
+            .onChange(of: shown) { _, id in withAnimation { proxy.scrollTo(id, anchor: .center) } }
             }
             ChannelList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
         }
@@ -295,9 +301,8 @@ private struct ChannelList: View {
 
     var body: some View {
         if channels.isEmpty {
-            Spacer()
             Text(model.strings.r("no_channels_in_group")).foregroundStyle(Theme.textFaint)
-            Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 LazyVStack(spacing: 8) {
@@ -508,8 +513,8 @@ private struct MenuTab: View {
                 }
                 section(s.r("settings")) {
                     cycle(s.r("language"), "language", p.language, [("auto", s.r("language_auto"))] + Strings.languages.map { ($0.code, $0.name) })
-                    cycle(s.r("accent"), "accent", p.accent, ["itv", "violet", "mint", "sunset", "gold", "white"].map { ($0, $0.capitalized) })
-                    MenuRow(s.r("tv_guide")) { model.refreshEpg() }
+                    cycle(s.r("accent"), "accent", p.accent, [("itv", "GoatTV"), ("violet", s.t("Violet", "Violeta")), ("mint", s.t("Mint", "Menta")), ("sunset", s.t("Sunset", "Pôr do sol")), ("gold", s.t("Gold", "Dourado")), ("white", s.t("White", "Branco"))])
+                    MenuRow(s.t("Update TV guide now", "Atualizar o guia agora")) { model.refreshEpg() }
                 }
                 section(s.r("parental")) {
                     if p.pinHash == nil {
