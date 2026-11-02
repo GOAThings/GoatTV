@@ -52,7 +52,6 @@ targets:
         # As listas IPTV são quase sempre http://.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-          NSAllowsArbitraryLoadsForMedia: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv

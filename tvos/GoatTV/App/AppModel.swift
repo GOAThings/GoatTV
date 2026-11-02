@@ -787,7 +787,7 @@ final class AppModel {
 
     func retry() {
         // Sem conta não há sessão para renovar: o servidor recusava-a e a app voltava às boas-vindas.
-        if isLocal {
+        if !hasAccount {
             guard let playlist = startPlaylist() else {
                 screen = .newPlaylist
                 return
