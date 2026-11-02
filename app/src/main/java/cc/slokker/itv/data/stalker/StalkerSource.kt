@@ -66,10 +66,11 @@ class StalkerSource(http: OkHttpClient) {
         }
         val endpoint = mutex.withLock { sessions[playlist.id]?.endpoint }.orEmpty()
         val channels = raw.values.mapIndexedNotNull { i, c -> parseChannel(c, i, endpoint) }
+        val (grouped, sections) = if (categories.isEmpty()) groupBySections(channels) else channels to emptyList()
         PlaylistContent.build(
             playlist = playlist,
-            categories = categories,
-            channels = channels,
+            categories = categories + sections,
+            channels = grouped,
             guideUrl = playlist.epgUrl?.takeIf { it.isNotBlank() },
         )
     }
@@ -238,6 +239,33 @@ class StalkerSource(http: OkHttpClient) {
             "client_type" to "STB", "metrics" to """{"mac":"${id.mac}","sn":"${id.serial}","model":"MAG250","type":"STB","uid":"","random":"$random"}""", "not_valid_token" to "0", "api_signature" to "263", "prehash" to "0",
             "timestamp" to (System.currentTimeMillis() / 1000).toString(), "random" to random,
         )
+
+        /** O nome dentro de um separador (`✦●✦ DESPORTO ✦●✦`, `=== UK ===`), ou null se for um canal normal. */
+        fun sectionTitle(name: String): String? {
+            val title = name.trim { !it.isLetterOrDigit() }
+            val start = name.indexOf(title)
+            val edges = start >= 2 && name.length - start - title.length >= 2
+            return title.takeIf { it.isNotEmpty() && edges && (name.take(start) + name.drop(start + title.length)).none { c -> c in "()[]{}" } }
+        }
+
+        /** Portais sem géneros: os separadores da lista passam a grupos e deixam de contar como canais. */
+        fun groupBySections(channels: List<Channel>): Pair<List<Channel>, List<Category>> {
+            if (channels.count { sectionTitle(it.name) != null } < 2) return channels to emptyList()
+            val sections = LinkedHashMap<String, Category>()
+            var current = ""
+            val grouped = channels.mapNotNull { c ->
+                val title = sectionTitle(c.name)
+                if (title != null) {
+                    current = title
+                    sections.getOrPut(title) { Category(title, title) }
+                    null
+                } else {
+                    c.copy(categoryId = current)
+                }
+            }
+            val used = grouped.map { it.categoryId }.toSet()
+            return grouped.mapIndexed { i, c -> c.copy(uid = i) } to sections.values.filter { it.id in used }
+        }
 
         /** Só os comandos `/ch/` são pedidos ao portal; os outros já são o link. */
         fun needsLink(cmd: String) = cmd.contains("/ch/")

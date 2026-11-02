@@ -64,6 +64,20 @@ class StalkerTest {
     }
 
     @Test
+    fun `portals without genres group channels by their separators`() {
+        fun ch(name: String) = Channel(0, name, 0, name, null, "")
+        assertEquals("FIFA WC", StalkerSource.sectionTitle("✦●✦ FIFA WC ✦●✦"))
+        assertEquals("UK", StalkerSource.sectionTitle("=== UK ==="))
+        assertNull(StalkerSource.sectionTitle("PPV| PSF 01 [EVENT ONLY]"))
+        assertNull(StalkerSource.sectionTitle("(( HD ))"))
+        val (grouped, sections) = StalkerSource.groupBySections(listOf(ch("Info"), ch("== A =="), ch("One"), ch("== B =="), ch("Two")))
+        assertEquals(listOf("A", "B"), sections.map { it.id })
+        assertEquals(listOf("" to "Info", "A" to "One", "B" to "Two"), grouped.map { it.categoryId to it.name })
+        assertEquals(listOf(0, 1, 2), grouped.map { it.uid })
+        assertEquals(2, StalkerSource.groupBySections(listOf(ch("== A =="), ch("One"))).first.size)
+    }
+
+    @Test
     fun `reports hide macs`() {
         assertEquals("a *** b", BugReport.redact("a $mac b", emptyList()))
         assertEquals("mac=***&x=1", BugReport.redact("mac=00%3A1A%3A79%3A00%3A00%3A01&x=1", emptyList()))

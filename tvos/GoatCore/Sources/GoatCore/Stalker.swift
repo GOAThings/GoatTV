@@ -76,6 +76,37 @@ public enum Stalker {
         }
     }
 
+    /// O nome dentro de um separador (`✦●✦ DESPORTO ✦●✦`, `=== UK ===`), ou nil se for um canal normal.
+    public static func sectionTitle(_ name: String) -> String? {
+        let chars = Array(name.trimmingCharacters(in: .whitespaces))
+        func text(_ c: Character) -> Bool { c.isLetter || c.isNumber }
+        guard let first = chars.firstIndex(where: text), let last = chars.lastIndex(where: text) else { return nil }
+        let edges = chars[..<first] + chars[(last + 1)...]
+        guard first >= 2, chars.count - last - 1 >= 2, !edges.contains(where: { "()[]{}".contains($0) }) else { return nil }
+        return String(chars[first...last])
+    }
+
+    /// Portais sem géneros: os separadores da lista passam a grupos e deixam de contar como canais.
+    public static func groupBySections(_ channels: [Channel]) -> ([Channel], [Category]) {
+        guard channels.filter({ sectionTitle($0.name) != nil }).count >= 2 else { return (channels, []) }
+        var sections: [Category] = []
+        var current = ""
+        var grouped: [Channel] = []
+        for c in channels {
+            if let title = sectionTitle(c.name) {
+                current = title
+                if !sections.contains(where: { $0.id == title }) { sections.append(Category(id: title, name: title)) }
+            } else {
+                var channel = c
+                channel.categoryId = current
+                channel.uid = grouped.count
+                grouped.append(channel)
+            }
+        }
+        let used = Set(grouped.map(\.categoryId))
+        return (grouped, sections.filter { used.contains($0.id) })
+    }
+
     static func parseChannels(_ raw: [JSON], endpoint: String, channelName: (String) -> String) -> [Channel] {
         var result: [Channel] = []
         for c in raw {
@@ -132,7 +163,8 @@ public actor StalkerClient {
             }
         }
         let channels = Stalker.parseChannels(raw, endpoint: sessions[playlist.id]?.endpoint ?? "", channelName: channelName)
-        return PlaylistContent.build(playlist: playlist, categories: categories, channels: channels,
+        let (grouped, sections) = categories.isEmpty ? Stalker.groupBySections(channels) : (channels, [])
+        return PlaylistContent.build(playlist: playlist, categories: categories + sections, channels: grouped,
                                      guideUrl: playlist.epgUrl.flatMap { $0.trimmed.isEmpty ? nil : $0 })
     }
 
