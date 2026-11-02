@@ -6,7 +6,6 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -51,8 +50,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -92,6 +89,7 @@ import cc.slokker.itv.ui.common.formatTime
 import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.ItvIcons
+import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.theme.Accent
@@ -180,7 +178,7 @@ fun MobileMain(vm: AppViewModel) {
                     Tab.Search -> SearchTab(vm, current) { epgFor = it }
                     Tab.Menu -> MobileMenu(vm)
                 }
-                // A barra flutua por cima da lista, como os botões de vidro do GoatRemote.
+                // A barra flutua por cima da lista, com o vidro do resto da GoatTV.
                 BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
                 epgFor?.let { EpgSheet(vm, it) { epgFor = null } }
             }
@@ -494,10 +492,7 @@ private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> U
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .fillMaxWidth()
-            .shadow(10.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(Color(0xFF26262A), Color(0xFF18181B))))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f))), CircleShape)
+            .glass(CircleShape)
             .padding(5.dp),
     ) {
         BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }

@@ -432,7 +432,7 @@ private struct TabRow: View {
             item(.menu, s.r("settings"), "gearshape")
         }
         .padding(5)
-        .liquidGlass(Capsule(), interactive: false)
+        .glass(radius: 40)
         .padding(.horizontal, 16)
         .padding(.bottom, 4)
     }
@@ -453,23 +453,6 @@ private struct TabRow: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// O mesmo vidro do GoatRemote: Liquid Glass no iOS 26, vidro escuro antes.
-private extension View {
-    @ViewBuilder
-    func liquidGlass<S: InsettableShape>(_ shape: S, interactive: Bool = true) -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
-        } else {
-            self.background(
-                shape
-                    .fill(LinearGradient(colors: [Theme.hex(0x26262A), Theme.hex(0x18181B)], startPoint: .top, endPoint: .bottom))
-                    .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.7), radius: 10, y: 5)
-            )
-        }
     }
 }
 
