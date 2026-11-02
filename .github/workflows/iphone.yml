@@ -4,7 +4,7 @@ name: iPhone
 on:
   workflow_dispatch:
   push:
-    branches: [mobile]
+    branches: [main, mobile]
     paths: ["tvos/**", ".github/workflows/iphone.yml"]
 
 jobs:

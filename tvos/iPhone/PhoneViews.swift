@@ -502,6 +502,12 @@ private struct TabRow: View {
         } label: {
             VStack(spacing: 2) {
                 Image(systemName: on && icon != "magnifyingglass" ? "\(icon).fill" : icon).font(.system(size: 19))
+                    .overlay(alignment: .topTrailing) {
+                        // Há versão nova: as Definições dizem onde a ir buscar.
+                        if t == .menu, model.updateVersion != nil {
+                            Circle().fill(Theme.sky).frame(width: 8, height: 8).offset(x: 4, y: -2)
+                        }
+                    }
                 Text(label).font(.caption2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -572,6 +578,25 @@ private struct MenuTab: View {
         let p = model.prefs
         ScrollView {
             VStack(spacing: 14) {
+                if let version = model.updateVersion {
+                    Button {
+                        UIApplication.shared.open(AppUpdate.releasePage)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.down.circle.fill").font(.title2).foregroundStyle(Theme.sky)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(s.t("Version %@ is available", "Há uma versão nova: %@", version)).foregroundStyle(Theme.text)
+                                Text(s.t("Download it on GitHub", "Descarrega no GitHub")).font(.footnote).foregroundStyle(Theme.textDim)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.up.right").foregroundStyle(Theme.textDim)
+                        }
+                        .padding(14)
+                        .background(cardFill, in: cardShape)
+                        .contentShape(cardShape)
+                    }
+                    .buttonStyle(.plain)
+                }
                 section(s.r("playlists")) {
                     ForEach(model.playlists, id: \.id) { pl in
                         MenuRow(pl.name, value: pl.id == model.content?.playlist.id ? "✓" : nil) { model.switchPlaylist(pl) }
