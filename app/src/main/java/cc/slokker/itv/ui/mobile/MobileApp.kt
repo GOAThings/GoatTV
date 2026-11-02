@@ -322,7 +322,11 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> 
     val unlocked by vm.unlocked.collectAsStateWithLifecycle()
     val locked = remember(content, unlocked) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
     var pinFor by remember { mutableStateOf<String?>(null) }
-    val shown = groups.firstOrNull { it.id == group }?.id ?: SpecialCategory.ALL
+    // O grupo pode não estar à vista (ex.: "Todos" escondido): fica o do canal a dar, ou o primeiro.
+    val shown = groups.firstOrNull { it.id == group }?.id
+        ?: groups.firstOrNull { it.id == current.categoryId }?.id
+        ?: groups.firstOrNull()?.id
+        ?: SpecialCategory.ALL
     val channels = remember(content, favorites, shown) { vm.channelsOf(shown) }
     Column(Modifier.fillMaxSize()) {
         // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.

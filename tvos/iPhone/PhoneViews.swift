@@ -301,7 +301,11 @@ private struct ChannelsTab: View {
 
     var body: some View {
         let groups = model.groups
-        let shown = group ?? model.groupId
+        // O grupo pode não estar à vista (ex.: "Todos" escondido): fica o do canal a dar, ou o primeiro.
+        let wanted = group ?? model.groupId
+        let shown = groups.contains { $0.id == wanted } ? wanted
+            : groups.first { $0.id == model.current?.categoryId }?.id
+            ?? groups.first { !model.isGroupLocked($0.id) }?.id ?? wanted
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
