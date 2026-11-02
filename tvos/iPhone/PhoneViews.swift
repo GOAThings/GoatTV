@@ -13,13 +13,18 @@ private let cardShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
 struct PhoneRoot: View {
     @Environment(AppModel.self) private var model
+    /// A abertura (o logo animado) só passa uma vez, ao abrir a app.
+    @State private var introDone = false
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
             switch model.screen {
-            case .starting, .loading:
+            case .starting:
                 GoatLogoView(intro: false)
+            case .loading(let name):
+                // O mesmo logo da abertura, no mesmo sítio, com o que se está a carregar por baixo.
+                GoatLogoView(intro: false, message: name.isEmpty ? nil : model.strings.loading(name))
             case .welcome:
                 PhoneWelcome()
             case .newPlaylist:
@@ -32,6 +37,12 @@ struct PhoneRoot: View {
                 PhoneError(info: model.strings.errNoPlaylists())
             case .error(let info):
                 PhoneError(info: info)
+            }
+            if !introDone {
+                GoatLogoView(intro: true) {
+                    withAnimation(.easeOut(duration: 0.45)) { introDone = true }
+                }
+                .transition(.opacity)
             }
             if let toast = model.toast {
                 VStack {
