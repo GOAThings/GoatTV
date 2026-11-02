@@ -85,6 +85,9 @@ class AppContainer(context: Context) {
 
     /** User-Agent para os servidores IPTV (o das definições, ou o predefinido). */
     @Volatile
+    /** Testes no emulador: abre a lista a sério, mas sem iniciar o vídeo nem a abertura. */
+    var noVideo = false
+
     var userAgent: String = IPTV_USER_AGENT
 
     /** Cliente para servidores IPTV (listas, EPG, logos). */

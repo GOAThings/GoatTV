@@ -21,8 +21,6 @@ targets:
       - path: iPhone
       - path: Shared
       - path: GoatTV/Resources
-        type: folder
-        buildPhase: resources
       - path: GoatTV/Assets.xcassets
       - path: GoatTV/App
         excludes: [GoatTVApp.swift]

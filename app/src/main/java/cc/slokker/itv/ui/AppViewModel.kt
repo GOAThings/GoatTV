@@ -2090,6 +2090,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Modo de teste: sem streams nem escritas na conta (ver AppContainer.testMode). */
     val testMode: Boolean get() = c.testMode
+    val noVideo: Boolean get() = c.noVideo
 
     /** Grava `settings` ou `favorites` (o objeto inteiro) no perfil GoatTV da conta (sem conta, só no LocalStore). */
     private fun patchUser(field: String, value: JsonElement) {

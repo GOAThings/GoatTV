@@ -66,7 +66,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val latestPrefs by rememberUpdatedState(prefs)
 
     fun start(index: Int) {
-        if (vm.testMode) return
+        if (vm.noVideo) return
         val candidate = candidates[0].getOrNull(index) ?: return
         attempt[0] = index
         playback.ready = false

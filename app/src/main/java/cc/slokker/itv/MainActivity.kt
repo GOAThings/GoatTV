@@ -73,6 +73,9 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG && intent.getBooleanExtra("test_mode", false)) {
             (application as ItvApp).container.testMode = true
         }
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("no_video", false)) {
+            (application as ItvApp).container.noVideo = true
+        }
         // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
         if (BuildConfig.DEBUG && savedInstanceState == null) {
             intent.getStringExtra("demo_m3u")?.let { url ->
@@ -134,7 +137,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalChannelLogos provides channelLogos,
     ) {
     // A abertura passa uma vez por arranque (sobrevive a rodar/recriar a atividade); qualquer tecla salta-a.
-    var introDone by rememberSaveable { mutableStateOf(vm.testMode) }
+    var introDone by rememberSaveable { mutableStateOf(vm.noVideo) }
     // A tecla que salta a abertura é consumida inteira (também o largar), para não fazer nada no ecrã de baixo.
     var skipKey by remember { mutableStateOf(false) }
     Box(
