@@ -92,6 +92,7 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.Strings
+import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.theme.ItvColors
@@ -146,10 +147,17 @@ fun MobileMain(vm: AppViewModel) {
     val streamFormat by vm.streamFormat.collectAsStateWithLifecycle()
     val current = channel ?: return
     val data = content ?: return
-    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat)
-    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val activity = LocalContext.current as? Activity
     var tab by rememberSaveable { mutableStateOf(Tab.Tv) }
+    val settings = tab == Tab.Menu
+    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = !settings)
+    val landscape = !settings && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val activity = LocalContext.current as? Activity
+    // Trocar de lista nas Definições abre outro canal: volta à TV para o ver.
+    var shownKey by remember { mutableStateOf(current.key) }
+    if (shownKey != current.key) {
+        shownKey = current.key
+        if (settings) tab = Tab.Tv
+    }
     var epgFor by remember { mutableStateOf<Channel?>(null) }
 
     FullscreenBars(landscape)
@@ -163,12 +171,16 @@ fun MobileMain(vm: AppViewModel) {
     }
 
     Column(Modifier.fillMaxSize().background(ItvColors.Background)) {
-        Box(
-            if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
-        ) {
-            VideoArea(vm, current, playback, landscape, onFullscreen = {
-                activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            })
+        if (settings) {
+            Spacer(Modifier.statusBarsPadding())
+        } else {
+            Box(
+                if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
+            ) {
+                VideoArea(vm, current, playback, landscape, onFullscreen = {
+                    activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                })
+            }
         }
         if (!landscape) {
             Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
@@ -584,7 +596,7 @@ fun MobileMenu(vm: AppViewModel) {
             }
         }
         Section(s.account) {
-            email?.let { MenuRow(it, null) { } }
+            email?.let { MenuRow(maskEmail(it), null) { } }
             MenuRow(s.sendReport, when (val r = report) { ReportState.Sending -> "…"; is ReportState.Sent -> r.id; else -> null }) { reporting = !reporting }
             if (reporting) {
                 Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }

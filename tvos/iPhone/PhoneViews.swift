@@ -2,6 +2,12 @@ import GoatCore
 import SwiftUI
 import UIKit
 
+/// Email mascarado para o ecrã ("a••••••@exemplo.com"), como no resto da GoatTV.
+private func phoneMaskEmail(_ email: String) -> String {
+    guard let at = email.firstIndex(of: "@"), at > email.startIndex, let first = email.first else { return email }
+    return "\(first)••••••\(email[at...])"
+}
+
 private let cardFill = Color.white.opacity(0.08)
 private let cardShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
@@ -50,16 +56,22 @@ private struct PhoneWelcome: View {
                 BrandMark(scale: 0.35).padding(.top, 24)
                 Text(s.r("welcome_title")).font(.title.bold())
                 Text(s.r("welcome_sub")).foregroundStyle(Theme.textDim)
-                choice(s.r("welcome_account"), s.r("welcome_account_sub"), model.connectAccount)
+                choice(s.r("welcome_account"), s.r("welcome_account_sub"), badge: s.r("recommended"), model.connectAccount)
                 choice(s.t("Playlists on this phone", "Listas neste telemóvel"), s.t("No account: add Xtream or M3U playlists here. Everything stays on this phone only.", "Sem conta: adiciona listas Xtream ou M3U aqui. Tudo fica só neste telemóvel."), model.startLocal)
             }
             .padding(20)
         }
     }
 
-    private func choice(_ title: String, _ body: String, _ action: @escaping () -> Void) -> some View {
+    private func choice(_ title: String, _ body: String, badge: String? = nil, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 4) {
+                if let badge {
+                    Text(badge.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Theme.accent(model.prefs.accent), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.bottom, 6)
+                }
                 Text(title).font(.headline).foregroundStyle(Theme.text)
                 Text(body).font(.subheadline).foregroundStyle(Theme.textDim).multilineTextAlignment(.leading)
             }
@@ -124,6 +136,7 @@ private enum PhoneTab: String { case tv, favorites, search, menu }
 struct PhoneMain: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var vertical
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab = PhoneMain.startTab
     @State private var epgFor: Channel?
 
@@ -135,11 +148,14 @@ struct PhoneMain: View {
     }
 
     var body: some View {
-        let landscape = vertical == .compact
+        let settings = tab == .menu
+        let landscape = vertical == .compact && !settings
         VStack(spacing: 0) {
-            VideoPane(fullscreen: landscape)
-                .aspectRatio(landscape ? nil : 16 / 9, contentMode: .fit)
-                .ignoresSafeArea(edges: landscape ? .all : [])
+            if !settings {
+                VideoPane(fullscreen: landscape)
+                    .aspectRatio(landscape ? nil : 16 / 9, contentMode: .fit)
+                    .ignoresSafeArea(edges: landscape ? .all : [])
+            }
             if !landscape {
                 Group {
                     switch tab {
@@ -155,6 +171,26 @@ struct PhoneMain: View {
             }
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0) }
+        // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
+        .onChange(of: tab) { old, new in
+            if new == .menu {
+                model.player.stop()
+            } else if old == .menu, let current = model.current {
+                model.play(current, remember: false)
+            }
+        }
+        // Trocar de lista nas Definições abre outro canal: volta à TV para o ver.
+        .onChange(of: model.current?.key) { _, _ in
+            if tab == .menu { tab = .tv }
+        }
+        // Ao voltar à app, o modelo retoma o canal: nas Definições fica fechado.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, tab == .menu else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                if tab == .menu { model.player.stop() }
+            }
+        }
         .statusBarHidden(landscape)
         .persistentSystemOverlays(landscape ? .hidden : .automatic)
         .task {
@@ -526,7 +562,7 @@ private struct MenuTab: View {
                     }
                 }
                 section(s.r("account")) {
-                    if let email = model.email { MenuRow(email) {} }
+                    if let email = model.email { MenuRow(phoneMaskEmail(email)) {} }
                     MenuRow(s.r("send_report")) { reporting = true }
                     if model.hasAccount { MenuRow(s.r("logout")) { model.signOut() } }
                     MenuRow(s.r("version"), value: model.appVersion) {}

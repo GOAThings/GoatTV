@@ -50,7 +50,7 @@ internal class MobilePlayback(val player: Player) {
  * descodificar), sem o comando nem os painéis.
  */
 @Composable
-internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: PlaylistContent, prefs: Prefs, streamFormat: String?): MobilePlayback {
+internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: PlaylistContent, prefs: Prefs, streamFormat: String?, active: Boolean): MobilePlayback {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var vlcFor by remember { mutableStateOf<String?>(null) }
@@ -64,6 +64,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val retry = remember { arrayOfNulls<Job>(1) }
     val latestChannel by rememberUpdatedState(channel)
     val latestPrefs by rememberUpdatedState(prefs)
+    val latestActive by rememberUpdatedState(active)
 
     fun start(index: Int) {
         if (vm.noVideo) return
@@ -81,8 +82,13 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     }
 
     val catchup by vm.catchup.collectAsStateWithLifecycle()
-    LaunchedEffect(channel.key, data.playlist, player, catchup) {
+    LaunchedEffect(channel.key, data.playlist, player, catchup, active) {
         retry[0]?.cancel()
+        // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
+        if (!active) {
+            player.stop()
+            return@LaunchedEffect
+        }
         val archive = catchup?.let { catchupCandidates(data.playlist, it, data.account?.timezone) }
         playback.archiveStart = archive?.startMs ?: 0L
         candidates[0] = archive?.candidates ?: streamCandidates(data.playlist, channel, streamFormat, data.account?.allowedFormats.orEmpty())
@@ -152,7 +158,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
     // Em segundo plano pára o stream e liberta a ligação Xtream.
     LifecycleStartEffect(player) {
-        if (player.playbackState == Player.STATE_IDLE && candidates[0].isNotEmpty()) start(attempt[0])
+        if (latestActive && player.playbackState == Player.STATE_IDLE && candidates[0].isNotEmpty()) start(attempt[0])
         onStopOrDispose {
             player.stop()
             vm.flushLastChannel()
