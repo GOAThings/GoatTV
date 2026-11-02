@@ -439,7 +439,7 @@ private struct TabRow: View {
             tab = t
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: tab == t ? "\(icon).fill" : icon).font(.title3)
+                Image(systemName: tab == t && icon != "magnifyingglass" ? "\(icon).fill" : icon).font(.title3)
                 Text(label).font(.caption2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
