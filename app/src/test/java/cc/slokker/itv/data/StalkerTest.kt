@@ -53,6 +53,17 @@ class StalkerTest {
     }
 
     @Test
+    fun `generated macs are valid and only fill an empty field`() {
+        val generated = PlaylistForm.generateMac()
+        assertEquals(generated, PlaylistForm.normalizeMac(generated))
+        assertEquals("00:1A:79", generated.take(8))
+        val stalker = PlaylistForm().withType(PlaylistType.STALKER, mac)
+        assertEquals(mac, stalker.username)
+        assertEquals("", stalker.withType(PlaylistType.M3U, mac).username)
+        assertEquals("other", PlaylistForm(username = "other").withType(PlaylistType.STALKER, mac).username)
+    }
+
+    @Test
     fun `reports hide macs`() {
         assertEquals("a *** b", BugReport.redact("a $mac b", emptyList()))
         assertEquals("mac=***&x=1", BugReport.redact("mac=00%3A1A%3A79%3A00%3A00%3A01&x=1", emptyList()))

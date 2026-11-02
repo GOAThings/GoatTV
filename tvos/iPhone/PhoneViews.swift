@@ -803,7 +803,7 @@ private struct PlaylistFormPage: View {
         let s = model.strings
         NavigationStack {
             Form {
-                Picker("", selection: $form.type) {
+                Picker("", selection: Binding(get: { form.type }, set: { form.setType($0, deviceMac: model.deviceMac) })) {
                     Text("Xtream").tag(PlaylistType.xtream)
                     Text("M3U").tag(PlaylistType.m3u)
                     if !model.hasAccount { Text("Stalker").tag(PlaylistType.stalker) }
@@ -817,6 +817,7 @@ private struct PlaylistFormPage: View {
                 } else if form.type == .stalker {
                     TextField(s.t("Portal URL", "URL do portal"), text: $form.server).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField(s.t("MAC address", "Endereço MAC"), text: $form.username).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    Text(s.t("Give this MAC to your provider so they can activate it, or enter the one they gave you.", "Dá este MAC ao teu fornecedor para ele o ativar, ou escreve o que ele te deu.")).font(.footnote).foregroundStyle(.secondary)
                     TextField("Serial", text: $form.serial).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("Device ID", text: $form.deviceId).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("Device ID 2", text: $form.deviceId2).textInputAutocapitalization(.never).autocorrectionDisabled()

@@ -80,6 +80,7 @@ class Strings(context: Context) {
     val xtreamBadLogin get() = s(R.string.xtream_bad_login)
     val stalkerBadLogin get() = s(R.string.stalker_bad_login)
     val stalkerSub get() = s(R.string.stalker_sub)
+    val stalkerMacHint get() = s(R.string.stalker_mac_hint)
     val portalUrl get() = s(R.string.portal_url)
     val macAddress get() = s(R.string.mac_address)
     val missingPortal get() = s(R.string.missing_portal)

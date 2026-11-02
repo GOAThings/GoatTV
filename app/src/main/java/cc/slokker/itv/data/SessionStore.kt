@@ -32,6 +32,12 @@ class SessionStore(private val context: Context) {
         val LOCAL = booleanPreferencesKey("local")
     }
 
+    /** O MAC deste aparelho para portais Stalker: gerado uma vez, fica mesmo ao sair da conta. */
+    val deviceMac: String by lazy {
+        val prefs = context.getSharedPreferences("stalker", Context.MODE_PRIVATE)
+        prefs.getString("device_mac", null) ?: PlaylistForm.generateMac().also { prefs.edit().putString("device_mac", it).apply() }
+    }
+
     private suspend fun prefs(): Preferences = context.dataStore.data.first()
 
     /**

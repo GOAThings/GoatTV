@@ -92,6 +92,7 @@ final class AppModel {
 
     private let backend = Backend()
     private let session = SessionStore()
+    var deviceMac: String { session.deviceMac }
     private let cache = DiskCache.caches()
     @ObservationIgnored private var settings: [String: JSON] = [:]
     @ObservationIgnored private var syncedSettings: [String: JSON] = [:]

@@ -1811,6 +1811,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** As listas Stalker só existem sem conta: com conta, o site expõe o portal como M3U. */
     val canAddStalker: Boolean get() = _local.value || c.token == null
 
+    val deviceMac: String get() = c.session.deviceMac
+
     /** O link de um canal Stalker neste momento (pede-se de cada vez que se abre, porque caduca). */
     suspend fun stalkerCandidates(playlist: Playlist, channel: Channel) = c.stalker.candidates(playlist, channel)
 

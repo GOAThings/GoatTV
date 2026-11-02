@@ -781,7 +781,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
                 val on = form.type == type
                 Text(
                     label, color = if (on) Color.Black else ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else Card).clickable { form = form.copy(type = type) }.padding(horizontal = 18.dp, vertical = 9.dp),
+                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else Card).clickable { form = form.withType(type, vm.deviceMac) }.padding(horizontal = 18.dp, vertical = 9.dp),
                 )
             }
         }
@@ -793,6 +793,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
         } else if (form.type == PlaylistType.STALKER) {
             Field(s.portalUrl, form.server, keyboard = KeyboardType.Uri) { form = form.copy(server = it) }
             Field(s.macAddress, form.username) { form = form.copy(username = it) }
+            Text(s.stalkerMacHint, color = ItvColors.TextDim, fontSize = 13.sp)
             Field("Serial", form.serial) { form = form.copy(serial = it) }
             Field("Device ID", form.deviceId) { form = form.copy(deviceId = it) }
             Field("Device ID 2", form.deviceId2) { form = form.copy(deviceId2 = it) }

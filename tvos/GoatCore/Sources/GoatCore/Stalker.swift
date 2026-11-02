@@ -8,6 +8,11 @@ import FoundationNetworking
 public enum Stalker {
     public static let userAgent = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 
+    /// Um MAC novo com o prefixo das MAG, que os portais esperam: as apps não têm acesso ao MAC verdadeiro.
+    public static func generateMac() -> String {
+        "00:1A:79:" + (0..<3).map { _ in String(format: "%02X", UInt8.random(in: 0...255)) }.joined(separator: ":")
+    }
+
     /// O MAC como `AA:BB:CC:DD:EE:FF` (aceita traços ou sem separadores), ou nil se não for um MAC.
     public static func normalizeMac(_ mac: String) -> String? {
         let hex = Array(mac.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "").uppercased())

@@ -1046,14 +1046,14 @@ private fun settingItems(
                 replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.M3U))))
             },
             Item.Action("stalker", "Stalker / MAC", s.stalkerSub) {
-                replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.STALKER))))
+                replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm().withType(PlaylistType.STALKER, vm.deviceMac))))
             }.takeIf { vm.canAddStalker },
         )
 
         is Route.PlaylistEdit -> buildList {
             val form = route.form.value
             fun set(f: (PlaylistForm) -> PlaylistForm) { route.form.value = f(route.form.value) }
-            fun text(key: String, title: String, value: String, kind: TextKind, optional: Boolean = false, update: (PlaylistForm, String) -> PlaylistForm) =
+            fun text(key: String, title: String, value: String, kind: TextKind, optional: Boolean = false, subtitle: String? = null, update: (PlaylistForm, String) -> PlaylistForm) =
                 Item.Nav(
                     key, title,
                     value = when {
@@ -1061,6 +1061,7 @@ private fun settingItems(
                         kind == TextKind.PASSWORD -> "•".repeat(value.length.coerceAtMost(8))
                         else -> value
                     },
+                    subtitle = subtitle,
                 ) { push(Route.TextEdit(title, value, kind) { v -> set { update(it, v) } }, key) }
 
             val typeOptions = listOf<Pair<Any?, String>>(PlaylistType.XTREAM to "Xtream Codes", PlaylistType.M3U to s.m3uPlaylist) +
@@ -1069,7 +1070,7 @@ private fun settingItems(
                 // Na conta, o tipo de uma lista não muda (para outro tipo cria-se uma lista nova).
                 add(Item.Info("type", s.type, typeOptions.first { it.first == form.type }.second))
             } else {
-                add(pick("type", s.type, typeOptions, form.type) { t -> set { it.copy(type = t as PlaylistType) } })
+                add(pick("type", s.type, typeOptions, form.type) { t -> set { it.withType(t as PlaylistType, vm.deviceMac) } })
             }
             add(text("name", s.name, form.name, TextKind.PLAIN, optional = true) { f, v -> f.copy(name = v) })
             if (form.type == PlaylistType.XTREAM) {
@@ -1078,7 +1079,7 @@ private fun settingItems(
                 add(text("pass", s.password, form.password, TextKind.PASSWORD) { f, v -> f.copy(password = v) })
             } else if (form.type == PlaylistType.STALKER) {
                 add(text("server", s.portalUrl, form.server, TextKind.URL) { f, v -> f.copy(server = v) })
-                add(text("mac", s.macAddress, form.username, TextKind.PLAIN) { f, v -> f.copy(username = v) })
+                add(text("mac", s.macAddress, form.username, TextKind.PLAIN, subtitle = s.stalkerMacHint) { f, v -> f.copy(username = v) })
                 add(text("serial", "Serial", form.serial, TextKind.PLAIN, optional = true) { f, v -> f.copy(serial = v) })
                 add(text("device", "Device ID", form.deviceId, TextKind.PLAIN, optional = true) { f, v -> f.copy(deviceId = v) })
                 add(text("device2", "Device ID 2", form.deviceId2, TextKind.PLAIN, optional = true) { f, v -> f.copy(deviceId2 = v) })

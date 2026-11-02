@@ -848,17 +848,18 @@ struct SettingsPanel: View {
             // As listas Stalker só existem sem conta: com conta, o site expõe o portal como M3U.
             if !model.hasAccount {
                 types.append(.action("stalker", "Stalker / MAC", subtitle: s.t("Portal address and authorized MAC address", "Endereço do portal e endereço MAC autorizado")) {
-                    form = PlaylistForm(type: .stalker)
+                    form = PlaylistForm()
+                    form.setType(.stalker, deviceMac: model.deviceMac)
                     replace(.playlistEdit(nil))
                 })
             }
             return types
 
         case .playlistEdit(let id):
-            func field(_ key: String, optional: Bool = false) -> Item {
+            func field(_ key: String, optional: Bool = false, subtitle: String? = nil) -> Item {
                 let value = fieldValue(key)
                 let shown = value.isEmpty ? (optional ? s.t("Optional", "Opcional") : "—") : (key == "pass" ? String(repeating: "•", count: min(8, value.count)) : value)
-                return .nav(key, fieldTitle(key), value: shown, to: .formField(key))
+                return .nav(key, fieldTitle(key), value: shown, subtitle: subtitle, to: .formField(key))
             }
             let typeName = form.type == .xtream ? "Xtream Codes" : form.type == .m3u ? s.t("M3U playlist", "Lista M3U") : "Stalker / MAC"
             var list: [Item] = []
@@ -866,14 +867,14 @@ struct SettingsPanel: View {
                 list.append(.info("type", s.t("Type", "Tipo"), typeName))
             } else {
                 list.append(.action("type", s.t("Type", "Tipo"), subtitle: typeName) {
-                    form.type = form.type == .xtream ? .m3u : form.type == .m3u && !model.hasAccount ? .stalker : .xtream
+                    form.setType(form.type == .xtream ? .m3u : form.type == .m3u && !model.hasAccount ? .stalker : .xtream, deviceMac: model.deviceMac)
                 })
             }
             list.append(field("name", optional: true))
             if form.type == .xtream {
                 list += [field("server"), field("user"), field("pass")]
             } else if form.type == .stalker {
-                list += [field("server"), field("user"), field("serial", optional: true), field("device", optional: true), field("device2", optional: true), field("signature", optional: true)]
+                list += [field("server"), field("user", subtitle: s.t("Give this MAC to your provider so they can activate it, or enter the one they gave you.", "Dá este MAC ao teu fornecedor para ele o ativar, ou escreve o que ele te deu.")), field("serial", optional: true), field("device", optional: true), field("device2", optional: true), field("signature", optional: true)]
             } else {
                 list.append(field("url"))
             }

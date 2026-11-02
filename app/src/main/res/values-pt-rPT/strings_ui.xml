@@ -38,6 +38,7 @@
     <string name="stalker_sub">Endereço do portal e endereço MAC autorizado</string>
     <string name="portal_url">URL do portal</string>
     <string name="mac_address">Endereço MAC</string>
+    <string name="stalker_mac_hint">Dá este MAC ao teu fornecedor para ele o ativar, ou escreve o que ele te deu.</string>
     <string name="missing_portal">Falta o URL do portal.</string>
     <string name="invalid_mac">Escreve um endereço MAC válido (00:1A:79:…).</string>
     <string name="xtream_bad_login">Utilizador ou password da lista Xtream inválidos.</string>

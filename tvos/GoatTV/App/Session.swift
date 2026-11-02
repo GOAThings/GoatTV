@@ -18,6 +18,14 @@ struct SessionStore {
     private let infoKey = "session.info"
     private let fallbackTokenKey = "session.token"
 
+    /// O MAC deste aparelho para portais Stalker: gerado uma vez, fica mesmo ao sair da conta.
+    var deviceMac: String {
+        if let mac = defaults.string(forKey: "stalker.deviceMac") { return mac }
+        let mac = Stalker.generateMac()
+        defaults.set(mac, forKey: "stalker.deviceMac")
+        return mac
+    }
+
     func load() -> Session? {
         guard let data = defaults.data(forKey: infoKey),
               var session = try? JSONDecoder().decode(Session.self, from: data) else { return nil }

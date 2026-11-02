@@ -32,6 +32,16 @@ public struct PlaylistForm: Hashable, Sendable {
         signature = p.signature ?? ""
     }
 
+    /// Muda o tipo: o Stalker começa com o MAC deste aparelho, e ao sair dele esse MAC não fica como utilizador.
+    public mutating func setType(_ next: PlaylistType, deviceMac: String) {
+        if next == .stalker, username.trimmed.isEmpty {
+            username = deviceMac
+        } else if next != .stalker, username == deviceMac {
+            username = ""
+        }
+        type = next
+    }
+
     public enum Problem: Sendable {
         case server, username, password, url, mac
     }

@@ -37,6 +37,16 @@ data class PlaylistForm(
     val deviceId2: String = "",
     val signature: String = "",
 ) {
+    /** Muda o tipo: o Stalker começa com o MAC deste aparelho, e ao sair dele esse MAC não fica como utilizador. */
+    fun withType(next: PlaylistType, deviceMac: String): PlaylistForm = copy(
+        type = next,
+        username = when {
+            next == PlaylistType.STALKER && username.isBlank() -> deviceMac
+            next != PlaylistType.STALKER && username == deviceMac -> ""
+            else -> username
+        },
+    )
+
     /** Mensagem do primeiro campo em falta, ou null se estiver pronto a gravar. */
     fun problem(): String? = when {
         type == PlaylistType.XTREAM && server.isBlank() -> I18n.s.missingServer
@@ -85,6 +95,10 @@ data class PlaylistForm(
             deviceId2 = p.deviceId2.orEmpty(),
             signature = p.signature.orEmpty(),
         )
+
+        /** Um MAC novo com o prefixo das MAG, que os portais esperam: as apps não têm acesso ao MAC verdadeiro. */
+        fun generateMac(): String =
+            "00:1A:79:" + List(3) { "%02X".format(java.security.SecureRandom().nextInt(256)) }.joinToString(":")
 
         /** O MAC como `AA:BB:CC:DD:EE:FF` (aceita traços ou sem separadores), ou null se não for um MAC. */
         fun normalizeMac(mac: String): String? {
