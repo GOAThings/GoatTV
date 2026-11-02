@@ -371,14 +371,16 @@ private struct ChannelCard: View {
 
     var body: some View {
         let playing = model.current?.key == channel.key
-        let now = model.nowNext(for: channel).now
+        let now = model.prefs.epgInList ? model.nowNext(for: channel).now : nil
         Button {
             model.play(channel, from: group)
         } label: {
             HStack(spacing: 12) {
-                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 64, height: 44))
+                if model.prefs.showLogos {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 64, height: 44))
+                }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(channel.name).font(.body.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    Text(model.prefs.showNumbers ? "\(channel.num)  \(channel.name)" : channel.name).font(.body.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
                     if let now {
                         Text(now.title).font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
                         ProgressView(value: Double(now.progress(now: Int64(Date().timeIntervalSince1970 * 1000)))).tint(Theme.sky)
@@ -541,6 +543,25 @@ private struct MenuTab: View {
     @State private var unlocked = false
     @State private var reporting = false
     @State private var message = ""
+    @State private var picking: Picking?
+    @State private var managingGroups = false
+    @State private var editingAgent = false
+    @State private var agentText = ""
+
+    /// Uma escolha aberta numa página própria, com as opções todas à vista.
+    struct Picking: Identifiable {
+        let id: String
+        let title: String
+        let options: [(JSON?, String)]
+        let current: JSON?
+    }
+
+    private var refreshOptions: [(JSON?, String)] {
+        let s = model.strings
+        return Prefs.refreshChoices.map { h in
+            (.number(Double(h)), h == 0 ? s.t("Every time the app opens", "Sempre que a app abre") : s.t("Every %1$@ h", "De %1$@ em %1$@ h", "\(h)"))
+        }
+    }
 
     var body: some View {
         let s = model.strings
@@ -554,19 +575,44 @@ private struct MenuTab: View {
                     if model.isLocal { MenuRow(s.r("add_playlist")) { adding = true } }
                 }
                 section(s.r("playback")) {
-                    cycle(s.r("aspect"), "aspect", p.aspect, [("fit", s.r("aspect_fit")), ("zoom", s.r("aspect_zoom")), ("fill", s.r("aspect_fill"))])
-                    cycle(s.r("buffer"), "buffer", p.buffer, [("live", s.r("buffer_live")), ("small", s.r("buffer_small")), ("normal", s.r("buffer_normal")), ("large", s.r("buffer_large"))])
-                    cycle(s.r("on_startup"), "startup", p.startup, [("last", s.r("startup_last")), ("list", s.r("startup_list"))])
+                    pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, [(nil, "Auto"), (.string("ts"), "TS (MPEG-TS)"), (.string("m3u8"), "HLS (m3u8)")])
+                    pick(s.r("buffer"), "buffer", p.buffer, [("live", s.r("buffer_live")), ("small", s.r("buffer_small")), ("normal", s.r("buffer_normal")), ("large", s.r("buffer_large"))])
+                    pick(s.t("Player", "Player"), "engine", p.engine, [("exo", s.t("Default (Apple player for HLS, VLC for the rest)", "Normal (o da Apple nos HLS, o VLC no resto)")), ("vlc", s.t("VLC (for streams that don't open)", "VLC (para streams que não abram)"))])
+                    pick(s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"), "decoder", p.decoder, [("hw", "Hardware"), ("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))])
+                    pick(s.t("Deinterlace (VLC)", "Desentrelaçar (VLC)"), "deinterlace", p.deinterlace, [("yadif2x", s.t("Smooth (50/60 frames)", "Suave (50/60 imagens)")), ("yadif", "Normal"), ("off", s.t("Off", "Desligado"))])
+                    pick(s.r("aspect"), "aspect", p.aspect, [("fit", s.r("aspect_fit")), ("zoom", s.r("aspect_zoom")), ("fill", s.r("aspect_fill"))])
+                    pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
+                    toggle(s.r("surround_default"), "surround_default", p.surroundDefault)
+                    MenuRow(s.t("User agent", "User agent"), value: p.userAgent.isEmpty ? s.t("Default", "Normal") : p.userAgent) {
+                        agentText = p.userAgent
+                        editingAgent = true
+                    }
+                }
+                section(s.t("Channels", "Canais")) {
+                    pick(s.r("on_startup"), "startup", p.startup, [("last", s.r("startup_last")), ("list", s.r("startup_list"))])
+                    pick(s.t("Sort channels", "Ordenar canais"), "sort", p.sort, [("number", s.t("Playlist order", "Pela ordem da lista")), ("name", s.t("By name (A–Z)", "Por nome (A–Z)"))])
+                    toggle(s.t("Channel numbers", "Números dos canais"), "show_numbers", p.showNumbers)
+                    toggle(s.t("Channel logos", "Logos dos canais"), "show_logos", p.showLogos)
+                    toggle(s.t("Current show in the list", "Programa atual na lista"), "epg_in_list", p.epgInList)
+                    MenuRow(s.t("Visible groups", "Grupos visíveis")) { managingGroups = true }
                 }
                 section(s.r("settings")) {
-                    cycle(s.r("language"), "language", p.language, [("auto", s.r("language_auto"))] + Strings.languages.map { ($0.code, $0.name) })
-                    cycle(s.r("accent"), "accent", p.accent, [("itv", "GoatTV"), ("violet", s.t("Violet", "Violeta")), ("mint", s.t("Mint", "Menta")), ("sunset", s.t("Sunset", "Pôr do sol")), ("gold", s.t("Gold", "Dourado")), ("white", s.t("White", "Branco"))])
+                    pick(s.r("language"), "language", p.language == "pt" ? "pt-PT" : p.language, [("auto", s.r("language_auto"))] + Strings.languages.map { ($0.code, $0.name) })
+                    pick(s.r("accent"), "accent", p.accent, [("itv", "GoatTV"), ("violet", s.t("Violet", "Violeta")), ("mint", s.t("Mint", "Menta")), ("sunset", s.t("Sunset", "Pôr do sol")), ("gold", s.t("Gold", "Dourado")), ("white", s.t("White", "Branco"))])
+                }
+                section(s.t("TV guide", "Guia de programação")) {
+                    pick(s.t("Update TV guide", "Atualizar guia"), "epg_refresh_hours", .number(Double(p.epgRefreshHours)), refreshOptions)
+                    pick(s.t("Update playlists", "Atualizar listas"), "playlist_refresh_hours", .number(Double(p.playlistRefreshHours)), refreshOptions)
+                    pick(s.t("Time offset", "Desvio horário"), "epg_offset_min", .number(Double(p.epgOffsetMin)), stride(from: -180, through: 180, by: 30).map { (.number(Double($0)), $0 == 0 ? "0" : String(format: "%+d min", $0)) })
                     MenuRow(s.t("Update TV guide now", "Atualizar o guia agora")) { model.refreshEpg() }
                 }
                 section(s.r("parental")) {
                     if p.pinHash == nil {
                         MenuRow(s.r("new_pin")) { choosingPin = true }
                     } else {
+                        toggle(s.t("Protect settings", "Proteger as Definições"), "settings_pin", p.settingsPin)
+                        MenuRow(s.t("Change PIN", "Mudar o PIN")) { choosingPin = true }
+                        MenuRow(s.t("Remove PIN", "Tirar o PIN")) { model.setPin(nil) }
                         ForEach(model.allGroups, id: \.id) { g in
                             MenuRow(g.name, value: model.isGroupLocked(g.id) ? "🔒" : nil) { model.toggleGroupLock(g.id) }
                         }
@@ -582,6 +628,43 @@ private struct MenuTab: View {
             .padding(12)
         }
         .sheet(isPresented: $adding) { PlaylistFormPage { adding = false } }
+        .sheet(item: $picking) { pick in
+            NavigationStack {
+                List(pick.options.indices, id: \.self) { i in
+                    Button {
+                        model.setPref(pick.id, pick.options[i].0)
+                        picking = nil
+                    } label: {
+                        HStack {
+                            Text(pick.options[i].1).foregroundStyle(Theme.text)
+                            Spacer()
+                            if pick.options[i].0 == pick.current { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+                        }
+                    }
+                }
+                .navigationTitle(pick.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { picking = nil } } }
+            }
+        }
+        .sheet(isPresented: $managingGroups) {
+            NavigationStack {
+                List(model.allGroups, id: \.id) { g in
+                    Toggle(g.name, isOn: Binding(get: { !model.isGroupHidden(g.id) }, set: { model.setGroupHidden(g.id, !$0) }))
+                }
+                .navigationTitle(s.t("Visible groups", "Grupos visíveis"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("OK") { managingGroups = false } } }
+            }
+        }
+        .alert(s.t("User agent", "User agent"), isPresented: $editingAgent) {
+            TextField("", text: $agentText).textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("OK") {
+                let text = agentText.trimmingCharacters(in: .whitespaces)
+                model.setPref("user_agent", text.isEmpty ? nil : .string(text))
+            }
+            Button(s.r("cancel"), role: .cancel) {}
+        }
         .alert(s.r("choose_pin"), isPresented: $choosingPin) {
             SecureField("PIN", text: $pinText).keyboardType(.numberPad)
             Button("OK") {
@@ -625,12 +708,20 @@ private struct MenuTab: View {
         }
     }
 
-    /// Uma escolha entre poucas opções: tocar passa à seguinte.
-    private func cycle(_ title: String, _ key: String, _ value: String, _ options: [(String, String)]) -> some View {
-        let index = options.firstIndex { $0.0 == value } ?? 0
-        return MenuRow(title, value: options[index].1) {
-            model.setPref(key, .string(options[(index + 1) % options.count].0))
+    private func pick(_ title: String, _ key: String, _ value: String, _ options: [(String, String)]) -> some View {
+        pick(title, key, .string(value), options.map { (.string($0.0), $0.1) })
+    }
+
+    private func pick(_ title: String, _ key: String, _ value: JSON?, _ options: [(JSON?, String)]) -> some View {
+        MenuRow(title, value: options.first { $0.0 == value }?.1) {
+            picking = Picking(id: key, title: title, options: options, current: value)
         }
+    }
+
+    private func toggle(_ title: String, _ key: String, _ on: Bool) -> some View {
+        Toggle(title, isOn: Binding(get: { on }, set: { model.setPref(key, .bool($0)) }))
+            .foregroundStyle(Theme.text).tint(Theme.sky)
+            .padding(.horizontal, 16).padding(.vertical, 8)
     }
 }
 

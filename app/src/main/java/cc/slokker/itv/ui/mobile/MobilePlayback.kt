@@ -17,6 +17,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistContent
@@ -111,6 +112,16 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         playback.archiveStart = archive?.startMs ?: 0L
         candidates[0] = archive?.candidates ?: streamCandidates(data.playlist, channel, streamFormat, data.account?.allowedFormats.orEmpty())
         start(0)
+    }
+
+    LaunchedEffect(playback.view, prefs.aspect) {
+        playback.view?.setResizeMode(
+            when (prefs.aspect) {
+                Prefs.Aspect.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                Prefs.Aspect.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            },
+        )
     }
 
     LaunchedEffect(player, playback.view) {
