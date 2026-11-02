@@ -1785,12 +1785,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * (nas M3U não se sabe: deixa-se tentar).
      */
     fun secondAllowed(playlist: Playlist): Boolean {
+        // Um MAC é uma box: uma ligação de cada vez.
+        if (playlist.type == PlaylistType.STALKER) return false
         val main = _content.value ?: return true
         if (!sameAccount(playlist, main.playlist)) return true
         if (main.playlist.type != PlaylistType.XTREAM) return true
         val limit = main.account?.maxConnections ?: return false
         return limit >= 2
     }
+
+    /** O link de um canal Stalker neste momento (pede-se de cada vez que se abre, porque caduca). */
+    suspend fun stalkerCandidates(playlist: Playlist, channel: Channel) = c.stalker.candidates(playlist, channel)
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
     suspend fun loadForSecond(playlist: Playlist): PlaylistContent {
@@ -1889,7 +1894,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val header = "GoatTV ${BuildConfig.VERSION_NAME} · ${BugReport.device}\n" +
                     "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.name.lowercase() }.ifEmpty { "none" }}" +
                     (if (c.testMode) " · test mode" else "")
-                val secrets = playlists.flatMap { listOfNotNull(it.username, it.password, it.url, it.epgUrl) } + listOfNotNull(c.token, _email.value)
+                val secrets = playlists.flatMap { listOfNotNull(it.server.takeIf { _ -> it.type == PlaylistType.STALKER }, it.username, it.password, it.url, it.epgUrl, it.serial, it.deviceId, it.deviceId2, it.signature) } + listOfNotNull(c.token, _email.value)
                 val log = kotlinx.coroutines.withContext(Dispatchers.IO) { BugReport.collect(getApplication(), header, secrets) }
                 val body = JsonObject().apply {
                     addProperty("app", "goattv")
@@ -2198,12 +2203,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val type = when (type?.lowercase()) {
                 "xtream" -> PlaylistType.XTREAM
                 "m3u" -> PlaylistType.M3U
+                "stalker" -> PlaylistType.STALKER
                 else -> return null
             }
             return Playlist(
                 id = id,
                 type = type,
-                name = name?.takeIf { it.isNotBlank() } ?: if (type == PlaylistType.XTREAM) "Xtream" else "M3U",
+                name = name?.takeIf { it.isNotBlank() } ?: when (type) {
+                    PlaylistType.XTREAM -> "Xtream"
+                    PlaylistType.M3U -> "M3U"
+                    PlaylistType.STALKER -> "Stalker"
+                },
                 // A conta manda sempre os 8 campos ("" nos que não são do tipo): vazio = em falta, para a lista
                 // não parecer diferente da guardada em cache (e não recarregar sem razão).
                 server = server?.takeIf { it.isNotBlank() },
@@ -2211,18 +2221,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 password = password?.takeIf { it.isNotEmpty() },
                 url = url?.takeIf { it.isNotBlank() },
                 epgUrl = epgUrl?.takeIf { it.isNotBlank() },
+                serial = serial,
+                deviceId = deviceId,
+                deviceId2 = deviceId2,
+                signature = signature,
             )
         }
 
         fun Playlist.toDto() = PlaylistDto(
             id = id,
-            type = if (type == PlaylistType.XTREAM) "xtream" else "m3u",
+            type = type.name.lowercase(),
             name = name,
             server = server,
             username = username,
             password = password,
             url = url,
             epgUrl = epgUrl,
+            serial = serial,
+            deviceId = deviceId,
+            deviceId2 = deviceId2,
+            signature = signature,
         )
 
         /** Id de uma lista desta TV (sem conta). */
@@ -2233,6 +2251,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             PlaylistType.XTREAM -> a.server?.trim()?.trimEnd('/')?.lowercase() == b.server?.trim()?.trimEnd('/')?.lowercase() &&
                 a.username?.trim() == b.username?.trim()
             PlaylistType.M3U -> a.url?.trim() == b.url?.trim()
+            PlaylistType.STALKER -> a.server?.trim()?.lowercase() == b.server?.trim()?.lowercase() && a.username == b.username
         }
 
         fun parseFavorites(json: JsonElement?): Map<String, List<String>> {

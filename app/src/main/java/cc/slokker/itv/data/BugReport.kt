@@ -64,14 +64,16 @@ object BugReport {
         out = QUERY.replace(out) { "${it.groupValues[1]}=***" }
         out = XTREAM_PATH.replace(out) { "/${it.groupValues[1]}/***/***/" }
         out = STALKER_PATH.replace(out, "/stalker/***/***/")
+        out = MAC.replace(out, "***")
         out = USER_INFO.replace(out) { "${it.groupValues[1]}***@" }
         out = AUTH.replace(out) { "${it.groupValues[1]} ***" }
         return out
     }
 
-    private val QUERY = Regex("(?i)\\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey)=([^&\\s\"']+)")
+    private val QUERY = Regex("(?i)\\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey|mac|sn|device_id|device_id2|signature|play_token)=([^&\\s\"']+)")
     private val XTREAM_PATH = Regex("/(live|movie|series|timeshift)/[^/\\s]+/[^/\\s]+/")
     private val STALKER_PATH = Regex("/stalker/[^/\\s]+/[^/\\s]+/")
+    private val MAC = Regex("(?i)\\b[0-9a-f]{2}(?:(?::|%3A)[0-9a-f]{2}){5}\\b")
     private val USER_INFO = Regex("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\\s:@]+:[^/\\s@]+@")
     private val AUTH = Regex("(?i)(authorization:?|bearer)\\s+[^\\s,]+")
 }

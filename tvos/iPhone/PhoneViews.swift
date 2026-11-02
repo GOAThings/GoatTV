@@ -648,6 +648,7 @@ private struct PlaylistFormPage: View {
                 Picker("", selection: $form.type) {
                     Text("Xtream").tag(PlaylistType.xtream)
                     Text("M3U").tag(PlaylistType.m3u)
+                    if !model.hasAccount { Text("Stalker").tag(PlaylistType.stalker) }
                 }
                 .pickerStyle(.segmented)
                 TextField(s.r("name"), text: $form.name)
@@ -655,6 +656,13 @@ private struct PlaylistFormPage: View {
                     TextField(s.r("server"), text: $form.server).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField(s.r("username"), text: $form.username).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField(s.r("password"), text: $form.password)
+                } else if form.type == .stalker {
+                    TextField(s.t("Portal URL", "URL do portal"), text: $form.server).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField(s.t("MAC address", "Endereço MAC"), text: $form.username).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                    TextField("Serial", text: $form.serial).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Device ID", text: $form.deviceId).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Device ID 2", text: $form.deviceId2).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Signature", text: $form.signature).textInputAutocapitalization(.never).autocorrectionDisabled()
                 } else {
                     TextField(s.r("playlist_url"), text: $form.url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }

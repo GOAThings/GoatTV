@@ -3,7 +3,7 @@ package cc.slokker.itv.data
 import cc.slokker.itv.ui.i18n.I18n
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-enum class PlaylistType { XTREAM, M3U }
+enum class PlaylistType { XTREAM, M3U, STALKER }
 
 data class Playlist(
     val id: String,
@@ -16,6 +16,11 @@ data class Playlist(
     // M3U
     val url: String? = null,
     val epgUrl: String? = null,
+    // Stalker (só sem conta): o portal fica em [server] e o MAC em [username]; sem estes, calculam-se a partir do MAC.
+    val serial: String? = null,
+    val deviceId: String? = null,
+    val deviceId2: String? = null,
+    val signature: String? = null,
 )
 
 /** Dados de uma lista a criar/editar na TV (só sem conta: com conta, as listas gerem-se no site). */
@@ -27,6 +32,10 @@ data class PlaylistForm(
     val password: String = "",
     val url: String = "",
     val epgUrl: String = "",
+    val serial: String = "",
+    val deviceId: String = "",
+    val deviceId2: String = "",
+    val signature: String = "",
 ) {
     /** Mensagem do primeiro campo em falta, ou null se estiver pronto a gravar. */
     fun problem(): String? = when {
@@ -34,24 +43,31 @@ data class PlaylistForm(
         type == PlaylistType.XTREAM && username.isBlank() -> I18n.s.missingUsername
         type == PlaylistType.XTREAM && password.isBlank() -> I18n.s.missingPassword
         type == PlaylistType.M3U && url.isBlank() -> I18n.s.missingUrl
+        type == PlaylistType.STALKER && server.isBlank() -> I18n.s.missingPortal
+        type == PlaylistType.STALKER && normalizeMac(username) == null -> I18n.s.invalidMac
         else -> null
     }
 
     /** A lista a gravar. Sem nome fica o do servidor; sem "http://" no endereço, junta-se. */
     fun toPlaylist(id: String): Playlist {
-        val xtream = type == PlaylistType.XTREAM
+        val stalker = type == PlaylistType.STALKER
+        val xtream = type == PlaylistType.XTREAM || stalker
         val server = withScheme(server).trimEnd('/')
         val url = withScheme(url)
-        val fallbackName = (if (xtream) server else url).toHttpUrlOrNull()?.host ?: if (xtream) "Xtream" else "M3U"
+        val fallbackName = (if (xtream) server else url).toHttpUrlOrNull()?.host ?: if (stalker) "Stalker" else if (xtream) "Xtream" else "M3U"
         return Playlist(
             id = id,
             type = type,
             name = name.trim().ifEmpty { fallbackName },
             server = server.takeIf { xtream },
-            username = username.trim().takeIf { xtream },
-            password = password.takeIf { xtream },
+            username = if (stalker) normalizeMac(username) else username.trim().takeIf { xtream },
+            password = password.takeIf { type == PlaylistType.XTREAM },
             url = url.takeIf { !xtream },
             epgUrl = withScheme(epgUrl).takeIf { it.isNotEmpty() },
+            serial = serial.trim().takeIf { stalker && it.isNotEmpty() },
+            deviceId = deviceId.trim().takeIf { stalker && it.isNotEmpty() },
+            deviceId2 = deviceId2.trim().takeIf { stalker && it.isNotEmpty() },
+            signature = signature.trim().takeIf { stalker && it.isNotEmpty() },
         )
     }
 
@@ -64,7 +80,18 @@ data class PlaylistForm(
             password = p.password.orEmpty(),
             url = p.url.orEmpty(),
             epgUrl = p.epgUrl.orEmpty(),
+            serial = p.serial.orEmpty(),
+            deviceId = p.deviceId.orEmpty(),
+            deviceId2 = p.deviceId2.orEmpty(),
+            signature = p.signature.orEmpty(),
         )
+
+        /** O MAC como `AA:BB:CC:DD:EE:FF` (aceita traços ou sem separadores), ou null se não for um MAC. */
+        fun normalizeMac(mac: String): String? {
+            val hex = mac.trim().replace(":", "").replace("-", "").uppercase()
+            if (hex.length != 12 || !hex.all { it in "0123456789ABCDEF" }) return null
+            return hex.chunked(2).joinToString(":")
+        }
 
         private fun withScheme(address: String): String {
             val a = address.trim()

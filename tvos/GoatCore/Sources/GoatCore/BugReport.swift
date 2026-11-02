@@ -20,9 +20,10 @@ public enum BugReport {
     }
 
     private static let rules: [(String, String)] = [
-        (#"(?i)\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey)=([^&\s"']+)"#, "$1=***"),
+        (#"(?i)\b(password|passwd|pass|pwd|username|user|token|access_token|auth|key|api_key|apikey|mac|sn|device_id|device_id2|signature|play_token)=([^&\s"']+)"#, "$1=***"),
         (#"/(live|movie|series|timeshift)/[^/\s]+/[^/\s]+/"#, "/$1/***/***/"),
         (#"/stalker/[^/\s]+/[^/\s]+/"#, "/stalker/***/***/"),
+        (#"(?i)\b[0-9a-f]{2}(?:(?::|%3A)[0-9a-f]{2}){5}\b"#, "***"),
         (#"([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@"#, "$1***@"),
         (#"(?i)(authorization:?|bearer)\s+[^\s,]+"#, "$1 ***"),
     ]

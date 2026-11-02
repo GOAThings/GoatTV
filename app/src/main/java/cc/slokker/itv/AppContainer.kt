@@ -15,6 +15,7 @@ import cc.slokker.itv.data.api.BackendApi
 import cc.slokker.itv.data.epg.AccountGuideSource
 import cc.slokker.itv.data.epg.XmltvSource
 import cc.slokker.itv.data.m3u.M3uSource
+import cc.slokker.itv.data.stalker.StalkerSource
 import cc.slokker.itv.data.xtream.XtreamSource
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -111,10 +112,12 @@ class AppContainer(context: Context) {
 
     val xtream = XtreamSource(iptvHttp, gson)
     private val m3u = M3uSource(iptvHttp)
-    val epg = EpgRepository(xtream, XmltvSource(iptvHttp), AccountGuideSource(backend), cache)
+    val stalker = StalkerSource(iptvHttp)
+    val epg = EpgRepository(xtream, stalker, XmltvSource(iptvHttp), AccountGuideSource(backend), cache)
 
     suspend fun loadPlaylist(playlist: Playlist): PlaylistContent = when (playlist.type) {
         PlaylistType.XTREAM -> xtream.load(playlist)
         PlaylistType.M3U -> m3u.load(playlist)
+        PlaylistType.STALKER -> stalker.load(playlist)
     }
 }

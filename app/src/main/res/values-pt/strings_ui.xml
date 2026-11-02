@@ -34,6 +34,12 @@
     <string name="m3u_no_url">A lista M3U não tem URL.</string>
     <string name="m3u_bad_url">URL da lista M3U inválido.</string>
     <string name="m3u_http">O servidor da lista respondeu %1$s.</string>
+    <string name="stalker_bad_login">O portal recusou este endereço MAC.</string>
+    <string name="stalker_sub">Endereço do portal e endereço MAC autorizado</string>
+    <string name="portal_url">URL do portal</string>
+    <string name="mac_address">Endereço MAC</string>
+    <string name="missing_portal">Falta o URL do portal.</string>
+    <string name="invalid_mac">Escreve um endereço MAC válido (00:1A:79:…).</string>
     <string name="xtream_bad_login">Utilizador ou password da lista Xtream inválidos.</string>
     <string name="xtream_inactive">A conta Xtream não está ativa (estado: %1$s).</string>
     <string name="xtream_http">O servidor Xtream respondeu %1$s.</string>

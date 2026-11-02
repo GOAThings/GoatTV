@@ -3,6 +3,16 @@ import Foundation
 public enum PlaylistType: String, Codable, Sendable {
     case xtream
     case m3u
+    case stalker
+
+    /// O nome curto do tipo.
+    public var label: String {
+        switch self {
+        case .xtream: return "Xtream"
+        case .m3u: return "M3U"
+        case .stalker: return "Stalker"
+        }
+    }
 }
 
 /// Uma lista de canais da conta (ou desta TV). Os mesmos campos que no GoatTV Android e no site.
@@ -17,9 +27,15 @@ public struct Playlist: Codable, Equatable, Sendable, Identifiable {
     // M3U
     public var url: String?
     public var epgUrl: String?
+    // Stalker (só sem conta): o portal fica em `server` e o MAC em `username`; sem estes, calculam-se a partir do MAC.
+    public var serial: String?
+    public var deviceId: String?
+    public var deviceId2: String?
+    public var signature: String?
 
     public init(id: String, type: PlaylistType, name: String, server: String? = nil, username: String? = nil,
-                password: String? = nil, url: String? = nil, epgUrl: String? = nil) {
+                password: String? = nil, url: String? = nil, epgUrl: String? = nil, serial: String? = nil,
+                deviceId: String? = nil, deviceId2: String? = nil, signature: String? = nil) {
         self.id = id
         self.type = type
         self.name = name
@@ -28,6 +44,10 @@ public struct Playlist: Codable, Equatable, Sendable, Identifiable {
         self.password = password
         self.url = url
         self.epgUrl = epgUrl
+        self.serial = serial
+        self.deviceId = deviceId
+        self.deviceId2 = deviceId2
+        self.signature = signature
     }
 
     /// A lista tal como vem da conta (`GET /api/goattv/config`); null se o tipo não for conhecido.

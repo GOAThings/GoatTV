@@ -536,7 +536,11 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
                 onClick = { onPick(p) },
                 selected = p.id == current,
                 title = p.name,
-                subtitle = if (p.type == PlaylistType.XTREAM) "Xtream" else "M3U",
+                subtitle = when (p.type) {
+                    PlaylistType.XTREAM -> "Xtream"
+                    PlaylistType.M3U -> "M3U"
+                    PlaylistType.STALKER -> "Stalker"
+                },
                 trailing = if (p.id == current) { { Text("✓", color = LocalAccent.current.start) } } else null,
                 modifier = if (p.id == current) Modifier.focusRequester(focus) else Modifier,
             )

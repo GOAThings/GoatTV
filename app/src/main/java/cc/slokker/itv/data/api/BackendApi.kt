@@ -163,6 +163,11 @@ data class PlaylistDto(
     @SerializedName("epg_url") val epgUrl: String?,
     /** O hash do índice de canais que a conta tem desta lista (null: nenhuma TV o enviou ainda). */
     @SerializedName("index_hash") val indexHash: String? = null,
+    // Só nas listas Stalker desta TV (ver Playlist).
+    val serial: String? = null,
+    val deviceId: String? = null,
+    val deviceId2: String? = null,
+    val signature: String? = null,
 )
 
 data class EpgCountryInfo(val code: String?, val name: String?, val channels: Int?, val guide: Boolean?)

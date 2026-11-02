@@ -15,6 +15,7 @@ enum CoreTests {
         ("hashes", hashes),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
+        ("stalker", stalker),
         ("appUpdate", appUpdate),
         ("m3u", m3u),
         ("m3uKeys", m3uKeys),
@@ -343,6 +344,25 @@ enum CoreTests {
 
     /// O hash do índice de canais é o mesmo do Android (ChannelIndexTest) para a mesma lista.
     /// Como o BugReportTest do Android: as credenciais saem do registo e ficam as linhas mais recentes.
+    static func stalker() throws {
+        let mac = "00:1A:79:00:00:01"
+        try expect(SHA.hex(SHA.md5(Array("abc".utf8))), "900150983cd24fb0d6963f7d28e17f72")
+        try expect(Stalker.normalizeMac("00-1a-79-00-00-01"), mac)
+        try expect(Stalker.normalizeMac("00:1A"), nil)
+        try expect(Stalker.endpoints("http://p/stalker_portal/c/"), ["http://p/stalker_portal/server/load.php"])
+        try expect(Stalker.endpoints("http://p:8080/c/").first, "http://p:8080/portal.php")
+        try expect(Stalker.commandURL("ffmpeg http://localhost/ch/1_", portal: "http://p:88/portal.php"), "http://p:88/ch/1_")
+        try expect(Stalker.commandURL("/play/live.php?a=1", portal: "http://p/portal.php"), "http://p/play/live.php?a=1")
+        try expect(Stalker.commandURL("auto http://cdn/x.m3u8?t=1", portal: "http://p"), "http://cdn/x.m3u8?t=1")
+        try expect(Stalker.candidate("http://cdn/x.m3u8?t=1").format, StreamFormat.hls)
+        try expect(Stalker.cookie(mac: mac, token: "T", stalkerPortal: true, action: "get_profile", timezone: "UTC"), "mac=00%3A1A%3A79%3A00%3A00%3A01; stb_lang=en; timezone=UTC")
+        try expect(Stalker.cookie(mac: mac, token: "T", stalkerPortal: false, action: "get_profile", timezone: "UTC"), "mac=\(mac); stb_lang=en; timezone=UTC; token=T")
+        let id = Stalker.Identity(Playlist(id: "s", type: .stalker, name: "S", server: "http://p", username: mac))
+        try expect(id.serial.count, 13)
+        try expect(id.deviceId, id.deviceId2)
+        try expect(BugReport.redact("a \(mac) b", secrets: []), "a *** b")
+    }
+
     static func bugReport() throws {
         let log = """
             Opening http://iptv.example:8080/live/joao/s3cr3t/123.ts

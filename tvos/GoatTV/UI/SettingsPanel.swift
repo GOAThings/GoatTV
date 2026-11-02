@@ -659,9 +659,9 @@ struct SettingsPanel: View {
         case .lists:
             var list: [Item] = model.playlists.map { (p: Playlist) -> Item in
                 .nav("p:\(p.id)", p.name, value: p.id == model.content?.playlist.id ? s.t("In use", "Em uso") : nil,
-                     subtitle: p.type == .xtream ? "Xtream Codes" : "M3U", to: .playlist(p.id))
+                     subtitle: p.type == .xtream ? "Xtream Codes" : p.type.label, to: .playlist(p.id))
             }
-            list.append(.nav("add", s.t("Add playlist", "Juntar lista"), subtitle: "Xtream Codes, M3U", to: .newPlaylistType))
+            list.append(.nav("add", s.t("Add playlist", "Juntar lista"), subtitle: model.hasAccount ? "Xtream Codes, M3U" : "Xtream Codes, M3U, Stalker", to: .newPlaylistType))
             if model.hasAccount {
                 list.append(.info("site", s.t("Also at", "Também em"), "thegoat.systems"))
             }
@@ -844,6 +844,10 @@ struct SettingsPanel: View {
                     form = PlaylistForm(type: .m3u)
                     replace(.playlistEdit(nil))
                 },
+                .action("stalker", "Stalker / MAC", subtitle: s.t("Portal address and authorized MAC address", "Endereço do portal e endereço MAC autorizado")) {
+                    form = PlaylistForm(type: .stalker)
+                    replace(.playlistEdit(nil))
+                },
             ]
 
         case .playlistEdit(let id):
@@ -852,17 +856,20 @@ struct SettingsPanel: View {
                 let shown = value.isEmpty ? (optional ? s.t("Optional", "Opcional") : "—") : (key == "pass" ? String(repeating: "•", count: min(8, value.count)) : value)
                 return .nav(key, fieldTitle(key), value: shown, to: .formField(key))
             }
+            let typeName = form.type == .xtream ? "Xtream Codes" : form.type == .m3u ? s.t("M3U playlist", "Lista M3U") : "Stalker / MAC"
             var list: [Item] = []
             if id != nil, model.hasAccount {
-                list.append(.info("type", s.t("Type", "Tipo"), form.type == .xtream ? "Xtream Codes" : s.t("M3U playlist", "Lista M3U")))
+                list.append(.info("type", s.t("Type", "Tipo"), typeName))
             } else {
-                list.append(.action("type", s.t("Type", "Tipo"), subtitle: form.type == .xtream ? "Xtream Codes" : s.t("M3U playlist", "Lista M3U")) {
-                    form.type = form.type == .xtream ? .m3u : .xtream
+                list.append(.action("type", s.t("Type", "Tipo"), subtitle: typeName) {
+                    form.type = form.type == .xtream ? .m3u : form.type == .m3u && !model.hasAccount ? .stalker : .xtream
                 })
             }
             list.append(field("name", optional: true))
             if form.type == .xtream {
                 list += [field("server"), field("user"), field("pass")]
+            } else if form.type == .stalker {
+                list += [field("server"), field("user"), field("serial", optional: true), field("device", optional: true), field("device2", optional: true), field("signature", optional: true)]
             } else {
                 list.append(field("url"))
             }
@@ -1108,6 +1115,10 @@ struct SettingsPanel: View {
         case "user": return form.username
         case "pass": return form.password
         case "url": return form.url
+        case "serial": return form.serial
+        case "device": return form.deviceId
+        case "device2": return form.deviceId2
+        case "signature": return form.signature
         default: return form.epgUrl
         }
     }
@@ -1119,6 +1130,10 @@ struct SettingsPanel: View {
         case "user": form.username = value
         case "pass": form.password = value
         case "url": form.url = value
+        case "serial": form.serial = value
+        case "device": form.deviceId = value
+        case "device2": form.deviceId2 = value
+        case "signature": form.signature = value
         default: form.epgUrl = value
         }
     }

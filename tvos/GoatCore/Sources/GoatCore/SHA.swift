@@ -54,6 +54,39 @@ enum SHA {
         return h.flatMap(bytes)
     }
 
+    /// MD5, só para o número de série das listas Stalker (como o de uma MAG).
+    static func md5(_ data: [UInt8]) -> [UInt8] {
+        let shifts: [UInt32] = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21]
+        let table = (0..<64).map { UInt32(truncatingIfNeeded: Int64(abs(sin(Double($0 + 1))) * 4_294_967_296)) }
+        var m = data
+        m.append(0x80)
+        while m.count % 64 != 56 { m.append(0) }
+        let bits = UInt64(data.count) * 8
+        for i in 0..<8 { m.append(UInt8(truncatingIfNeeded: bits >> (UInt64(i) * 8))) }
+        var h: [UInt32] = [0x6745_2301, 0xEFCD_AB89, 0x98BA_DCFE, 0x1032_5476]
+        for start in stride(from: 0, to: m.count, by: 64) {
+            let w = (0..<16).map { i -> UInt32 in
+                let o = start + i * 4
+                return UInt32(m[o]) | UInt32(m[o + 1]) << 8 | UInt32(m[o + 2]) << 16 | UInt32(m[o + 3]) << 24
+            }
+            var (a, b, c, d) = (h[0], h[1], h[2], h[3])
+            for i in 0..<64 {
+                let f: UInt32, g: Int
+                switch i / 16 {
+                case 0: (f, g) = ((b & c) | (~b & d), i)
+                case 1: (f, g) = ((d & b) | (~d & c), (5 * i + 1) % 16)
+                case 2: (f, g) = (b ^ c ^ d, (3 * i + 5) % 16)
+                default: (f, g) = (c ^ (b | ~d), (7 * i) % 16)
+                }
+                let sum = a &+ f &+ table[i] &+ w[g]
+                (a, d, c) = (d, c, b)
+                b = b &+ rotl(sum, shifts[(i / 16) * 4 + i % 4])
+            }
+            h[0] &+= a; h[1] &+= b; h[2] &+= c; h[3] &+= d
+        }
+        return h.flatMap { v in (0..<4).map { UInt8(truncatingIfNeeded: v >> (UInt32($0) * 8)) } }
+    }
+
     static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String(format: "%02x", $0) }.joined()
     }

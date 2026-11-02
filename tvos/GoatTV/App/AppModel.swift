@@ -373,6 +373,7 @@ final class AppModel {
         case .username: return strings.t("Enter the username", "Falta o utilizador")
         case .password: return strings.t("Enter the password", "Falta a password")
         case .url: return strings.t("Enter the playlist address", "Falta o endereço da lista")
+        case .mac: return strings.t("Enter a valid MAC address", "Escreve um endereço MAC válido")
         }
     }
 
@@ -481,7 +482,7 @@ final class AppModel {
         guard let local = pendingLocalProfile else { return }
         pendingLocalProfile = nil
         func same(_ a: Playlist, _ b: Playlist) -> Bool {
-            a.type == b.type && (a.type == .xtream
+            a.type == b.type && (a.type != .m3u
                 ? a.server?.lowercased() == b.server?.lowercased() && a.username == b.username
                 : a.url == b.url)
         }
@@ -893,7 +894,10 @@ final class AppModel {
         zapCount += 1
         let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
                                           allowedFormats: content.account?.allowedFormats ?? [])
-        player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer)
+        let stalker = loader.stalker
+        let playlist = content.playlist
+        player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
+                    linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
         saveLast(channel, watched: false)
         watchTask?.cancel()
         watchTask = Task { [weak self] in
@@ -1092,6 +1096,8 @@ final class AppModel {
 
     /// Pode-se ver o segundo canal de [playlist]? Da conta da lista principal só se o plano deixar 2+ ligações.
     func secondAllowed(_ playlist: Playlist) -> Bool {
+        // Um MAC é uma box: uma ligação de cada vez.
+        if playlist.type == .stalker { return false }
         guard let main = content else { return true }
         guard sameAccount(playlist, main.playlist), main.playlist.type == .xtream else { return true }
         return (main.account?.maxConnections ?? 0) >= 2
@@ -1389,7 +1395,7 @@ final class AppModel {
         let device = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion) · \(model)"
         let header = "GoatTV \(appVersion) · \(device)\n" +
             "Account: \(hasAccount ? "yes" : "no") · playlists: \(playlists.isEmpty ? "none" : playlists.map(\.type.rawValue).joined(separator: ", "))"
-        let secrets = playlists.flatMap { [$0.username, $0.password, $0.url, $0.epgUrl].compactMap { $0 } } + [backend.token, email].compactMap { $0 }
+        let secrets = playlists.flatMap { [$0.type == .stalker ? $0.server : nil, $0.username, $0.password, $0.url, $0.epgUrl, $0.serial, $0.deviceId, $0.deviceId2, $0.signature].compactMap { $0 } } + [backend.token, email].compactMap { $0 }
         let backend = backend
         let strings = strings
         Task {
@@ -1665,13 +1671,13 @@ final class AppModel {
 
     /// Canal Xtream sem guia: pede os próximos programas ao servidor.
     private func loadShortEpgIfNeeded(_ channel: Channel) {
-        guard let content, content.playlist.type == .xtream, let streamId = channel.streamId, shortEpg[channel.key] == nil,
+        guard let content, content.playlist.type != .m3u, let streamId = channel.streamId, shortEpg[channel.key] == nil,
               Guide.entries(for: channel, account: accountGuide, main: mainGuide, extra: extraGuide).isEmpty else { return }
         shortEpg[channel.key] = []
         let loader = self.loader
         let playlist = content.playlist
         Task { [weak self] in
-            guard let list = try? await loader.shortEpg(playlist, streamId: streamId), !list.isEmpty else { return }
+            guard let list = try? await (playlist.type == .stalker ? loader.stalker.shortEpg(playlist, streamId: streamId) : loader.shortEpg(playlist, streamId: streamId)), !list.isEmpty else { return }
             self?.shortEpg[channel.key] = list
             self?.guideVersion += 1
         }

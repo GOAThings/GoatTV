@@ -13,6 +13,9 @@ public func streamCandidates(playlist: Playlist, channel: Channel, preferred: St
                              allowedFormats: Set<String> = []) -> [StreamCandidate] {
     let order = preferred == StreamFormat.hls ? [StreamFormat.hls, StreamFormat.ts] : [StreamFormat.ts, StreamFormat.hls]
 
+    // O link pede-se ao portal ao abrir o canal (StalkerClient.candidates).
+    if playlist.type == .stalker { return [] }
+
     if playlist.type == .xtream {
         guard let id = channel.streamId else { return [] }
         // Se o servidor diz que formatos permite, não vale a pena tentar os outros.

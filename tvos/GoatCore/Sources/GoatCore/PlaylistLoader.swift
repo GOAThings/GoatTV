@@ -12,10 +12,13 @@ public struct PlaylistLoader: Sendable {
     /// Nome para um canal sem nome ("Canal 12"), já traduzido.
     public var channelName: @Sendable (String) -> String
 
+    public let stalker: StalkerClient
+
     public init(session: URLSession = HTTP.makeSession(timeout: 60), userAgent: String = iptvUserAgent,
                 gunzip: (@Sendable (Data) -> Data?)? = nil,
                 channelName: @escaping @Sendable (String) -> String = { "Channel \($0)" }) {
         self.session = session
+        stalker = StalkerClient(session: session)
         self.userAgent = userAgent
         self.gunzip = gunzip
         self.channelName = channelName
@@ -25,6 +28,7 @@ public struct PlaylistLoader: Sendable {
         switch playlist.type {
         case .m3u: return try await loadM3U(playlist)
         case .xtream: return try await loadXtream(playlist)
+        case .stalker: return try await stalker.load(playlist, channelName: channelName)
         }
     }
 

@@ -17,6 +17,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
@@ -66,8 +67,24 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val latestPrefs by rememberUpdatedState(prefs)
     val latestActive by rememberUpdatedState(active)
 
+    val link = remember { arrayOfNulls<Job>(1) }
+    val linkFresh = remember { booleanArrayOf(false) }
+    val latestPlaylist by rememberUpdatedState(data.playlist)
+
     fun start(index: Int) {
         if (vm.noVideo) return
+        link[0]?.cancel()
+        // Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
+        if (latestPlaylist.type == PlaylistType.STALKER && index == 0 && !linkFresh[0]) {
+            playback.ready = false
+            link[0] = scope.launch {
+                candidates[0] = vm.stalkerCandidates(latestPlaylist, latestChannel)
+                linkFresh[0] = true
+                start(0)
+            }
+            return
+        }
+        linkFresh[0] = false
         val candidate = candidates[0].getOrNull(index) ?: return
         attempt[0] = index
         playback.ready = false
@@ -84,6 +101,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     LaunchedEffect(channel.key, data.playlist, player, catchup, active) {
         retry[0]?.cancel()
+        link[0]?.cancel()
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
         if (!active) {
             player.stop()

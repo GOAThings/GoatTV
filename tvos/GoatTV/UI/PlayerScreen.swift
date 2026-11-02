@@ -869,7 +869,7 @@ struct PlayerScreen: View {
                     model.switchPlaylist(playlist)
                     showChannels(of: SpecialCategory.all)
                 } label: {
-                    RowContent(title: playlist.name, subtitle: playlist.type == .xtream ? "Xtream" : "M3U") {
+                    RowContent(title: playlist.name, subtitle: playlist.type.label) {
                         if playlist.id == model.content?.playlist.id { Text("✓").font(Fonts.rowTitle).foregroundStyle(Theme.sky) }
                     }
                 }

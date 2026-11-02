@@ -24,6 +24,9 @@ fun streamCandidates(
         listOf(StreamFormat.TS, StreamFormat.HLS)
     }
 
+    // O link pede-se ao portal ao abrir o canal (StalkerSource.candidates).
+    if (playlist.type == PlaylistType.STALKER) return emptyList()
+
     if (playlist.type == PlaylistType.XTREAM) {
         val id = channel.streamId ?: return emptyList()
         // Se o servidor diz que formatos permite, não vale a pena tentar os outros.

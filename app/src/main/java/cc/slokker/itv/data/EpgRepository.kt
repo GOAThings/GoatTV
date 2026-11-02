@@ -4,6 +4,7 @@ import cc.slokker.itv.data.epg.AccountGuide
 import cc.slokker.itv.data.epg.AccountGuideSource
 import cc.slokker.itv.data.epg.XmltvGuide
 import cc.slokker.itv.data.epg.XmltvSource
+import cc.slokker.itv.data.stalker.StalkerSource
 import cc.slokker.itv.data.xtream.XtreamSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class EpgRepository(
     private val xtream: XtreamSource,
+    private val stalker: StalkerSource,
     private val xmltv: XmltvSource,
     private val accountSource: AccountGuideSource,
     private val store: CacheStore,
@@ -215,11 +217,11 @@ class EpgRepository(
             val now = System.currentTimeMillis()
             ready.entriesFor(channel).filter { it.endMs > now }.takeIf { it.isNotEmpty() }?.let { return it }
         }
-        if (playlist.type != PlaylistType.XTREAM) return emptyList()
+        if (playlist.type == PlaylistType.M3U) return emptyList()
         val streamId = channel.streamId ?: return emptyList()
         cached(playlist, channel)?.let { return it }
         return try {
-            val entries = xtream.shortEpg(playlist, streamId)
+            val entries = if (playlist.type == PlaylistType.STALKER) stalker.shortEpg(playlist, channel) else xtream.shortEpg(playlist, streamId)
             shortCache[cacheKey(playlist, channel)] = Cached(System.currentTimeMillis(), entries)
             _version.value++
             val now = System.currentTimeMillis()

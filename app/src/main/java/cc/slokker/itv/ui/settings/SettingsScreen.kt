@@ -1045,6 +1045,9 @@ private fun settingItems(
             Item.Action("m3u", s.m3uPlaylist, s.m3uSub) {
                 replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.M3U))))
             },
+            Item.Action("stalker", "Stalker / MAC", s.stalkerSub) {
+                replace(Route.PlaylistEdit(null, mutableStateOf(PlaylistForm(type = PlaylistType.STALKER))))
+            },
         )
 
         is Route.PlaylistEdit -> buildList {
@@ -1060,7 +1063,8 @@ private fun settingItems(
                     },
                 ) { push(Route.TextEdit(title, value, kind) { v -> set { update(it, v) } }, key) }
 
-            val typeOptions = listOf<Pair<Any?, String>>(PlaylistType.XTREAM to "Xtream Codes", PlaylistType.M3U to s.m3uPlaylist)
+            val typeOptions = listOf<Pair<Any?, String>>(PlaylistType.XTREAM to "Xtream Codes", PlaylistType.M3U to s.m3uPlaylist) +
+                if (local || form.type == PlaylistType.STALKER) listOf<Pair<Any?, String>>(PlaylistType.STALKER to "Stalker / MAC") else emptyList()
             if (route.id != null && !local) {
                 // Na conta, o tipo de uma lista não muda (para outro tipo cria-se uma lista nova).
                 add(Item.Info("type", s.type, typeOptions.first { it.first == form.type }.second))
@@ -1072,6 +1076,13 @@ private fun settingItems(
                 add(text("server", s.server, form.server, TextKind.URL) { f, v -> f.copy(server = v) })
                 add(text("user", s.username, form.username, TextKind.PLAIN) { f, v -> f.copy(username = v) })
                 add(text("pass", s.password, form.password, TextKind.PASSWORD) { f, v -> f.copy(password = v) })
+            } else if (form.type == PlaylistType.STALKER) {
+                add(text("server", s.portalUrl, form.server, TextKind.URL) { f, v -> f.copy(server = v) })
+                add(text("mac", s.macAddress, form.username, TextKind.PLAIN) { f, v -> f.copy(username = v) })
+                add(text("serial", "Serial", form.serial, TextKind.PLAIN, optional = true) { f, v -> f.copy(serial = v) })
+                add(text("device", "Device ID", form.deviceId, TextKind.PLAIN, optional = true) { f, v -> f.copy(deviceId = v) })
+                add(text("device2", "Device ID 2", form.deviceId2, TextKind.PLAIN, optional = true) { f, v -> f.copy(deviceId2 = v) })
+                add(text("signature", "Signature", form.signature, TextKind.PLAIN, optional = true) { f, v -> f.copy(signature = v) })
             } else {
                 add(text("url", s.playlistUrl, form.url, TextKind.URL) { f, v -> f.copy(url = v) })
             }
@@ -1302,7 +1313,11 @@ private fun requestOverlayPermission(context: Context) {
     runCatching { context.startActivity(intent) }
 }
 
-private fun typeLabel(type: PlaylistType) = if (type == PlaylistType.XTREAM) "Xtream" else "M3U"
+private fun typeLabel(type: PlaylistType) = when (type) {
+    PlaylistType.XTREAM -> "Xtream"
+    PlaylistType.M3U -> "M3U"
+    PlaylistType.STALKER -> "Stalker"
+}
 
 /** Linha que está a carregar da rede (ver o `key` em SettingsContent). */
 private const val LOADING_KEY = "loading"

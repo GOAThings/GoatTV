@@ -270,6 +270,19 @@ fun PlayerScreen(vm: AppViewModel) {
 
     fun start(candidateIndex: Int) {
         if (vm.testMode) return
+        session.linkJob?.cancel()
+        // Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
+        if (latestData.playlist.type == PlaylistType.STALKER && candidateIndex == 0 && !session.linkFresh) {
+            val channel = session.channel ?: return
+            session.ready = false
+            session.linkJob = scope.launch {
+                session.candidates = latestVm.stalkerCandidates(latestData.playlist, channel)
+                session.linkFresh = true
+                start(0)
+            }
+            return
+        }
+        session.linkFresh = false
         val candidate = session.candidates.getOrNull(candidateIndex) ?: return
         session.attempt = candidateIndex
         session.error = null
@@ -1270,6 +1283,8 @@ private class PlaybackSession {
     var attempt = 0
     var retries = 0
     var retryJob: Job? = null
+    var linkJob: Job? = null
+    var linkFresh = false
 
     /** Já se escolheu a faixa de áudio deste canal (surround por defeito). */
     var audioChosen = false

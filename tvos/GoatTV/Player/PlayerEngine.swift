@@ -150,16 +150,24 @@ final class PlayerEngine: NSObject {
         vlc.drawable = vlcView
     }
 
-    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?) {
+    /// Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
+    @ObservationIgnored private var linkResolver: (() async -> [StreamCandidate]?)?
+
+    private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
+        candidates.flatMap { c -> [Attempt] in
+            engine != "vlc" && c.isHLS ? [Attempt(candidate: c, backend: .apple), Attempt(candidate: c, backend: .vlc)] : [Attempt(candidate: c, backend: .vlc)]
+        }
+    }
+
+    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+        self.linkResolver = linkResolver
         retry?.cancel()
         pendingStart?.cancel()
         let wasShowing = state == .playing
         self.userAgent = (userAgent?.isEmpty ?? true) ? iptvUserAgent : userAgent!
         self.referrer = referrer
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
-        attempts = candidates.flatMap { c -> [Attempt] in
-            engine != "vlc" && c.isHLS ? [Attempt(candidate: c, backend: .apple), Attempt(candidate: c, backend: .vlc)] : [Attempt(candidate: c, backend: .vlc)]
-        }
+        attempts = makeAttempts(candidates)
         index = 0
         paused = false
         wasPlaying = false
@@ -235,6 +243,23 @@ final class PlayerEngine: NSObject {
     }
 
     private func start() {
+        guard let linkResolver, index == 0 else {
+            open()
+            return
+        }
+        watchdog?.cancel()
+        pendingStart?.cancel()
+        stopBackends()
+        state = .opening
+        pendingStart = Task { [weak self] in
+            let list = await linkResolver()
+            guard !Task.isCancelled, let self else { return }
+            self.attempts = self.makeAttempts(list ?? [])
+            self.open()
+        }
+    }
+
+    private func open() {
         watchdog?.cancel()
         guard index < attempts.count, let url = URL(string: attempts[index].candidate.url) else {
             fail()
@@ -261,7 +286,7 @@ final class PlayerEngine: NSObject {
     private func next() {
         index += 1
         if index < attempts.count {
-            start()
+            open()
         } else {
             fail()
         }
