@@ -23,6 +23,8 @@ data class Prefs(
     /** Passthrough de áudio (Dolby/DTS para o recetor ou a TV). */
     val audioPassthrough: Boolean = true,
     val surroundDefault: Boolean = false,
+    /** Telemóvel: o vídeo continua numa janela pequena ao sair da app. */
+    val pipEnabled: Boolean = false,
     val audioDecoder: String = Decoder.HARDWARE,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
@@ -105,6 +107,7 @@ data class Prefs(
         const val AFR = "afr"
         const val AUDIO_PASSTHROUGH = "audio_passthrough"
         const val SURROUND_DEFAULT = "surround_default"
+        const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
         const val HDR = "hdr"
         const val USER_AGENT = "user_agent"
@@ -195,6 +198,7 @@ data class Prefs(
                 afr = bool(Key.AFR, d.afr),
                 audioPassthrough = bool(Key.AUDIO_PASSTHROUGH, d.audioPassthrough),
                 surroundDefault = bool(Key.SURROUND_DEFAULT, d.surroundDefault),
+                pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, setOf(Decoder.HARDWARE, Decoder.SOFTWARE)),
                 hdr = str(Key.HDR, d.hdr, setOf(Hdr.AUTO, Hdr.SDR)),
                 userAgent = s.get(Key.USER_AGENT)?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty(),
