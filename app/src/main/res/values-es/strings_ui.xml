@@ -30,7 +30,7 @@
     <string name="loading_playlists">Obteniendo tus listas…</string>
     <string name="loading_playlist">Cargando \"%1$s\"…</string>
     <string name="playlist_load_failed">No se pudo cargar la lista \"%1$s\".\n%2$s</string>
-    <string name="session_ended">Se cerró tu sesión. Activa esta TV de nuevo.</string>
+    <string name="session_ended">Se ha cerrado tu sesión en la cuenta.</string>
     <string name="m3u_no_url">La lista M3U no tiene URL.</string>
     <string name="m3u_bad_url">URL de la lista M3U no válida.</string>
     <string name="m3u_http">El servidor de la lista respondió %1$s.</string>

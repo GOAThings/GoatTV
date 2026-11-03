@@ -30,7 +30,7 @@
     <string name="loading_playlists">Buscando suas listas…</string>
     <string name="loading_playlist">Carregando \"%1$s\"…</string>
     <string name="playlist_load_failed">Não foi possível carregar a lista \"%1$s\".\n%2$s</string>
-    <string name="session_ended">Você saiu da conta. Ative esta TV de novo.</string>
+    <string name="session_ended">Você saiu da sua conta.</string>
     <string name="m3u_no_url">A lista M3U não tem URL.</string>
     <string name="m3u_bad_url">URL da lista M3U inválida.</string>
     <string name="m3u_http">O servidor da lista respondeu %1$s.</string>
@@ -541,4 +541,9 @@
     <string name="report_sent">Enviado. Relatório %1$s</string>
     <string name="report_too_many">Relatórios demais. Tente mais tarde.</string>
     <string name="report_failed">Não foi possível enviar: %1$s</string>
+    <string name="connect_account_title">Liga a tua conta GOAT</string>
+    <string name="connect_account_body">As tuas listas, favoritos e definições, em todos os dispositivos.</string>
+    <string name="copy_code">Copiar código</string>
+    <string name="copied">Copiado</string>
+    <string name="sign_in_to_approve">Entrar para aprovar</string>
 </resources>

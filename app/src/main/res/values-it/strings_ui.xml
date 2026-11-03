@@ -30,7 +30,7 @@
     <string name="loading_playlists">Recupero delle tue playlist…</string>
     <string name="loading_playlist">Caricamento di \"%1$s\"…</string>
     <string name="playlist_load_failed">Impossibile caricare la playlist \"%1$s\".\n%2$s</string>
-    <string name="session_ended">Sei stato disconnesso. Attiva di nuovo questa TV.</string>
+    <string name="session_ended">Sei stato disconnesso dal tuo account.</string>
     <string name="m3u_no_url">La playlist M3U non ha un URL.</string>
     <string name="m3u_bad_url">URL della playlist M3U non valido.</string>
     <string name="m3u_http">Il server della playlist ha risposto %1$s.</string>

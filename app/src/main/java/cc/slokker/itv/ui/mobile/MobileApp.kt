@@ -642,7 +642,7 @@ fun MobileMenu(vm: AppViewModel) {
                 Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }
                 MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
             }
-            if (!local) MenuRow(s.logoutThisTv, null, vm::logoutThisTv)
+            if (!local) MenuRow(s.logout, null, vm::logoutThisTv)
         }
     }
 }

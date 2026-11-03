@@ -30,7 +30,7 @@
     <string name="loading_playlists">Oynatma listeleriniz alınıyor…</string>
     <string name="loading_playlist">\"%1$s\" yükleniyor…</string>
     <string name="playlist_load_failed">\"%1$s\" oynatma listesi yüklenemedi.\n%2$s</string>
-    <string name="session_ended">Oturumunuz kapatıldı. Bu TV\'yi yeniden etkinleştirin.</string>
+    <string name="session_ended">Hesabınızdan çıkış yapıldı.</string>
     <string name="m3u_no_url">M3U oynatma listesinin URL\'si yok.</string>
     <string name="m3u_bad_url">Geçersiz M3U oynatma listesi URL\'si.</string>
     <string name="m3u_http">Oynatma listesi sunucusu %1$s yanıtını verdi.</string>

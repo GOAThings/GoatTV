@@ -72,6 +72,11 @@ class Strings(context: Context) {
     fun playlistLoadFailed(name: String, reason: String) =
         s(R.string.playlist_load_failed, name, reason)
     val sessionEnded get() = s(R.string.session_ended)
+    val connectAccountTitle get() = s(R.string.connect_account_title)
+    val connectAccountBody get() = s(R.string.connect_account_body)
+    val copyCode get() = s(R.string.copy_code)
+    val copied get() = s(R.string.copied)
+    val signInToApprove get() = s(R.string.sign_in_to_approve)
 
     // ---- Listas (erros das fontes) ----
     val m3uNoUrl get() = s(R.string.m3u_no_url)

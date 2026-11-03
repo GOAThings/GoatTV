@@ -30,7 +30,7 @@
     <string name="loading_playlists">आपकी प्लेलिस्ट लाई जा रही हैं…</string>
     <string name="loading_playlist">\"%1$s\" लोड हो रही है…</string>
     <string name="playlist_load_failed">प्लेलिस्ट \"%1$s\" लोड नहीं हो सकी।\n%2$s</string>
-    <string name="session_ended">आप साइन आउट हो गए। इस TV को फिर से सक्रिय करें।</string>
+    <string name="session_ended">आप अपने खाते से साइन आउट हो गए हैं।</string>
     <string name="m3u_no_url">M3U प्लेलिस्ट में कोई URL नहीं है।</string>
     <string name="m3u_bad_url">M3U प्लेलिस्ट का URL अमान्य है।</string>
     <string name="m3u_http">प्लेलिस्ट सर्वर ने %1$s लौटाया।</string>

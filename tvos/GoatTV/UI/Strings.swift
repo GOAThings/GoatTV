@@ -91,7 +91,7 @@ struct Strings {
     var noPlaylistsBody: String { t("Add a playlist at thegoat.systems and it will show up here.", "Junta uma lista em thegoat.systems e ela aparece aqui.") }
     var retry: String { t("Try again", "Tentar de novo") }
     var signOut: String { t("Sign out", "Terminar sessão") }
-    var sessionEnded: String { t("This TV was signed out of the account.", "Esta TV saiu da conta.") }
+    var sessionEnded: String { t("You were signed out of your account.", "A sessão na tua conta terminou.") }
     var cancel: String { t("Cancel", "Cancelar") }
 
     func sourceError(_ e: Error) -> String {

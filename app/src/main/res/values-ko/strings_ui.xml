@@ -30,7 +30,7 @@
     <string name="loading_playlists">재생목록을 가져오는 중…</string>
     <string name="loading_playlist">\'%1$s\' 불러오는 중…</string>
     <string name="playlist_load_failed">재생목록 \'%1$s\'을(를) 불러올 수 없어요.\n%2$s</string>
-    <string name="session_ended">로그아웃되었어요. 이 TV를 다시 활성화하세요.</string>
+    <string name="session_ended">계정에서 로그아웃되었습니다.</string>
     <string name="m3u_no_url">M3U 재생목록에 URL이 없어요.</string>
     <string name="m3u_bad_url">M3U 재생목록 URL이 유효하지 않아요.</string>
     <string name="m3u_http">재생목록 서버가 %1$s을(를) 반환했어요.</string>

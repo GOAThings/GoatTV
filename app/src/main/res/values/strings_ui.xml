@@ -30,7 +30,7 @@
     <string name="loading_playlists">Getting your playlists…</string>
     <string name="loading_playlist">Loading \"%1$s\"…</string>
     <string name="playlist_load_failed">Couldn\'t load the playlist \"%1$s\".\n%2$s</string>
-    <string name="session_ended">You were signed out. Activate this TV again.</string>
+    <string name="session_ended">You were signed out of your account.</string>
     <string name="m3u_no_url">The M3U playlist has no URL.</string>
     <string name="m3u_bad_url">Invalid M3U playlist URL.</string>
     <string name="m3u_http">The playlist server replied %1$s.</string>
@@ -548,4 +548,9 @@
     <string name="report_failed">Couldn\'t send: %1$s</string>
     <string name="welcome_local_phone">Playlists on this phone</string>
     <string name="welcome_local_phone_sub">No account: add Xtream or M3U playlists here. Everything stays on this phone only.</string>
+    <string name="connect_account_title">Connect your GOAT account</string>
+    <string name="connect_account_body">Your playlists, favourites and settings, on every device.</string>
+    <string name="copy_code">Copy code</string>
+    <string name="copied">Copied</string>
+    <string name="sign_in_to_approve">Sign in to approve</string>
 </resources>

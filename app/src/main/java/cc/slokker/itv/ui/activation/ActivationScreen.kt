@@ -1,5 +1,11 @@
 package cc.slokker.itv.ui.activation
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.activity.compose.BackHandler
 import cc.slokker.itv.ui.glass.GlassButton
@@ -71,6 +77,8 @@ private class ActivationState {
     var qr by mutableStateOf<ImageBitmap?>(null)
     /** O endereço vem do servidor (ex.: thegoat.systems/ativar); vazio até chegar. */
     var verificationUrl by mutableStateOf("")
+    /** O endereço a abrir no telemóvel (com o código, se o servidor o der). */
+    var approveUrl by mutableStateOf("")
     var expiresAt by mutableLongStateOf(0L)
     var error by mutableStateOf<String?>(null)
 }
@@ -106,26 +114,68 @@ fun ActivationScreen(
 
     val s = LocalStrings.current
     if (phone) {
+        val clipboard = LocalClipboardManager.current
+        var copied by remember(state.code) { mutableStateOf(false) }
         Column(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Logo(size = 28)
-            Text(s.activateTitle, color = ItvColors.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Text(s.activateGoTo, color = ItvColors.TextDim, fontSize = 15.sp)
+            Spacer(Modifier.weight(1f))
+            Text(s.connectAccountTitle, color = ItvColors.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Text(s.connectAccountBody, color = ItvColors.TextDim, fontSize = 15.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(24.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .clickable(enabled = state.code != null) {
+                        state.code?.let { clipboard.setText(AnnotatedString(it)) }
+                        copied = true
+                    }
+                    .padding(vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    state.code ?: "· · ·", maxLines = 1,
+                    style = TextStyle(brush = ItvColors.Accent, fontSize = 42.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(if (copied) "✓ ${s.copied}" else s.copyCode, color = ItvColors.TextFaint, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            val error = state.error
+            when {
+                error != null -> Text(error, color = ItvColors.Error, fontSize = 13.sp, textAlign = TextAlign.Center)
+                state.code != null -> {
+                    val remaining = ((state.expiresAt - now) / 1000).coerceAtLeast(0)
+                    Text(s.activateExpires(remaining / 60, remaining % 60), color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center)
+                }
+                else -> Text(s.activateRequesting, color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center)
+            }
+            Spacer(Modifier.weight(1f))
+            if (state.verificationUrl.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(ItvColors.Accent)
+                        .clickable {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(state.approveUrl))) }
+                        }
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(s.signInToApprove, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(state.verificationUrl, color = ItvColors.TextFaint, fontSize = 12.sp)
+            }
             Text(
-                state.verificationUrl, color = ItvColors.Sky, fontSize = 18.sp,
-                modifier = Modifier.clickable(enabled = state.verificationUrl.isNotEmpty()) {
-                    val url = state.verificationUrl.let { if ("://" in it) it else "https://$it" }
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                },
-            )
-            Text(s.activateEnterCode, color = ItvColors.TextDim, fontSize = 15.sp)
-            Text(state.code ?: "· · ·", color = ItvColors.Text, fontSize = 48.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-            state.error?.let { Text(it, color = ItvColors.Error, fontSize = 15.sp) }
-            Text(
-                backLabel, color = ItvColors.Text, fontSize = 16.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(vertical = 12.dp),
+                backLabel, color = ItvColors.TextDim, fontSize = 15.sp,
+                modifier = Modifier.clickable(onClick = onBack).padding(top = 12.dp, bottom = 4.dp, start = 12.dp, end = 12.dp),
             )
         }
         return
@@ -217,6 +267,7 @@ private suspend fun runActivation(
         state.error = null
         state.code = code
         state.verificationUrl = url.removePrefix("https://").removePrefix("http://")
+        state.approveUrl = (start.verificationUrlComplete ?: url).let { if ("://" in it) it else "https://$it" }
         state.qr = qrBitmap(start.verificationUrlComplete ?: url)
         state.expiresAt = System.currentTimeMillis() + (start.expiresIn ?: 600) * 1000L
         var interval = (start.interval ?: 5).coerceAtLeast(2) * 1000L
