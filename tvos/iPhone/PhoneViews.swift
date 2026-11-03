@@ -101,8 +101,8 @@ private struct PhoneActivation: View {
         let s = model.strings
         let a = model.activation
         VStack(spacing: 0) {
-            BrandMark(scale: 0.35).frame(maxWidth: .infinity)
             Spacer()
+            BrandMark(scale: 0.35).frame(maxWidth: .infinity).padding(.bottom, 28)
             VStack(spacing: 8) {
                 Text(s.t("Connect your GOAT account", "Liga a tua conta GOAT")).font(.title2.bold()).multilineTextAlignment(.center)
                 Text(s.t("Your playlists, favourites and settings, on every device.", "As tuas listas, favoritos e definições, em todos os dispositivos."))
@@ -141,8 +141,7 @@ private struct PhoneActivation: View {
                     ProgressView()
                 }
             }
-            .font(.footnote).multilineTextAlignment(.center).padding(.top, 12)
-            Spacer()
+            .font(.footnote).multilineTextAlignment(.center).padding(.top, 12).padding(.bottom, 24)
             if let text = a.qrText ?? a.url, let url = URL(string: text.contains("://") ? text : "https://\(text)") {
                 Link(destination: url) {
                     Text(s.t("Sign in to approve", "Entrar para aprovar"))
@@ -152,6 +151,7 @@ private struct PhoneActivation: View {
                 }
                 Text(a.url ?? text).font(.caption).foregroundStyle(Theme.textFaint).padding(.top, 8)
             }
+            Spacer()
             Button(s.r("use_without_account")) { model.leaveActivation() }
                 .font(.subheadline).foregroundStyle(Theme.textDim).padding(.top, 16)
         }

@@ -120,8 +120,9 @@ fun ActivationScreen(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Logo(size = 28)
             Spacer(Modifier.weight(1f))
+            Logo(size = 28)
+            Spacer(Modifier.height(28.dp))
             Text(s.connectAccountTitle, color = ItvColors.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Text(s.connectAccountBody, color = ItvColors.TextDim, fontSize = 15.sp, textAlign = TextAlign.Center)
@@ -155,7 +156,7 @@ fun ActivationScreen(
                 }
                 else -> Text(s.activateRequesting, color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(24.dp))
             if (state.verificationUrl.isNotEmpty()) {
                 Box(
                     Modifier
@@ -173,6 +174,7 @@ fun ActivationScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(state.verificationUrl, color = ItvColors.TextFaint, fontSize = 12.sp)
             }
+            Spacer(Modifier.weight(1f))
             Text(
                 backLabel, color = ItvColors.TextDim, fontSize = 15.sp,
                 modifier = Modifier.clickable(onClick = onBack).padding(top = 12.dp, bottom = 4.dp, start = 12.dp, end = 12.dp),
