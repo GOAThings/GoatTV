@@ -35,6 +35,8 @@ final class PlayerEngine: NSObject {
 
     private(set) var state: State = .idle
     private(set) var paused = false
+    /// A última imagem do canal está parada no ecrã, à espera que volte a dar.
+    private(set) var frozen = false
     /// O formato da forma que está a dar ("ts" ou "m3u8").
     private(set) var format: String?
     /// O motor que está a dar.
@@ -226,12 +228,14 @@ final class PlayerEngine: NSObject {
     private func showFreeze(_ image: UIImage?) {
         freezeView.image = image
         freezeView.isHidden = image == nil
+        frozen = image != nil
         if let image { view.bringSubviewToFront(freezeView); _ = image }
     }
 
     private func hideFreeze() {
         freezeView.isHidden = true
         freezeView.image = nil
+        frozen = false
     }
 
     private func appleSnapshot() -> UIImage? {
@@ -286,6 +290,7 @@ final class PlayerEngine: NSObject {
         stopBackends()
         let attempt = attempts[index]
         backend = attempt.backend
+        DebugLog.add("Player: opening \(attempt.candidate.format) with \(backend) (\(index + 1)/\(attempts.count))")
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
         state = .opening
@@ -297,6 +302,7 @@ final class PlayerEngine: NSObject {
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
             guard !Task.isCancelled, let self, self.state == .opening else { return }
+            DebugLog.add("Player: no picture after 15 s")
             self.next()
         }
     }
@@ -410,6 +416,7 @@ final class PlayerEngine: NSObject {
             next()
         case .ended:
             // Uma stream em direto que "acaba" caiu: volta a ligar.
+            DebugLog.add("Player: VLC stream ended")
             if state == .playing { fail() } else { next() }
         default:
             break
@@ -539,6 +546,7 @@ final class PlayerEngine: NSObject {
 
 extension PlayerEngine: AVPictureInPictureControllerDelegate {
     fileprivate func setUpPip() {
+        DebugLog.add("PiP: allowed \(pipAllowed), supported \(AVPictureInPictureController.isPictureInPictureSupported())")
         pipObserver = nil
         pipController?.stopPictureInPicture()
         pipController = nil
@@ -549,7 +557,10 @@ extension PlayerEngine: AVPictureInPictureControllerDelegate {
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         pipObserver = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] c, _ in
             let possible = c.isPictureInPicturePossible
-            Task { @MainActor in self?.pipPossible = possible }
+            Task { @MainActor in
+                self?.pipPossible = possible
+                DebugLog.add("PiP: possible \(possible)")
+            }
         }
         pipController = controller
     }

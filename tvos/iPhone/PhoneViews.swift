@@ -314,8 +314,11 @@ private struct VideoPane: View {
                 }
             }
             .ignoresSafeArea(edges: fullscreen ? .all : [])
-            if let error = model.playbackError {
+            // Enquanto ainda vai tentar outra vez, não há erro para mostrar.
+            if let error = model.playbackError, model.player.retries >= PlayerEngine.maxStartRetries || model.prefs.reconnectSeconds == 0 {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
+            } else if model.player.frozen {
+                ProgressView().tint(.white)
             } else if model.player.state != .playing, let current = model.current {
                 Text(current.name).font(.subheadline).foregroundStyle(Theme.textDim)
             }
