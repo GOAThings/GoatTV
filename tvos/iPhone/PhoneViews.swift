@@ -11,6 +11,11 @@ private func phoneMaskEmail(_ email: String) -> String {
 private let cardFill = Color.white.opacity(0.08)
 private let cardShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
+// Em teste: a lista de canais com ou sem cartões. Fica só neste aparelho, nas Definições → Canais.
+private let channelCardsKey = "phone_channel_cards"
+private let listShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+private let selectedFill = Theme.sky.opacity(0.13)
+
 struct PhoneRoot: View {
     @Environment(AppModel.self) private var model
     /// A abertura (o logo animado) só passa uma vez, ao abrir a app.
@@ -224,7 +229,7 @@ struct PhoneMain: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
-                // A barra flutua por cima da lista: o conteúdo passa por baixo do vidro.
+                // A barra fica colada ao fundo do ecrã, por baixo da lista.
                 .safeAreaInset(edge: .bottom, spacing: 0) { TabRow(tab: $tab) }
             }
         }
@@ -407,6 +412,7 @@ private struct ChannelsTab: View {
     @State private var group: String?
     @State private var pinFor: ChannelGroup?
     @State private var pin = ""
+    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let groups = model.groups
@@ -418,7 +424,7 @@ private struct ChannelsTab: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: cards ? 6 : 0) {
                     ForEach(groups, id: \.id) { g in
                         let locked = model.isGroupLocked(g.id)
                         let on = g.id == shown
@@ -427,14 +433,14 @@ private struct ChannelsTab: View {
                         } label: {
                             Text(locked ? "🔒 \(g.name)" : g.name)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(on ? Color.black : Theme.text)
-                                .padding(.horizontal, 16).padding(.vertical, 9)
-                                .background(on ? Color.white : cardFill, in: Capsule())
+                                .foregroundStyle(on ? Theme.sky : cards ? Theme.textDim : Theme.textFaint)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(on ? selectedFill : cards ? cardFill : .clear, in: listShape)
                         }
                         .id(g.id)
                     }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .padding(.horizontal, cards ? 12 : 4).padding(.vertical, 8)
             }
             // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
             .onAppear { proxy.scrollTo(shown, anchor: .center) }
@@ -458,6 +464,7 @@ private struct ChannelList: View {
     let channels: [Channel]
     let group: String
     @Binding var epgFor: Channel?
+    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         if channels.isEmpty {
@@ -465,12 +472,12 @@ private struct ChannelList: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: cards ? 6 : 0) {
                     ForEach(channels) { channel in
                         ChannelCard(channel: channel, group: group, epgFor: $epgFor)
                     }
                 }
-                .padding(.horizontal, 12).padding(.bottom, 12)
+                .padding(.horizontal, cards ? 12 : 6).padding(.bottom, 12)
             }
         }
     }
@@ -481,6 +488,7 @@ private struct ChannelCard: View {
     let channel: Channel
     let group: String
     @Binding var epgFor: Channel?
+    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let playing = model.current?.key == channel.key
@@ -488,25 +496,47 @@ private struct ChannelCard: View {
         Button {
             model.play(channel, from: group)
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 if model.prefs.showLogos {
-                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 64, height: 44))
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 56, height: 38))
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.prefs.showNumbers ? "\(channel.num)  \(channel.name)" : channel.name).font(.body.weight(.semibold)).foregroundStyle(Theme.text).lineLimit(1)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(channel.name).font(.body.weight(.semibold)).foregroundStyle(playing ? Theme.sky : Theme.text).lineLimit(1)
+                        Spacer(minLength: 8)
+                        if model.prefs.showNumbers {
+                            Text("\(channel.num)").font(.footnote).monospacedDigit().foregroundStyle(Theme.textFaint.opacity(0.6))
+                        }
+                    }
                     if let now {
-                        Text(now.title).font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
-                        ProgressView(value: Double(now.progress(now: Int64(Date().timeIntervalSince1970 * 1000)))).tint(Theme.sky)
+                        Text(now.title).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
+                        ThinProgress(value: Double(now.progress(now: Int64(Date().timeIntervalSince1970 * 1000))), color: playing ? Theme.sky : Color.white.opacity(0.34))
+                            .padding(.top, 5)
                     }
                 }
-                Spacer(minLength: 0)
             }
-            .padding(12)
-            .background(playing ? Color.white.opacity(0.16) : cardFill, in: cardShape)
-            .contentShape(cardShape)
+            .padding(.horizontal, 10).padding(.vertical, 11)
+            .background(playing ? selectedFill : cards ? cardFill : .clear, in: listShape)
+            .contentShape(listShape)
         }
         .simultaneousGesture(LongPressGesture().onEnded { _ in epgFor = channel })
         .task { model.requestShortEpg(channel) }
+    }
+}
+
+/// A barra do programa a dar: fina, para não pesar em cada linha.
+private struct ThinProgress: View {
+    let value: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.08))
+                Capsule().fill(color).frame(width: geo.size.width * min(max(value, 0), 1))
+            }
+        }
+        .frame(height: 2)
     }
 }
 
@@ -570,6 +600,7 @@ private struct SearchTab: View {
     @Environment(AppModel.self) private var model
     @Binding var epgFor: Channel?
     @State private var query = ""
+    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let s = model.strings
@@ -585,12 +616,12 @@ private struct SearchTab: View {
                 Text(s.r("search_no_results")).foregroundStyle(Theme.textFaint)
             }
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: cards ? 6 : 0) {
                     ForEach(hits) { hit in
                         ChannelCard(channel: hit.channel, group: model.groupFor(hit.channel), epgFor: $epgFor)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, cards ? 12 : 6)
             }
         }
     }
@@ -608,10 +639,9 @@ private struct TabRow: View {
             item(.search, s.r("search"), "magnifyingglass")
             item(.menu, s.r("settings"), "gearshape")
         }
-        .padding(5)
-        .glass(radius: 40)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 8).padding(.top, 6)
+        .background { Theme.hex(0x0C0E13).ignoresSafeArea(edges: .bottom) }
+        .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.1)).frame(height: 0.5) }
     }
 
     private func item(_ t: PhoneTab, _ label: String, _ icon: String) -> some View {
@@ -630,10 +660,9 @@ private struct TabRow: View {
                 Text(label).font(.caption2).lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .foregroundStyle(on ? Theme.sky : Theme.textDim)
-            .background(on ? Color.white.opacity(0.12) : .clear, in: Capsule())
-            .contentShape(Capsule())
+            .padding(.vertical, 4)
+            .foregroundStyle(on ? Theme.sky : Theme.textFaint)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -676,6 +705,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
 /// Definições do telemóvel: o essencial, em lista agrupada.
 private struct MenuTab: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(channelCardsKey) private var channelCards = false
     @State private var adding = false
     @State private var choosingPin = false
     @State private var pinText = ""
@@ -782,6 +812,9 @@ private struct MenuTab: View {
                     toggle(s.t("Channel numbers", "Números dos canais"), "show_numbers", p.showNumbers)
                     toggle(s.t("Channel logos", "Logos dos canais"), "show_logos", p.showLogos)
                     toggle(s.t("Current show in the list", "Programa atual na lista"), "epg_in_list", p.epgInList)
+                    Toggle(s.t("Channel cards (test)", "Cartões nos canais (teste)"), isOn: $channelCards)
+                        .foregroundStyle(Theme.text).tint(Theme.sky)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
                     if model.hasAccount { MenuRow(s.t("Logo source", "Origem dos logótipos")) { pickingLogoSource = true } }
                     MenuRow(s.t("Visible groups", "Grupos visíveis")) { managingGroups = true }
                 }
