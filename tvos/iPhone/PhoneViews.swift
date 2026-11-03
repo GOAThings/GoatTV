@@ -206,11 +206,13 @@ struct PhoneMain: View {
     var body: some View {
         let settings = tab == .menu
         let landscape = vertical == .compact && !settings
+        GeometryReader { geo in
         VStack(spacing: 0) {
             if !settings {
+                // Ao alto, 16:9 com a largura toda; deitado, o ecrã todo.
                 VideoPane(fullscreen: landscape)
-                    .aspectRatio(landscape ? nil : 16 / 9, contentMode: .fit)
-                    .ignoresSafeArea(edges: landscape ? .all : [])
+                    .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
+                    .frame(height: landscape ? nil : geo.size.width * 9 / 16)
             }
             if !landscape {
                 Group {
@@ -225,6 +227,7 @@ struct PhoneMain: View {
                 // A barra flutua por cima da lista: o conteúdo passa por baixo do vidro.
                 .safeAreaInset(edge: .bottom, spacing: 0) { TabRow(tab: $tab) }
             }
+        }
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0) }
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
@@ -271,8 +274,11 @@ private struct VideoPane: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            Color.black.ignoresSafeArea(edges: fullscreen ? .all : [])
+            // O vídeo é uma vista UIKit: sem isto, fica com os toques e o gesto de baixo nem sempre os recebe.
             VideoSurface(view: model.player.view)
+                .ignoresSafeArea(edges: fullscreen ? .all : [])
+                .allowsHitTesting(false)
             if let error = model.playbackError {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
             } else if model.player.state != .playing, let current = model.current {
@@ -288,6 +294,9 @@ private struct VideoPane: View {
         .task(id: touched) {
             try? await Task.sleep(for: .seconds(4))
             if !Task.isCancelled { controls = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            PhoneOrientation.deviceMoved()
         }
     }
 
@@ -321,8 +330,8 @@ private struct VideoPane: View {
     }
 
     private func rotate() {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: fullscreen ? .portrait : .landscapeRight))
+        touched += 1
+        PhoneOrientation.force(fullscreen ? .portrait : .landscape)
     }
 
     private func iconButton(_ name: String, action: @escaping () -> Void) -> some View {
