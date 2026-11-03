@@ -99,6 +99,12 @@ import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import cc.slokker.itv.data.api.EpgCountryInfo
+import cc.slokker.itv.data.api.EpgCountryResult
+import cc.slokker.itv.data.api.EpgGuideChannel
+import cc.slokker.itv.ui.common.LogoImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -161,6 +167,7 @@ fun MobileMain(vm: AppViewModel) {
         if (settings) tab = Tab.Tv
     }
     var epgFor by remember { mutableStateOf<Channel?>(null) }
+    var epgPick by remember { mutableStateOf<Pair<Channel, Boolean>?>(null) }
 
     FullscreenBars(landscape)
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
@@ -194,7 +201,15 @@ fun MobileMain(vm: AppViewModel) {
                 }
                 // A barra flutua por cima da lista, com o vidro do resto da GoatTV.
                 BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
-                epgFor?.let { EpgSheet(vm, it) { epgFor = null } }
+                epgFor?.let { channel ->
+                    EpgSheet(vm, channel, onPick = { logo -> epgPick = channel to logo }) { epgFor = null }
+                }
+                epgPick?.let { (channel, logo) ->
+                    EpgPickPage(vm, channel, logo) {
+                        epgPick = null
+                        epgFor = null
+                    }
+                }
             }
         }
     }
@@ -419,7 +434,7 @@ private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, on
 
 /** O guia de um canal (manter o dedo no cartão). */
 @Composable
-private fun EpgSheet(vm: AppViewModel, channel: Channel, onClose: () -> Unit) {
+private fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean) -> Unit, onClose: () -> Unit) {
     val s = LocalStrings.current
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
@@ -439,6 +454,16 @@ private fun EpgSheet(vm: AppViewModel, channel: Channel, onClose: () -> Unit) {
                 Text(channel.name, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel) }
                 ControlButton(ItvIcons.Close, onClick = onClose)
+            }
+            if (vm.epgPickerAvailable) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(false to s.epgGuideChannel, true to s.channelLogo).forEach { (logo, title) ->
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Card).clickable { onPick(logo) }.padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(title, color = ItvColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                }
             }
             if (entries.isEmpty()) Text(s.noGuide, color = ItvColors.TextFaint, fontSize = 15.sp)
             LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -573,6 +598,10 @@ fun MobileMenu(vm: AppViewModel) {
     }
     picking?.let { p -> return PickPage(p) { picking = null } }
     if (managingGroups) return GroupsPage(vm) { managingGroups = false }
+    var pickingCountry by remember { mutableStateOf<Boolean?>(null) }
+    var confirmingEpgReset by remember { mutableStateOf(false) }
+    val epgMappings by vm.epgMappings.collectAsStateWithLifecycle()
+    pickingCountry?.let { logo -> return EpgCountriesPage(vm, logo) { pickingCountry = null } }
     if (editingAgent) {
         return UserAgentPage(prefs.userAgent, onSave = { vm.setPref(Prefs.Key.USER_AGENT, it.trim().ifEmpty { null }) }) { editingAgent = false }
     }
@@ -602,6 +631,7 @@ fun MobileMenu(vm: AppViewModel) {
             ToggleRow(s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) }
             ToggleRow(s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) }
             ToggleRow(s.nowInList, prefs.epgInList) { vm.setPref(Prefs.Key.EPG_IN_LIST, it) }
+            if (vm.epgPickerAvailable) MenuRow(s.logoSource, null) { pickingCountry = true }
             MenuRow(s.visibleGroups, null) { managingGroups = true }
         }
         Section(s.settings) {
@@ -612,6 +642,13 @@ fun MobileMenu(vm: AppViewModel) {
             prefRow(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours)
             prefRow(Prefs.Key.PLAYLIST_REFRESH, s.playlistRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.playlistRefreshHours)
             prefRow(Prefs.Key.EPG_OFFSET, s.timeOffset, (-180..180 step 30).map { m -> m to (if (m == 0) "0" else "%+d min".format(m)) }, prefs.epgOffsetMin)
+            if (vm.epgPickerAvailable) MenuRow(s.epgCountryGuide, null) { pickingCountry = false }
+            if (vm.epgPickerAvailable && epgMappings.isNotEmpty()) {
+                MenuRow(if (confirmingEpgReset) s.pressAgainToConfirm else s.epgResetAll, null) {
+                    if (confirmingEpgReset) vm.resetEpgMappings()
+                    confirmingEpgReset = !confirmingEpgReset
+                }
+            }
             MenuRow(s.refreshEpg, null, vm::refreshEpg)
         }
         Section(s.parental) {
@@ -844,5 +881,179 @@ fun MobileLoadError(error: ErrorInfo, onRetry: () -> Unit, onSettings: (() -> Un
         MenuRow(s.retry, null, onRetry)
         onSettings?.let { MenuRow(s.settings, null, it) }
         onLogout?.let { MenuRow(s.logout, null, it) }
+    }
+}
+
+/** Com conta: o guia ou o logótipo de um canal (sugestões, pesquisa e países, como na TV). */
+@Composable
+private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    val mappings by vm.epgMappings.collectAsStateWithLifecycle()
+    val mapping = mappings[channel.key]
+    val choice = vm.channelLogoChoice(channel)
+    var query by remember { mutableStateOf(channel.name) }
+    var country by remember { mutableStateOf<EpgCountryResult?>(null) }
+    var showAll by remember { mutableStateOf(false) }
+    BackHandler(onBack = { if (country != null) { country = null; showAll = false } else onClose() })
+
+    fun usable(g: EpgGuideChannel) = g.id != null && (!logo || g.icon != null)
+    fun chosen(code: String?, g: EpgGuideChannel) = if (logo) choice == g.icon else mapping?.country == code && mapping?.channelId == g.id
+    fun choose(code: String, g: EpgGuideChannel) {
+        if (logo) {
+            vm.setChannelLogo(channel, g.icon)
+            onClose()
+        } else {
+            scope.launch { if (vm.setEpgMapping(channel, code, g)) onClose() }
+        }
+    }
+
+    val open = country
+    if (open != null) {
+        val code = open.country.orEmpty()
+        val name = open.countryName ?: code.uppercase()
+        val all by produceState<AppViewModel.EpgResult<EpgCountryResult>?>(null, code, showAll) { if (showAll) value = vm.epgCountryChannels(code) }
+        val channels = if (showAll) (all as? AppViewModel.EpgResult.Ok)?.value?.channels.orEmpty() else open.channels.orEmpty()
+        PickerScaffold(name, { country = null; showAll = false }) {
+            if (showAll && all == null) item { PickerRow(s.loadingShort) {} }
+            (all as? AppViewModel.EpgResult.Error)?.takeIf { showAll }?.let { e -> item { PickerRow(e.message) {} } }
+            items(channels.filter(::usable), key = { it.id!! }) { g ->
+                PickerRow(g.name ?: g.id!!, g.now, if (logo) g.icon else null, showLogo = logo, checked = chosen(code, g)) { choose(code, g) }
+            }
+            if (!showAll) item { PickerRow(s.epgAllCountry(name)) { showAll = true } }
+            item {
+                if (logo) {
+                    PickerRow(s.logoCountryApply(name), s.logoCountryApplySub) {
+                        vm.setPref(Prefs.Key.LOGO_SOURCE, code)
+                        onClose()
+                    }
+                } else {
+                    PickerRow(s.epgCountryApply(name), s.epgCountryGuideSub) {
+                        vm.applyEpgCountry(code, name)
+                        onClose()
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    val suggestions by produceState<AppViewModel.EpgResult<List<EpgGuideChannel>>?>(null, channel.key) { value = vm.epgSuggest(channel) }
+    val search by produceState<AppViewModel.EpgResult<List<EpgCountryResult>>?>(null, query) {
+        value = null
+        delay(400)
+        value = vm.epgSearch(query)
+    }
+    PickerScaffold(if (logo) s.channelLogo else s.epgGuideChannel, onClose, header = {
+        Field(s.epgSearchOther, query, Modifier.padding(bottom = 8.dp)) { query = it }
+    }) {
+        if (logo) {
+            item {
+                PickerRow(s.logoAutomatic, checked = choice == null) {
+                    vm.setChannelLogo(channel, null)
+                    onClose()
+                }
+            }
+            item {
+                PickerRow(s.logoFromPlaylist, logo = channel.logo, showLogo = true, checked = choice == "") {
+                    vm.setChannelLogo(channel, "")
+                    onClose()
+                }
+            }
+        } else {
+            item {
+                PickerRow(s.epgFromPlaylist, checked = mapping == null) {
+                    if (mapping == null) onClose() else scope.launch { if (vm.removeEpgMapping(channel)) onClose() }
+                }
+            }
+        }
+        val suggested = (suggestions as? AppViewModel.EpgResult.Ok)?.value.orEmpty().filter { usable(it) && it.country != null }
+        if (suggested.isNotEmpty()) {
+            item { PickerHeader(s.epgSuggestions) }
+            items(suggested, key = { "s:${it.country}:${it.id}" }) { g ->
+                PickerRow(g.name ?: g.id!!, listOfNotNull(g.countryName, g.now).joinToString(" · "), g.icon, showLogo = logo, checked = chosen(g.country, g)) { choose(g.country!!, g) }
+            }
+        }
+        item { PickerHeader(s.epgCountriesFor(query)) }
+        when (val r = search) {
+            null -> item { PickerRow(s.loadingShort) {} }
+            is AppViewModel.EpgResult.Error -> item { PickerRow(r.message) {} }
+            is AppViewModel.EpgResult.Ok -> {
+                val countries = r.value.map { it.copy(channels = it.channels?.filter(::usable)) }.filter { it.country != null && !it.channels.isNullOrEmpty() }
+                if (countries.isEmpty()) item { PickerRow(s.epgNoResults(query)) {} }
+                items(countries, key = { "c:${it.country}" }) { c ->
+                    PickerRow(c.countryName ?: c.country!!.uppercase(), c.channels!!.size.toString()) { country = c }
+                }
+            }
+        }
+    }
+}
+
+/** A lista inteira: o guia de um país, ou a origem dos logótipos. */
+@Composable
+private fun EpgCountriesPage(vm: AppViewModel, logo: Boolean, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val countries by produceState<AppViewModel.EpgResult<List<EpgCountryInfo>>?>(null) { value = vm.epgCountries() }
+    BackHandler(onBack = onClose)
+    fun source(value: String?) {
+        vm.setPref(Prefs.Key.LOGO_SOURCE, value)
+        onClose()
+    }
+    PickerScaffold(if (logo) s.logoSource else s.epgCountryGuide, onClose) {
+        if (logo) {
+            item { PickerRow(s.logoFromPlaylist, checked = prefs.logoSource == Prefs.LogoSource.PLAYLIST) { source(null) } }
+            item { PickerRow(s.logoFromGuide, s.logoFromGuideSub, checked = prefs.logoSource == Prefs.LogoSource.GUIDE) { source(Prefs.LogoSource.GUIDE) } }
+        }
+        when (val r = countries) {
+            null -> item { PickerRow(s.loadingShort) {} }
+            is AppViewModel.EpgResult.Error -> item { PickerRow(r.message) {} }
+            is AppViewModel.EpgResult.Ok -> items(
+                r.value.filter { it.code != null && (it.channels ?: 0) > 0 }.sortedBy { it.name ?: it.code },
+                key = { it.code!! },
+            ) { c ->
+                val name = c.name ?: c.code!!.uppercase()
+                PickerRow(name, if (logo) null else c.channels.toString(), checked = logo && prefs.logoSource == c.code) {
+                    if (logo) {
+                        source(c.code)
+                    } else {
+                        vm.applyEpgCountry(c.code!!, name)
+                        onClose()
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerScaffold(title: String, onClose: () -> Unit, header: @Composable () -> Unit = {}, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    Column(Modifier.fillMaxSize().background(ItvColors.Background).padding(horizontal = 16.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            ControlButton(ItvIcons.Close, onClick = onClose)
+        }
+        header()
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp), content = content)
+    }
+}
+
+@Composable
+private fun PickerHeader(title: String) {
+    Text(title, color = ItvColors.TextFaint, fontSize = 13.sp, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+}
+
+@Composable
+private fun PickerRow(title: String, subtitle: String? = null, logo: String? = null, showLogo: Boolean = false, checked: Boolean = false, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (showLogo) {
+            LogoImage(logo, title, 40.dp)
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, color = ItvColors.Text, fontSize = 16.sp)
+            if (!subtitle.isNullOrEmpty()) Text(subtitle, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (checked) Text("✓", color = LocalAccent.current.start, fontSize = 18.sp)
     }
 }

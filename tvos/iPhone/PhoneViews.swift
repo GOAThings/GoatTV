@@ -451,6 +451,7 @@ private struct GuideSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let channel: Channel
+    @State private var pickingLogo: Bool?
 
     var body: some View {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
@@ -485,7 +486,16 @@ private struct GuideSheet: View {
             .navigationTitle(channel.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if model.hasAccount {
+                    Menu {
+                        Button(model.strings.t("Guide channel", "Canal do guia")) { pickingLogo = false }
+                        Button(model.strings.t("Channel logo", "Logótipo do canal")) { pickingLogo = true }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                }
                 Button { model.toggleFavorite(channel) } label: { Image(systemName: model.isFavorite(channel) ? "star.fill" : "star") }
+            }
+            .navigationDestination(item: $pickingLogo) { logo in
+                PhoneEpgPick(channel: channel, logo: logo) { dismiss() }
             }
         }
         .presentationDetents([.medium, .large])
@@ -637,6 +647,9 @@ private struct MenuTab: View {
         }
     }
     @State private var managingGroups = false
+    @State private var pickingGuideCountry = false
+    @State private var confirmingEpgReset = false
+    @State private var pickingLogoSource = false
     @State private var editingAgent = false
     @State private var agentText = ""
 
@@ -705,6 +718,7 @@ private struct MenuTab: View {
                     toggle(s.t("Channel numbers", "Números dos canais"), "show_numbers", p.showNumbers)
                     toggle(s.t("Channel logos", "Logos dos canais"), "show_logos", p.showLogos)
                     toggle(s.t("Current show in the list", "Programa atual na lista"), "epg_in_list", p.epgInList)
+                    if model.hasAccount { MenuRow(s.t("Logo source", "Origem dos logótipos")) { pickingLogoSource = true } }
                     MenuRow(s.t("Visible groups", "Grupos visíveis")) { managingGroups = true }
                 }
                 section(s.r("settings")) {
@@ -715,6 +729,13 @@ private struct MenuTab: View {
                     pick(s.t("Update TV guide", "Atualizar guia"), "epg_refresh_hours", .number(Double(p.epgRefreshHours)), refreshOptions)
                     pick(s.t("Update playlists", "Atualizar listas"), "playlist_refresh_hours", .number(Double(p.playlistRefreshHours)), refreshOptions)
                     pick(s.t("Time offset", "Desvio horário"), "epg_offset_min", .number(Double(p.epgOffsetMin)), stride(from: -180, through: 180, by: 30).map { (.number(Double($0)), $0 == 0 ? "0" : String(format: "%+d min", $0)) })
+                    if model.hasAccount { MenuRow(s.t("Guide by country", "Guia por país")) { pickingGuideCountry = true } }
+                    if model.hasAccount, !model.epgMappings.isEmpty {
+                        MenuRow(confirmingEpgReset ? s.t("Press again to confirm", "Carrega outra vez para confirmar") : s.r("epg_reset_all")) {
+                            if confirmingEpgReset { model.resetEpgMappings() }
+                            confirmingEpgReset.toggle()
+                        }
+                    }
                     MenuRow(s.t("Update TV guide now", "Atualizar o guia agora")) { model.refreshEpg() }
                 }
                 section(s.r("parental")) {
@@ -759,6 +780,8 @@ private struct MenuTab: View {
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { picking = nil } } }
             }
         }
+        .sheet(isPresented: $pickingGuideCountry) { PhoneEpgCountries(logo: false) { pickingGuideCountry = false } }
+        .sheet(isPresented: $pickingLogoSource) { PhoneEpgCountries(logo: true) { pickingLogoSource = false } }
         .sheet(isPresented: $managingGroups) {
             NavigationStack {
                 List(model.allGroups, id: \.id) { g in
