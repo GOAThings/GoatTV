@@ -368,6 +368,10 @@ final class PlayerEngine: NSObject {
         retries = 0
         lastHTTPStatus = nil
         hideFreeze()
+        #if os(iOS)
+        // Criado antes de o vídeo da Apple estar à vista, o controlador só dá conta ao sair da app: faz-se de novo.
+        if backend == .apple, pipAllowed, !pipPossible, !pipActive { setUpPip() }
+        #endif
         if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
         format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
         applyAspect()
