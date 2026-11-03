@@ -83,6 +83,19 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var controlsDisplay = true
     /// Mantém a última imagem do canal anterior até o novo começar.
     @ObservationIgnored var freezeFrame = true
+    #if os(iOS)
+    /// Picture in picture ligado nas Definições (só no leitor principal).
+    @ObservationIgnored var pipAllowed = false {
+        didSet { if pipAllowed != oldValue { setUpPip() } }
+    }
+    /// O canal dá para a janela pequena agora (só o leitor da Apple sabe fazê-lo).
+    private(set) var pipPossible = false
+    private(set) var pipActive = false
+    /// A janela pequena fechou-se.
+    @ObservationIgnored var onPipStopped: (() -> Void)?
+    @ObservationIgnored fileprivate var pipController: AVPictureInPictureController?
+    @ObservationIgnored fileprivate var pipObserver: NSKeyValueObservation?
+    #endif
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -154,7 +167,12 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var linkResolver: (() async -> [StreamCandidate]?)?
 
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
-        candidates.flatMap { c -> [Attempt] in
+        var candidates = candidates
+        #if os(iOS)
+        // A janela pequena só dá com o leitor da Apple: com ela ligada, o HLS vem primeiro.
+        if pipAllowed, engine != "vlc" { candidates = candidates.filter(\.isHLS) + candidates.filter { !$0.isHLS } }
+        #endif
+        return candidates.flatMap { c -> [Attempt] in
             engine != "vlc" && c.isHLS ? [Attempt(candidate: c, backend: .apple), Attempt(candidate: c, backend: .vlc)] : [Attempt(candidate: c, backend: .vlc)]
         }
     }
@@ -515,6 +533,55 @@ final class PlayerEngine: NSObject {
     private func clearDisplayCriteria() {}
     #endif
 }
+
+#if os(iOS)
+// MARK: Picture in picture
+
+extension PlayerEngine: AVPictureInPictureControllerDelegate {
+    fileprivate func setUpPip() {
+        pipObserver = nil
+        pipController?.stopPictureInPicture()
+        pipController = nil
+        pipPossible = false
+        guard pipAllowed, AVPictureInPictureController.isPictureInPictureSupported(),
+              let controller = AVPictureInPictureController(playerLayer: appleView.playerLayer) else { return }
+        controller.delegate = self
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        pipObserver = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] c, _ in
+            let possible = c.isPictureInPicturePossible
+            Task { @MainActor in self?.pipPossible = possible }
+        }
+        pipController = controller
+    }
+
+    func togglePip() {
+        guard let pipController else { return }
+        if pipController.isPictureInPictureActive {
+            pipController.stopPictureInPicture()
+        } else {
+            pipController.startPictureInPicture()
+        }
+    }
+
+    nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor in self.pipActive = true }
+    }
+
+    nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor in
+            self.pipActive = false
+            self.onPipStopped?()
+        }
+    }
+
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+        Task { @MainActor in
+            self.pipActive = false
+            self.onPipStopped?()
+        }
+    }
+}
+#endif
 
 /// A vista do leitor da Apple (a camada é a do vídeo).
 final class AppleVideoView: UIView {

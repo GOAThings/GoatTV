@@ -368,6 +368,9 @@ private struct VideoPane: View {
                     pill(s.r("back_to_live")) { model.exitCatchup() }
                 }
                 Spacer()
+                if model.player.pipPossible {
+                    iconButton("pip.enter") { model.player.togglePip(); touched += 1 }
+                }
                 if model.second == nil {
                     iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
                 } else {
@@ -768,6 +771,7 @@ private struct MenuTab: View {
                     pick(s.r("aspect"), "aspect", p.aspect, [("fit", s.r("aspect_fit")), ("zoom", s.r("aspect_zoom")), ("fill", s.r("aspect_fill"))])
                     pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
                     toggle(s.r("surround_default"), "surround_default", p.surroundDefault)
+                    toggle(s.r("picture_in_picture"), "pip_enabled", p.pipEnabled)
                     MenuRow(s.t("User agent", "User agent"), value: p.userAgent.isEmpty ? s.t("Default", "Normal") : p.userAgent) {
                         agentText = p.userAgent
                         editingAgent = true

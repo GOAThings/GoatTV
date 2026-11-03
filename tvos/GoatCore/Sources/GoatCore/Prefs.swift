@@ -36,6 +36,8 @@ public struct Prefs: Equatable, Sendable {
     public var freezeFrame = true
     /// Faixa surround por defeito.
     public var surroundDefault = false
+    /// iPhone: o vídeo continua numa janela pequena ao sair da app.
+    public var pipEnabled = false
     /// Escala da interface, em % (80–120).
     public var uiScale = 100
     // Mudança de canal
@@ -147,6 +149,7 @@ public struct Prefs: Equatable, Sendable {
         audioPassthrough = bool("audio_passthrough", d.audioPassthrough)
         freezeFrame = bool("freeze_frame", d.freezeFrame)
         surroundDefault = bool("surround_default", d.surroundDefault)
+        pipEnabled = bool("pip_enabled", d.pipEnabled)
         uiScale = clamp(int("ui_scale", d.uiScale), 80, 120)
         engine = str("engine", d.engine, ["exo", "vlc"])
         decoder = str("decoder", d.decoder, ["hw", "sw"])
