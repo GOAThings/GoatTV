@@ -85,25 +85,6 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var controlsDisplay = true
     /// Mantém a última imagem do canal anterior até o novo começar.
     @ObservationIgnored var freezeFrame = true
-    #if os(iOS)
-    /// Picture in picture ligado nas Definições (só no leitor principal).
-    @ObservationIgnored var pipAllowed = false {
-        didSet { if pipAllowed != oldValue { setUpPip() } }
-    }
-    /// O canal dá para a janela pequena agora (só o leitor da Apple sabe fazê-lo).
-    private(set) var pipPossible = false
-    private(set) var pipActive = false
-    /// O HLS deste canal, para passar para o leitor da Apple quando se pede a janela pequena.
-    var pipCandidate: StreamCandidate?
-    /// A passar para o leitor da Apple para abrir a janela pequena.
-    @ObservationIgnored fileprivate var pipPending = false
-    /// Mostra-se o botão: ou o vídeo já está pronto, ou dá para passar para o leitor da Apple.
-    var pipAvailable: Bool { pipAllowed && (pipActive || (state == .playing && (pipPossible || pipCandidate != nil))) }
-    /// A janela pequena fechou-se.
-    @ObservationIgnored var onPipStopped: (() -> Void)?
-    @ObservationIgnored fileprivate var pipController: AVPictureInPictureController?
-    @ObservationIgnored fileprivate var pipObserver: NSKeyValueObservation?
-    #endif
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -181,10 +162,6 @@ final class PlayerEngine: NSObject {
     }
 
     func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
-        #if os(iOS)
-        pipPending = false
-        pipCandidate = nil
-        #endif
         self.linkResolver = linkResolver
         retry?.cancel()
         pendingStart?.cancel()
@@ -251,9 +228,6 @@ final class PlayerEngine: NSObject {
     }
 
     func stop() {
-        #if os(iOS)
-        pipPending = false
-        #endif
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
@@ -298,9 +272,6 @@ final class PlayerEngine: NSObject {
         stopBackends()
         let attempt = attempts[index]
         backend = attempt.backend
-        #if os(iOS)
-        if backend != .apple { pipPending = false }
-        #endif
         DebugLog.add("Player: opening \(attempt.candidate.format) with \(backend) (\(index + 1)/\(attempts.count))")
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
@@ -380,16 +351,8 @@ final class PlayerEngine: NSObject {
         retries = 0
         lastHTTPStatus = nil
         hideFreeze()
-        #if os(iOS)
-        // Criado antes de o vídeo da Apple estar à vista, o controlador só dá conta ao sair da app: faz-se de novo.
-        if backend == .apple, pipAllowed, !pipPossible, !pipActive { setUpPip() }
-        #endif
-        #if os(iOS)
-        if pipPending { finishPipSwitch() }
-        #endif
         if backend == .apple { checkApplePicture() }
-        // A passagem para a janela pequena não muda o formato preferido da conta.
-        if !pipSwitching, let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
+        if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
         format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
         applyAspect()
         applyAudio()
@@ -493,20 +456,8 @@ final class PlayerEngine: NSObject {
             Task { @MainActor in self?.appleFailed() }
         })
         avPlayer.isMuted = muted
-        #if os(iOS)
-        // Na passagem para a janela pequena não se espera por muito vídeo em memória (há canais que nunca lá chegam).
-        avPlayer.automaticallyWaitsToMinimizeStalling = !pipPending
-        #endif
         avPlayer.replaceCurrentItem(with: item)
         avPlayer.play()
-    }
-
-    private var pipSwitching: Bool {
-        #if os(iOS)
-        pipPending
-        #else
-        false
-        #endif
     }
 
     /// Para o registo: há canais em que o leitor da Apple dá som sem imagem.
@@ -592,88 +543,6 @@ final class PlayerEngine: NSObject {
     private func clearDisplayCriteria() {}
     #endif
 }
-
-#if os(iOS)
-// MARK: Picture in picture
-
-extension PlayerEngine: AVPictureInPictureControllerDelegate {
-    fileprivate func setUpPip() {
-        DebugLog.add("PiP: allowed \(pipAllowed), supported \(AVPictureInPictureController.isPictureInPictureSupported())")
-        pipObserver = nil
-        pipController?.stopPictureInPicture()
-        pipController = nil
-        pipPossible = false
-        guard pipAllowed, AVPictureInPictureController.isPictureInPictureSupported(),
-              let controller = AVPictureInPictureController(playerLayer: appleView.playerLayer) else { return }
-        controller.delegate = self
-        controller.canStartPictureInPictureAutomaticallyFromInline = true
-        pipObserver = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] c, _ in
-            let possible = c.isPictureInPicturePossible
-            Task { @MainActor in
-                self?.pipPossible = possible
-                DebugLog.add("PiP: possible \(possible)")
-            }
-        }
-        pipController = controller
-    }
-
-    func togglePip() {
-        guard let pipController else { return }
-        if pipController.isPictureInPictureActive {
-            pipController.stopPictureInPicture()
-        } else if pipPossible {
-            pipController.startPictureInPicture()
-        } else if !pipPending, let pipCandidate {
-            // O canal volta a abrir no leitor da Apple; se não der, segue para o que estava a dar.
-            DebugLog.add("PiP: switching to the Apple player")
-            attempts = [Attempt(candidate: pipCandidate, backend: .apple)] + attempts.filter { !($0.backend == .apple && $0.candidate == pipCandidate) }
-            index = 0
-            wasPlaying = false
-            pipPending = true
-            open()
-        }
-    }
-
-    /// O canal já dá no leitor da Apple: abre a janela quando houver imagem; sem imagem, volta ao que estava a dar.
-    fileprivate func finishPipSwitch() {
-        let item = avPlayer.currentItem
-        Task { [weak self] in
-            for _ in 0..<16 {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard let self, self.pipPending, self.backend == .apple, self.avPlayer.currentItem === item else { return }
-                if self.appleView.playerLayer.isReadyForDisplay, self.pipPossible {
-                    self.pipPending = false
-                    self.pipController?.startPictureInPicture()
-                    return
-                }
-            }
-            guard let self, self.pipPending, self.backend == .apple, self.avPlayer.currentItem === item else { return }
-            DebugLog.add("PiP: no picture on the Apple player, going back")
-            self.next()
-        }
-    }
-
-    nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor in self.pipActive = true }
-    }
-
-    nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor in
-            self.pipActive = false
-            self.onPipStopped?()
-        }
-    }
-
-    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
-        let message = "\(error)"
-        Task { @MainActor in
-            DebugLog.add("PiP: failed to start: \(message)")
-            self.pipActive = false
-            self.onPipStopped?()
-        }
-    }
-}
-#endif
 
 /// A vista do leitor da Apple (a camada é a do vídeo).
 final class AppleVideoView: UIView {

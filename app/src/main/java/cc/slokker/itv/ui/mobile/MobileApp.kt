@@ -72,7 +72,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
-import cc.slokker.itv.MainActivity
 import cc.slokker.itv.BuildConfig
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
@@ -159,16 +158,8 @@ fun MobileMain(vm: AppViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.Tv) }
     val settings = tab == Tab.Menu
     val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = !settings)
+    val landscape = !settings && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val activity = LocalContext.current as? Activity
-    val main = activity as? MainActivity
-    val pip = main?.inPip == true
-    val landscape = !settings && (pip || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
-    // Nas Definições o canal está fechado: não há nada para levar para a janela pequena.
-    val pipOnLeave = prefs.pipEnabled && !settings
-    DisposableEffect(main, pipOnLeave) {
-        main?.setPipOnLeave(pipOnLeave)
-        onDispose { main?.setPipOnLeave(false) }
-    }
     // Trocar de lista nas Definições abre outro canal: volta à TV para o ver.
     var shownKey by remember { mutableStateOf(current.key) }
     if (shownKey != current.key) {
@@ -195,7 +186,7 @@ fun MobileMain(vm: AppViewModel) {
             Box(
                 if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
             ) {
-                VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onFullscreen = {
+                VideoArea(vm, current, playback, landscape, onFullscreen = {
                     activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 })
             }
@@ -229,7 +220,7 @@ fun MobileMain(vm: AppViewModel) {
             delay(15_000)
         }
     }
-    if (!pip) reminder?.let { r ->
+    reminder?.let { r ->
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(12.dp)) {
             Row(Modifier.fillMaxWidth().clip(CardShape).background(Color(0xFF20232E)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -260,7 +251,7 @@ private fun FullscreenBars(fullscreen: Boolean) {
 }
 
 @Composable
-private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, pip: Boolean, onPip: (() -> Unit)?, onFullscreen: () -> Unit) {
+private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, onFullscreen: () -> Unit) {
     val s = LocalStrings.current
     var controls by remember { mutableStateOf(true) }
     var touched by remember { mutableStateOf(0) }
@@ -294,7 +285,7 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
             !playback.ready -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
         }
-        if (controls && !pip) {
+        if (controls) {
             Row(
                 Modifier.align(Alignment.TopStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -314,10 +305,7 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                     SmallAction(s.backToLive) { vm.exitCatchup() }
                 }
             }
-            Row(Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
-                onPip?.let { ControlButton(ItvIcons.Pip, onClick = it) }
-                ControlButton(ItvIcons.Fullscreen, onClick = onFullscreen)
-            }
+            ControlButton(ItvIcons.Fullscreen, Modifier.align(Alignment.BottomEnd).padding(6.dp), onFullscreen)
             if (fullscreen && catchup == null) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomStart).padding(14.dp))
         }
     }
@@ -630,9 +618,6 @@ fun MobileMenu(vm: AppViewModel) {
         Section(s.playback) {
             PickRow(s.streamFormat, listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)"), format, open) { vm.setStreamFormat(it as String?) }
             prefRow(Prefs.Key.BUFFER, s.buffer, listOf(Prefs.Buffer.LIVE to s.bufferLive, Prefs.Buffer.SMALL to s.bufferSmall, Prefs.Buffer.NORMAL to s.bufferNormal, Prefs.Buffer.LARGE to s.bufferLarge), prefs.buffer)
-            if ((LocalContext.current as? MainActivity)?.pipSupported == true) {
-                ToggleRow(s.pictureInPicture, prefs.pipEnabled) { vm.setPref(Prefs.Key.PIP_ENABLED, it) }
-            }
             prefRow(Prefs.Key.ENGINE, s.engine, listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc), prefs.engine)
             prefRow(Prefs.Key.DECODER, s.decoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.decoder)
             prefRow(Prefs.Key.AUDIO_DECODER, s.audioDecoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.audioDecoder)

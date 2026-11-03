@@ -161,12 +161,6 @@ final class AppModel {
         }
         loadReminders()
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
-        #if os(iOS)
-        // Fechou-se a janela pequena com a app fora: o canal para e liberta a ligação.
-        player.onPipStopped = { [weak self] in
-            if UIApplication.shared.applicationState == .background { self?.stopForBackground() }
-        }
-        #endif
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
@@ -538,9 +532,6 @@ final class AppModel {
         recents = Backend.parseKeyLists(settings["recent_channels"])
         strings = Strings(language: prefs.language)
         player.reconnectSeconds = prefs.reconnectSeconds
-        #if os(iOS)
-        player.pipAllowed = prefs.pipEnabled
-        #endif
         player.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
         player.aspect = prefs.aspect
         for engine in [player, secondPlayer] {
@@ -928,12 +919,6 @@ final class AppModel {
         let playlist = content.playlist
         player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
                     linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
-        #if os(iOS)
-        // A janela pequena precisa de HLS: tenta-se mesmo que o servidor não o anuncie.
-        if prefs.pipEnabled {
-            player.pipCandidate = streamCandidates(playlist: content.playlist, channel: channel, preferred: StreamFormat.hls).first(where: \.isHLS)
-        }
-        #endif
         saveLast(channel, watched: false)
         watchTask?.cancel()
         watchTask = Task { [weak self] in
@@ -1743,21 +1728,6 @@ final class AppModel {
         updateTopShelf()
         flushWatched()
         closeSecond()
-        #if os(iOS)
-        if player.pipPossible || player.pipActive {
-            // A janela pequena abre sozinha ao sair; se não abrir, o canal para na mesma.
-            player.setMuted(false)
-            Task {
-                try? await Task.sleep(for: .seconds(1))
-                if UIApplication.shared.applicationState == .background, !player.pipActive { stopForBackground() }
-            }
-            return
-        }
-        #endif
-        stopForBackground()
-    }
-
-    private func stopForBackground() {
         player.stop()
         backgrounded = true
     }

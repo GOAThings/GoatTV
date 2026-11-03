@@ -1,10 +1,5 @@
 package cc.slokker.itv
 
-import android.app.PictureInPictureParams
-import android.content.res.Configuration
-import android.os.Build
-import android.util.Rational
-import androidx.annotation.RequiresApi
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalDensity
@@ -98,41 +93,6 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openLink(intent)
-    }
-
-    /** Está na janela pequena: só se mostra o vídeo. */
-    var inPip by mutableStateOf(false)
-        private set
-    private var pipOnLeave = false
-
-    val pipSupported: Boolean
-        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-
-    /** O telemóvel diz se, ao sair da app, o vídeo passa para a janela pequena. */
-    fun setPipOnLeave(enabled: Boolean) {
-        pipOnLeave = enabled
-        if (pipSupported) setPictureInPictureParams(pipParams(enabled))
-    }
-
-    fun enterPip() {
-        if (pipSupported) enterPictureInPictureMode(pipParams(pipOnLeave))
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun pipParams(auto: Boolean): PictureInPictureParams =
-        PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(auto)
-        }.build()
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        // A partir do Android 12 o sistema entra sozinho.
-        if (pipOnLeave && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) enterPip()
-    }
-
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        inPip = isInPictureInPictureMode
     }
 
     private fun openLink(intent: Intent?) {
