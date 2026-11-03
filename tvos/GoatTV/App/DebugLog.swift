@@ -25,15 +25,21 @@ enum DebugLog {
         return lines.joined(separator: "\n")
     }
 
+    /// O teclado, a vibração e afins enchem o registo sem dizerem nada sobre o vídeo.
+    private static let noise = ["com.apple.UIKit", "com.apple.corehaptics", "com.apple.runningboard", "com.apple.inputAnalytics",
+                                "com.apple.TextInputUI", "com.apple.RemoteTextInput", "com.apple.KeyboardArbiter", "com.apple.BackBoard",
+                                "com.apple.FrontBoard", "com.apple.Pasteboard"]
+
     /// O registo do sistema deste processo nos últimos [minutes] minutos (sem as linhas do próprio DebugLog).
-    static func system(minutes: Double = 20) -> String {
+    static func system(minutes: Double = 5) -> String {
         guard let store = try? OSLogStore(scope: .currentProcessIdentifier),
               let entries = try? store.getEntries(at: store.position(date: Date().addingTimeInterval(-minutes * 60))) else {
             return "(system log unavailable)"
         }
         let time = Date.FormatStyle().hour(.twoDigits(amPM: .omitted)).minute().second()
         return entries.compactMap { entry -> String? in
-            guard let log = entry as? OSLogEntryLog, log.subsystem != "cc.slokker.goattv" else { return nil }
+            guard let log = entry as? OSLogEntryLog, log.subsystem != "cc.slokker.goattv",
+                  !noise.contains(where: log.subsystem.hasPrefix) else { return nil }
             let level = log.level == .error || log.level == .fault ? "E" : "I"
             return "\(log.date.formatted(time)) \(level) [\(log.subsystem)/\(log.category)] \(log.composedMessage)"
         }.joined(separator: "\n")

@@ -34,6 +34,11 @@ public enum BugReport {
     public static func trim(head: String, log: String, max: Int = maxBytes) -> String {
         let budget = max - head.utf8.count
         var tail = Substring(log)
+        // Corta logo o que sobra: contar a cada linha, num registo grande, demora muito.
+        if budget > 0, log.utf8.count > budget {
+            tail = log[log.utf8.index(log.utf8.endIndex, offsetBy: -budget)...]
+            if let cut = tail.firstIndex(of: "\n") { tail = tail[tail.index(after: cut)...] } else { tail = "" }
+        }
         while tail.utf8.count > budget, let cut = tail.firstIndex(of: "\n") { tail = tail[tail.index(after: cut)...] }
         if tail.utf8.count > budget { tail = "" }
         return head + tail
