@@ -95,24 +95,69 @@ private struct PhoneWelcome: View {
 
 private struct PhoneActivation: View {
     @Environment(AppModel.self) private var model
+    @State private var copied = false
 
     var body: some View {
         let s = model.strings
         let a = model.activation
-        VStack(alignment: .leading, spacing: 14) {
-            BrandMark(scale: 0.35)
-            Text(s.activateTitle).font(.title.bold())
-            if let text = a.qrText ?? a.url, let url = URL(string: text.contains("://") ? text : "https://\(text)") {
-                Link(a.url ?? text, destination: url).foregroundStyle(Theme.sky)
-            }
-            Text(s.activateStep2).foregroundStyle(Theme.textDim)
-            Text(a.code ?? "······").font(.system(size: 46, weight: .bold, design: .monospaced))
-            if let error = a.error { Text(error).foregroundStyle(Theme.error) }
-            Button(s.r("use_without_account")) { model.leaveActivation() }.padding(.top, 8)
+        VStack(spacing: 0) {
+            BrandMark(scale: 0.35).frame(maxWidth: .infinity)
             Spacer()
+            VStack(spacing: 8) {
+                Text(s.t("Connect your GOAT account", "Liga a tua conta GOAT")).font(.title2.bold()).multilineTextAlignment(.center)
+                Text(s.t("Your playlists, favourites and settings, on every device.", "As tuas listas, favoritos e definições, em todos os dispositivos."))
+                    .font(.subheadline).foregroundStyle(Theme.textDim).multilineTextAlignment(.center)
+            }
+            Button {
+                guard let code = a.code else { return }
+                UIPasteboard.general.string = code
+                copied = true
+            } label: {
+                VStack(spacing: 8) {
+                    Text(a.code ?? "······")
+                        .font(.system(size: 42, weight: .bold, design: .monospaced))
+                        .minimumScaleFactor(0.6).lineLimit(1)
+                        .foregroundStyle(Theme.accent)
+                    Label(copied ? s.t("Copied", "Copiado") : s.t("Copy code", "Copiar código"), systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.footnote).foregroundStyle(Theme.textFaint)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .background(cardFill, in: cardShape)
+            }
+            .buttonStyle(.plain)
+            .disabled(a.code == nil)
+            .padding(.top, 24)
+            Group {
+                if let error = a.error {
+                    Text(error).foregroundStyle(Theme.error)
+                } else if let expires = a.expires {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let left = max(0, Int(expires.timeIntervalSince(context.date)))
+                        Text(s.r("activate_expires_text", "\(left / 60)").replacingOccurrences(of: "%2$02d", with: String(format: "%02d", left % 60)))
+                            .foregroundStyle(Theme.textFaint)
+                    }
+                } else {
+                    ProgressView()
+                }
+            }
+            .font(.footnote).multilineTextAlignment(.center).padding(.top, 12)
+            Spacer()
+            if let text = a.qrText ?? a.url, let url = URL(string: text.contains("://") ? text : "https://\(text)") {
+                Link(destination: url) {
+                    Text(s.t("Sign in to approve", "Entrar para aprovar"))
+                        .font(.headline).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .background(Theme.accent(model.prefs.accent), in: cardShape)
+                }
+                Text(a.url ?? text).font(.caption).foregroundStyle(Theme.textFaint).padding(.top, 8)
+            }
+            Button(s.r("use_without_account")) { model.leaveActivation() }
+                .font(.subheadline).foregroundStyle(Theme.textDim).padding(.top, 16)
         }
         .padding(24)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: a.code) { copied = false }
     }
 }
 
