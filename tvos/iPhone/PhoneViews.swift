@@ -212,7 +212,7 @@ struct PhoneMain: View {
                 // Ao alto, 16:9 com a largura toda; deitado, o ecrã todo.
                 VideoPane(fullscreen: landscape)
                     .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
-                    .frame(height: landscape ? nil : geo.size.width * 9 / 16)
+                    .frame(height: landscape ? nil : geo.size.width * 9 / (model.second == nil ? 16 : 8))
             }
             if !landscape {
                 Group {
@@ -233,6 +233,7 @@ struct PhoneMain: View {
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
         .onChange(of: tab) { old, new in
             if new == .menu {
+                model.closeSecond()
                 model.player.stop()
             } else if old == .menu, let current = model.current {
                 model.play(current, remember: false)
@@ -271,14 +272,48 @@ private struct VideoPane: View {
     let fullscreen: Bool
     @State private var controls = true
     @State private var touched = 0
+    @State private var focusSecond = false
+    @State private var pickingSecond = false
+
+    /// Um vídeo. O vídeo é uma vista UIKit: sem desligar os toques, fica com eles e os gestos nem sempre os recebem.
+    /// Com dois canais, tocar no que está em silêncio passa-lhe o som.
+    private func videoTile(_ view: UIView, name: String?, audible: Bool, focus: @escaping () -> Void) -> some View {
+        ZStack {
+            VideoSurface(view: view).allowsHitTesting(false)
+            if let name { Text(name).font(.footnote).foregroundStyle(Theme.textDim) }
+            if model.second != nil, audible {
+                Rectangle().strokeBorder(Theme.accent(model.prefs.accent), lineWidth: 2).allowsHitTesting(false)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.second != nil, !audible {
+                focus()
+                controls = true
+            } else {
+                controls.toggle()
+            }
+            touched += 1
+        }
+    }
+
+    private func applyAudio() {
+        if model.second == nil { focusSecond = false }
+        model.player.setMuted(model.second != nil && focusSecond)
+        model.secondPlayer.setMuted(!focusSecond)
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea(edges: fullscreen ? .all : [])
-            // O vídeo é uma vista UIKit: sem isto, fica com os toques e o gesto de baixo nem sempre os recebe.
-            VideoSurface(view: model.player.view)
-                .ignoresSafeArea(edges: fullscreen ? .all : [])
-                .allowsHitTesting(false)
+            // Com dois canais: lado a lado deitado, um por cima do outro ao alto.
+            (fullscreen ? AnyLayout(HStackLayout(spacing: 2)) : AnyLayout(VStackLayout(spacing: 2))) {
+                videoTile(model.player.view, name: nil, audible: !focusSecond) { focusSecond = false }
+                if let second = model.second {
+                    videoTile(model.secondPlayer.view, name: model.secondPlayer.state == .playing ? nil : second.channel.name, audible: focusSecond) { focusSecond = true }
+                }
+            }
+            .ignoresSafeArea(edges: fullscreen ? .all : [])
             if let error = model.playbackError {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
             } else if model.player.state != .playing, let current = model.current {
@@ -289,11 +324,22 @@ private struct VideoPane: View {
         .contentShape(Rectangle())
         .onTapGesture { controls.toggle(); touched += 1 }
         .gesture(DragGesture(minimumDistance: 40).onEnded { v in
-            if abs(v.translation.height) > abs(v.translation.width) { model.zap(v.translation.height < 0 ? 1 : -1) }
+            guard abs(v.translation.height) > abs(v.translation.width) else { return }
+            let delta = v.translation.height < 0 ? 1 : -1
+            if focusSecond { model.zapSecond(delta) } else { model.zap(delta) }
         })
         .task(id: touched) {
             try? await Task.sleep(for: .seconds(4))
             if !Task.isCancelled { controls = false }
+        }
+        .onChange(of: focusSecond) { applyAudio() }
+        .onChange(of: model.second?.channel.key) { applyAudio() }
+        .onChange(of: model.current?.key) { applyAudio() }
+        .sheet(isPresented: $pickingSecond) {
+            PhoneSecondPicker { content, channel, group in
+                model.openSecond(content, channel, groupId: group)
+                pickingSecond = false
+            } onClose: { pickingSecond = false }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             PhoneOrientation.deviceMoved()
@@ -322,6 +368,12 @@ private struct VideoPane: View {
                     pill(s.r("back_to_live")) { model.exitCatchup() }
                 }
                 Spacer()
+                if model.second == nil {
+                    iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
+                } else {
+                    iconButton("rectangle.2.swap") { pickingSecond = true; touched += 1 }
+                    iconButton("xmark") { model.closeSecond(); touched += 1 }
+                }
                 iconButton(fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", action: rotate)
             }
             .padding(6)

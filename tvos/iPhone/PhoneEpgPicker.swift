@@ -221,3 +221,74 @@ private struct PhoneEpgRow: View {
         Task { if await model.setEpgMapping(channel, country: country, guide: g) { done() } }
     }
 }
+
+/// Escolher o segundo canal: a lista (se houver mais do que uma permitida), o grupo e o canal.
+struct PhoneSecondPicker: View {
+    @Environment(AppModel.self) private var model
+    let onPick: (PlaylistContent, Channel, String) -> Void
+    let onClose: () -> Void
+    @State private var content: PlaylistContent?
+    @State private var group: ChannelGroup?
+    @State private var loading = false
+    @State private var failed = false
+
+    var body: some View {
+        let s = model.strings
+        let allowed = model.playlists.filter(model.secondAllowed)
+        NavigationStack {
+            List {
+                if loading {
+                    ProgressView()
+                } else if let content, let group {
+                    ForEach(model.channelsForSecond(content, group.id)) { ch in
+                        Button {
+                            onPick(content, ch, group.id)
+                        } label: {
+                            HStack(spacing: 12) {
+                                if model.prefs.showLogos {
+                                    ChannelLogo(url: ch.logo.flatMap(URL.init(string:)), name: ch.name, size: CGSize(width: 56, height: 38))
+                                }
+                                Text(ch.name).foregroundStyle(Theme.text)
+                            }
+                        }
+                    }
+                } else if let content {
+                    ForEach(model.groupsForSecond(content)) { g in
+                        Button(g.name) { group = g }.foregroundStyle(Theme.text)
+                    }
+                } else if allowed.isEmpty {
+                    Text(s.t("Your playlist only allows one connection at a time.", "A tua lista só permite uma ligação de cada vez."))
+                        .foregroundStyle(Theme.textFaint)
+                } else {
+                    if failed { Text(s.t("Couldn't load the playlist.", "Não foi possível carregar a lista.")).foregroundStyle(Theme.error) }
+                    ForEach(allowed, id: \.id) { p in
+                        Button(p.name) { open(p) }.foregroundStyle(Theme.text)
+                    }
+                }
+            }
+            .navigationTitle(group?.name ?? content?.playlist.name ?? s.t("Second channel", "Segundo canal"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(s.t("Close", "Fechar"), action: onClose)
+                }
+                if group != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { group = nil } label: { Image(systemName: "chevron.left") }
+                    }
+                }
+            }
+        }
+        .onAppear { if allowed.count == 1 { open(allowed[0]) } }
+    }
+
+    private func open(_ playlist: Playlist) {
+        loading = true
+        failed = false
+        Task {
+            content = try? await model.loadForSecond(playlist)
+            failed = content == nil
+            loading = false
+        }
+    }
+}
