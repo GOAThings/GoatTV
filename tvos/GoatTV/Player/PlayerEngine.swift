@@ -423,6 +423,14 @@ final class PlayerEngine: NSObject {
         }
     }
 
+    /// O estado lê-se depois de o VLC o mudar e o "playing" pode já ter passado: com o tempo a andar, está a dar.
+    /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
+    fileprivate func vlcTimeChanged() {
+        guard backend == .vlc, state == .opening, vlc.isPlaying else { return }
+        DebugLog.add("Player: VLC time moving without a playing state")
+        becamePlaying()
+    }
+
     /// A frame rate e o tamanho do vídeo que o VLC está a dar.
     private var vlcVideoInfo: (fps: Double, width: Int, height: Int)? {
         guard let tracks = vlc.media?.tracksInformation as? [[String: Any]] else { return nil }
@@ -841,5 +849,9 @@ extension PlayerEngine {
 extension PlayerEngine: VLCMediaPlayerDelegate {
     nonisolated func mediaPlayerStateChanged(_ aNotification: Notification) {
         Task { @MainActor in self.vlcStateChanged() }
+    }
+
+    nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification) {
+        Task { @MainActor in self.vlcTimeChanged() }
     }
 }
