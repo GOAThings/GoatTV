@@ -922,8 +922,13 @@ final class AppModel {
         current = channel
         playingSince = Date()
         zapCount += 1
+        var allowed = content.account?.allowedFormats ?? []
+        #if os(iOS)
+        // A janela pequena precisa de HLS: tenta-se mesmo que o servidor não o anuncie (se recusar, segue para o TS).
+        if prefs.pipEnabled { allowed = [] }
+        #endif
         let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
-                                          allowedFormats: content.account?.allowedFormats ?? [])
+                                          allowedFormats: allowed)
         let stalker = loader.stalker
         let playlist = content.playlist
         player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
