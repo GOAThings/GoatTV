@@ -922,17 +922,18 @@ final class AppModel {
         current = channel
         playingSince = Date()
         zapCount += 1
-        var allowed = content.account?.allowedFormats ?? []
-        #if os(iOS)
-        // A janela pequena precisa de HLS: tenta-se mesmo que o servidor não o anuncie (se recusar, segue para o TS).
-        if prefs.pipEnabled { allowed = [] }
-        #endif
         let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
-                                          allowedFormats: allowed)
+                                          allowedFormats: content.account?.allowedFormats ?? [])
         let stalker = loader.stalker
         let playlist = content.playlist
         player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
                     linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
+        #if os(iOS)
+        // A janela pequena precisa de HLS: tenta-se mesmo que o servidor não o anuncie.
+        if prefs.pipEnabled {
+            player.pipCandidate = streamCandidates(playlist: content.playlist, channel: channel, preferred: StreamFormat.hls).first(where: \.isHLS)
+        }
+        #endif
         saveLast(channel, watched: false)
         watchTask?.cancel()
         watchTask = Task { [weak self] in

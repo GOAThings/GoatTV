@@ -371,7 +371,7 @@ private struct VideoPane: View {
                     pill(s.r("back_to_live")) { model.exitCatchup() }
                 }
                 Spacer()
-                if model.player.pipPossible {
+                if model.player.pipAvailable {
                     iconButton("pip.enter") { model.player.togglePip(); touched += 1 }
                 }
                 if model.second == nil {
