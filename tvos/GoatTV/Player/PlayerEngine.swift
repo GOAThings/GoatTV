@@ -298,11 +298,12 @@ final class PlayerEngine: NSObject {
         case .vlc: startVLC(url)
         case .apple: startApple(url)
         }
-        // Se em 15 s não começar a dar, tenta a forma seguinte.
+        // Se não começar a dar, tenta a forma seguinte (o leitor da Apple tem o VLC a seguir: espera-se menos).
+        let patience = backend == .apple ? 8 : 15
         watchdog = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: .seconds(patience))
             guard !Task.isCancelled, let self, self.state == .opening else { return }
-            DebugLog.add("Player: no picture after 15 s")
+            DebugLog.add("Player: no picture after \(patience) s (\(self.backend), waiting: \(self.avPlayer.reasonForWaitingToPlay?.rawValue ?? "-"))")
             self.next()
         }
     }
@@ -372,6 +373,7 @@ final class PlayerEngine: NSObject {
         // Criado antes de o vídeo da Apple estar à vista, o controlador só dá conta ao sair da app: faz-se de novo.
         if backend == .apple, pipAllowed, !pipPossible, !pipActive { setUpPip() }
         #endif
+        if backend == .apple { checkApplePicture() }
         if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
         format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
         applyAspect()
@@ -478,6 +480,20 @@ final class PlayerEngine: NSObject {
         avPlayer.isMuted = muted
         avPlayer.replaceCurrentItem(with: item)
         avPlayer.play()
+    }
+
+    /// Som sem imagem: a camada pode ficar sem vídeo. Ligá-la de novo ao leitor fá-la pedir a imagem outra vez.
+    private func checkApplePicture() {
+        let item = avPlayer.currentItem
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self, self.backend == .apple, self.state == .playing, self.avPlayer.currentItem === item else { return }
+            let size = item?.presentationSize ?? .zero
+            DebugLog.add("Player: picture ready \(self.appleView.playerLayer.isReadyForDisplay), size \(Int(size.width))x\(Int(size.height))")
+            guard !self.appleView.playerLayer.isReadyForDisplay else { return }
+            self.appleView.playerLayer.player = nil
+            self.appleView.playerLayer.player = self.avPlayer
+        }
     }
 
     private func appleStatus(_ item: AVPlayerItem) {
