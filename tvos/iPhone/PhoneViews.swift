@@ -11,8 +11,6 @@ private func phoneMaskEmail(_ email: String) -> String {
 private let cardFill = Color.white.opacity(0.08)
 private let cardShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 
-// Em teste: a lista de canais com ou sem cartões. Fica só neste aparelho, nas Definições → Canais.
-private let channelCardsKey = "phone_channel_cards"
 private let listShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 private let selectedFill = Theme.sky.opacity(0.13)
 
@@ -412,7 +410,6 @@ private struct ChannelsTab: View {
     @State private var group: String?
     @State private var pinFor: ChannelGroup?
     @State private var pin = ""
-    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let groups = model.groups
@@ -424,7 +421,7 @@ private struct ChannelsTab: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: cards ? 6 : 0) {
+                HStack(spacing: 0) {
                     ForEach(groups, id: \.id) { g in
                         let locked = model.isGroupLocked(g.id)
                         let on = g.id == shown
@@ -433,14 +430,14 @@ private struct ChannelsTab: View {
                         } label: {
                             Text(locked ? "🔒 \(g.name)" : g.name)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(on ? Theme.sky : cards ? Theme.textDim : Theme.textFaint)
+                                .foregroundStyle(on ? Theme.sky : Theme.textFaint)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(on ? selectedFill : cards ? cardFill : .clear, in: listShape)
+                                .background(on ? selectedFill : .clear, in: listShape)
                         }
                         .id(g.id)
                     }
                 }
-                .padding(.horizontal, cards ? 12 : 4).padding(.vertical, 8)
+                .padding(.horizontal, 4).padding(.vertical, 8)
             }
             // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
             .onAppear { proxy.scrollTo(shown, anchor: .center) }
@@ -464,7 +461,6 @@ private struct ChannelList: View {
     let channels: [Channel]
     let group: String
     @Binding var epgFor: Channel?
-    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         if channels.isEmpty {
@@ -472,12 +468,12 @@ private struct ChannelList: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: cards ? 6 : 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(channels) { channel in
                         ChannelCard(channel: channel, group: group, epgFor: $epgFor)
                     }
                 }
-                .padding(.horizontal, cards ? 12 : 6).padding(.bottom, 12)
+                .padding(.horizontal, 6).padding(.bottom, 12)
             }
         }
     }
@@ -488,7 +484,6 @@ private struct ChannelCard: View {
     let channel: Channel
     let group: String
     @Binding var epgFor: Channel?
-    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let playing = model.current?.key == channel.key
@@ -516,7 +511,7 @@ private struct ChannelCard: View {
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 11)
-            .background(playing ? selectedFill : cards ? cardFill : .clear, in: listShape)
+            .background(playing ? selectedFill : .clear, in: listShape)
             .contentShape(listShape)
         }
         .simultaneousGesture(LongPressGesture().onEnded { _ in epgFor = channel })
@@ -600,7 +595,6 @@ private struct SearchTab: View {
     @Environment(AppModel.self) private var model
     @Binding var epgFor: Channel?
     @State private var query = ""
-    @AppStorage(channelCardsKey) private var cards = false
 
     var body: some View {
         let s = model.strings
@@ -616,12 +610,12 @@ private struct SearchTab: View {
                 Text(s.r("search_no_results")).foregroundStyle(Theme.textFaint)
             }
             ScrollView {
-                LazyVStack(spacing: cards ? 6 : 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(hits) { hit in
                         ChannelCard(channel: hit.channel, group: model.groupFor(hit.channel), epgFor: $epgFor)
                     }
                 }
-                .padding(.horizontal, cards ? 12 : 6)
+                .padding(.horizontal, 6)
             }
         }
     }
@@ -705,7 +699,6 @@ private struct ShareSheet: UIViewControllerRepresentable {
 /// Definições do telemóvel: o essencial, em lista agrupada.
 private struct MenuTab: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(channelCardsKey) private var channelCards = false
     @State private var adding = false
     @State private var choosingPin = false
     @State private var pinText = ""
@@ -812,9 +805,6 @@ private struct MenuTab: View {
                     toggle(s.t("Channel numbers", "Números dos canais"), "show_numbers", p.showNumbers)
                     toggle(s.t("Channel logos", "Logos dos canais"), "show_logos", p.showLogos)
                     toggle(s.t("Current show in the list", "Programa atual na lista"), "epg_in_list", p.epgInList)
-                    Toggle(s.t("Channel cards (test)", "Cartões nos canais (teste)"), isOn: $channelCards)
-                        .foregroundStyle(Theme.text).tint(Theme.sky)
-                        .padding(.horizontal, 16).padding(.vertical, 8)
                     if model.hasAccount { MenuRow(s.t("Logo source", "Origem dos logótipos")) { pickingLogoSource = true } }
                     MenuRow(s.t("Visible groups", "Grupos visíveis")) { managingGroups = true }
                 }
