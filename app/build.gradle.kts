@@ -21,8 +21,8 @@ android {
         // As bibliotecas AndroidX atuais (Compose, Media3, tv-material) exigem minSdk 23.
         minSdk = 23
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.9.4"
+        versionCode = 31
+        versionName = "0.9.5"
         // As boxes de TV são ARM. Sem x86 (só emuladores): o FFmpeg e o VLC trazem bibliotecas nativas por arquitetura.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
