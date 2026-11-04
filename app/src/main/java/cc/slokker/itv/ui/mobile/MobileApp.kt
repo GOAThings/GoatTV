@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -72,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -320,9 +322,20 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
         seekJob?.cancel()
         seekJob = scope.launch {
             delay(SEEK_DEBOUNCE_MS)
+            val forward = seekDelta > 0
             val target = seekBase + seekDelta
             seekDelta = 0
-            vm.seekCatchup(target)
+            val cu = vm.catchup.value ?: return@launch
+            val inStream = target - (playback.archiveStart - cu.startMs)
+            if (inStream >= 0 && playback.player.isCurrentMediaItemSeekable) {
+                playback.player.seekTo(inStream)
+            } else if (forward) {
+                // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
+                val wanted = cu.startMs + target
+                vm.seekCatchup(target + (60_000 - wanted % 60_000) % 60_000)
+            } else {
+                vm.seekCatchup(target)
+            }
         }
     }
     LaunchedEffect(controls, touched, channel.key) {
@@ -350,9 +363,10 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             update = { playback.view = it },
             modifier = Modifier.fillMaxSize(),
         )
+        playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         when {
             playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
-            !playback.ready -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
+            !playback.ready && playback.freeze == null -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
         }
         if (controls && !pip) {
             Row(
@@ -369,7 +383,7 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (seekDelta != 0L) {
                     Text(
-                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 60_000} min", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 1000} s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
@@ -400,12 +414,12 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
     }
 }
 
-/** Recuar ou avançar 5 minutos, ao lado do botão de pausa. */
+/** Recuar ou avançar 30 segundos, ao lado do botão de pausa. */
 @Composable
 private fun SeekButton(forward: Boolean, onClick: () -> Unit) {
     Box(Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(ItvIcons.Replay, null, tint = Color.White, modifier = Modifier.size(34.dp).graphicsLayer { if (forward) scaleX = -1f })
-        Text("5", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text("30", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -1180,7 +1194,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
 
 private val BAR_SPACE = 92.dp
 private const val CONTROLS_MS = 4_000L
-private const val SEEK_MS = 5 * 60_000L
+private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val GUIDE_PAST_SLOTS = 36
 private const val ZAP_DRAG_PX = 120f

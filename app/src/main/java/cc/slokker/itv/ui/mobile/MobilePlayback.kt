@@ -10,6 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +45,8 @@ internal class MobilePlayback(val player: Player) {
     var failed by mutableStateOf(false)
     var playing by mutableStateOf(false)
     var view by mutableStateOf<VideoView?>(null)
+    /** Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto). */
+    var freeze by mutableStateOf<ImageBitmap?>(null)
     /** Catch-up: instante real do início do vídeo pedido ao servidor (0 em direto). */
     var archiveStart = 0L
 }
@@ -105,8 +109,12 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         link[0]?.cancel()
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
         if (!active) {
+            playback.freeze = null
             player.stop()
             return@LaunchedEffect
+        }
+        if (latestPrefs.freezeFrame && playback.ready) {
+            playback.freeze = playback.view?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap()
         }
         val archive = catchup?.let { catchupCandidates(data.playlist, it, data.account?.timezone) }
         playback.archiveStart = archive?.startMs ?: 0L
@@ -154,6 +162,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
                 playback.playing = isPlaying
             }
 
+            override fun onRenderedFirstFrame() {
+                playback.freeze = null
+            }
+
             override fun onVideoSizeChanged(size: VideoSize) {
                 if (size.width > 0 && size.height > 0) playback.view?.setAspectRatio(size.width * size.pixelWidthHeightRatio / size.height)
             }
@@ -172,6 +184,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
                     !playback.ready && attempt[0] + 1 < candidates[0].size -> start(attempt[0] + 1)
                     else -> {
                         playback.failed = !playback.ready
+                        if (playback.failed) playback.freeze = null
                         if (latestPrefs.reconnectSeconds > 0) reconnect()
                     }
                 }
@@ -195,3 +208,6 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     }
     return playback
 }
+
+private const val FREEZE_WIDTH = 1280
+private const val FREEZE_HEIGHT = 720

@@ -177,7 +177,8 @@ final class PlayerEngine: NSObject {
         surroundChosen = false
         lastHTTPStatus = nil
         guard freezeFrame, wasShowing else {
-            hideFreeze()
+            // Ainda a abrir (ex.: dois canais seguidos): a última imagem fica até o novo começar.
+            if !freezeFrame { hideFreeze() }
             start()
             return
         }
@@ -189,7 +190,6 @@ final class PlayerEngine: NSObject {
         case .vlc:
             // Sem saída de vídeo (ainda a abrir, ou só som), o VLC lança uma exceção em vez de gravar a imagem.
             guard vlc.hasVideoOut else {
-                hideFreeze()
                 start()
                 return
             }
@@ -198,12 +198,26 @@ final class PlayerEngine: NSObject {
             try? FileManager.default.removeItem(atPath: path)
             vlc.saveVideoSnapshot(at: path, withWidth: 1280, andHeight: 720)
             pendingStart = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(120))
-                guard !Task.isCancelled, let self else { return }
-                self.showFreeze(UIImage(contentsOfFile: path))
+                // A gravação demora: sem a imagem pronta, o ecrã ficava preto enquanto o canal novo abre.
+                var image: UIImage?
+                for _ in 0..<15 {
+                    try? await Task.sleep(for: .milliseconds(40))
+                    guard !Task.isCancelled else { return }
+                    image = UIImage(contentsOfFile: path)
+                    if image != nil { break }
+                }
+                guard let self else { return }
+                self.showFreeze(image)
                 self.start()
             }
         }
+    }
+
+    /// Salta dentro do stream aberto, sem o reabrir. Só resulta se o servidor o deixar.
+    func seekWithin(toMs: Int64) -> Bool {
+        guard backend == .vlc, state == .playing, vlc.isSeekable, toMs >= 0, toMs <= Int64(Int32.max) else { return false }
+        vlc.time = VLCTime(int: Int32(toMs))
+        return true
     }
 
     /// Volta a tentar já (OK no erro).
@@ -356,7 +370,8 @@ final class PlayerEngine: NSObject {
         wasPlaying = true
         retries = 0
         lastHTTPStatus = nil
-        hideFreeze()
+        // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o tempo começa a andar.
+        if backend == .apple { hideFreeze() }
         if backend == .apple { checkApplePicture() }
         if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
         format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
@@ -416,7 +431,9 @@ final class PlayerEngine: NSObject {
     /// O estado lê-se depois de o VLC o mudar e o "playing" pode já ter passado: com o tempo a andar, está a dar.
     /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
     fileprivate func vlcTimeChanged() {
-        guard backend == .vlc, state == .opening, vlc.isPlaying else { return }
+        guard backend == .vlc else { return }
+        if frozen, state == .playing { hideFreeze() }
+        guard state == .opening, vlc.isPlaying else { return }
         DebugLog.add("Player: VLC time moving without a playing state")
         becamePlaying()
     }

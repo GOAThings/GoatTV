@@ -1012,8 +1012,15 @@ final class AppModel {
             exitCatchup()
             return
         }
+        if player.seekWithin(toMs: positionMs - (catchupBase - cu.startMs)) { return }
+        // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
+        var target = max(0, positionMs)
+        if target > catchupPosition {
+            let wanted = cu.startMs + target
+            target += (60_000 - wanted % 60_000) % 60_000
+        }
         var next = cu
-        next.positionMs = max(0, positionMs)
+        next.positionMs = target
         startCatchup(next)
     }
 

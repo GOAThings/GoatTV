@@ -410,14 +410,14 @@ private struct VideoPane: View {
             .background(Color.black.opacity(0.45))
             Spacer()
             if seekDelta != 0 {
-                Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 60_000) min").font(.footnote.weight(.semibold))
+                Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 1000) s").font(.footnote.weight(.semibold))
                     .padding(.horizontal, 12).padding(.vertical, 5)
                     .background(Color.black.opacity(0.55), in: Capsule())
             }
             HStack(spacing: 28) {
-                if model.catchup != nil { seekButton("gobackward.5", -seekStep) }
+                if model.catchup != nil { seekButton("gobackward.30", -seekStep) }
                 iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
-                if model.catchup != nil { seekButton("goforward.5", seekStep) }
+                if model.catchup != nil { seekButton("goforward.30", seekStep) }
             }
             Spacer()
             HStack(spacing: 6) {
@@ -440,7 +440,7 @@ private struct VideoPane: View {
         .foregroundStyle(.white)
     }
 
-    private var seekStep: Int64 { 300_000 }
+    private var seekStep: Int64 { 30_000 }
 
     private func seekButton(_ name: String, _ delta: Int64) -> some View {
         Button { seek(delta) } label: { Image(systemName: name).font(.title).frame(width: 52, height: 52) }
