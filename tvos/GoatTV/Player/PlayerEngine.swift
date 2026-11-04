@@ -94,8 +94,10 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var movingSince: Date?
     /// Onde começar dentro do stream, em ms (o catch-up só abre em minutos certos; o resto é aqui).
     @ObservationIgnored private var startOffsetMs: Int64 = 0
-    @ObservationIgnored private var startChecked = false
-    /// O VLC abriu do início em vez de saltar para [startOffsetMs]: o servidor não deixa.
+    @ObservationIgnored private var seekingStart = false
+    @ObservationIgnored private var startSettled = false
+    @ObservationIgnored private var startSeekCheck: Task<Void, Never>?
+    /// O salto para [startOffsetMs] não se confirmou: quem usa o leitor volta a abrir noutro sítio.
     @ObservationIgnored var onStartIgnored: (() -> Void)?
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
@@ -178,6 +180,7 @@ final class PlayerEngine: NSObject {
         self.startOffsetMs = startOffsetMs
         retry?.cancel()
         pendingStart?.cancel()
+        startSeekCheck?.cancel()
         positionValid = false
         savingSnapshot = false
         let wasShowing = state == .playing
@@ -261,6 +264,7 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
+        startSeekCheck?.cancel()
         hideFreeze()
         stopBackends()
         hasPicture = false
@@ -309,7 +313,9 @@ final class PlayerEngine: NSObject {
         hasPicture = false
         videoOutSeen = false
         movingSince = nil
-        startChecked = false
+        startSeekCheck?.cancel()
+        seekingStart = false
+        startSettled = false
         state = .opening
         switch backend {
         case .vlc: startVLC(url)
@@ -421,13 +427,14 @@ final class PlayerEngine: NSObject {
         media.addOption(":network-caching=\(cachingMs)")
         media.addOption(":http-reconnect")
         if softwareDecoder { media.addOption(":codec=avcodec") }
-        if startOffsetMs >= 1000 { media.addOption(":start-time=\(startOffsetMs / 1000)") }
         vlc.media = media
         if deinterlace == "off" {
             vlc.setDeinterlaceFilter(nil)
         } else {
             vlc.setDeinterlace(.auto, withFilter: deinterlace)
         }
+        // A saltar para [startOffsetMs], não se ouve o que está antes.
+        vlc.audio?.isMuted = muted || startOffsetMs >= 1000
         vlc.play()
     }
 
@@ -452,9 +459,8 @@ final class PlayerEngine: NSObject {
     /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
     fileprivate func vlcTimeChanged() {
         guard backend == .vlc, !savingSnapshot else { return }
-        if state == .playing {
+        if state == .playing, !jumpingToStart() {
             positionValid = true
-            checkStartOffset()
             checkPicture()
         }
         guard state == .opening, vlc.isPlaying else { return }
@@ -462,11 +468,38 @@ final class PlayerEngine: NSObject {
         becamePlaying()
     }
 
-    private func checkStartOffset() {
-        guard startOffsetMs >= 1000, !startChecked else { return }
-        startChecked = true
-        guard positionMs < startOffsetMs - 5_000 else { return }
-        DebugLog.add("Player: VLC ignored the start time")
+    /// Salta para [startOffsetMs] mal o vídeo começa a andar e confirma pelo relógio que lá chegou.
+    /// Devolve true enquanto o tempo do leitor ainda não é o certo.
+    private func jumpingToStart() -> Bool {
+        guard startOffsetMs >= 1000, !startSettled else { return false }
+        guard seekingStart else {
+            seekingStart = true
+            vlc.audio?.isMuted = true
+            guard vlc.isSeekable, startOffsetMs <= Int64(Int32.max) else {
+                startJumpFailed()
+                return true
+            }
+            vlc.time = VLCTime(int: Int32(startOffsetMs))
+            startSeekCheck = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(6))
+                guard !Task.isCancelled else { return }
+                self?.startJumpFailed()
+            }
+            return true
+        }
+        guard positionMs >= startOffsetMs - 3_000, positionMs < startOffsetMs + 15_000 else { return true }
+        startSeekCheck?.cancel()
+        startSettled = true
+        vlc.audio?.isMuted = muted
+        return false
+    }
+
+    private func startJumpFailed() {
+        guard !startSettled else { return }
+        startSeekCheck?.cancel()
+        startSettled = true
+        vlc.audio?.isMuted = muted
+        DebugLog.add("Player: VLC did not reach the start position")
         onStartIgnored?()
     }
 
