@@ -161,7 +161,6 @@ final class AppModel {
         }
         loadReminders()
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
-        player.onStartIgnored = { [weak self] in self?.catchupCannotJump() }
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
@@ -991,7 +990,6 @@ final class AppModel {
     /// Vê [entry] em catch-up, desde o início (ou desde [positionMs]).
     func playCatchup(_ channel: Channel, _ entry: EpgEntry, positionMs: Int64 = 0) {
         let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
-        catchupSeekedForward = false
         if current?.key != channel.key {
             // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
             let opens = content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone) } != nil
@@ -1004,26 +1002,7 @@ final class AppModel {
         guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone) else { return }
         catchup = cu
         catchupBase = start.startMs
-        player.play(start.candidates, userAgent: cu.channel.userAgent ?? prefs.userAgent, referrer: cu.channel.referrer,
-                    startOffsetMs: catchupExact ? cu.startMs + cu.positionMs - start.startMs : 0)
-    }
-
-    /// O servidor só abre em minutos certos, e o leitor salta para o resto. Se o salto não se confirmar, passa a
-    /// andar de minuto em minuto.
-    @ObservationIgnored private(set) var catchupExact = true
-    @ObservationIgnored private var catchupSeekedForward = false
-
-    /// O salto dentro do stream não resultou: abre no minuto certo mais perto, para o toque não se perder.
-    private func catchupCannotJump() {
-        catchupExact = false
-        guard var next = catchup else { return }
-        next.positionMs = minuteLanding(next.positionMs, startMs: next.startMs, forward: catchupSeekedForward)
-        startCatchup(next)
-    }
-
-    private func minuteLanding(_ positionMs: Int64, startMs: Int64, forward: Bool) -> Int64 {
-        let extra = (startMs + positionMs) % 60_000
-        return max(0, forward ? positionMs + (60_000 - extra) % 60_000 : positionMs - extra)
+        player.play(start.candidates, userAgent: cu.channel.userAgent ?? prefs.userAgent, referrer: cu.channel.referrer)
     }
 
     /// Onde vai o catch-up, em ms desde o início do programa.
@@ -1040,7 +1019,6 @@ final class AppModel {
             exitCatchup()
             return
         }
-        catchupSeekedForward = positionMs > catchupPosition
         var next = cu
         next.positionMs = catchupLanding(positionMs)
         startCatchup(next)
@@ -1052,13 +1030,13 @@ final class AppModel {
         return positionMs >= nowMs() - catchup.startMs - Catchup.minAgeMs || positionMs >= catchup.durationMs
     }
 
-    /// Onde um salto para [positionMs] vai mesmo parar. Se só der para abrir em minutos certos: a avançar vai para o
+    /// Onde um salto para [positionMs] vai mesmo parar. O servidor só abre em minutos certos: a avançar vai para o
     /// seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto.
     func catchupLanding(_ positionMs: Int64) -> Int64 {
         guard let catchup else { return positionMs }
         let target = max(0, positionMs)
-        if catchupExact { return target }
-        return minuteLanding(target, startMs: catchup.startMs, forward: target > catchupPosition)
+        let extra = (catchup.startMs + target) % 60_000
+        return max(0, target > catchupPosition ? target + (60_000 - extra) % 60_000 : target - extra)
     }
 
     func exitCatchup() {

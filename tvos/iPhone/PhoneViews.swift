@@ -523,10 +523,11 @@ private struct VideoPane: View {
         }
     }
 
-    /// Onde um salto a partir do direto vai parar: os últimos minutos ainda não estão no arquivo do servidor.
+    /// Onde um salto a partir do direto vai parar: os últimos minutos ainda não estão no arquivo do servidor, e o
+    /// servidor só abre em minutos certos.
     private func liveLanding(_ target: Int64, livePosition: Int64, entry: EpgEntry) -> Int64 {
         let wanted = max(0, min(target, livePosition - Catchup.minAgeMs - seekStep))
-        return model.catchupExact ? wanted : max(0, wanted - (entry.startMs + wanted) % 60_000)
+        return max(0, wanted - (entry.startMs + wanted) % 60_000)
     }
 
     /// Para onde vão os toques em ±30 s.

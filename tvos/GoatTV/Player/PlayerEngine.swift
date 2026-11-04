@@ -90,19 +90,7 @@ final class PlayerEngine: NSObject {
     /// O tempo do leitor já é o do stream novo. Antes disso, é o do anterior.
     @ObservationIgnored private(set) var positionValid = false
     @ObservationIgnored private var savingSnapshot = false
-    /// Imagens já desenhadas antes do salto dentro do stream (são do sítio errado).
-    @ObservationIgnored private var picturesBeforeJump = 0
     @ObservationIgnored private var movingSince: Date?
-    /// Onde começar dentro do stream, em ms (o catch-up só abre em minutos certos; o resto é aqui).
-    @ObservationIgnored private var startOffsetMs: Int64 = 0
-    @ObservationIgnored private var seekingStart = false
-    @ObservationIgnored private var startSettled = false
-    @ObservationIgnored private var startSeekCheck: Task<Void, Never>?
-    /// Depois de saltar, o tempo do VLC recomeça do zero: conta-se o que anda a partir de [startOffsetMs].
-    @ObservationIgnored private var playedMs: Int64 = 0
-    @ObservationIgnored private var lastVlcTime: Int64?
-    /// O salto para [startOffsetMs] não se confirmou: quem usa o leitor volta a abrir noutro sítio.
-    @ObservationIgnored var onStartIgnored: (() -> Void)?
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -179,12 +167,10 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, startOffsetMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         self.linkResolver = linkResolver
-        self.startOffsetMs = startOffsetMs
         retry?.cancel()
         pendingStart?.cancel()
-        startSeekCheck?.cancel()
         positionValid = false
         savingSnapshot = false
         let wasShowing = state == .playing
@@ -268,7 +254,6 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
-        startSeekCheck?.cancel()
         hideFreeze()
         stopBackends()
         hasPicture = false
@@ -315,13 +300,7 @@ final class PlayerEngine: NSObject {
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
         hasPicture = false
-        picturesBeforeJump = 0
         movingSince = nil
-        startSeekCheck?.cancel()
-        seekingStart = false
-        startSettled = false
-        playedMs = 0
-        lastVlcTime = nil
         state = .opening
         switch backend {
         case .vlc: startVLC(url)
@@ -465,59 +444,13 @@ final class PlayerEngine: NSObject {
     /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
     fileprivate func vlcTimeChanged() {
         guard backend == .vlc, !savingSnapshot else { return }
-        if state == .playing, !jumpingToStart() {
-            countPlayed()
+        if state == .playing {
             positionValid = true
             checkPicture()
         }
         guard state == .opening, vlc.isPlaying else { return }
         DebugLog.add("Player: VLC time moving without a playing state")
         becamePlaying()
-    }
-
-    /// Salta para [startOffsetMs] mal o vídeo começa a andar. O salto vê-se no tempo do VLC, que deixa de andar
-    /// certinho; se isso não acontecer, o vídeo não saiu do sítio. Devolve true enquanto ainda não saltou.
-    private func jumpingToStart() -> Bool {
-        guard startOffsetMs >= 1000, !startSettled else { return false }
-        let time = Int64(vlc.time.intValue)
-        guard seekingStart else {
-            seekingStart = true
-            lastVlcTime = time
-            guard vlc.isSeekable, startOffsetMs <= Int64(Int32.max) else {
-                startJumpFailed()
-                return true
-            }
-            vlc.time = VLCTime(int: Int32(startOffsetMs))
-            startSeekCheck = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(6))
-                guard !Task.isCancelled else { return }
-                self?.startJumpFailed()
-            }
-            return true
-        }
-        let moved = time - (lastVlcTime ?? time)
-        lastVlcTime = time
-        guard moved < 0 || moved > Self.maxTimeStepMs else { return true }
-        startSeekCheck?.cancel()
-        startSettled = true
-        picturesBeforeJump = picturesShown
-        return false
-    }
-
-    private func countPlayed() {
-        let time = Int64(vlc.time.intValue)
-        if let last = lastVlcTime, (0...Self.maxTimeStepMs).contains(time - last) { playedMs += time - last }
-        lastVlcTime = time
-    }
-
-    private static let maxTimeStepMs: Int64 = 3_000
-
-    private func startJumpFailed() {
-        guard !startSettled else { return }
-        startSeekCheck?.cancel()
-        startSettled = true
-        DebugLog.add("Player: VLC did not reach the start position")
-        onStartIgnored?()
     }
 
     private var picturesShown: Int { Int(vlc.media?.numberOfDisplayedPictures ?? 0) }
@@ -528,7 +461,7 @@ final class PlayerEngine: NSObject {
         guard !hasPicture else { return }
         let since = movingSince ?? Date()
         movingSince = since
-        guard picturesShown > picturesBeforeJump || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
+        guard picturesShown > 0 || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
         hasPicture = true
         vlc.audio?.isMuted = muted
         hideFreeze()
@@ -680,7 +613,7 @@ extension PlayerEngine {
     /// Onde vai o vídeo, em ms desde o início do que se pediu (no catch-up, desde o minuto pedido).
     var positionMs: Int64 {
         switch backend {
-        case .vlc: return startOffsetMs >= 1000 ? startOffsetMs + playedMs : Int64(vlc.time.intValue)
+        case .vlc: return Int64(vlc.time.intValue)
         case .apple:
             let t = CMTimeGetSeconds(avPlayer.currentTime())
             return t.isFinite ? Int64(t * 1000) : 0
