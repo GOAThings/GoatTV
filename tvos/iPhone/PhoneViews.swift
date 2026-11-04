@@ -1071,7 +1071,7 @@ private struct MenuTab: View {
     }
 
     private func pick(_ title: String, _ key: String, _ value: JSON?, _ options: [(JSON?, String)]) -> some View {
-        MenuRow(title, value: options.first { $0.0 == value }?.1.map(shortLabel), chevron: true) {
+        MenuRow(title, value: (options.first { $0.0 == value }?.1).map(shortLabel), chevron: true) {
             picking = Picking(id: key, title: title, options: options, current: value)
         }
     }
