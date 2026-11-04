@@ -1000,7 +1000,7 @@ final class AppModel {
     /// Onde vai o catch-up, em ms desde o início do programa.
     var catchupPosition: Int64 {
         guard let catchup else { return 0 }
-        guard player.state == .playing else { return catchup.positionMs }
+        guard player.state == .playing, player.positionValid else { return catchup.positionMs }
         return catchupBase - catchup.startMs + player.positionMs
     }
 
@@ -1012,7 +1012,6 @@ final class AppModel {
             exitCatchup()
             return
         }
-        if player.seekWithin(toMs: positionMs - (catchupBase - cu.startMs)) { return }
         // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
         var target = max(0, positionMs)
         if target > catchupPosition {

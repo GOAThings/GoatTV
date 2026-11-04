@@ -111,6 +111,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.VlcPlayer
 import cc.slokker.itv.ui.player.rememberStreamState
 import cc.slokker.itv.ui.player.trackOptions
 import cc.slokker.itv.ui.theme.ItvColors
@@ -335,7 +336,8 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             return
         }
         val inStream = target - (playback.archiveStart - cu.startMs)
-        if (inStream >= 0 && playback.player.isCurrentMediaItemSeekable) {
+        // No VLC, o tempo deixa de bater certo depois de saltar dentro do stream: reabre-se nessa posição.
+        if (inStream >= 0 && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable) {
             playback.player.seekTo(inStream)
         } else if (forward) {
             // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.

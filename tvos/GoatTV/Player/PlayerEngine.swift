@@ -85,6 +85,9 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var controlsDisplay = true
     /// Mantém a última imagem do canal anterior até o novo começar.
     @ObservationIgnored var freezeFrame = true
+    /// O tempo do leitor já é o do stream novo. Antes disso, é o do anterior.
+    @ObservationIgnored private(set) var positionValid = false
+    @ObservationIgnored private var savingSnapshot = false
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -165,6 +168,8 @@ final class PlayerEngine: NSObject {
         self.linkResolver = linkResolver
         retry?.cancel()
         pendingStart?.cancel()
+        positionValid = false
+        savingSnapshot = false
         let wasShowing = state == .playing
         self.userAgent = (userAgent?.isEmpty ?? true) ? iptvUserAgent : userAgent!
         self.referrer = referrer
@@ -197,6 +202,7 @@ final class PlayerEngine: NSObject {
             let path = NSTemporaryDirectory() + "goattv-freeze.png"
             try? FileManager.default.removeItem(atPath: path)
             vlc.saveVideoSnapshot(at: path, withWidth: 1280, andHeight: 720)
+            savingSnapshot = true
             pendingStart = Task { [weak self] in
                 // A gravação demora: sem a imagem pronta, o ecrã ficava preto enquanto o canal novo abre.
                 var image: UIImage?
@@ -207,17 +213,11 @@ final class PlayerEngine: NSObject {
                     if image != nil { break }
                 }
                 guard let self else { return }
+                self.savingSnapshot = false
                 self.showFreeze(image)
                 self.start()
             }
         }
-    }
-
-    /// Salta dentro do stream aberto, sem o reabrir. Só resulta se o servidor o deixar.
-    func seekWithin(toMs: Int64) -> Bool {
-        guard backend == .vlc, state == .playing, vlc.isSeekable, toMs >= 0, toMs <= Int64(Int32.max) else { return false }
-        vlc.time = VLCTime(int: Int32(toMs))
-        return true
     }
 
     /// Volta a tentar já (OK no erro).
@@ -371,8 +371,11 @@ final class PlayerEngine: NSObject {
         retries = 0
         lastHTTPStatus = nil
         // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o tempo começa a andar.
-        if backend == .apple { hideFreeze() }
-        if backend == .apple { checkApplePicture() }
+        if backend == .apple {
+            positionValid = true
+            hideFreeze()
+            checkApplePicture()
+        }
         if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
         format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
         applyAspect()
@@ -431,7 +434,8 @@ final class PlayerEngine: NSObject {
     /// O estado lê-se depois de o VLC o mudar e o "playing" pode já ter passado: com o tempo a andar, está a dar.
     /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
     fileprivate func vlcTimeChanged() {
-        guard backend == .vlc else { return }
+        guard backend == .vlc, !savingSnapshot else { return }
+        if state == .playing { positionValid = true }
         if frozen, state == .playing { hideFreeze() }
         guard state == .opening, vlc.isPlaying else { return }
         DebugLog.add("Player: VLC time moving without a playing state")
