@@ -552,4 +552,6 @@
     <string name="settings_appearance">Aparência</string>
     <string name="setting_on">Ativado</string>
     <string name="setting_off">Desativado</string>
+    <string name="tab_guide">Guia</string>
+    <string name="guide_now">Agora</string>
 </resources>

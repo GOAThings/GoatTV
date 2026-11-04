@@ -559,4 +559,6 @@
     <string name="settings_appearance">Appearance</string>
     <string name="setting_on">On</string>
     <string name="setting_off">Off</string>
+    <string name="tab_guide">Guide</string>
+    <string name="guide_now">Now</string>
 </resources>

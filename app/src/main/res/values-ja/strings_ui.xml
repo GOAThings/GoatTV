@@ -543,4 +543,6 @@
     <string name="settings_appearance">外観</string>
     <string name="setting_on">オン</string>
     <string name="setting_off">オフ</string>
+    <string name="tab_guide">番組表</string>
+    <string name="guide_now">現在</string>
 </resources>

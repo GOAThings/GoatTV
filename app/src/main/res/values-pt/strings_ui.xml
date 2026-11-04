@@ -561,4 +561,6 @@
     <string name="settings_appearance">Aspeto</string>
     <string name="setting_on">Ligado</string>
     <string name="setting_off">Desligado</string>
+    <string name="tab_guide">Guia</string>
+    <string name="guide_now">Agora</string>
 </resources>

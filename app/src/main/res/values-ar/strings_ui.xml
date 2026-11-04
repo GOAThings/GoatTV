@@ -553,4 +553,6 @@
     <string name="settings_appearance">المظهر</string>
     <string name="setting_on">تشغيل</string>
     <string name="setting_off">إيقاف</string>
+    <string name="tab_guide">الدليل</string>
+    <string name="guide_now">الآن</string>
 </resources>

@@ -1084,10 +1084,15 @@ final class AppModel {
 
     // MARK: Temporizador
 
-    func setSleepTimer(_ minutes: Int?) {
+    func setSleepTimer(_ minutes: Int?, announce: Bool = true) {
         sleepAt = minutes.map { Date().addingTimeInterval(Double($0) * 60) }
+        guard announce else { return }
         if let minutes {
+            #if os(tvOS)
             showToast(strings.t("The TV turns off in %@ min", "Desliga daqui a %@ min", "\(minutes)"))
+            #else
+            showToast(strings.r("sleep_set", "\(minutes)"))
+            #endif
         } else {
             showToast(strings.t("Sleep timer off", "Temporizador desligado"))
         }

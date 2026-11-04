@@ -543,4 +543,6 @@
     <string name="settings_appearance">外观</string>
     <string name="setting_on">开</string>
     <string name="setting_off">关</string>
+    <string name="tab_guide">节目单</string>
+    <string name="guide_now">现在</string>
 </resources>

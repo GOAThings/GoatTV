@@ -549,4 +549,6 @@
     <string name="settings_appearance">Оформление</string>
     <string name="setting_on">Вкл.</string>
     <string name="setting_off">Выкл.</string>
+    <string name="tab_guide">Программа</string>
+    <string name="guide_now">Сейчас</string>
 </resources>

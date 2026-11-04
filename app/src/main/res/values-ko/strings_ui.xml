@@ -543,4 +543,6 @@
     <string name="settings_appearance">모양</string>
     <string name="setting_on">켜짐</string>
     <string name="setting_off">꺼짐</string>
+    <string name="tab_guide">편성표</string>
+    <string name="guide_now">지금</string>
 </resources>

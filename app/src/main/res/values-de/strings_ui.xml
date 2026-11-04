@@ -545,4 +545,6 @@
     <string name="settings_appearance">Darstellung</string>
     <string name="setting_on">Ein</string>
     <string name="setting_off">Aus</string>
+    <string name="tab_guide">Programm</string>
+    <string name="guide_now">Jetzt</string>
 </resources>

@@ -124,6 +124,8 @@ class Strings(context: Context) {
     val settingsAppearance get() = s(R.string.settings_appearance)
     val settingOn get() = s(R.string.setting_on)
     val settingOff get() = s(R.string.setting_off)
+    val tabGuide get() = s(R.string.tab_guide)
+    val guideNow get() = s(R.string.guide_now)
     val changeSecond get() = s(R.string.change_second)
     val closeSecond get() = s(R.string.close_second)
     val noSignal get() = s(R.string.no_signal)

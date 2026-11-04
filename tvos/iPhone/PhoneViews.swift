@@ -14,6 +14,16 @@ private let cardShape = RoundedRectangle(cornerRadius: 18, style: .continuous)
 private let listShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 private let selectedFill = Theme.sky.opacity(0.13)
 
+private let timeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
+
+private func phoneTime(_ ms: Int64) -> String {
+    timeFormatter.string(from: Date(timeIntervalSince1970: Double(ms) / 1000))
+}
+
 struct PhoneRoot: View {
     @Environment(AppModel.self) private var model
     /// A abertura (o logo animado) só passa uma vez, ao abrir a app.
@@ -189,7 +199,7 @@ private struct PhoneError: View {
     }
 }
 
-private enum PhoneTab: String { case tv, favorites, search, menu }
+private enum PhoneTab: String { case tv, guide, favorites, search, menu }
 
 /// O ecrã principal: abre logo a dar o último canal, com a lista por baixo.
 struct PhoneMain: View {
@@ -213,7 +223,7 @@ struct PhoneMain: View {
         VStack(spacing: 0) {
             if !settings {
                 // Ao alto, 16:9 com a largura toda; deitado, o ecrã todo.
-                VideoPane(fullscreen: landscape)
+                VideoPane(fullscreen: landscape) { epgFor = model.current }
                     .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
                     .frame(height: landscape ? nil : geo.size.width * 9 / (model.second == nil ? 16 : 8))
             }
@@ -221,6 +231,7 @@ struct PhoneMain: View {
                 Group {
                     switch tab {
                     case .tv: ChannelsTab(epgFor: $epgFor)
+                    case .guide: ChannelsTab(epgFor: $epgFor, guide: true)
                     case .favorites: ChannelList(channels: model.channels(in: SpecialCategory.favorites), group: SpecialCategory.favorites, epgFor: $epgFor)
                     case .search: SearchTab(epgFor: $epgFor)
                     case .menu: MenuTab()
@@ -254,6 +265,27 @@ struct PhoneMain: View {
                 if tab == .menu { model.player.stop() }
             }
         }
+        // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background, model.sleepAt != nil { model.setSleepTimer(nil, announce: false) }
+        }
+        // Temporizador: aviso no último minuto; ao acabar, para e sai da app.
+        .task(id: model.sleepAt) {
+            var warned = false
+            while let at = model.sleepAt, !Task.isCancelled {
+                let left = at.timeIntervalSinceNow
+                if left <= 0 {
+                    model.sleepNow()
+                    return
+                }
+                if left <= 60, !warned {
+                    warned = true
+                    model.showToast(model.strings.r("sleep_soon", "\(Int(left.rounded(.up)))"))
+                }
+                try? await Task.sleep(for: .seconds(left <= 61 ? 1 : min(left - 60, 30)))
+            }
+        }
+        .sensoryFeedback(.selection, trigger: model.current?.key)
         .statusBarHidden(landscape)
         .persistentSystemOverlays(landscape ? .hidden : .automatic)
         .task {
@@ -273,6 +305,8 @@ struct PhoneMain: View {
 private struct VideoPane: View {
     @Environment(AppModel.self) private var model
     let fullscreen: Bool
+    let onGuide: () -> Void
+    @State private var showingOptions = false
     @State private var controls = true
     @State private var touched = 0
     @State private var focusSecond = false
@@ -347,6 +381,9 @@ private struct VideoPane: View {
                 pickingSecond = false
             } onClose: { pickingSecond = false }
         }
+        .sheet(isPresented: $showingOptions) {
+            PlayerOptionsSheet(player: model.second != nil && focusSecond ? model.secondPlayer : model.player)
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             PhoneOrientation.deviceMoved()
         }
@@ -359,7 +396,11 @@ private struct VideoPane: View {
                 Text(model.current?.name ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 Spacer()
                 if let c = model.current {
-                    iconButton(model.isFavorite(c) ? "star.fill" : "star") { model.toggleFavorite(c); touched += 1 }
+                    iconButton(model.isFavorite(c) ? "star.fill" : "star") {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        model.toggleFavorite(c)
+                        touched += 1
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -374,6 +415,8 @@ private struct VideoPane: View {
                     pill(s.r("back_to_live")) { model.exitCatchup() }
                 }
                 Spacer()
+                iconButton("calendar") { onGuide(); touched += 1 }
+                iconButton("ellipsis") { showingOptions = true; touched += 1 }
                 if model.second == nil {
                     iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
                 } else {
@@ -404,9 +447,62 @@ private struct VideoPane: View {
     }
 }
 
+/// Áudio, legendas e temporizador do canal a dar.
+private struct PlayerOptionsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let player: PlayerEngine
+
+    var body: some View {
+        let s = model.strings
+        NavigationStack {
+            List {
+                Section(s.r("audio")) {
+                    let tracks = player.audioTracks
+                    if tracks.isEmpty { Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint) }
+                    ForEach(tracks, id: \.id) { track in
+                        row(track.name, track.id == player.currentAudio) { player.selectAudio(track.id) }
+                    }
+                }
+                Section(s.r("subtitles")) {
+                    let tracks = player.subtitleTracks
+                    if tracks.isEmpty { Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint) }
+                    ForEach(tracks, id: \.id) { track in
+                        row(track.id < 0 ? s.r("subtitles_off") : track.name, track.id == player.currentSubtitle) { player.selectSubtitle(track.id) }
+                    }
+                }
+                Section(model.sleepAt.map { s.r("sleep_remaining", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.r("sleep_timer")) {
+                    row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }
+                    ForEach([15, 30, 45, 60, 90, 120], id: \.self) { minutes in
+                        row("\(minutes) min", false) { model.setSleepTimer(minutes) }
+                    }
+                }
+            }
+            .navigationTitle(model.current?.name ?? "")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func row(_ title: String, _ checked: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            dismiss()
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(Theme.text)
+                Spacer()
+                if checked { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+            }
+        }
+    }
+}
+
 private struct ChannelsTab: View {
     @Environment(AppModel.self) private var model
     @Binding var epgFor: Channel?
+    var guide = false
     @State private var group: String?
     @State private var pinFor: ChannelGroup?
     @State private var pin = ""
@@ -443,7 +539,11 @@ private struct ChannelsTab: View {
             .onAppear { proxy.scrollTo(shown, anchor: .center) }
             .onChange(of: shown) { _, id in withAnimation { proxy.scrollTo(id, anchor: .center) } }
             }
-            ChannelList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
+            if guide {
+                GuideList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
+            } else {
+                ChannelList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
+            }
         }
         .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { pinFor != nil }, set: { if !$0 { pinFor = nil } })) {
             SecureField("PIN", text: $pin).keyboardType(.numberPad)
@@ -479,17 +579,118 @@ private struct ChannelList: View {
     }
 }
 
+/// O guia: o que dá em cada canal à hora escolhida.
+private struct GuideList: View {
+    @Environment(AppModel.self) private var model
+    let channels: [Channel]
+    let group: String
+    @Binding var epgFor: Channel?
+    @State private var slot: Int64?
+
+    var body: some View {
+        let s = model.strings
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let halfHour: Int64 = 1_800_000
+        let first = now - now % halfHour + halfHour
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    slotButton(s.t("Now", "Agora"), on: slot == nil) { slot = nil }
+                    ForEach(0..<12, id: \.self) { i in
+                        let time = first + Int64(i) * halfHour
+                        slotButton(phoneTime(time), on: slot == time) { slot = time }
+                    }
+                }
+                .padding(.horizontal, 4).padding(.bottom, 6)
+            }
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+            if channels.isEmpty {
+                Text(s.r("no_channels_in_group")).foregroundStyle(Theme.textFaint)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(channels) { channel in
+                            GuideRow(channel: channel, group: group, slot: slot, now: now, epgFor: $epgFor)
+                        }
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func slotButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline).foregroundStyle(on ? Theme.text : Theme.textFaint)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(on ? cardFill : .clear, in: listShape)
+        }
+    }
+}
+
+/// Um canal no guia. Agora, tocar abre o canal; a outra hora, abre o guia dele (catch-up e lembretes).
+private struct GuideRow: View {
+    @Environment(AppModel.self) private var model
+    let channel: Channel
+    let group: String
+    let slot: Int64?
+    let now: Int64
+    @Binding var epgFor: Channel?
+
+    var body: some View {
+        let at = slot ?? now
+        let entry = model.programmes(for: channel).first { $0.startMs <= at && $0.endMs > at }
+        let playing = slot == nil && model.current?.key == channel.key
+        Button {
+            if slot == nil {
+                model.play(channel, from: group)
+            } else {
+                epgFor = channel
+            }
+        } label: {
+            HStack(spacing: 14) {
+                if model.prefs.showLogos {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 56, height: 38))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry?.title ?? channel.name).font(.body.weight(.semibold)).foregroundStyle(playing ? Theme.sky : Theme.text).lineLimit(1)
+                    Text(entry.map { "\(phoneTime($0.startMs)) – \(phoneTime($0.endMs))" } ?? model.strings.r("no_guide"))
+                        .font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
+                    if slot == nil, let entry {
+                        ThinProgress(value: Double(entry.progress(now: now)), color: playing ? Theme.sky : Color.white.opacity(0.34))
+                            .padding(.top, 5)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 11)
+            .background(playing ? selectedFill : .clear, in: listShape)
+            .contentShape(listShape)
+        }
+        .simultaneousGesture(LongPressGesture().onEnded { _ in epgFor = channel })
+        .task { model.requestShortEpg(channel) }
+    }
+}
+
 private struct ChannelCard: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
     let group: String
+    /// O programa encontrado na pesquisa, em vez do que está a dar.
+    var found: EpgEntry?
     @Binding var epgFor: Channel?
 
     var body: some View {
         let playing = model.current?.key == channel.key
-        let now = model.prefs.epgInList ? model.nowNext(for: channel).now : nil
+        let time = Int64(Date().timeIntervalSince1970 * 1000)
+        let now = found ?? (model.prefs.epgInList ? model.nowNext(for: channel).now : nil)
         Button {
-            model.play(channel, from: group)
+            if let found, found.startMs > time {
+                epgFor = channel
+            } else {
+                model.play(channel, from: group)
+            }
         } label: {
             HStack(spacing: 14) {
                 if model.prefs.showLogos {
@@ -504,9 +705,11 @@ private struct ChannelCard: View {
                         }
                     }
                     if let now {
-                        Text(now.title).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
-                        ThinProgress(value: Double(now.progress(now: Int64(Date().timeIntervalSince1970 * 1000))), color: playing ? Theme.sky : Color.white.opacity(0.34))
-                            .padding(.top, 5)
+                        Text(found == nil ? now.title : "\(phoneTime(now.startMs))  \(now.title)").font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
+                        if now.startMs <= time {
+                            ThinProgress(value: Double(now.progress(now: time)), color: playing ? Theme.sky : Color.white.opacity(0.34))
+                                .padding(.top, 5)
+                        }
                     }
                 }
             }
@@ -612,7 +815,7 @@ private struct SearchTab: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(hits) { hit in
-                        ChannelCard(channel: hit.channel, group: model.groupFor(hit.channel), epgFor: $epgFor)
+                        ChannelCard(channel: hit.channel, group: model.groupFor(hit.channel), found: hit.programme, epgFor: $epgFor)
                     }
                 }
                 .padding(.horizontal, 6)
@@ -629,6 +832,7 @@ private struct TabRow: View {
         let s = model.strings
         HStack(spacing: 0) {
             item(.tv, "TV", "tv")
+            item(.guide, s.t("Guide", "Guia"), "calendar")
             item(.favorites, s.r("favorites"), "star")
             item(.search, s.r("search"), "magnifyingglass")
             item(.menu, s.r("settings"), "gearshape")
@@ -644,7 +848,7 @@ private struct TabRow: View {
             tab = t
         } label: {
             VStack(spacing: 2) {
-                Image(systemName: on && icon != "magnifyingglass" ? "\(icon).fill" : icon).font(.system(size: 19))
+                Image(systemName: on && icon != "magnifyingglass" && icon != "calendar" ? "\(icon).fill" : icon).font(.system(size: 19))
                     .overlay(alignment: .topTrailing) {
                         // Há versão nova: as Definições dizem onde a ir buscar.
                         if t == .menu, model.updateVersion != nil {

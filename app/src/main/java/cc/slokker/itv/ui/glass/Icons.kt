@@ -66,6 +66,10 @@ object ItvIcons {
         icon("Report", "M20,2H4c-1.1,0 -2,0.9 -2,2v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2zM20,16H6l-2,2V4h16v12z")
     }
 
+    val More: ImageVector by lazy {
+        icon("More", "M6,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zM18,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zM12,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2z")
+    }
+
     /** Guia de TV (grelha). */
     val Guide: ImageVector by lazy {
         icon("Guide", "M3,14h4v-4H3v4zm0,5h4v-4H3v4zM3,9h4V5H3v4zm5,5h13v-4H8v4zm0,5h13v-4H8v4zM8,5v4h13V5H8z")

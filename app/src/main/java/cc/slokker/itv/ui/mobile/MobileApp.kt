@@ -3,6 +3,7 @@ package cc.slokker.itv.ui.mobile
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -49,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.media3.common.C
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -77,6 +79,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.BuildConfig
+import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.Channel
@@ -100,6 +103,8 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.rememberStreamState
+import cc.slokker.itv.ui.player.trackOptions
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import androidx.compose.runtime.produceState
@@ -115,7 +120,7 @@ private val Card = Color.White.copy(alpha = 0.08f)
 private val CardShape = RoundedCornerShape(18.dp)
 private val ListShape = RoundedCornerShape(12.dp)
 private const val SELECTED_ALPHA = 0.13f
-private enum class Tab { Tv, Favorites, Search, Menu }
+private enum class Tab { Tv, Guide, Favorites, Search, Menu }
 
 /** Primeira vez no telemóvel: conta GOAT ou listas só neste aparelho. */
 @Composable
@@ -181,11 +186,40 @@ fun MobileMain(vm: AppViewModel) {
     }
     var epgFor by remember { mutableStateOf<Channel?>(null) }
     var epgPick by remember { mutableStateOf<Pair<Channel, Boolean>?>(null) }
+    var showingOptions by remember { mutableStateOf(false) }
+    val view = LocalView.current
+    var hapticKey by remember { mutableStateOf(current.key) }
+    LaunchedEffect(current.key) {
+        if (hapticKey != current.key) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        hapticKey = current.key
+    }
+    // Temporizador: aviso no último minuto; ao acabar, para e fecha a app.
+    val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val strings = LocalStrings.current
+    LaunchedEffect(sleepAt) {
+        val at = sleepAt ?: return@LaunchedEffect
+        var warned = false
+        while (true) {
+            val left = at - System.currentTimeMillis()
+            if (left <= 0) {
+                playback.player.stop()
+                vm.setSleepTimer(null, announce = false)
+                activity?.finish()
+                break
+            }
+            if (left <= 60_000 && !warned) {
+                warned = true
+                vm.showToast(strings.sleepSoon(((left + 999) / 1000).toInt()))
+            }
+            delay(if (left <= 61_000) 1_000 else minOf(left - 60_000, 30_000))
+        }
+    }
 
     FullscreenBars(landscape)
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
-    BackHandler(landscape || epgFor != null || tab != Tab.Tv) {
+    BackHandler(landscape || showingOptions || epgFor != null || tab != Tab.Tv) {
         when {
+            showingOptions -> showingOptions = false
             landscape -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             epgFor != null -> epgFor = null
             else -> tab = Tab.Tv
@@ -199,7 +233,7 @@ fun MobileMain(vm: AppViewModel) {
             Box(
                 if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
             ) {
-                VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onFullscreen = {
+                VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onGuide = if (landscape) null else ({ epgFor = current }), onOptions = { showingOptions = true }, onFullscreen = {
                     activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 })
             }
@@ -208,6 +242,7 @@ fun MobileMain(vm: AppViewModel) {
             Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
                 when (tab) {
                     Tab.Tv -> ChannelsTab(vm, current) { epgFor = it }
+                    Tab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
                     Tab.Favorites -> ChannelList(vm, vm.channelsOf(SpecialCategory.FAVORITES), SpecialCategory.FAVORITES, current) { epgFor = it }
                     Tab.Search -> SearchTab(vm, current) { epgFor = it }
                     Tab.Menu -> MobileMenu(vm)
@@ -226,6 +261,7 @@ fun MobileMain(vm: AppViewModel) {
             }
         }
     }
+    if (showingOptions && !pip) PlayerOptionsSheet(vm, playback) { showingOptions = false }
     var reminder by remember { mutableStateOf<Reminder?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -264,8 +300,9 @@ private fun FullscreenBars(fullscreen: Boolean) {
 }
 
 @Composable
-private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, pip: Boolean, onPip: (() -> Unit)?, onFullscreen: () -> Unit) {
+private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, pip: Boolean, onPip: (() -> Unit)?, onGuide: (() -> Unit)?, onOptions: () -> Unit, onFullscreen: () -> Unit) {
     val s = LocalStrings.current
+    val view = LocalView.current
     var controls by remember { mutableStateOf(true) }
     var touched by remember { mutableStateOf(0) }
     val catchup by vm.catchup.collectAsStateWithLifecycle()
@@ -304,7 +341,11 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(channel.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel); touched++ }
+                ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    vm.toggleFavorite(channel)
+                    touched++
+                }
             }
             ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.align(Alignment.Center).size(56.dp)) {
                 if (playback.playing) playback.player.pause() else playback.player.play()
@@ -319,10 +360,56 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                 }
             }
             Row(Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
+                onGuide?.let { ControlButton(ItvIcons.Calendar) { it(); touched++ } }
+                ControlButton(ItvIcons.More) { onOptions(); touched++ }
                 onPip?.let { ControlButton(ItvIcons.Pip, onClick = it) }
                 ControlButton(ItvIcons.Fullscreen, onClick = onFullscreen)
             }
             if (fullscreen && catchup == null) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomStart).padding(14.dp))
+        }
+    }
+}
+
+/** Áudio, legendas e temporizador do canal a dar. */
+@Composable
+private fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    val tracks = rememberStreamState(playback.player).tracks
+    val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.75f)
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color(0xFF14161E))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            listOf(s.audio to (C.TRACK_TYPE_AUDIO to false), s.subtitles to (C.TRACK_TYPE_TEXT to true)).forEach { (title, kind) ->
+                Section(title) {
+                    val options = trackOptions(tracks, kind.first, playback.player, kind.second)
+                    if (options.isEmpty()) Note(s.noTracks)
+                    options.forEach { o ->
+                        MenuRow(o.label, null, checked = o.selected) {
+                            o.select()
+                            onClose()
+                        }
+                    }
+                }
+            }
+            Section(sleepAt?.let { s.sleepRemaining(((it - System.currentTimeMillis()) / 60_000 + 1).toInt()) } ?: s.sleepTimer) {
+                MenuRow(s.subtitlesOff, null, checked = sleepAt == null) {
+                    vm.setSleepTimer(null)
+                    onClose()
+                }
+                listOf(15, 30, 45, 60, 90, 120).forEach { minutes ->
+                    MenuRow("$minutes min", null) {
+                        vm.setSleepTimer(minutes)
+                        onClose()
+                    }
+                }
+            }
         }
     }
 }
@@ -344,7 +431,7 @@ private fun ControlButton(icon: ImageVector, modifier: Modifier = Modifier.size(
 }
 
 @Composable
-private fun ChannelsTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Unit) {
+private fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = false, onEpg: (Channel) -> Unit) {
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
@@ -390,7 +477,7 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> 
                 )
             }
         }
-        ChannelList(vm, channels, shown, current, onEpg)
+        if (guide) GuideList(vm, channels, shown, current, onEpg) else ChannelList(vm, channels, shown, current, onEpg)
     }
     pinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { pinFor = null }) { pin ->
@@ -414,14 +501,89 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
     }
 }
 
+/** O guia: o que dá em cada canal à hora escolhida. */
+@Composable
+private fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: String, current: Channel, onEpg: (Channel) -> Unit) {
+    val s = LocalStrings.current
+    val now = rememberNow()
+    var slot by rememberSaveable { mutableStateOf<Long?>(null) }
+    val halfHour = 1_800_000L
+    val first = now - now % halfHour + halfHour
+    Column(Modifier.fillMaxSize()) {
+        LazyRow(contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = 6.dp)) {
+            item { SlotChip(s.guideNow, slot == null) { slot = null } }
+            items(12) { i ->
+                val time = first + i * halfHour
+                SlotChip(formatTime(time), slot == time) { slot = time }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(RowLine))
+        if (channels.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(s.noChannelsInGroup, color = ItvColors.TextFaint, fontSize = 15.sp) }
+        } else {
+            LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = BAR_SPACE)) {
+                items(channels, key = { it.uid }) { channel ->
+                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onClick = {
+                        if (slot == null) vm.play(channel, groupId) else onEpg(channel)
+                    }, onLong = { onEpg(channel) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlotChip(label: String, on: Boolean, onClick: () -> Unit) {
+    Text(
+        label, color = if (on) ItvColors.Text else ItvColors.TextFaint, fontSize = 14.sp, maxLines = 1,
+        modifier = Modifier.clip(ListShape).background(if (on) Card else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+/** Um canal no guia. Agora, tocar abre o canal; a outra hora, abre o guia dele (catch-up e lembretes). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
+private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
+    val s = LocalStrings.current
+    val accent = LocalAccent.current.start
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    val at = slot ?: now
+    val entry = epg.firstOrNull { it.startMs <= at && it.endMs > at }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(ListShape)
+            .background(if (playing) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLong)
+            .padding(horizontal = 10.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (prefs.showLogos) {
+            Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
+            Spacer(Modifier.width(14.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(entry?.title ?: channel.name, color = if (playing) accent else ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(entry?.let { "${formatTime(it.startMs)} – ${formatTime(it.endMs)}" } ?: s.noGuide, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (slot == null && entry != null) {
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+                    Box(Modifier.fillMaxWidth(entry.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, found: EpgEntry? = null, onClick: () -> Unit, onLong: () -> Unit) {
     val accent = LocalAccent.current.start
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val programme = epg.firstOrNull { it.startMs <= now && it.endMs > now }?.takeIf { prefs.epgInList }
+    val programme = found ?: epg.firstOrNull { it.startMs <= now && it.endMs > now }?.takeIf { prefs.epgInList }
     Row(
         Modifier
             .fillMaxWidth()
@@ -444,10 +606,12 @@ private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, on
                 }
             }
             if (programme != null) {
-                Text(programme.title, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-                    Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
+                Text(if (found == null) programme.title else "${formatTime(programme.startMs)}  ${programme.title}", color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (programme.startMs <= now) {
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+                        Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
+                    }
                 }
             }
         }
@@ -530,7 +694,10 @@ private fun SearchTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Un
             hits.isEmpty() -> Note(s.searchNoResults)
             else -> LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = BAR_SPACE)) {
                 items(hits) { hit ->
-                    ChannelCard(vm, hit.channel, hit.channel.key == current.key, onClick = { vm.play(hit.channel, vm.groupFor(hit.channel)) }, onLong = { onEpg(hit.channel) })
+                    val future = (hit.programme?.startMs ?: 0L) > System.currentTimeMillis()
+                    ChannelCard(vm, hit.channel, hit.channel.key == current.key, found = hit.programme, onClick = {
+                        if (future) onEpg(hit.channel) else vm.play(hit.channel, vm.groupFor(hit.channel))
+                    }, onLong = { onEpg(hit.channel) })
                 }
             }
         }
@@ -563,6 +730,7 @@ private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> U
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.1f)))
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp)) {
             BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }
+            BarItem(s.tabGuide, ItvIcons.Calendar, tab == Tab.Guide) { onTab(Tab.Guide) }
             BarItem(s.favorites, ItvIcons.Star, tab == Tab.Favorites) { onTab(Tab.Favorites) }
             BarItem(s.search, ItvIcons.Search, tab == Tab.Search) { onTab(Tab.Search) }
             BarItem(s.settings, ItvIcons.Settings, tab == Tab.Menu) { onTab(Tab.Menu) }

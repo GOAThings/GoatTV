@@ -545,4 +545,6 @@
     <string name="settings_appearance">रूप-रंग</string>
     <string name="setting_on">चालू</string>
     <string name="setting_off">बंद</string>
+    <string name="tab_guide">गाइड</string>
+    <string name="guide_now">अभी</string>
 </resources>
