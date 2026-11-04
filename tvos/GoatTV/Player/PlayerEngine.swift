@@ -90,7 +90,8 @@ final class PlayerEngine: NSObject {
     /// O tempo do leitor já é o do stream novo. Antes disso, é o do anterior.
     @ObservationIgnored private(set) var positionValid = false
     @ObservationIgnored private var savingSnapshot = false
-    @ObservationIgnored private var videoOutSeen = false
+    /// Imagens já desenhadas antes do salto dentro do stream (são do sítio errado).
+    @ObservationIgnored private var picturesBeforeJump = 0
     @ObservationIgnored private var movingSince: Date?
     /// Onde começar dentro do stream, em ms (o catch-up só abre em minutos certos; o resto é aqui).
     @ObservationIgnored private var startOffsetMs: Int64 = 0
@@ -314,7 +315,7 @@ final class PlayerEngine: NSObject {
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
         hasPicture = false
-        videoOutSeen = false
+        picturesBeforeJump = 0
         movingSince = nil
         startSeekCheck?.cancel()
         seekingStart = false
@@ -438,8 +439,8 @@ final class PlayerEngine: NSObject {
         } else {
             vlc.setDeinterlace(.auto, withFilter: deinterlace)
         }
-        // A saltar para [startOffsetMs], não se ouve o que está antes.
-        vlc.audio?.isMuted = muted || startOffsetMs >= 1000
+        // O som chega antes da imagem: só se ouve quando ela aparecer.
+        vlc.audio?.isMuted = true
         vlc.play()
     }
 
@@ -482,7 +483,6 @@ final class PlayerEngine: NSObject {
         guard seekingStart else {
             seekingStart = true
             lastVlcTime = time
-            vlc.audio?.isMuted = true
             guard vlc.isSeekable, startOffsetMs <= Int64(Int32.max) else {
                 startJumpFailed()
                 return true
@@ -500,7 +500,7 @@ final class PlayerEngine: NSObject {
         guard moved < 0 || moved > Self.maxTimeStepMs else { return true }
         startSeekCheck?.cancel()
         startSettled = true
-        vlc.audio?.isMuted = muted
+        picturesBeforeJump = picturesShown
         return false
     }
 
@@ -516,23 +516,27 @@ final class PlayerEngine: NSObject {
         guard !startSettled else { return }
         startSeekCheck?.cancel()
         startSettled = true
-        vlc.audio?.isMuted = muted
         DebugLog.add("Player: VLC did not reach the start position")
         onStartIgnored?()
     }
 
-    /// A saída de vídeo aparece com a primeira imagem completa; espera-se mais um instante para já estar desenhada.
-    /// Sem saída ao fim de uns segundos, o canal só tem som.
+    private var picturesShown: Int { Int(vlc.media?.numberOfDisplayedPictures ?? 0) }
+
+    /// A imagem congelada e o silêncio ficam até o VLC desenhar a primeira imagem.
+    /// Se o canal só tiver som, ou se a imagem não chegar em 5 segundos, não se espera mais.
     private func checkPicture() {
         guard !hasPicture else { return }
         let since = movingSince ?? Date()
         movingSince = since
-        guard videoOutSeen || Date().timeIntervalSince(since) > 5 else {
-            videoOutSeen = vlc.hasVideoOut
-            return
-        }
+        guard picturesShown > picturesBeforeJump || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
         hasPicture = true
+        vlc.audio?.isMuted = muted
         hideFreeze()
+    }
+
+    private var soundOnly: Bool {
+        let types = (vlc.media?.tracksInformation as? [[String: Any]] ?? []).compactMap { $0[VLCMediaTracksInformationType] as? String }
+        return types.contains(VLCMediaTracksInformationTypeAudio) && !types.contains(VLCMediaTracksInformationTypeVideo)
     }
 
     /// A frame rate e o tamanho do vídeo que o VLC está a dar.
