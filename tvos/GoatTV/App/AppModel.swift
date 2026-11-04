@@ -900,7 +900,8 @@ final class AppModel {
 
     // MARK: Canais
 
-    func play(_ channel: Channel, from group: String? = nil, remember: Bool = true) {
+    /// Com [opening] a false, só muda de canal: quem chama abre logo outro stream (ex.: catch-up).
+    func play(_ channel: Channel, from group: String? = nil, remember: Bool = true, opening: Bool = true) {
         guard let content else { return }
         if let group { groupId = group }
         catchup = nil
@@ -913,12 +914,14 @@ final class AppModel {
         current = channel
         playingSince = Date()
         zapCount += 1
-        let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
-                                          allowedFormats: content.account?.allowedFormats ?? [])
-        let stalker = loader.stalker
-        let playlist = content.playlist
-        player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
-                    linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
+        if opening {
+            let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
+                                              allowedFormats: content.account?.allowedFormats ?? [])
+            let stalker = loader.stalker
+            let playlist = content.playlist
+            player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
+                        linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
+        }
         saveLast(channel, watched: false)
         watchTask?.cancel()
         watchTask = Task { [weak self] in
@@ -986,8 +989,13 @@ final class AppModel {
 
     /// Vê [entry] em catch-up, desde o início (ou desde [positionMs]).
     func playCatchup(_ channel: Channel, _ entry: EpgEntry, positionMs: Int64 = 0) {
-        if current?.key != channel.key { play(channel, from: groupFor(channel)) }
-        startCatchup(Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs)))
+        let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
+        if current?.key != channel.key {
+            // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
+            let opens = content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone) } != nil
+            play(channel, from: groupFor(channel), opening: !opens)
+        }
+        startCatchup(cu)
     }
 
     private func startCatchup(_ cu: Catchup) {
@@ -1007,20 +1015,28 @@ final class AppModel {
     /// Avança/recua para [positionMs]; passar do direto (ou do fim) volta ao direto.
     func seekCatchup(_ positionMs: Int64) {
         guard let cu = catchup else { return }
-        let liveEdge = nowMs() - cu.startMs - Catchup.minAgeMs
-        if positionMs >= liveEdge || positionMs >= cu.durationMs {
+        if catchupGoesLive(positionMs) {
             exitCatchup()
             return
         }
-        // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
-        var target = max(0, positionMs)
-        if target > catchupPosition {
-            let wanted = cu.startMs + target
-            target += (60_000 - wanted % 60_000) % 60_000
-        }
         var next = cu
-        next.positionMs = target
+        next.positionMs = catchupLanding(positionMs)
         startCatchup(next)
+    }
+
+    /// [positionMs] já passa do que o servidor tem: o salto volta ao direto.
+    func catchupGoesLive(_ positionMs: Int64) -> Bool {
+        guard let catchup else { return false }
+        return positionMs >= nowMs() - catchup.startMs - Catchup.minAgeMs || positionMs >= catchup.durationMs
+    }
+
+    /// Onde um salto para [positionMs] vai mesmo parar. O servidor só abre em minutos certos: a avançar vai para o
+    /// seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto.
+    func catchupLanding(_ positionMs: Int64) -> Int64 {
+        guard let catchup else { return positionMs }
+        let target = max(0, positionMs)
+        let extra = (catchup.startMs + target) % 60_000
+        return max(0, target > catchupPosition ? target + (60_000 - extra) % 60_000 : target - extra)
     }
 
     func exitCatchup() {

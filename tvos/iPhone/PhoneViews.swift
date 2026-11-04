@@ -358,9 +358,9 @@ private struct VideoPane: View {
             // Enquanto ainda vai tentar outra vez, não há erro para mostrar.
             if let error = model.playbackError, model.player.retries >= PlayerEngine.maxStartRetries || model.prefs.reconnectSeconds == 0 {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
-            } else if model.player.frozen {
+            } else if !controls, model.player.frozen {
                 ProgressView().tint(.white)
-            } else if model.player.state != .playing, let current = model.current {
+            } else if !controls, model.player.state != .playing, let current = model.current {
                 Text(current.name).font(.subheadline).foregroundStyle(Theme.textDim)
             }
             if controls { overlay }
@@ -414,7 +414,12 @@ private struct VideoPane: View {
                 // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
                 let canSeek = barState?.seekable == true
                 if canSeek { seekButton("gobackward.30", -seekStep) }
-                iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
+                // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
+                if model.player.frozen || model.player.state == .opening {
+                    ProgressView().tint(.white).frame(width: 44, height: 44)
+                } else {
+                    iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
+                }
                 if canSeek {
                     seekButton("goforward.30", seekStep)
                         .disabled(model.catchup == nil)
@@ -424,7 +429,7 @@ private struct VideoPane: View {
             // Por cima dos botões, sem os mexer.
             .overlay(alignment: .top) {
                 if seekDelta != 0 {
-                    Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 1000) s").font(.footnote.weight(.semibold))
+                    Text(seekLabel).font(.footnote.weight(.semibold))
                         .padding(.horizontal, 12).padding(.vertical, 5)
                         .background(Color.black.opacity(0.55), in: Capsule())
                         .fixedSize()
@@ -514,9 +519,26 @@ private struct VideoPane: View {
         if model.catchup != nil {
             model.seekCatchup(target)
         } else if target < livePosition - 5_000, let channel = model.current, let entry = model.nowNext(for: channel).now {
-            // Os últimos minutos ainda não estão no arquivo do servidor.
-            model.playCatchup(channel, entry, positionMs: max(0, min(target, livePosition - Catchup.minAgeMs - seekStep)))
+            model.playCatchup(channel, entry, positionMs: liveLanding(target, livePosition: livePosition, entry: entry))
         }
+    }
+
+    /// Onde um salto a partir do direto vai parar: os últimos minutos ainda não estão no arquivo do servidor, e o
+    /// servidor só abre em minutos certos.
+    private func liveLanding(_ target: Int64, livePosition: Int64, entry: EpgEntry) -> Int64 {
+        let wanted = max(0, min(target, livePosition - Catchup.minAgeMs - seekStep))
+        return max(0, wanted - (entry.startMs + wanted) % 60_000)
+    }
+
+    /// Para onde vão os toques em ±30 s.
+    private var seekLabel: String {
+        let target = seekBase + seekDelta
+        if model.catchup != nil {
+            if model.catchupGoesLive(target) { return model.strings.t("Go live", "Ir para o direto") }
+            return "→ " + durationText(model.catchupLanding(target))
+        }
+        guard let channel = model.current, let entry = model.nowNext(for: channel).now else { return "" }
+        return "→ " + durationText(liveLanding(target, livePosition: seekBase, entry: entry))
     }
 
     private var seekStep: Int64 { 30_000 }

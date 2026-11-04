@@ -125,6 +125,17 @@ import cc.slokker.itv.ui.common.LogoImage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import cc.slokker.itv.data.Catchup
 
 private val Card = Color.White.copy(alpha = 0.08f)
 private val CardShape = RoundedCornerShape(18.dp)
@@ -324,27 +335,34 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
     var tick by remember { mutableStateOf(0) }
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val liveEntry = { now: Long -> vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    // No VLC, o tempo deixa de bater certo depois de saltar dentro do stream: reabre-se nessa posição.
+    fun seeksInStream(cu: Catchup, target: Long) =
+        target >= playback.archiveStart - cu.startMs && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable
+    // Onde um salto vai mesmo parar: os últimos minutos ainda não estão no arquivo do servidor, e o servidor só abre
+    // em minutos certos (a avançar vai para o seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto).
+    fun landing(target: Long, position: Long): Long {
+        val cu = vm.catchup.value
+        if (cu == null) {
+            val wanted = target.coerceAtMost(position - CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0)
+            val start = liveEntry(System.currentTimeMillis())?.startMs ?: return wanted
+            return (wanted - (start + wanted) % 60_000).coerceAtLeast(0)
+        }
+        val wanted = target.coerceAtLeast(0)
+        if (seeksInStream(cu, wanted)) return wanted
+        val extra = (cu.startMs + wanted) % 60_000
+        return (if (wanted > position) wanted + (60_000 - extra) % 60_000 else wanted - extra).coerceAtLeast(0)
+    }
     fun goTo(target: Long, position: Long) {
-        val forward = target > position
         val cu = vm.catchup.value
         if (cu == null) {
             val entry = liveEntry(System.currentTimeMillis())
-            // Os últimos minutos ainda não estão no arquivo do servidor.
-            if (entry != null && target < position - 5_000) {
-                vm.playCatchup(channel, entry, target.coerceAtMost(position - CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0))
-            }
+            if (entry != null && target < position - 5_000) vm.playCatchup(channel, entry, landing(target, position))
             return
         }
-        val inStream = target - (playback.archiveStart - cu.startMs)
-        // No VLC, o tempo deixa de bater certo depois de saltar dentro do stream: reabre-se nessa posição.
-        if (inStream >= 0 && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable) {
-            playback.player.seekTo(inStream)
-        } else if (forward) {
-            // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
-            val wanted = cu.startMs + target
-            vm.seekCatchup(target + (60_000 - wanted % 60_000) % 60_000)
+        if (seeksInStream(cu, target)) {
+            playback.player.seekTo(target - (playback.archiveStart - cu.startMs))
         } else {
-            vm.seekCatchup(target)
+            vm.seekCatchup(landing(target, position))
         }
     }
     // Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
@@ -394,7 +412,9 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
         playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         when {
             playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
-            !playback.ready && playback.freeze == null -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
+            controls && !pip -> {}
+            playback.freeze != null -> Spinner(Modifier.align(Alignment.Center))
+            !playback.ready -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
         }
         if (controls && !pip) {
             Row(
@@ -417,16 +437,25 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                     val canSeek = cu != null || (live != null && vm.canCatchup(channel, live))
                     fun position() = if (cu != null) playback.archiveStart - cu.startMs + playback.player.currentPosition else System.currentTimeMillis() - (live?.startMs ?: 0L)
                     if (canSeek) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
-                    ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(56.dp)) {
-                        if (playback.playing) playback.player.pause() else playback.player.play()
-                        touched++
+                    // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
+                    if (!playback.failed && (!playback.ready || playback.freeze != null)) {
+                        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                            Spinner()
+                        }
+                    } else {
+                        ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(56.dp)) {
+                            if (playback.playing) playback.player.pause() else playback.player.play()
+                            touched++
+                        }
                     }
                     if (canSeek) SeekButton(forward = true, enabled = cu != null) { seek(SEEK_MS, position()) }
                 }
                 // Por cima dos botões, sem os mexer.
                 if (seekDelta != 0L) {
+                    val target = seekBase + seekDelta
+                    val goesLive = catchup?.let { target >= (System.currentTimeMillis() - it.startMs - CATCHUP_MIN_AGE_MS).coerceAtMost(it.durationMs) } == true
                     Text(
-                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 1000} s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        if (goesLive) s.playerGoLive else "→ ${durationText(landing(target, seekBase))}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopCenter).offset(y = (-30).dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
@@ -477,6 +506,18 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                 }
             }
         }
+    }
+}
+
+/** O canal está a abrir. */
+@Composable
+private fun Spinner(modifier: Modifier = Modifier) {
+    val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
+        0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "turn",
+    )
+    Canvas(modifier.size(28.dp)) {
+        val stroke = 2.dp.toPx()
+        drawArc(Color.White, turn, 270f, false, topLeft = Offset(stroke / 2, stroke / 2), size = Size(size.width - stroke, size.height - stroke), style = Stroke(stroke, cap = StrokeCap.Round))
     }
 }
 
