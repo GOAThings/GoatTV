@@ -187,6 +187,12 @@ final class PlayerEngine: NSObject {
             showFreeze(appleSnapshot())
             start()
         case .vlc:
+            // Sem saída de vídeo (ainda a abrir, ou só som), o VLC lança uma exceção em vez de gravar a imagem.
+            guard vlc.hasVideoOut else {
+                hideFreeze()
+                start()
+                return
+            }
             // O VLC grava a imagem num ficheiro; espera-se um instante antes de parar o canal antigo.
             let path = NSTemporaryDirectory() + "goattv-freeze.png"
             try? FileManager.default.removeItem(atPath: path)
