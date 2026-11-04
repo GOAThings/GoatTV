@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -113,6 +114,7 @@ import cc.slokker.itv.data.api.EpgCountryInfo
 import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.ui.common.LogoImage
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -306,6 +308,23 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
     var controls by remember { mutableStateOf(true) }
     var touched by remember { mutableStateOf(0) }
     val catchup by vm.catchup.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var seekDelta by remember { mutableStateOf(0L) }
+    var seekBase by remember { mutableStateOf(0L) }
+    var seekJob by remember { mutableStateOf<Job?>(null) }
+    // Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
+    fun seek(delta: Long, position: Long) {
+        if (seekDelta == 0L) seekBase = position
+        seekDelta += delta
+        touched++
+        seekJob?.cancel()
+        seekJob = scope.launch {
+            delay(SEEK_DEBOUNCE_MS)
+            val target = seekBase + seekDelta
+            seekDelta = 0
+            vm.seekCatchup(target)
+        }
+    }
     LaunchedEffect(controls, touched, channel.key) {
         if (controls) {
             delay(CONTROLS_MS)
@@ -347,15 +366,26 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                     touched++
                 }
             }
-            ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.align(Alignment.Center).size(56.dp)) {
-                if (playback.playing) playback.player.pause() else playback.player.play()
-                touched++
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (seekDelta != 0L) {
+                    Text(
+                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 60_000} min", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val cu = catchup
+                    fun position() = if (cu == null) 0L else playback.archiveStart - cu.startMs + playback.player.currentPosition
+                    if (cu != null) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
+                    ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(56.dp)) {
+                        if (playback.playing) playback.player.pause() else playback.player.play()
+                        touched++
+                    }
+                    if (cu != null) SeekButton(forward = true) { seek(SEEK_MS, position()) }
+                }
             }
-            catchup?.let { cu ->
+            if (catchup != null) {
                 Row(Modifier.align(Alignment.BottomStart).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    fun position() = playback.archiveStart - cu.startMs + playback.player.currentPosition
-                    SmallAction("−5") { vm.seekCatchup(position() - SEEK_MS); touched++ }
-                    SmallAction("+5") { vm.seekCatchup(position() + SEEK_MS); touched++ }
                     SmallAction(s.backToLive) { vm.exitCatchup() }
                 }
             }
@@ -367,6 +397,15 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             }
             if (fullscreen && catchup == null) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomStart).padding(14.dp))
         }
+    }
+}
+
+/** Recuar ou avançar 5 minutos, ao lado do botão de pausa. */
+@Composable
+private fun SeekButton(forward: Boolean, onClick: () -> Unit) {
+    Box(Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(ItvIcons.Replay, null, tint = Color.White, modifier = Modifier.size(34.dp).graphicsLayer { if (forward) scaleX = -1f })
+        Text("5", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -510,7 +549,12 @@ private fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: String
     val halfHour = 1_800_000L
     val first = now - now % halfHour + halfHour
     Column(Modifier.fillMaxSize()) {
-        LazyRow(contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = 6.dp)) {
+        // Para trás, para o catch-up; "Agora" começa perto do início do ecrã.
+        LazyRow(state = rememberLazyListState(GUIDE_PAST_SLOTS - 1), contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = 6.dp)) {
+            items(GUIDE_PAST_SLOTS) { i ->
+                val time = first + (i - GUIDE_PAST_SLOTS) * halfHour
+                SlotChip(formatTime(time), slot == time) { slot = time }
+            }
             item { SlotChip(s.guideNow, slot == null) { slot = null } }
             items(12) { i ->
                 val time = first + i * halfHour
@@ -523,9 +567,7 @@ private fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: String
         } else {
             LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = BAR_SPACE)) {
                 items(channels, key = { it.uid }) { channel ->
-                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onClick = {
-                        if (slot == null) vm.play(channel, groupId) else onEpg(channel)
-                    }, onLong = { onEpg(channel) })
+                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onPlay = { vm.play(channel, groupId) }, onLong = { onEpg(channel) })
                 }
             }
         }
@@ -540,22 +582,30 @@ private fun SlotChip(label: String, on: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** Um canal no guia. Agora, tocar abre o canal; a outra hora, abre o guia dele (catch-up e lembretes). */
+/** Um canal no guia. Agora, tocar abre o canal; no passado, o catch-up; a outra hora, o guia dele. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
+private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long, playing: Boolean, onPlay: () -> Unit, onLong: () -> Unit) {
     val s = LocalStrings.current
     val accent = LocalAccent.current.start
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg } }
     val at = slot ?: now
-    val entry = epg.firstOrNull { it.startMs <= at && it.endMs > at }
+    val entry = entries.firstOrNull { it.startMs <= at && it.endMs > at }
+    val catchup = slot != null && entry != null && vm.canCatchup(channel, entry)
     Row(
         Modifier
             .fillMaxWidth()
             .clip(ListShape)
             .background(if (playing) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
-            .combinedClickable(onClick = onClick, onLongClick = onLong)
+            .combinedClickable(onClick = {
+                when {
+                    slot == null -> onPlay()
+                    catchup -> vm.playCatchup(channel, entry!!)
+                    else -> onLong()
+                }
+            }, onLongClick = onLong)
             .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -572,6 +622,10 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
                     Box(Modifier.fillMaxWidth(entry.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
                 }
             }
+        }
+        if (catchup) {
+            Spacer(Modifier.width(8.dp))
+            Icon(ItvIcons.Replay, s.watchCatchup, tint = ItvColors.TextFaint, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -1127,6 +1181,8 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
 private val BAR_SPACE = 92.dp
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 5 * 60_000L
+private const val SEEK_DEBOUNCE_MS = 700L
+private const val GUIDE_PAST_SLOTS = 36
 private const val ZAP_DRAG_PX = 120f
 
 /** Erro ao carregar uma lista, com botões de toque. */

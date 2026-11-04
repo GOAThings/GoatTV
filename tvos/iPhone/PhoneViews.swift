@@ -307,6 +307,9 @@ private struct VideoPane: View {
     let fullscreen: Bool
     let onGuide: () -> Void
     @State private var showingOptions = false
+    @State private var seekDelta: Int64 = 0
+    @State private var seekBase: Int64 = 0
+    @State private var seekTask: Task<Void, Never>?
     @State private var controls = true
     @State private var touched = 0
     @State private var focusSecond = false
@@ -406,12 +409,19 @@ private struct VideoPane: View {
             .padding(.horizontal, 12)
             .background(Color.black.opacity(0.45))
             Spacer()
-            iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
+            if seekDelta != 0 {
+                Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 60_000) min").font(.footnote.weight(.semibold))
+                    .padding(.horizontal, 12).padding(.vertical, 5)
+                    .background(Color.black.opacity(0.55), in: Capsule())
+            }
+            HStack(spacing: 28) {
+                if model.catchup != nil { seekButton("gobackward.5", -seekStep) }
+                iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
+                if model.catchup != nil { seekButton("goforward.5", seekStep) }
+            }
             Spacer()
             HStack(spacing: 6) {
                 if model.catchup != nil {
-                    pill("−5") { model.seekCatchup(model.catchupPosition - 300_000); touched += 1 }
-                    pill("+5") { model.seekCatchup(model.catchupPosition + 300_000); touched += 1 }
                     pill(s.r("back_to_live")) { model.exitCatchup() }
                 }
                 Spacer()
@@ -428,6 +438,27 @@ private struct VideoPane: View {
             .padding(6)
         }
         .foregroundStyle(.white)
+    }
+
+    private var seekStep: Int64 { 300_000 }
+
+    private func seekButton(_ name: String, _ delta: Int64) -> some View {
+        Button { seek(delta) } label: { Image(systemName: name).font(.title).frame(width: 52, height: 52) }
+    }
+
+    /// Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
+    private func seek(_ delta: Int64) {
+        if seekDelta == 0 { seekBase = model.catchupPosition }
+        seekDelta += delta
+        touched += 1
+        seekTask?.cancel()
+        seekTask = Task {
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            let target = seekBase + seekDelta
+            seekDelta = 0
+            model.seekCatchup(target)
+        }
     }
 
     private func rotate() {
@@ -593,15 +624,23 @@ private struct GuideList: View {
         let halfHour: Int64 = 1_800_000
         let first = now - now % halfHour + halfHour
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    slotButton(s.t("Now", "Agora"), on: slot == nil) { slot = nil }
-                    ForEach(0..<12, id: \.self) { i in
-                        let time = first + Int64(i) * halfHour
-                        slotButton(phoneTime(time), on: slot == time) { slot = time }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        // Para trás, para o catch-up; "Agora" começa ao centro.
+                        ForEach(-36..<0, id: \.self) { i in
+                            let time = first + Int64(i) * halfHour
+                            slotButton(phoneTime(time), on: slot == time) { slot = time }
+                        }
+                        slotButton(s.t("Now", "Agora"), on: slot == nil) { slot = nil }.id("now")
+                        ForEach(0..<12, id: \.self) { i in
+                            let time = first + Int64(i) * halfHour
+                            slotButton(phoneTime(time), on: slot == time) { slot = time }
+                        }
                     }
+                    .padding(.horizontal, 4).padding(.bottom, 6)
                 }
-                .padding(.horizontal, 4).padding(.bottom, 6)
+                .onAppear { proxy.scrollTo("now", anchor: .center) }
             }
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
             if channels.isEmpty {
@@ -629,7 +668,7 @@ private struct GuideList: View {
     }
 }
 
-/// Um canal no guia. Agora, tocar abre o canal; a outra hora, abre o guia dele (catch-up e lembretes).
+/// Um canal no guia. Agora, tocar abre o canal; no passado, o catch-up; a outra hora, o guia dele.
 private struct GuideRow: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
@@ -642,9 +681,12 @@ private struct GuideRow: View {
         let at = slot ?? now
         let entry = model.programmes(for: channel).first { $0.startMs <= at && $0.endMs > at }
         let playing = slot == nil && model.current?.key == channel.key
+        let catchup = slot != nil && entry.map { model.canCatchup(channel, $0) } == true
         Button {
             if slot == nil {
                 model.play(channel, from: group)
+            } else if catchup, let entry {
+                model.playCatchup(channel, entry)
             } else {
                 epgFor = channel
             }
@@ -663,6 +705,7 @@ private struct GuideRow: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if catchup { Image(systemName: "gobackward").foregroundStyle(Theme.textFaint) }
             }
             .padding(.horizontal, 10).padding(.vertical, 11)
             .background(playing ? selectedFill : .clear, in: listShape)
