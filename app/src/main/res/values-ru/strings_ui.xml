@@ -551,4 +551,6 @@
     <string name="setting_off">Выкл.</string>
     <string name="tab_guide">Программа</string>
     <string name="guide_now">Сейчас</string>
+    <string name="player_live">ЭФИР</string>
+    <string name="player_go_live">В эфир</string>
 </resources>

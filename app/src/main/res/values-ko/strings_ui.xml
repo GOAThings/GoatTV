@@ -545,4 +545,6 @@
     <string name="setting_off">꺼짐</string>
     <string name="tab_guide">편성표</string>
     <string name="guide_now">지금</string>
+    <string name="player_live">라이브</string>
+    <string name="player_go_live">라이브로</string>
 </resources>

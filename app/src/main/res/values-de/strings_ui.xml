@@ -547,4 +547,6 @@
     <string name="setting_off">Aus</string>
     <string name="tab_guide">Programm</string>
     <string name="guide_now">Jetzt</string>
+    <string name="player_live">LIVE</string>
+    <string name="player_go_live">Zu Live</string>
 </resources>

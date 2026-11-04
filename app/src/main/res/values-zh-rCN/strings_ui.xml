@@ -545,4 +545,6 @@
     <string name="setting_off">关</string>
     <string name="tab_guide">节目单</string>
     <string name="guide_now">现在</string>
+    <string name="player_live">直播</string>
+    <string name="player_go_live">回到直播</string>
 </resources>

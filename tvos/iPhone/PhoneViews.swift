@@ -310,6 +310,7 @@ private struct VideoPane: View {
     @State private var seekDelta: Int64 = 0
     @State private var seekBase: Int64 = 0
     @State private var seekTask: Task<Void, Never>?
+    @State private var scrub: Double?
     @State private var controls = true
     @State private var touched = 0
     @State private var focusSecond = false
@@ -373,7 +374,7 @@ private struct VideoPane: View {
         })
         .task(id: touched) {
             try? await Task.sleep(for: .seconds(4))
-            if !Task.isCancelled { controls = false }
+            if !Task.isCancelled, scrub == nil { controls = false }
         }
         .onChange(of: focusSecond) { applyAudio() }
         .onChange(of: model.second?.channel.key) { applyAudio() }
@@ -393,11 +394,11 @@ private struct VideoPane: View {
     }
 
     private var overlay: some View {
-        let s = model.strings
-        return VStack {
+        VStack {
             HStack {
                 Text(model.current?.name ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 Spacer()
+                if fullscreen { Text(Date(), style: .time).font(.footnote) }
                 if let c = model.current {
                     iconButton(model.isFavorite(c) ? "star.fill" : "star") {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -409,35 +410,113 @@ private struct VideoPane: View {
             .padding(.horizontal, 12)
             .background(Color.black.opacity(0.45))
             Spacer()
-            if seekDelta != 0 {
-                Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 1000) s").font(.footnote.weight(.semibold))
-                    .padding(.horizontal, 12).padding(.vertical, 5)
-                    .background(Color.black.opacity(0.55), in: Capsule())
-            }
             HStack(spacing: 28) {
-                if model.catchup != nil { seekButton("gobackward.30", -seekStep) }
+                // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
+                let canSeek = barState?.seekable == true
+                if canSeek { seekButton("gobackward.30", -seekStep) }
                 iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
-                if model.catchup != nil { seekButton("goforward.30", seekStep) }
+                if canSeek {
+                    seekButton("goforward.30", seekStep)
+                        .disabled(model.catchup == nil)
+                        .opacity(model.catchup == nil ? 0.35 : 1)
+                }
+            }
+            // Por cima dos botões, sem os mexer.
+            .overlay(alignment: .top) {
+                if seekDelta != 0 {
+                    Text("\(seekDelta > 0 ? "+" : "−")\(abs(seekDelta) / 1000) s").font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .background(Color.black.opacity(0.55), in: Capsule())
+                        .fixedSize()
+                        .offset(y: -32)
+                }
             }
             Spacer()
-            HStack(spacing: 6) {
-                if model.catchup != nil {
-                    pill(s.r("back_to_live")) { model.exitCatchup() }
+            VStack(spacing: 0) {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in progressRow }
+                HStack(spacing: 6) {
+                    liveButton
+                    Spacer()
+                    iconButton("calendar") { onGuide(); touched += 1 }
+                    iconButton("ellipsis") { showingOptions = true; touched += 1 }
+                    if model.second == nil {
+                        iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
+                    } else {
+                        iconButton("rectangle.2.swap") { pickingSecond = true; touched += 1 }
+                        iconButton("xmark") { model.closeSecond(); touched += 1 }
+                    }
+                    iconButton(fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", action: rotate)
                 }
-                Spacer()
-                iconButton("calendar") { onGuide(); touched += 1 }
-                iconButton("ellipsis") { showingOptions = true; touched += 1 }
-                if model.second == nil {
-                    iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
-                } else {
-                    iconButton("rectangle.2.swap") { pickingSecond = true; touched += 1 }
-                    iconButton("xmark") { model.closeSecond(); touched += 1 }
-                }
-                iconButton(fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", action: rotate)
             }
-            .padding(6)
+            .padding(.horizontal, 6)
+            .background(LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom))
         }
         .foregroundStyle(.white)
+    }
+
+    /// Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
+    private var barState: (position: Int64, duration: Int64, seekable: Bool)? {
+        if let catchup = model.catchup { return (model.catchupPosition, catchup.durationMs, true) }
+        guard let channel = model.current, let entry = model.nowNext(for: channel).now, entry.endMs > entry.startMs else { return nil }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        return (now - entry.startMs, entry.endMs - entry.startMs, model.canCatchup(channel, entry))
+    }
+
+    @ViewBuilder private var progressRow: some View {
+        if let bar = barState {
+            let fraction = scrub ?? min(max(Double(bar.position) / Double(bar.duration), 0), 1)
+            HStack(spacing: 8) {
+                Text(durationText(Int64(fraction * Double(bar.duration))))
+                PlayerBar(progress: fraction, seekable: bar.seekable) { value in
+                    scrub = value
+                    touched += 1
+                } onEnd: { value in
+                    scrub = nil
+                    goTo(Int64(value * Double(bar.duration)), livePosition: bar.position)
+                }
+                Text(durationText(bar.duration))
+            }
+            .font(.caption2.monospacedDigit())
+            .padding(.horizontal, 8)
+        }
+    }
+
+    /// O botão do direto: em direto só avisa; em catch-up, volta.
+    private var liveButton: some View {
+        let live = model.catchup == nil
+        return Button {
+            model.exitCatchup()
+        } label: {
+            HStack(spacing: 6) {
+                Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
+                Text(live ? model.strings.t("LIVE", "DIRETO") : model.strings.t("Go live", "Ir para o direto"))
+                    .font(.footnote.weight(.semibold))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(live ? Color.clear : Color.white.opacity(0.16), in: Capsule())
+        }
+        .disabled(live)
+    }
+
+    private func durationText(_ ms: Int64) -> String {
+        let total = max(ms, 0) / 1000
+        let hours = total / 3600
+        let minutes = total / 60 % 60
+        let seconds = total % 60
+        return hours > 0 ? String(format: "%d:%02d:%02d", hours, minutes, seconds) : String(format: "%d:%02d", minutes, seconds)
+    }
+
+    /// Larguei a barra: no catch-up, vai para lá; em direto, entra no catch-up do programa a dar.
+    private func goTo(_ target: Int64, livePosition: Int64) {
+        seekTask?.cancel()
+        seekDelta = 0
+        touched += 1
+        if model.catchup != nil {
+            model.seekCatchup(target)
+        } else if target < livePosition - 5_000, let channel = model.current, let entry = model.nowNext(for: channel).now {
+            // Os últimos minutos ainda não estão no arquivo do servidor.
+            model.playCatchup(channel, entry, positionMs: max(0, min(target, livePosition - Catchup.minAgeMs - seekStep)))
+        }
     }
 
     private var seekStep: Int64 { 30_000 }
@@ -448,7 +527,7 @@ private struct VideoPane: View {
 
     /// Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
     private func seek(_ delta: Int64) {
-        if seekDelta == 0 { seekBase = model.catchupPosition }
+        if seekDelta == 0 { seekBase = barState?.position ?? 0 }
         seekDelta += delta
         touched += 1
         seekTask?.cancel()
@@ -457,7 +536,7 @@ private struct VideoPane: View {
             guard !Task.isCancelled else { return }
             let target = seekBase + seekDelta
             seekDelta = 0
-            model.seekCatchup(target)
+            goTo(target, livePosition: seekBase)
         }
     }
 
@@ -469,12 +548,33 @@ private struct VideoPane: View {
     private func iconButton(_ name: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: name).font(.title3).frame(width: 44, height: 44) }
     }
+}
 
-    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.footnote.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Color.black.opacity(0.55), in: Capsule())
+/// A barra de progresso do leitor, para arrastar.
+private struct PlayerBar: View {
+    let progress: Double
+    let seekable: Bool
+    let onChange: (Double) -> Void
+    let onEnd: (Double) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let fraction = { (x: CGFloat) in Double(min(max(x / max(width, 1), 0), 1)) }
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.28)).frame(height: 4)
+                Capsule().fill(Theme.sky).frame(width: width * progress, height: 4)
+                if seekable {
+                    Circle().fill(Color.white).frame(width: 14, height: 14).offset(x: width * progress - 7)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(seekable ? DragGesture(minimumDistance: 0)
+                .onChanged { onChange(fraction($0.location.x)) }
+                .onEnded { onEnd(fraction($0.location.x)) } : nil)
         }
+        .frame(height: 30)
     }
 }
 

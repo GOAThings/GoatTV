@@ -561,4 +561,6 @@
     <string name="setting_off">Desligado</string>
     <string name="tab_guide">Guia</string>
     <string name="guide_now">Agora</string>
+    <string name="player_live">DIRETO</string>
+    <string name="player_go_live">Ir para o direto</string>
 </resources>

@@ -126,6 +126,8 @@ class Strings(context: Context) {
     val settingOff get() = s(R.string.setting_off)
     val tabGuide get() = s(R.string.tab_guide)
     val guideNow get() = s(R.string.guide_now)
+    val playerLive get() = s(R.string.player_live)
+    val playerGoLive get() = s(R.string.player_go_live)
     val changeSecond get() = s(R.string.change_second)
     val closeSecond get() = s(R.string.close_second)
     val noSignal get() = s(R.string.no_signal)

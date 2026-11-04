@@ -547,4 +547,6 @@
     <string name="setting_off">Kapalı</string>
     <string name="tab_guide">Rehber</string>
     <string name="guide_now">Şimdi</string>
+    <string name="player_live">CANLI</string>
+    <string name="player_go_live">Canlıya git</string>
 </resources>

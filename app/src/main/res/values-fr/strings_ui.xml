@@ -549,4 +549,6 @@
     <string name="setting_off">Désactivé</string>
     <string name="tab_guide">Guide</string>
     <string name="guide_now">Maintenant</string>
+    <string name="player_live">EN DIRECT</string>
+    <string name="player_go_live">Revenir au direct</string>
 </resources>

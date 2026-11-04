@@ -555,4 +555,6 @@
     <string name="setting_off">إيقاف</string>
     <string name="tab_guide">الدليل</string>
     <string name="guide_now">الآن</string>
+    <string name="player_live">مباشر</string>
+    <string name="player_go_live">إلى البث المباشر</string>
 </resources>

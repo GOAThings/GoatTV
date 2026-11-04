@@ -10,6 +10,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -46,6 +49,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.media3.common.C
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -314,6 +319,32 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
     var seekDelta by remember { mutableStateOf(0L) }
     var seekBase by remember { mutableStateOf(0L) }
     var seekJob by remember { mutableStateOf<Job?>(null) }
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    var tick by remember { mutableStateOf(0) }
+    val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    val liveEntry = { now: Long -> vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    fun goTo(target: Long, position: Long) {
+        val forward = target > position
+        val cu = vm.catchup.value
+        if (cu == null) {
+            val entry = liveEntry(System.currentTimeMillis())
+            // Os últimos minutos ainda não estão no arquivo do servidor.
+            if (entry != null && target < position - 5_000) {
+                vm.playCatchup(channel, entry, target.coerceAtMost(position - AppViewModel.CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0))
+            }
+            return
+        }
+        val inStream = target - (playback.archiveStart - cu.startMs)
+        if (inStream >= 0 && playback.player.isCurrentMediaItemSeekable) {
+            playback.player.seekTo(inStream)
+        } else if (forward) {
+            // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
+            val wanted = cu.startMs + target
+            vm.seekCatchup(target + (60_000 - wanted % 60_000) % 60_000)
+        } else {
+            vm.seekCatchup(target)
+        }
+    }
     // Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
     fun seek(delta: Long, position: Long) {
         if (seekDelta == 0L) seekBase = position
@@ -322,26 +353,21 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
         seekJob?.cancel()
         seekJob = scope.launch {
             delay(SEEK_DEBOUNCE_MS)
-            val forward = seekDelta > 0
             val target = seekBase + seekDelta
             seekDelta = 0
-            val cu = vm.catchup.value ?: return@launch
-            val inStream = target - (playback.archiveStart - cu.startMs)
-            if (inStream >= 0 && playback.player.isCurrentMediaItemSeekable) {
-                playback.player.seekTo(inStream)
-            } else if (forward) {
-                // O servidor só abre em minutos certos: a avançar vai para o seguinte, senão ficava no mesmo sítio.
-                val wanted = cu.startMs + target
-                vm.seekCatchup(target + (60_000 - wanted % 60_000) % 60_000)
-            } else {
-                vm.seekCatchup(target)
-            }
+            goTo(target, seekBase)
         }
     }
-    LaunchedEffect(controls, touched, channel.key) {
-        if (controls) {
+    LaunchedEffect(controls, touched, channel.key, scrub) {
+        if (controls && scrub == null) {
             delay(CONTROLS_MS)
             controls = false
+        }
+    }
+    LaunchedEffect(controls) {
+        while (controls) {
+            delay(1_000)
+            tick++
         }
     }
     Box(
@@ -374,52 +400,148 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(channel.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (fullscreen) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
                 ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     vm.toggleFavorite(channel)
                     touched++
                 }
             }
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (seekDelta != 0L) {
-                    Text(
-                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 1000} s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
-                    )
-                }
+            Box(Modifier.align(Alignment.Center)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
                     val cu = catchup
-                    fun position() = if (cu == null) 0L else playback.archiveStart - cu.startMs + playback.player.currentPosition
-                    if (cu != null) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
+                    val live = if (cu == null) liveEntry(System.currentTimeMillis()) else null
+                    val canSeek = cu != null || (live != null && vm.canCatchup(channel, live))
+                    fun position() = if (cu != null) playback.archiveStart - cu.startMs + playback.player.currentPosition else System.currentTimeMillis() - (live?.startMs ?: 0L)
+                    if (canSeek) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
                     ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(56.dp)) {
                         if (playback.playing) playback.player.pause() else playback.player.play()
                         touched++
                     }
-                    if (cu != null) SeekButton(forward = true) { seek(SEEK_MS, position()) }
+                    if (canSeek) SeekButton(forward = true, enabled = cu != null) { seek(SEEK_MS, position()) }
+                }
+                // Por cima dos botões, sem os mexer.
+                if (seekDelta != 0L) {
+                    Text(
+                        "${if (seekDelta > 0) "+" else "−"}${kotlin.math.abs(seekDelta) / 1000} s", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        modifier = Modifier.align(Alignment.TopCenter).offset(y = (-30).dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
+                    )
                 }
             }
-            if (catchup != null) {
-                Row(Modifier.align(Alignment.BottomStart).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SmallAction(s.backToLive) { vm.exitCatchup() }
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))))
+                    .padding(horizontal = 6.dp),
+            ) {
+                // Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
+                tick
+                val now = System.currentTimeMillis()
+                val cu = catchup
+                val entry = if (cu == null) liveEntry(now) else null
+                val duration = cu?.durationMs ?: entry?.let { it.endMs - it.startMs }
+                if (duration != null && duration > 0) {
+                    val position = when {
+                        cu != null && playback.ready -> playback.archiveStart - cu.startMs + playback.player.currentPosition
+                        cu != null -> cu.positionMs
+                        else -> now - entry!!.startMs
+                    }
+                    val fraction = scrub ?: (position.toFloat() / duration).coerceIn(0f, 1f)
+                    Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp)
+                        PlayerBar(
+                            fraction, seekable = cu != null || vm.canCatchup(channel, entry!!),
+                            onChange = { scrub = it; touched++ },
+                            onEnd = {
+                                val target = ((scrub ?: fraction) * duration).toLong()
+                                scrub = null
+                                touched++
+                                seekJob?.cancel()
+                                seekDelta = 0
+                                goTo(target, position)
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        )
+                        Text(durationText(duration), color = Color.White, fontSize = 11.sp)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LiveButton(catchup == null) { vm.exitCatchup() }
+                    Spacer(Modifier.weight(1f))
+                    onGuide?.let { ControlButton(ItvIcons.Calendar) { it(); touched++ } }
+                    ControlButton(ItvIcons.More) { onOptions(); touched++ }
+                    onPip?.let { ControlButton(ItvIcons.Pip, onClick = it) }
+                    ControlButton(ItvIcons.Fullscreen, onClick = onFullscreen)
                 }
             }
-            Row(Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
-                onGuide?.let { ControlButton(ItvIcons.Calendar) { it(); touched++ } }
-                ControlButton(ItvIcons.More) { onOptions(); touched++ }
-                onPip?.let { ControlButton(ItvIcons.Pip, onClick = it) }
-                ControlButton(ItvIcons.Fullscreen, onClick = onFullscreen)
-            }
-            if (fullscreen && catchup == null) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomStart).padding(14.dp))
         }
     }
 }
 
+/** O botão do direto: em direto só avisa; em catch-up, volta. */
+@Composable
+private fun LiveButton(live: Boolean, onClick: () -> Unit) {
+    val s = LocalStrings.current
+    Row(
+        Modifier.clip(CircleShape).background(if (live) Color.Transparent else Color.White.copy(alpha = 0.16f)).clickable(enabled = !live, onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (live) Color(0xFFE53935) else Color.White.copy(alpha = 0.6f)))
+        Spacer(Modifier.width(6.dp))
+        Text(if (live) s.playerLive else s.playerGoLive, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/** A barra de progresso do leitor, para arrastar. */
+@Composable
+private fun PlayerBar(progress: Float, seekable: Boolean, onChange: (Float) -> Unit, onEnd: () -> Unit, modifier: Modifier = Modifier) {
+    val accent = LocalAccent.current.start
+    val change by rememberUpdatedState(onChange)
+    val end by rememberUpdatedState(onEnd)
+    Box(
+        modifier.height(30.dp).then(
+            if (!seekable) Modifier else Modifier.pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    change((down.position.x / size.width).coerceIn(0f, 1f))
+                    while (true) {
+                        val pointer = awaitPointerEvent().changes.first()
+                        pointer.consume()
+                        if (!pointer.pressed) break
+                        change((pointer.position.x / size.width).coerceIn(0f, 1f))
+                    }
+                    end()
+                }
+            },
+        ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+        Box(Modifier.fillMaxWidth(progress).height(4.dp).clip(CircleShape).background(accent))
+        if (seekable) {
+            Box(Modifier.fillMaxWidth(progress), contentAlignment = Alignment.CenterEnd) {
+                Box(Modifier.offset(x = 7.dp).size(14.dp).clip(CircleShape).background(Color.White))
+            }
+        }
+    }
+}
+
+private fun durationText(ms: Long): String {
+    val total = ms.coerceAtLeast(0) / 1000
+    val hours = total / 3600
+    val minutes = total / 60 % 60
+    val seconds = total % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
 /** Recuar ou avançar 30 segundos, ao lado do botão de pausa. */
 @Composable
-private fun SeekButton(forward: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(ItvIcons.Replay, null, tint = Color.White, modifier = Modifier.size(34.dp).graphicsLayer { if (forward) scaleX = -1f })
-        Text("30", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    val tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f)
+    Box(Modifier.size(52.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(ItvIcons.Replay, null, tint = tint, modifier = Modifier.size(34.dp).graphicsLayer { if (forward) scaleX = -1f })
+        Text("30", color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -465,14 +587,6 @@ private fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, onClo
             }
         }
     }
-}
-
-@Composable
-private fun SmallAction(label: String, onClick: () -> Unit) {
-    Text(
-        label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(end = 6.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
-    )
 }
 
 @Composable
