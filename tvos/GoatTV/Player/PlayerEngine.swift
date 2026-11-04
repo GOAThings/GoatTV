@@ -37,6 +37,8 @@ final class PlayerEngine: NSObject {
     private(set) var paused = false
     /// A última imagem do canal está parada no ecrã, à espera que volte a dar.
     private(set) var frozen = false
+    /// O vídeo já tem imagem. No VLC, o som e o tempo chegam primeiro: a imagem espera pela primeira imagem completa.
+    private(set) var hasPicture = false
     /// O formato da forma que está a dar ("ts" ou "m3u8").
     private(set) var format: String?
     /// O motor que está a dar.
@@ -88,6 +90,13 @@ final class PlayerEngine: NSObject {
     /// O tempo do leitor já é o do stream novo. Antes disso, é o do anterior.
     @ObservationIgnored private(set) var positionValid = false
     @ObservationIgnored private var savingSnapshot = false
+    @ObservationIgnored private var videoOutSeen = false
+    @ObservationIgnored private var movingSince: Date?
+    /// Onde começar dentro do stream, em ms (o catch-up só abre em minutos certos; o resto é aqui).
+    @ObservationIgnored private var startOffsetMs: Int64 = 0
+    @ObservationIgnored private var startChecked = false
+    /// O VLC abriu do início em vez de saltar para [startOffsetMs]: o servidor não deixa.
+    @ObservationIgnored var onStartIgnored: (() -> Void)?
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -164,8 +173,9 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, startOffsetMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         self.linkResolver = linkResolver
+        self.startOffsetMs = startOffsetMs
         retry?.cancel()
         pendingStart?.cancel()
         positionValid = false
@@ -253,6 +263,7 @@ final class PlayerEngine: NSObject {
         pendingStart?.cancel()
         hideFreeze()
         stopBackends()
+        hasPicture = false
         state = .idle
         clearDisplayCriteria()
     }
@@ -295,6 +306,10 @@ final class PlayerEngine: NSObject {
         DebugLog.add("Player: opening \(attempt.candidate.format) with \(backend) (\(index + 1)/\(attempts.count))")
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
+        hasPicture = false
+        videoOutSeen = false
+        movingSince = nil
+        startChecked = false
         state = .opening
         switch backend {
         case .vlc: startVLC(url)
@@ -370,9 +385,10 @@ final class PlayerEngine: NSObject {
         wasPlaying = true
         retries = 0
         lastHTTPStatus = nil
-        // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o tempo começa a andar.
+        // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o vídeo aparecer.
         if backend == .apple {
             positionValid = true
+            hasPicture = true
             hideFreeze()
             checkApplePicture()
         }
@@ -405,6 +421,7 @@ final class PlayerEngine: NSObject {
         media.addOption(":network-caching=\(cachingMs)")
         media.addOption(":http-reconnect")
         if softwareDecoder { media.addOption(":codec=avcodec") }
+        if startOffsetMs >= 1000 { media.addOption(":start-time=\(startOffsetMs / 1000)") }
         vlc.media = media
         if deinterlace == "off" {
             vlc.setDeinterlaceFilter(nil)
@@ -435,11 +452,36 @@ final class PlayerEngine: NSObject {
     /// Sem isto, o vídeo aparece mas para a app continua a abrir, e ao fim de 15 s fecha uma ligação que funcionava.
     fileprivate func vlcTimeChanged() {
         guard backend == .vlc, !savingSnapshot else { return }
-        if state == .playing { positionValid = true }
-        if frozen, state == .playing { hideFreeze() }
+        if state == .playing {
+            positionValid = true
+            checkStartOffset()
+            checkPicture()
+        }
         guard state == .opening, vlc.isPlaying else { return }
         DebugLog.add("Player: VLC time moving without a playing state")
         becamePlaying()
+    }
+
+    private func checkStartOffset() {
+        guard startOffsetMs >= 1000, !startChecked else { return }
+        startChecked = true
+        guard positionMs < startOffsetMs - 5_000 else { return }
+        DebugLog.add("Player: VLC ignored the start time")
+        onStartIgnored?()
+    }
+
+    /// A saída de vídeo aparece com a primeira imagem completa; espera-se mais um instante para já estar desenhada.
+    /// Sem saída ao fim de uns segundos, o canal só tem som.
+    private func checkPicture() {
+        guard !hasPicture else { return }
+        let since = movingSince ?? Date()
+        movingSince = since
+        guard videoOutSeen || Date().timeIntervalSince(since) > 5 else {
+            videoOutSeen = vlc.hasVideoOut
+            return
+        }
+        hasPicture = true
+        hideFreeze()
     }
 
     /// A frame rate e o tamanho do vídeo que o VLC está a dar.

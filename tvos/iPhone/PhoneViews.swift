@@ -358,7 +358,7 @@ private struct VideoPane: View {
             // Enquanto ainda vai tentar outra vez, não há erro para mostrar.
             if let error = model.playbackError, model.player.retries >= PlayerEngine.maxStartRetries || model.prefs.reconnectSeconds == 0 {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
-            } else if !controls, model.player.frozen {
+            } else if !controls, model.player.frozen || (model.player.state == .playing && !model.player.hasPicture) {
                 ProgressView().tint(.white)
             } else if !controls, model.player.state != .playing, let current = model.current {
                 Text(current.name).font(.subheadline).foregroundStyle(Theme.textDim)
@@ -415,7 +415,7 @@ private struct VideoPane: View {
                 let canSeek = barState?.seekable == true
                 if canSeek { seekButton("gobackward.30", -seekStep) }
                 // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
-                if model.player.frozen || model.player.state == .opening {
+                if model.player.frozen || model.player.state == .opening || (model.player.state == .playing && !model.player.hasPicture) {
                     ProgressView().tint(.white).frame(width: 44, height: 44)
                 } else {
                     iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
@@ -523,11 +523,10 @@ private struct VideoPane: View {
         }
     }
 
-    /// Onde um salto a partir do direto vai parar: os últimos minutos ainda não estão no arquivo do servidor, e o
-    /// servidor só abre em minutos certos.
+    /// Onde um salto a partir do direto vai parar: os últimos minutos ainda não estão no arquivo do servidor.
     private func liveLanding(_ target: Int64, livePosition: Int64, entry: EpgEntry) -> Int64 {
         let wanted = max(0, min(target, livePosition - Catchup.minAgeMs - seekStep))
-        return max(0, wanted - (entry.startMs + wanted) % 60_000)
+        return model.catchupExact ? wanted : max(0, wanted - (entry.startMs + wanted) % 60_000)
     }
 
     /// Para onde vão os toques em ±30 s.

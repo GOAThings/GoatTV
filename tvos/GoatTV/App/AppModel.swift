@@ -161,6 +161,7 @@ final class AppModel {
         }
         loadReminders()
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
+        player.onStartIgnored = { [weak self] in self?.catchupExact = false }
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
@@ -1002,8 +1003,13 @@ final class AppModel {
         guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone) else { return }
         catchup = cu
         catchupBase = start.startMs
-        player.play(start.candidates, userAgent: cu.channel.userAgent ?? prefs.userAgent, referrer: cu.channel.referrer)
+        player.play(start.candidates, userAgent: cu.channel.userAgent ?? prefs.userAgent, referrer: cu.channel.referrer,
+                    startOffsetMs: catchupExact ? cu.startMs + cu.positionMs - start.startMs : 0)
     }
+
+    /// O servidor só abre em minutos certos, e o leitor salta para o resto. Se o servidor não deixar saltar, passa a
+    /// andar de minuto em minuto.
+    @ObservationIgnored private(set) var catchupExact = true
 
     /// Onde vai o catch-up, em ms desde o início do programa.
     var catchupPosition: Int64 {
@@ -1030,11 +1036,12 @@ final class AppModel {
         return positionMs >= nowMs() - catchup.startMs - Catchup.minAgeMs || positionMs >= catchup.durationMs
     }
 
-    /// Onde um salto para [positionMs] vai mesmo parar. O servidor só abre em minutos certos: a avançar vai para o
+    /// Onde um salto para [positionMs] vai mesmo parar. Se só der para abrir em minutos certos: a avançar vai para o
     /// seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto.
     func catchupLanding(_ positionMs: Int64) -> Int64 {
         guard let catchup else { return positionMs }
         let target = max(0, positionMs)
+        if catchupExact { return target }
         let extra = (catchup.startMs + target) % 60_000
         return max(0, target > catchupPosition ? target + (60_000 - extra) % 60_000 : target - extra)
     }
