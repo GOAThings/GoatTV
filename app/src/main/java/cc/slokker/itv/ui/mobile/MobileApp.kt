@@ -330,7 +330,7 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             val entry = liveEntry(System.currentTimeMillis())
             // Os últimos minutos ainda não estão no arquivo do servidor.
             if (entry != null && target < position - 5_000) {
-                vm.playCatchup(channel, entry, target.coerceAtMost(position - AppViewModel.CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0))
+                vm.playCatchup(channel, entry, target.coerceAtMost(position - CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0))
             }
             return
         }
@@ -1310,6 +1310,7 @@ private val BAR_SPACE = 92.dp
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
+private const val CATCHUP_MIN_AGE_MS = 2 * 60_000L
 private const val GUIDE_PAST_SLOTS = 36
 private const val ZAP_DRAG_PX = 120f
 
