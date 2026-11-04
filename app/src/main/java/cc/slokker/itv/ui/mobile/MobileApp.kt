@@ -92,7 +92,6 @@ import cc.slokker.itv.ui.common.formatTime
 import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.ItvIcons
-import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
@@ -111,6 +110,8 @@ import kotlinx.coroutines.launch
 
 private val Card = Color.White.copy(alpha = 0.08f)
 private val CardShape = RoundedCornerShape(18.dp)
+private val ListShape = RoundedCornerShape(12.dp)
+private const val SELECTED_ALPHA = 0.13f
 private enum class Tab { Tv, Favorites, Search, Menu }
 
 /** Primeira vez no telemóvel: conta GOAT ou listas só neste aparelho. */
@@ -208,7 +209,7 @@ fun MobileMain(vm: AppViewModel) {
                     Tab.Search -> SearchTab(vm, current) { epgFor = it }
                     Tab.Menu -> MobileMenu(vm)
                 }
-                // A barra flutua por cima da lista, com o vidro do resto da GoatTV.
+                // A barra fica colada ao fundo do ecrã, por cima da lista.
                 BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
                 epgFor?.let { channel ->
                     EpgSheet(vm, channel, onPick = { logo -> epgPick = channel to logo }) { epgFor = null }
@@ -359,30 +360,30 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> 
         // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
         val pills = rememberLazyListState()
         LaunchedEffect(shown, groups) { groups.indexOfFirst { it.id == shown }.takeIf { it >= 0 }?.let { pills.animateScrollToItem(it) } }
+        val accent = LocalAccent.current.start
         LazyRow(
             state = pills,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         ) {
             items(groups, key = { it.id }) { g ->
                 val on = g.id == shown
                 Text(
                     g.name,
-                    color = if (on) Color.Black else ItvColors.Text,
+                    color = if (on) accent else ItvColors.TextFaint,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (on) Color.White else Card)
+                        .clip(ListShape)
+                        .background(if (on) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
                         .clickable { group = g.id }
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
             items(locked, key = { it.id }) { g ->
                 Text(
-                    "🔒 ${g.name}", color = ItvColors.TextDim, fontSize = 14.sp, maxLines = 1,
-                    modifier = Modifier.clip(CircleShape).background(Card).clickable { pinFor = g.id }.padding(horizontal = 16.dp, vertical = 9.dp),
+                    "🔒 ${g.name}", color = ItvColors.TextFaint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                    modifier = Modifier.clip(ListShape).clickable { pinFor = g.id }.padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
         }
@@ -403,7 +404,7 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
         return
     }
     val list = rememberLazyListState()
-    LazyColumn(state = list, contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(state = list, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = BAR_SPACE)) {
         items(channels, key = { it.uid }) { channel ->
             ChannelCard(vm, channel, channel.key == current.key, onClick = { vm.play(channel, groupId) }, onLong = { onEpg(channel) })
         }
@@ -413,7 +414,7 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, onClick: () -> Unit, onLong: () -> Unit) {
-    val accent = LocalAccent.current
+    val accent = LocalAccent.current.start
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
@@ -421,23 +422,29 @@ private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, on
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(CardShape)
-            .background(if (playing) Color.White.copy(alpha = 0.16f) else Card)
+            .clip(ListShape)
+            .background(if (playing) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLong)
-            .padding(12.dp),
+            .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (prefs.showLogos) {
-            Box(Modifier.size(64.dp, 48.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 48.dp) }
-            Spacer(Modifier.width(12.dp))
+            Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
+            Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(if (prefs.showNumbers) "${channel.num}  ${channel.name}" else channel.name, color = ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(channel.name, color = if (playing) accent else ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (prefs.showNumbers) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("${channel.num}", color = ItvColors.TextFaint.copy(alpha = 0.36f), fontSize = 13.sp)
+                }
+            }
             if (programme != null) {
-                Text(programme.title, color = ItvColors.TextDim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(programme.title, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
-                Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.15f))) {
-                    Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(accent.brush))
+                Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+                    Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
                 }
             }
         }
@@ -518,7 +525,7 @@ private fun SearchTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Un
         when {
             query.trim().length < 2 -> Note(s.searchMinChars)
             hits.isEmpty() -> Note(s.searchNoResults)
-            else -> LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            else -> LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = BAR_SPACE)) {
                 items(hits) { hit ->
                     ChannelCard(vm, hit.channel, hit.channel.key == current.key, onClick = { vm.play(hit.channel, vm.groupFor(hit.channel)) }, onLong = { onEpg(hit.channel) })
                 }
@@ -549,26 +556,22 @@ private fun Field(hint: String, value: String, modifier: Modifier = Modifier, se
 @Composable
 private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> Unit) {
     val s = LocalStrings.current
-    Row(
-        modifier
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .fillMaxWidth()
-            .glass(CircleShape)
-            .padding(5.dp),
-    ) {
-        BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }
-        BarItem(s.favorites, ItvIcons.Star, tab == Tab.Favorites) { onTab(Tab.Favorites) }
-        BarItem(s.search, ItvIcons.Search, tab == Tab.Search) { onTab(Tab.Search) }
-        BarItem(s.settings, ItvIcons.Settings, tab == Tab.Menu) { onTab(Tab.Menu) }
+    Column(modifier.fillMaxWidth().background(Color(0xFF0C0E13)).navigationBarsPadding()) {
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.1f)))
+        Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp)) {
+            BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }
+            BarItem(s.favorites, ItvIcons.Star, tab == Tab.Favorites) { onTab(Tab.Favorites) }
+            BarItem(s.search, ItvIcons.Search, tab == Tab.Search) { onTab(Tab.Search) }
+            BarItem(s.settings, ItvIcons.Settings, tab == Tab.Menu) { onTab(Tab.Menu) }
+        }
     }
 }
 
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.BarItem(label: String, icon: ImageVector, on: Boolean, onClick: () -> Unit) {
-    val tint = if (on) LocalAccent.current.start else ItvColors.TextDim
+    val tint = if (on) LocalAccent.current.start else ItvColors.TextFaint
     Column(
-        Modifier.weight(1f).clip(CircleShape).background(if (on) Color.White.copy(alpha = 0.12f) else Color.Transparent).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.weight(1f).clickable(onClick = onClick).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
