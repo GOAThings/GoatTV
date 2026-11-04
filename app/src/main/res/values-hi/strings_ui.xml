@@ -539,4 +539,10 @@
     <string name="report_sent">भेज दी गई। रिपोर्ट %1$s</string>
     <string name="report_too_many">बहुत सारी रिपोर्ट। बाद में फिर कोशिश करें।</string>
     <string name="report_failed">भेजा नहीं जा सका: %1$s</string>
+    <string name="settings_picture_sound">चित्र और ध्वनि</string>
+    <string name="settings_connection">कनेक्शन</string>
+    <string name="settings_advanced">उन्नत</string>
+    <string name="settings_appearance">रूप-रंग</string>
+    <string name="setting_on">चालू</string>
+    <string name="setting_off">बंद</string>
 </resources>

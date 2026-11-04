@@ -537,4 +537,10 @@
     <string name="report_sent">Terkirim. Laporan %1$s</string>
     <string name="report_too_many">Terlalu banyak laporan. Coba lagi nanti.</string>
     <string name="report_failed">Tidak dapat mengirim: %1$s</string>
+    <string name="settings_picture_sound">Gambar dan suara</string>
+    <string name="settings_connection">Koneksi</string>
+    <string name="settings_advanced">Lanjutan</string>
+    <string name="settings_appearance">Tampilan</string>
+    <string name="setting_on">Aktif</string>
+    <string name="setting_off">Nonaktif</string>
 </resources>

@@ -543,4 +543,10 @@
     <string name="report_sent">Отправлено. Отчёт %1$s</string>
     <string name="report_too_many">Слишком много отчётов. Попробуйте позже.</string>
     <string name="report_failed">Не удалось отправить: %1$s</string>
+    <string name="settings_picture_sound">Изображение и звук</string>
+    <string name="settings_connection">Подключение</string>
+    <string name="settings_advanced">Дополнительно</string>
+    <string name="settings_appearance">Оформление</string>
+    <string name="setting_on">Вкл.</string>
+    <string name="setting_off">Выкл.</string>
 </resources>

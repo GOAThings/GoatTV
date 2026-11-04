@@ -553,4 +553,10 @@
     <string name="copy_code">Copy code</string>
     <string name="copied">Copied</string>
     <string name="sign_in_to_approve">Sign in to approve</string>
+    <string name="settings_picture_sound">Picture and sound</string>
+    <string name="settings_connection">Connection</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="setting_on">On</string>
+    <string name="setting_off">Off</string>
 </resources>

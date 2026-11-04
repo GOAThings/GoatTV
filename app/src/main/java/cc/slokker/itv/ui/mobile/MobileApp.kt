@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -579,7 +582,10 @@ private fun androidx.compose.foundation.layout.RowScope.BarItem(label: String, i
     }
 }
 
-/** Definições do telemóvel: o essencial, em lista agrupada. */
+/** As páginas das Definições. */
+private enum class MenuPage { Playback, Channels, Guide, Appearance, Parental }
+
+/** Definições do telemóvel: um ecrã curto com as categorias, e uma página para cada. */
 @Composable
 fun MobileMenu(vm: AppViewModel) {
     val s = LocalStrings.current
@@ -595,6 +601,7 @@ fun MobileMenu(vm: AppViewModel) {
     if (!unlockedMenu) {
         return PinDialog(s.enterPin, onClose = null) { pin -> vm.unlockSettings(pin).also { if (it) unlockedMenu = true } }
     }
+    var page by remember { mutableStateOf<MenuPage?>(null) }
     var choosingPin by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var reporting by remember { mutableStateOf(false) }
@@ -623,81 +630,116 @@ fun MobileMenu(vm: AppViewModel) {
     val open: (Picking) -> Unit = { picking = it }
     @Composable
     fun prefRow(key: String, title: String, options: List<Pair<Any?, String>>, value: Any?) = PickRow(title, options, value, open) { vm.setPref(key, it) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Section(s.playlists) {
-            playlists.forEach { p ->
-                MenuRow(p.name, if (p.id == content?.playlist?.id) "✓" else null) { vm.switchPlaylist(p) }
-            }
-            if (local) MenuRow(s.addPlaylist, null) { adding = true }
-        }
-        Section(s.playback) {
-            PickRow(s.streamFormat, listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)"), format, open) { vm.setStreamFormat(it as String?) }
-            prefRow(Prefs.Key.BUFFER, s.buffer, listOf(Prefs.Buffer.LIVE to s.bufferLive, Prefs.Buffer.SMALL to s.bufferSmall, Prefs.Buffer.NORMAL to s.bufferNormal, Prefs.Buffer.LARGE to s.bufferLarge), prefs.buffer)
-            if ((LocalContext.current as? MainActivity)?.pipSupported == true) {
-                ToggleRow(s.pictureInPicture, prefs.pipEnabled) { vm.setPref(Prefs.Key.PIP_ENABLED, it) }
-            }
-            prefRow(Prefs.Key.ENGINE, s.engine, listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc), prefs.engine)
-            prefRow(Prefs.Key.DECODER, s.decoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.decoder)
-            prefRow(Prefs.Key.AUDIO_DECODER, s.audioDecoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.audioDecoder)
-            prefRow(Prefs.Key.ASPECT, s.aspect, listOf(Prefs.Aspect.FIT to s.aspectFit, Prefs.Aspect.ZOOM to s.aspectZoom, Prefs.Aspect.FILL to s.aspectFill), prefs.aspect)
-            prefRow(Prefs.Key.RECONNECT_SECONDS, s.reconnect, listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) }, prefs.reconnectSeconds)
-            MenuRow(s.userAgent, prefs.userAgent.ifBlank { s.userAgentDefault }) { editingAgent = true }
-        }
-        Section(s.manageChannels) {
-            prefRow(Prefs.Key.STARTUP, s.onStartup, listOf(Prefs.Startup.LAST to s.startupLast, Prefs.Startup.LIST to s.startupList), prefs.startup)
-            prefRow(Prefs.Key.SORT, s.sortChannels, listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName), prefs.sort)
-            ToggleRow(s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) }
-            ToggleRow(s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) }
-            ToggleRow(s.nowInList, prefs.epgInList) { vm.setPref(Prefs.Key.EPG_IN_LIST, it) }
-            if (vm.epgPickerAvailable) MenuRow(s.logoSource, null) { pickingCountry = true }
-            MenuRow(s.visibleGroups, null) { managingGroups = true }
-        }
-        Section(s.settings) {
-            prefRow(Prefs.Key.LANGUAGE, s.language, listOf("auto" to s.languageAuto) + Strings.LANGUAGES, prefs.language)
-            prefRow(Prefs.Key.ACCENT, s.accent, Accent.ALL.map { it.id to s.accentName(it.id) }, prefs.accent)
-        }
-        Section(s.guide) {
-            prefRow(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours)
-            prefRow(Prefs.Key.PLAYLIST_REFRESH, s.playlistRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.playlistRefreshHours)
-            prefRow(Prefs.Key.EPG_OFFSET, s.timeOffset, (-180..180 step 30).map { m -> m to (if (m == 0) "0" else "%+d min".format(m)) }, prefs.epgOffsetMin)
-            if (vm.epgPickerAvailable) MenuRow(s.epgCountryGuide, null) { pickingCountry = false }
-            if (vm.epgPickerAvailable && epgMappings.isNotEmpty()) {
-                MenuRow(if (confirmingEpgReset) s.pressAgainToConfirm else s.epgResetAll, null) {
-                    if (confirmingEpgReset) vm.resetEpgMappings()
-                    confirmingEpgReset = !confirmingEpgReset
+    val formats = listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)")
+    val buffers = listOf(Prefs.Buffer.LIVE to s.bufferLive, Prefs.Buffer.SMALL to s.bufferSmall, Prefs.Buffer.NORMAL to s.bufferNormal, Prefs.Buffer.LARGE to s.bufferLarge)
+    val startups = listOf(Prefs.Startup.LAST to s.startupLast, Prefs.Startup.LIST to s.startupList)
+    val languages = listOf("auto" to s.languageAuto) + Strings.LANGUAGES
+    val accents = Accent.ALL.map { it.id to s.accentName(it.id) }
+    fun label(options: List<Pair<Any?, String>>, value: Any?) = options.firstOrNull { it.first == value }?.second.orEmpty()
+    page?.let { BackHandler { page = null } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        when (page) {
+            null -> {
+                Text(s.settings, color = ItvColors.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
+                Section(s.playlists) {
+                    playlists.forEach { p ->
+                        MenuRow(p.name, null, checked = p.id == content?.playlist?.id) { vm.switchPlaylist(p) }
+                    }
+                    if (local) MenuRow(s.addPlaylist, null) { adding = true }
+                }
+                Section(null) {
+                    MenuRow(s.playback, label(formats, format).substringBefore(" ") + ", " + label(buffers, prefs.buffer).substringBefore(" ("), ItvIcons.Play, chevron = true) { page = MenuPage.Playback }
+                    MenuRow(s.manageChannels, label(startups, prefs.startup), ItvIcons.Channels, chevron = true) { page = MenuPage.Channels }
+                    MenuRow(s.guide, s.refreshLabel(prefs.epgRefreshHours), ItvIcons.Calendar, chevron = true) { page = MenuPage.Guide }
+                    MenuRow(s.settingsAppearance, label(languages, prefs.language) + ", " + label(accents, prefs.accent), ItvIcons.Globe, chevron = true) { page = MenuPage.Appearance }
+                    MenuRow(s.parental, if (prefs.pinHash == null) s.settingOff else s.settingOn, ItvIcons.Lock, chevron = true) { page = MenuPage.Parental }
+                }
+                Section(s.account) {
+                    MenuRow(s.sendReport, when (val r = report) { ReportState.Sending -> "…"; is ReportState.Sent -> r.id; else -> null }, ItvIcons.Report, chevron = true) { reporting = !reporting }
+                    if (reporting) {
+                        Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }
+                        MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
+                    }
+                    if (!local) MenuRow(s.logout, email?.let(::maskEmail), onClick = vm::logoutThisTv)
+                    when (val u = update) {
+                        is UpdateState.Available -> MenuRow(u.release.version, null, onClick = vm::installUpdate)
+                        is UpdateState.Downloading -> MenuRow(u.release.version, "${(u.progress * 100).toInt()}%") { }
+                        is UpdateState.Installing -> MenuRow(s.installing, null) { }
+                        UpdateState.UpToDate -> MenuRow(s.upToDate, BuildConfig.VERSION_NAME) { vm.checkForUpdate(true) }
+                        else -> MenuRow(s.checkUpdates, BuildConfig.VERSION_NAME) { vm.checkForUpdate(true) }
+                    }
                 }
             }
-            MenuRow(s.refreshEpg, null, vm::refreshEpg)
-        }
-        Section(s.parental) {
-            if (prefs.pinHash == null) {
-                MenuRow(s.setPin, null) { choosingPin = true }
-            } else {
-                ToggleRow(s.protectSettings, prefs.settingsPin) { vm.setPref(Prefs.Key.SETTINGS_PIN, it) }
-                MenuRow(s.changePin, null) { choosingPin = true }
-                MenuRow(s.parentalOff, null) { vm.setPin(null) }
-                vm.orderedGroups(includeHidden = true).forEach { g ->
-                    ToggleRow("🔒 " + g.name, vm.isGroupLockedSetting(g.id)) { vm.toggleGroupLock(g.id) }
+            MenuPage.Playback -> {
+                PageHeader(s.playback, s.settings) { page = null }
+                Section(s.settingsPictureSound) {
+                    prefRow(Prefs.Key.ASPECT, s.aspect, listOf(Prefs.Aspect.FIT to s.aspectFit, Prefs.Aspect.ZOOM to s.aspectZoom, Prefs.Aspect.FILL to s.aspectFill), prefs.aspect)
+                    if ((LocalContext.current as? MainActivity)?.pipSupported == true) {
+                        ToggleRow(s.pictureInPicture, prefs.pipEnabled) { vm.setPref(Prefs.Key.PIP_ENABLED, it) }
+                    }
+                }
+                Section(s.settingsConnection) {
+                    prefRow(Prefs.Key.BUFFER, s.buffer, buffers, prefs.buffer)
+                    prefRow(Prefs.Key.RECONNECT_SECONDS, s.reconnect, listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) }, prefs.reconnectSeconds)
+                }
+                Section(s.settingsAdvanced) {
+                    PickRow(s.streamFormat, formats, format, open) { vm.setStreamFormat(it as String?) }
+                    prefRow(Prefs.Key.ENGINE, s.engine, listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc), prefs.engine)
+                    prefRow(Prefs.Key.DECODER, s.decoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.decoder)
+                    prefRow(Prefs.Key.AUDIO_DECODER, s.audioDecoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.audioDecoder)
+                    MenuRow(s.userAgent, prefs.userAgent.ifBlank { s.userAgentDefault }, chevron = true) { editingAgent = true }
                 }
             }
-        }
-        Section(s.updates) {
-            when (val u = update) {
-                is UpdateState.Available -> MenuRow(u.release.version, null, vm::installUpdate)
-                is UpdateState.Downloading -> MenuRow(u.release.version, "${(u.progress * 100).toInt()}%") { }
-                is UpdateState.Installing -> MenuRow(s.installing, null) { }
-                UpdateState.UpToDate -> MenuRow(s.upToDate, BuildConfig.VERSION_NAME) { vm.checkForUpdate(true) }
-                else -> MenuRow(s.checkUpdates, BuildConfig.VERSION_NAME) { vm.checkForUpdate(true) }
+            MenuPage.Channels -> {
+                PageHeader(s.manageChannels, s.settings) { page = null }
+                Section(null) {
+                    prefRow(Prefs.Key.STARTUP, s.onStartup, startups, prefs.startup)
+                    prefRow(Prefs.Key.SORT, s.sortChannels, listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName), prefs.sort)
+                    ToggleRow(s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) }
+                    ToggleRow(s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) }
+                    ToggleRow(s.nowInList, prefs.epgInList) { vm.setPref(Prefs.Key.EPG_IN_LIST, it) }
+                    if (vm.epgPickerAvailable) MenuRow(s.logoSource, null, chevron = true) { pickingCountry = true }
+                    MenuRow(s.visibleGroups, null, chevron = true) { managingGroups = true }
+                }
             }
-        }
-        Section(s.account) {
-            email?.let { MenuRow(maskEmail(it), null) { } }
-            MenuRow(s.sendReport, when (val r = report) { ReportState.Sending -> "…"; is ReportState.Sent -> r.id; else -> null }) { reporting = !reporting }
-            if (reporting) {
-                Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }
-                MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
+            MenuPage.Guide -> {
+                PageHeader(s.guide, s.settings) { page = null }
+                Section(null) {
+                    prefRow(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours)
+                    prefRow(Prefs.Key.PLAYLIST_REFRESH, s.playlistRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.playlistRefreshHours)
+                    prefRow(Prefs.Key.EPG_OFFSET, s.timeOffset, (-180..180 step 30).map { m -> m to (if (m == 0) "0" else "%+d min".format(m)) }, prefs.epgOffsetMin)
+                    if (vm.epgPickerAvailable) MenuRow(s.epgCountryGuide, null, chevron = true) { pickingCountry = false }
+                    if (vm.epgPickerAvailable && epgMappings.isNotEmpty()) {
+                        MenuRow(if (confirmingEpgReset) s.pressAgainToConfirm else s.epgResetAll, null) {
+                            if (confirmingEpgReset) vm.resetEpgMappings()
+                            confirmingEpgReset = !confirmingEpgReset
+                        }
+                    }
+                    MenuRow(s.refreshEpg, null, onClick = vm::refreshEpg)
+                }
             }
-            if (!local) MenuRow(s.logout, null, vm::logoutThisTv)
+            MenuPage.Appearance -> {
+                PageHeader(s.settingsAppearance, s.settings) { page = null }
+                Section(null) {
+                    prefRow(Prefs.Key.LANGUAGE, s.language, languages, prefs.language)
+                    prefRow(Prefs.Key.ACCENT, s.accent, accents, prefs.accent)
+                }
+            }
+            MenuPage.Parental -> {
+                PageHeader(s.parental, s.settings) { page = null }
+                Section(null) {
+                    if (prefs.pinHash == null) {
+                        MenuRow(s.setPin, null) { choosingPin = true }
+                    } else {
+                        ToggleRow(s.protectSettings, prefs.settingsPin) { vm.setPref(Prefs.Key.SETTINGS_PIN, it) }
+                        MenuRow(s.changePin, null) { choosingPin = true }
+                        MenuRow(s.parentalOff, null) { vm.setPin(null) }
+                        vm.orderedGroups(includeHidden = true).forEach { g ->
+                            ToggleRow("🔒 " + g.name, vm.isGroupLockedSetting(g.id)) { vm.toggleGroupLock(g.id) }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -725,28 +767,67 @@ private fun PinDialog(title: String, onClose: (() -> Unit)?, check: (String) -> 
     }
 }
 
+private val RowLine = Color.White.copy(alpha = 0.08f)
+
 @Composable
-private fun Section(title: String, rows: @Composable () -> Unit) {
+private fun Section(title: String?, rows: @Composable () -> Unit) {
     Column {
-        Text(title, color = ItvColors.TextFaint, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, bottom = 6.dp))
-        Column(Modifier.fillMaxWidth().clip(CardShape).background(Card)) { rows() }
+        if (title != null) {
+            Text(title.uppercase(), color = ItvColors.TextFaint.copy(alpha = 0.42f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, bottom = 2.dp))
+        }
+        // A linha por baixo da última fila fica de fora.
+        Column(
+            Modifier.fillMaxWidth().clipToBounds().layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, placeable.height - 0.5.dp.roundToPx()) { placeable.place(0, 0) }
+            },
+        ) { rows() }
+    }
+}
+
+/** O topo de uma página: voltar atrás e o título. */
+@Composable
+private fun PageHeader(title: String, back: String, onBack: () -> Unit) {
+    val accent = LocalAccent.current.start
+    Box(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(Modifier.align(Alignment.CenterStart).clip(ListShape).clickable(onClick = onBack).padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(ItvIcons.Back, null, tint = accent, modifier = Modifier.size(24.dp))
+            Text(back, color = accent, fontSize = 16.sp)
+        }
+        Text(title, color = ItvColors.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.align(Alignment.Center))
     }
 }
 
 @Composable
-private fun MenuRow(title: String, value: String?, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (value != null) Text(value, color = ItvColors.TextDim, fontSize = 15.sp)
+private fun MenuRow(title: String, value: String?, icon: ImageVector? = null, chevron: Boolean = false, checked: Boolean = false, onClick: () -> Unit) {
+    val accent = LocalAccent.current.start
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(16.dp))
+            }
+            Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (value != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(value, color = ItvColors.TextFaint, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
+            }
+            if (checked) Icon(ItvIcons.Check, null, tint = accent, modifier = Modifier.size(22.dp))
+            if (chevron) Icon(ItvIcons.Chevron, null, tint = ItvColors.TextFaint.copy(alpha = 0.42f), modifier = Modifier.size(22.dp))
+        }
+        Box(Modifier.padding(start = if (icon != null) 54.dp else 16.dp).fillMaxWidth().height(0.5.dp).background(RowLine))
     }
 }
+
+/** O valor numa fila: as explicações longas ficam para a lista de opções. */
+private fun shortLabel(label: String) = if (label.length > 24) label.substringBefore(" (") else label
 
 /** Uma escolha aberta numa página própria, com as opções todas à vista. */
 private class Picking(val title: String, val options: List<Pair<Any?, String>>, val selected: Any?, val onPick: (Any?) -> Unit)
 
 @Composable
 private fun PickRow(title: String, options: List<Pair<Any?, String>>, value: Any?, open: (Picking) -> Unit, onPick: (Any?) -> Unit) {
-    MenuRow(title, options.firstOrNull { it.first == value }?.second) { open(Picking(title, options, value, onPick)) }
+    MenuRow(title, options.firstOrNull { it.first == value }?.second?.let(::shortLabel), chevron = true) { open(Picking(title, options, value, onPick)) }
 }
 
 @Composable
@@ -754,7 +835,7 @@ private fun PickPage(picking: Picking, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     SubPage(picking.title, onClose) {
         picking.options.forEach { (value, label) ->
-            MenuRow(label, if (value == picking.selected) "✓" else null) {
+            MenuRow(label, null, checked = value == picking.selected) {
                 picking.onPick(value)
                 onClose()
             }
@@ -787,7 +868,7 @@ private fun UserAgentPage(initial: String, onSave: (String) -> Unit, onClose: ()
     var text by remember { mutableStateOf(initial) }
     BackHandler(onBack = onClose)
     SubPage(s.userAgent, onClose) {
-        Field(s.userAgentSub, text, Modifier.padding(12.dp)) { text = it }
+        Field(s.userAgentSub, text, Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) { text = it }
         MenuRow(s.save, null) {
             onSave(text)
             onClose()
@@ -797,24 +878,24 @@ private fun UserAgentPage(initial: String, onSave: (String) -> Unit, onClose: ()
 
 @Composable
 private fun SubPage(title: String, onClose: () -> Unit, rows: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ControlButton(ItvIcons.Close, onClick = onClose)
-            Text(title, color = ItvColors.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        }
-        Column(Modifier.fillMaxWidth().clip(CardShape).background(Card)) { rows() }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = BAR_SPACE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        PageHeader(title, LocalStrings.current.settings, onClose)
+        Section(null, rows)
     }
 }
 
 @Composable
 private fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
     val accent = LocalAccent.current
-    Row(Modifier.fillMaxWidth().clickable { onChange(!on) }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Box(
-            Modifier.size(44.dp, 26.dp).clip(CircleShape).then(if (on) Modifier.background(accent.brush) else Modifier.background(Color.White.copy(alpha = 0.18f))).padding(3.dp),
-            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-        ) { Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White)) }
+    Column(Modifier.fillMaxWidth().clickable { onChange(!on) }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Box(
+                Modifier.size(44.dp, 26.dp).clip(CircleShape).then(if (on) Modifier.background(accent.brush) else Modifier.background(Color.White.copy(alpha = 0.18f))).padding(3.dp),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+            ) { Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White)) }
+        }
+        Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(RowLine))
     }
 }
 
@@ -895,10 +976,10 @@ fun MobileLoadError(error: ErrorInfo, onRetry: () -> Unit, onSettings: (() -> Un
         error.fixes.forEach { Text("• $it", color = ItvColors.TextDim, fontSize = 14.sp) }
         error.detail?.let { Text(it, color = ItvColors.TextFaint, fontSize = 12.sp) }
         Spacer(Modifier.height(8.dp))
-        onAddPlaylist?.let { MenuRow(s.addPlaylist, null, it) }
-        MenuRow(s.retry, null, onRetry)
-        onSettings?.let { MenuRow(s.settings, null, it) }
-        onLogout?.let { MenuRow(s.logout, null, it) }
+        onAddPlaylist?.let { MenuRow(s.addPlaylist, null, onClick = it) }
+        MenuRow(s.retry, null, onClick = onRetry)
+        onSettings?.let { MenuRow(s.settings, null, onClick = it) }
+        onLogout?.let { MenuRow(s.logout, null, onClick = it) }
     }
 }
 

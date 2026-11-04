@@ -547,4 +547,10 @@
     <string name="report_sent">تم الإرسال. التقرير %1$s</string>
     <string name="report_too_many">تقارير كثيرة جدًا. حاول لاحقًا.</string>
     <string name="report_failed">تعذّر الإرسال: %1$s</string>
+    <string name="settings_picture_sound">الصورة والصوت</string>
+    <string name="settings_connection">الاتصال</string>
+    <string name="settings_advanced">متقدم</string>
+    <string name="settings_appearance">المظهر</string>
+    <string name="setting_on">تشغيل</string>
+    <string name="setting_off">إيقاف</string>
 </resources>

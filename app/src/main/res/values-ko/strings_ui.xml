@@ -537,4 +537,10 @@
     <string name="report_sent">보냈습니다. 보고서 %1$s</string>
     <string name="report_too_many">보고서가 너무 많습니다. 나중에 다시 시도하세요.</string>
     <string name="report_failed">보낼 수 없음: %1$s</string>
+    <string name="settings_picture_sound">화면 및 소리</string>
+    <string name="settings_connection">연결</string>
+    <string name="settings_advanced">고급</string>
+    <string name="settings_appearance">모양</string>
+    <string name="setting_on">켜짐</string>
+    <string name="setting_off">꺼짐</string>
 </resources>

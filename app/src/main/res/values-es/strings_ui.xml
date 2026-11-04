@@ -541,4 +541,10 @@
     <string name="report_sent">Enviado. Informe %1$s</string>
     <string name="report_too_many">Demasiados informes. Inténtalo más tarde.</string>
     <string name="report_failed">No se pudo enviar: %1$s</string>
+    <string name="settings_picture_sound">Imagen y sonido</string>
+    <string name="settings_connection">Conexión</string>
+    <string name="settings_advanced">Avanzado</string>
+    <string name="settings_appearance">Apariencia</string>
+    <string name="setting_on">Activado</string>
+    <string name="setting_off">Desactivado</string>
 </resources>

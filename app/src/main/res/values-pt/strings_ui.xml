@@ -555,4 +555,10 @@
     <string name="copy_code">Copiar código</string>
     <string name="copied">Copiado</string>
     <string name="sign_in_to_approve">Entrar para aprovar</string>
+    <string name="settings_picture_sound">Imagem e som</string>
+    <string name="settings_connection">Ligação</string>
+    <string name="settings_advanced">Avançado</string>
+    <string name="settings_appearance">Aspeto</string>
+    <string name="setting_on">Ligado</string>
+    <string name="setting_off">Desligado</string>
 </resources>

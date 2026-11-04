@@ -537,4 +537,10 @@
     <string name="report_sent">已发送。报告 %1$s</string>
     <string name="report_too_many">报告过多，请稍后再试。</string>
     <string name="report_failed">无法发送：%1$s</string>
+    <string name="settings_picture_sound">画面和声音</string>
+    <string name="settings_connection">连接</string>
+    <string name="settings_advanced">高级</string>
+    <string name="settings_appearance">外观</string>
+    <string name="setting_on">开</string>
+    <string name="setting_off">关</string>
 </resources>

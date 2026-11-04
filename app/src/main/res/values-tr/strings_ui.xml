@@ -539,4 +539,10 @@
     <string name="report_sent">Gönderildi. Rapor %1$s</string>
     <string name="report_too_many">Çok fazla rapor. Daha sonra tekrar deneyin.</string>
     <string name="report_failed">Gönderilemedi: %1$s</string>
+    <string name="settings_picture_sound">Görüntü ve ses</string>
+    <string name="settings_connection">Bağlantı</string>
+    <string name="settings_advanced">Gelişmiş</string>
+    <string name="settings_appearance">Görünüm</string>
+    <string name="setting_on">Açık</string>
+    <string name="setting_off">Kapalı</string>
 </resources>

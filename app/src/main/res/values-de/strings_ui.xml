@@ -539,4 +539,10 @@
     <string name="report_sent">Gesendet. Bericht %1$s</string>
     <string name="report_too_many">Zu viele Berichte. Versuche es später erneut.</string>
     <string name="report_failed">Senden fehlgeschlagen: %1$s</string>
+    <string name="settings_picture_sound">Bild und Ton</string>
+    <string name="settings_connection">Verbindung</string>
+    <string name="settings_advanced">Erweitert</string>
+    <string name="settings_appearance">Darstellung</string>
+    <string name="setting_on">Ein</string>
+    <string name="setting_off">Aus</string>
 </resources>

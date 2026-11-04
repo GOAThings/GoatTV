@@ -537,4 +537,10 @@
     <string name="report_sent">送信しました。レポート %1$s</string>
     <string name="report_too_many">レポートが多すぎます。しばらくしてからお試しください。</string>
     <string name="report_failed">送信できませんでした: %1$s</string>
+    <string name="settings_picture_sound">画像と音声</string>
+    <string name="settings_connection">接続</string>
+    <string name="settings_advanced">詳細設定</string>
+    <string name="settings_appearance">外観</string>
+    <string name="setting_on">オン</string>
+    <string name="setting_off">オフ</string>
 </resources>

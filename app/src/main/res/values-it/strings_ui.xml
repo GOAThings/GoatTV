@@ -541,4 +541,10 @@
     <string name="report_sent">Inviata. Segnalazione %1$s</string>
     <string name="report_too_many">Troppe segnalazioni. Riprova più tardi.</string>
     <string name="report_failed">Impossibile inviare: %1$s</string>
+    <string name="settings_picture_sound">Immagine e suono</string>
+    <string name="settings_connection">Connessione</string>
+    <string name="settings_advanced">Avanzate</string>
+    <string name="settings_appearance">Aspetto</string>
+    <string name="setting_on">Attivo</string>
+    <string name="setting_off">Disattivo</string>
 </resources>
