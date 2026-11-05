@@ -531,8 +531,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Acabou de se ligar a conta numa TV que estava sem conta. As definições desta TV passam para a conta
      * se a conta ainda não tiver nenhumas; os favoritos passam para as listas da conta que são as mesmas
-     * (mesmo servidor e utilizador, ou mesmo URL) e ainda não têm favoritos. As listas em si não passam:
-     * o login da TV não pode criar listas na conta.
+     * (mesmo servidor e utilizador, ou mesmo URL) e ainda não têm favoritos. As listas em si não passam sozinhas
+     * (o login da TV pode criá-las na conta, mas só quando a pessoa as adiciona).
      */
     private fun adoptLocalProfile(local: ConfigResponse) {
         val localPlaylists = local.playlists.orEmpty().mapNotNull { it.toPlaylist() }

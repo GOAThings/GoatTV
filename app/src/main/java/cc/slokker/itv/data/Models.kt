@@ -23,7 +23,7 @@ data class Playlist(
     val signature: String? = null,
 )
 
-/** Dados de uma lista a criar/editar na TV (só sem conta: com conta, as listas gerem-se no site). */
+/** Dados de uma lista a criar/editar na TV (nesta TV sem conta, ou na conta). */
 data class PlaylistForm(
     val type: PlaylistType = PlaylistType.XTREAM,
     val name: String = "",

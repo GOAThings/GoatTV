@@ -24,7 +24,7 @@ const val BACKEND_APP = "goattv"
 
 /**
  * API da conta Slokker para a GoatTV. A TV tem um login de dispositivo (não o da pessoa), que só serve para
- * esta app: lê listas e definições e grava favoritos e definições. Gerir listas é só no site.
+ * esta app: lê listas e definições, grava favoritos e definições, e cria, altera e apaga as listas da conta.
  * O token vai em `Authorization: <token>` (ver AppContainer).
  */
 interface BackendApi {
