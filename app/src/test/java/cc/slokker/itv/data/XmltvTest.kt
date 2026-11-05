@@ -94,4 +94,43 @@ class XmltvTest {
         assertFalse(RefreshPolicy.isDue(6, 5 * h, 10 * h, checkedSinceOpen = false))
         assertTrue(RefreshPolicy.isDue(6, 4 * h, 10 * h, checkedSinceOpen = true))
     }
+
+
+    private fun parser(onProgramme: (String) -> Unit = {}) = XmltvParser(
+        onChannel = { _, _ -> },
+        wantsProgramme = { _, _, _ -> true },
+        onProgramme = { _, _, _, title -> onProgramme(title) },
+    )
+
+    private val huge = "a".repeat(cc.slokker.itv.data.SafeInput.MAX_XMLTV_TEXT + 10)
+    private val programme = "<programme start=\"20260101000000 +0000\" stop=\"20260101010000 +0000\" channel=\"c\">"
+
+    @Test(expected = java.io.IOException::class)
+    fun `an unclosed tag stops at the limit`() {
+        parser().parse(StringReader("<$huge"))
+    }
+
+    @Test(expected = java.io.IOException::class)
+    fun `an unclosed title stops at the limit`() {
+        parser().parse(StringReader("$programme<title>$huge"))
+    }
+
+    @Test(expected = java.io.IOException::class)
+    fun `an unclosed CDATA title stops at the limit`() {
+        parser().parse(StringReader("$programme<title><![CDATA[$huge"))
+    }
+
+    @Test
+    fun `a long CDATA outside a captured element is skipped without keeping it`() {
+        val titles = ArrayList<String>()
+        parser { titles += it }.parse(StringReader("<tv><desc><![CDATA[$huge]]></desc>$programme<title>Ok</title></programme></tv>"))
+        assertEquals(listOf("Ok"), titles)
+    }
+
+    @Test
+    fun `a title with CDATA still reads`() {
+        val titles = ArrayList<String>()
+        parser { titles += it }.parse(StringReader("$programme<title><![CDATA[A & B]]></title></programme>"))
+        assertEquals(listOf("A & B"), titles)
+    }
 }

@@ -1,6 +1,8 @@
 package cc.slokker.itv.data
 
 import cc.slokker.itv.data.m3u.M3uParser
+import java.io.IOException
+import java.io.StringReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -146,5 +148,68 @@ class M3uParserTest {
         assertTrue(M3uParser.isVod("http://h/movie/1.ts"))
         assertTrue(M3uParser.isVod("http://h/a/b.MP4"))
         assertTrue(!M3uParser.isVod("http://h/live/1.ts"))
+    }
+
+
+    @Test
+    fun `bounded lines split like readLine`() {
+        assertEquals(listOf("a", "b", "", "c", "d"), StringReader("a\nb\r\n\rc\nd").boundedLines().toList())
+        assertEquals(listOf("a"), StringReader("a\n").boundedLines().toList())
+    }
+
+    @Test(expected = IOException::class)
+    fun `a line with no end stops at the limit`() {
+        StringReader("x".repeat(1000)).boundedLines(maxLine = 100).toList()
+    }
+
+    @Test(expected = IOException::class)
+    fun `a reader stops at the size limit`() {
+        LimitedReader(StringReader("x".repeat(1000)), 100).readText()
+    }
+
+    @Test
+    fun `a body within the limits reads whole`() {
+        assertEquals("x".repeat(100), LimitedReader(StringReader("x".repeat(100)), 100).readText())
+        assertEquals(100, LimitedInputStream("x".repeat(100).byteInputStream(), 100).readBytes().size)
+    }
+
+    @Test(expected = IOException::class)
+    fun `a stream stops at the size limit`() {
+        LimitedInputStream("x".repeat(1000).byteInputStream(), 100).readBytes()
+    }
+
+    @Test
+    fun `reserved and repeated group ids never reach the group list`() {
+        val r = parse("#EXTM3U\n#EXTINF:-1 group-title=\"__all__\",A\nhttp://example.invalid/a.ts\n#EXTINF:-1 group-title=\"News\",B\nhttp://example.invalid/b.ts")
+        val playlist = Playlist(id = "p", type = PlaylistType.M3U, name = "P")
+        val content = PlaylistContent.build(playlist, r.categories, r.channels)
+        assertEquals(listOf("News"), content.categories.map { it.id })
+        // As cópias em cache passam pelo mesmo construtor.
+        val cached = PlaylistContent(playlist, listOf(Category("1", "A"), Category("1", "B"), Category(SpecialCategory.FAVORITES, "F")), r.channels)
+        assertEquals(listOf("1"), cached.categories.map { it.id })
+    }
+
+    @Test
+    fun `groups follow the chosen order and new ones stay last in list order`() {
+        val playlist = Playlist(id = "p", type = PlaylistType.M3U, name = "P")
+        val content = PlaylistContent(playlist, listOf("a", "b", "c", "d").map { Category(it, it) }, emptyList())
+        assertEquals(listOf("c", "a", "b", "d"), content.orderedCategories(listOf("c", "a")).map { it.id })
+        // Muitos grupos: tem de ser linear, senão isto não acaba (corre na interface).
+        val many = PlaylistContent(playlist, (0 until 200_000).map { Category("g$it", "g$it") }, emptyList())
+        assertEquals("g0", many.orderedCategories(emptyList()).first().id)
+    }
+
+    @Test
+    fun `provider dates out of range are dropped`() {
+        assertEquals(1_000L, SafeInput.epochMs(1))
+        assertNull(SafeInput.epochMs(Long.MAX_VALUE))
+        assertNull(SafeInput.epochMs(-1))
+    }
+
+    @Test
+    fun `control characters leave user agent and referrer values`() {
+        assertEquals("probe :sout=x", SafeInput.stripControl("probe\r\n :sout=\u0085x\u2028\u2029\u0000"))
+        assertEquals("VLC/3.0 é", SafeInput.stripControl("VLC/3.0 é"))
+        assertEquals("VLC/3.0 ", SafeInput.headerSafe("VLC/3.0 é\n"))
     }
 }

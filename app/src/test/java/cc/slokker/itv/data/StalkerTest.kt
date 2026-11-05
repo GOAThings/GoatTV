@@ -82,4 +82,19 @@ class StalkerTest {
         assertEquals("a *** b", BugReport.redact("a $mac b", emptyList()))
         assertEquals("mac=***&x=1", BugReport.redact("mac=00%3A1A%3A79%3A00%3A00%3A01&x=1", emptyList()))
     }
+
+
+    @Test
+    fun `a token with characters a header cannot carry is not usable`() {
+        assertTrue(SafeInput.isHeaderSafe("abc-123_XYZ"))
+        assertFalse(SafeInput.isHeaderSafe("abc\ndef"))
+        assertFalse(SafeInput.isHeaderSafe("tokén"))
+        // O que se aceita tem mesmo de passar no OkHttp.
+        okhttp3.Request.Builder().url("http://example.invalid/").header("Authorization", "Bearer abc-123_XYZ").build()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `okhttp refuses what the token check refuses`() {
+        okhttp3.Request.Builder().url("http://example.invalid/").header("Authorization", "Bearer abc\ndef").build()
+    }
 }

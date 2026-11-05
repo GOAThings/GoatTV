@@ -5,6 +5,7 @@ import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.HomeItem
 import cc.slokker.itv.data.Reminder
+import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.Updater
 import cc.slokker.itv.data.epg.XmltvGuide
 import kotlinx.coroutines.async
@@ -174,7 +175,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Preferências que vivem fora do Compose: User-Agent dos pedidos e cópia local do arranque automático.
         viewModelScope.launch {
             _prefs.collect { p ->
-                c.userAgent = p.userAgent.ifBlank { IPTV_USER_AGENT }
+                c.userAgent = SafeInput.headerSafe(p.userAgent).ifBlank { IPTV_USER_AGENT }
                 if (_content.value != null) c.session.setAutoStart(p.autoStart)
             }
         }
@@ -1203,10 +1204,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Grupos da lista atual pela ordem escolhida (os novos ficam no fim, pela ordem da lista). */
     fun orderedGroups(includeHidden: Boolean): List<Category> {
         val content = _content.value ?: return emptyList()
-        val order = _prefs.value.groupOrder[content.playlist.id].orEmpty()
-        val position = order.withIndex().associate { (i, id) -> id to i }
-        return content.categories
-            .sortedBy { position[it.id] ?: (order.size + content.categories.indexOf(it)) }
+        return content.orderedCategories(_prefs.value.groupOrder[content.playlist.id].orEmpty())
             .filter { includeHidden || !isGroupHidden(it.id) }
     }
 
@@ -1708,7 +1706,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Programas do canal para a grelha (passado incluído), com o desvio horário das definições. */
     fun guideEntries(channel: Channel): List<EpgEntry> {
         val content = _content.value ?: return emptyList()
-        return (c.epg.guideEntries(content.playlist, channel) ?: c.epg.cached(content.playlist, channel).orEmpty()).shifted()
+        // Sem dois programas à mesma hora: as listas do ecrã usam a hora como chave única.
+        return (c.epg.guideEntries(content.playlist, channel) ?: c.epg.cached(content.playlist, channel).orEmpty()).distinctBy { it.startMs }.shifted()
     }
 
     // ---- Catch-up ----------------------------------------------------------------------------

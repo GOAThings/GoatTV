@@ -1,11 +1,14 @@
 package cc.slokker.itv.data.epg
 
+import cc.slokker.itv.data.SafeInput
+import java.io.IOException
 import java.io.Reader
 
 /**
  * Parser XMLTV em streaming (um carácter de cada vez): aguenta guias de dezenas de MB sem os carregar.
  * Só percebe o que o guia precisa: `<channel id>` com `<display-name>` e `<programme start stop channel>`
  * com `<title>`. Os resultados saem por callbacks, para quem chama decidir o que guardar.
+ * O que fica em memória de cada vez tem um limite: um guia que passe dele falha com IOException.
  */
 class XmltvParser(
     private val onChannel: (id: String, names: List<String>) -> Unit,
@@ -29,7 +32,7 @@ class XmltvParser(
             val c = r.read()
             if (c == -1) break
             if (c != '<'.code) {
-                capture?.append(c.toChar())
+                capture?.let { checkSize(it.length); it.append(c.toChar()) }
                 continue
             }
             val tag = readTag(r) ?: continue
@@ -75,6 +78,10 @@ class XmltvParser(
         }
     }
 
+    private fun checkSize(length: Int) {
+        if (length >= SafeInput.MAX_XMLTV_TEXT) throw IOException("Guide element over the size limit")
+    }
+
     private class Tag(val name: String, val attrs: Map<String, String>, val closing: Boolean, val selfClosing: Boolean)
 
     /** Lê uma etiqueta depois de '<'. Devolve null para comentários, `<?xml ?>`, `<!DOCTYPE>` e CDATA. */
@@ -92,16 +99,19 @@ class XmltvParser(
             } else if (c == '>'.code) {
                 break
             }
+            checkSize(sb.length)
             sb.append(c.toChar())
             if (sb.length == 3 && sb.startsWith("!--")) {
                 skipUntil(r, "-->", null)
                 return null
             }
             if (sb.length == 8 && sb.startsWith("![CDATA[")) {
-                // O texto do CDATA conta como texto do elemento, sem entidades.
-                val text = StringBuilder()
+                // O texto do CDATA conta como texto do elemento, sem entidades (fora de um elemento, nem se guarda).
+                val text = capture?.let { StringBuilder() }
                 skipUntil(r, "]]>", text)
-                capture?.append(text.toString().replace("&", "&amp;"))
+                if (text != null) {
+                    capture?.let { checkSize(it.length + text.length); it.append(text.toString().replace("&", "&amp;")) }
+                }
                 return null
             }
         }
@@ -129,7 +139,7 @@ class XmltvParser(
                 return
             }
             if (pending.length > end.length) {
-                into?.append(pending[0])
+                into?.let { checkSize(it.length); it.append(pending[0]) }
                 pending.deleteCharAt(0)
             }
         }

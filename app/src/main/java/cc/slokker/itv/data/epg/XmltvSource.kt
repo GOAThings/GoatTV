@@ -2,6 +2,8 @@ package cc.slokker.itv.data.epg
 
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
+import cc.slokker.itv.data.LimitedInputStream
+import cc.slokker.itv.data.SafeInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -93,11 +95,13 @@ class XmltvSource(private val http: OkHttpClient) {
             val source = res.body.source()
             // Muitos guias vêm em .gz sem Content-Encoding: vê-se pelos dois primeiros bytes.
             val gzip = source.peek().let { it.request(2) && it.readByte() == 0x1f.toByte() && it.readByte() == 0x8b.toByte() }
-            val stream = if (gzip) GZIPInputStream(source.inputStream(), 64 * 1024) else source.inputStream()
+            val stream = LimitedInputStream(if (gzip) GZIPInputStream(source.inputStream(), 64 * 1024) else source.inputStream(), SafeInput.MAX_GUIDE_BYTES)
             val now = System.currentTimeMillis()
-            XmltvGuide.build(url, channels, now - WINDOW_BEFORE_MS, now + WINDOW_AFTER_MS, now) { parser ->
-                val reader = CancellableReader(stream.reader(Charsets.UTF_8)) { context.ensureActive() }
-                parser.parse(reader.buffered(64 * 1024))
+            SafeInput.outOfMemoryAsIo {
+                XmltvGuide.build(url, channels, now - WINDOW_BEFORE_MS, now + WINDOW_AFTER_MS, now) { parser ->
+                    val reader = CancellableReader(stream.reader(Charsets.UTF_8)) { context.ensureActive() }
+                    parser.parse(reader.buffered(64 * 1024))
+                }
             }
         }
     }

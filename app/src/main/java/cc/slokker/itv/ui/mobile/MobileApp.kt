@@ -761,7 +761,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
     val accent = LocalAccent.current.start
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg } }
+    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg.distinctBy { it.startMs } } }
     val at = slot ?: now
     val entry = entries.firstOrNull { it.startMs <= at && it.endMs > at }
     val catchup = slot != null && entry != null && vm.canCatchup(channel, entry)
@@ -849,7 +849,7 @@ private fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean)
     val s = LocalStrings.current
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
-    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg } }
+    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg.distinctBy { it.startMs } } }
     val reminders by vm.reminders.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).

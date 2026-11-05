@@ -5,8 +5,10 @@ import android.util.Base64
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
+import cc.slokker.itv.data.LimitedReader
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
+import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.SourceException
 import cc.slokker.itv.data.XtreamAccount
 import com.google.gson.Gson
@@ -94,9 +96,9 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
             .build()
         val listings = get<XtreamShortEpg?>(url, XtreamShortEpg::class.java)?.epgListings.orEmpty()
         return listings.mapNotNull { l ->
-            val start = l.startTimestamp?.toLongOrNull() ?: return@mapNotNull null
-            val stop = l.stopTimestamp?.toLongOrNull() ?: return@mapNotNull null
-            EpgEntry(decodeBase64(l.title.orEmpty()), start * 1000, stop * 1000)
+            val start = l.startTimestamp?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
+            val stop = l.stopTimestamp?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
+            EpgEntry(decodeBase64(l.title.orEmpty()), start, stop)
         }.sortedBy { it.startMs }
     }
 
@@ -113,7 +115,7 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
         http.newCall(Request.Builder().url(url).build()).execute().use { res ->
             if (!res.isSuccessful) throw SourceException(SourceException.Kind.HTTP, I18n.s.xtreamHttp(res.code), httpCode = res.code)
             try {
-                gson.fromJson<T>(res.body.charStream(), type)
+                SafeInput.outOfMemoryAsIo { gson.fromJson<T>(LimitedReader(res.body.charStream(), SafeInput.MAX_PLAYLIST_BYTES), type) }
             } catch (e: JsonParseException) {
                 throw SourceException(SourceException.Kind.BAD_RESPONSE, I18n.s.xtreamBadResponse)
             }

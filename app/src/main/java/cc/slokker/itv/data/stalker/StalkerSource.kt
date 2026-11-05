@@ -3,8 +3,10 @@ package cc.slokker.itv.data.stalker
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
+import cc.slokker.itv.data.LimitedReader
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
+import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.SourceException
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.StreamFormat
@@ -94,9 +96,9 @@ class StalkerSource(http: OkHttpClient) {
         val id = channel.streamId ?: return@withContext emptyList()
         api(playlist, "itv", "get_short_epg", listOf("ch_id" to id, "size" to size.toString())).asListOrEmpty().mapNotNull { e ->
             val o = e.asObjectOrNull() ?: return@mapNotNull null
-            val start = o.text("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null
-            val stop = o.text("stop_timestamp")?.toLongOrNull() ?: return@mapNotNull null
-            EpgEntry(o.text("name").orEmpty(), start * 1000, stop * 1000)
+            val start = o.text("start_timestamp")?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
+            val stop = o.text("stop_timestamp")?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
+            EpgEntry(o.text("name").orEmpty(), start, stop)
         }
     }
 
@@ -106,6 +108,8 @@ class StalkerSource(http: OkHttpClient) {
         throw e
     } catch (e: IOException) {
         null
+    } catch (e: IllegalArgumentException) {
+        null // um cabeçalho que o OkHttp recusa (ex.: um MAC com acentos): é como o portal não responder.
     }
 
     /** Um pedido com a sessão; se o token tiver caducado, entra de novo uma vez. */
@@ -133,10 +137,12 @@ class StalkerSource(http: OkHttpClient) {
         for (endpoint in endpoints(server)) {
             try {
                 val hello = js(call(endpoint, identity, "", "stb", "handshake", listOf("token" to ""))).asObjectOrNull()
-                val token = hello?.text("token")?.takeIf { it.isNotEmpty() } ?: throw badLogin()
+                val token = hello?.text("token")?.takeIf { it.isNotEmpty() && SafeInput.isHeaderSafe(it) } ?: throw badLogin()
                 val profile = js(call(endpoint, identity, token, "stb", "get_profile", profileParams(identity, hello.text("random").orEmpty()))).asObjectOrNull()
                 if (profile == null || profile.text("status") == "1") throw badLogin()
-                return@withLock Session(endpoint, profile.text("token")?.takeIf { it.isNotEmpty() } ?: token, identity).also { sessions[playlist.id] = it }
+                val finalToken = profile.text("token")?.takeIf { it.isNotEmpty() } ?: token
+                if (!SafeInput.isHeaderSafe(finalToken)) throw badLogin()
+                return@withLock Session(endpoint, finalToken, identity).also { sessions[playlist.id] = it }
             } catch (e: SourceException) {
                 if (e.kind == SourceException.Kind.BAD_LOGIN) throw e
                 failure = e
@@ -163,7 +169,7 @@ class StalkerSource(http: OkHttpClient) {
             .apply { if (token.isNotEmpty()) header("Authorization", "Bearer $token") }
             .build()
         http.newCall(request).execute().use { res ->
-            val body = res.body.string()
+            val body = SafeInput.outOfMemoryAsIo { LimitedReader(res.body.charStream(), SafeInput.MAX_PLAYLIST_BYTES).use { it.readText() } }
             if (res.code == 401 || body.contains("Authorization failed", ignoreCase = true)) throw ExpiredToken()
             if (!res.isSuccessful) throw SourceException(SourceException.Kind.HTTP, I18n.s.m3uHttp(res.code), httpCode = res.code)
             return body
@@ -176,7 +182,7 @@ class StalkerSource(http: OkHttpClient) {
 
     private fun js(body: String): JsonElement {
         val root = try {
-            JsonParser.parseString(body).asObjectOrNull()
+            SafeInput.outOfMemoryAsIo { JsonParser.parseString(body).asObjectOrNull() }
         } catch (e: RuntimeException) {
             null
         }

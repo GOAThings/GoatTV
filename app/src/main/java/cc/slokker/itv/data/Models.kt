@@ -150,7 +150,7 @@ data class XtreamAccount(
 
 class PlaylistContent(
     val playlist: Playlist,
-    val categories: List<Category>,
+    categories: List<Category>,
     val channels: List<Channel>,
     val account: XtreamAccount? = null,
     /** Guia XMLTV: o da conta, ou o do cabeçalho da lista M3U (`x-tvg-url`). */
@@ -158,9 +158,18 @@ class PlaylistContent(
     /** Quando os canais foram descarregados (para o intervalo de atualização). */
     val fetchedAt: Long = System.currentTimeMillis(),
 ) {
+    /** Sem ids repetidos nem os dos grupos especiais: as listas do ecrã usam o id como chave única. Vale também para as cópias em cache. */
+    val categories: List<Category> = categories.filter { it.id !in SpecialCategory.RESERVED }.distinctBy { it.id }
     val byCategory: Map<String, List<Channel>> = channels.groupBy { it.categoryId }
     val byKey: Map<String, Channel> = channels.reversed().associateBy { it.key }
     private val categoryNames = categories.associate { it.id to it.name }
+
+    /** Os grupos pela ordem escolhida ([order]: ids); os novos ficam no fim, pela ordem da lista. */
+    fun orderedCategories(order: List<String>): List<Category> {
+        val position = order.withIndex().associate { (i, id) -> id to i }
+        // O sortedBy é estável: os que têm a mesma posição ficam pela ordem da lista.
+        return categories.sortedBy { position[it.id] ?: order.size }
+    }
 
     fun categoryName(id: String): String = when (id) {
         SpecialCategory.FAVORITES -> I18n.s.favorites
@@ -195,6 +204,7 @@ object SpecialCategory {
     const val FAVORITES = "__fav__"
     const val ALL = "__all__"
     const val RECENT = "__recent__"
+    val RESERVED = setOf(FAVORITES, ALL, RECENT)
 }
 
 data class EpgEntry(val title: String, val startMs: Long, val endMs: Long) {
