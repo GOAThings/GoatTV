@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import cc.slokker.itv.data.SafeInput
 import android.view.SurfaceView
 import android.view.View
 import androidx.annotation.OptIn
@@ -109,8 +110,9 @@ internal class VlcPlayer(
     /** A stream a tocar (o equivalente ao `setMediaSource` do ExoPlayer); começa com [prepare]. */
     fun setStream(url: String, userAgent: String?, referrer: String?) {
         this.url = url
-        this.userAgent = userAgent
-        this.referrer = referrer
+        // Cada um é uma opção do libVLC: só texto, sem nada que a possa partir em duas.
+        this.userAgent = userAgent?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
+        this.referrer = referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
         mediaItem = MediaItem.fromUri(url)
         if (playbackState != Player.STATE_IDLE) vlc.stop()
         playbackState = Player.STATE_IDLE

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import cc.slokker.itv.data.Reminder
+import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.catchupCandidates
 import cc.slokker.itv.ui.common.isAccountBusy
 import cc.slokker.itv.ui.glass.GlassChipButton
@@ -1495,11 +1496,11 @@ internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
 internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String): MediaSource {
     // Muitos servidores redirecionam de http para https ou para outro host.
     val http = DefaultHttpDataSource.Factory()
-        .setUserAgent(channel?.userAgent ?: userAgent)
+        .setUserAgent(SafeInput.stripControl(channel?.userAgent ?: userAgent))
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(20_000)
-    channel?.referrer?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
+    channel?.referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
 
     val item = MediaItem.Builder()
         .setUri(candidate.url)

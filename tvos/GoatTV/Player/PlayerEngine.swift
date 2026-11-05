@@ -174,8 +174,10 @@ final class PlayerEngine: NSObject {
         positionValid = false
         savingSnapshot = false
         let wasShowing = state == .playing
-        self.userAgent = (userAgent?.isEmpty ?? true) ? iptvUserAgent : userAgent!
-        self.referrer = referrer
+        // Cada um vai numa opção do VLC ou num cabeçalho: só texto, sem nada que a possa partir em duas.
+        let agent = userAgent.map(SafeInput.stripControl) ?? ""
+        self.userAgent = agent.isEmpty ? iptvUserAgent : agent
+        self.referrer = referrer.map(SafeInput.stripControl)
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
         attempts = makeAttempts(candidates)
         index = 0
