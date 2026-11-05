@@ -20,9 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: XcodeGen
-        run: |
-          curl -fsSL -o /tmp/xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
-          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+        run: scripts/fetch-xcodegen.sh
       - uses: actions/cache@v4
         with:
           path: tvos/build/tvvlckit.tar.xz
