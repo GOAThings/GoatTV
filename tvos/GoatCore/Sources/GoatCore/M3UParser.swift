@@ -159,7 +159,8 @@ public enum M3UParser {
             var i = 0
             while i <= n {
                 if i == n || buf[i] == 0x0A {
-                    if i > start {
+                    // Uma linha sem fim não é um canal: fica de fora (o corpo inteiro já tem um limite).
+                    if i > start, i - start <= SafeInput.maxM3ULine {
                         body(String(decoding: UnsafeBufferPointer(rebasing: buf[start..<i]), as: UTF8.self))
                     }
                     start = i + 1

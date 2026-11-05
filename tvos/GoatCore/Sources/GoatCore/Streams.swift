@@ -68,7 +68,8 @@ public struct Catchup: Equatable, Sendable {
     /// e pelo menos 2 minutos depois de começar.)
     public static func available(playlist: Playlist, channel: Channel, entry: EpgEntry, now: Int64 = nowMs()) -> Bool {
         guard playlist.type == .xtream, channel.archiveDays > 0 else { return false }
-        return entry.startMs < now - minAgeMs && entry.startMs > now - Int64(channel.archiveDays) * 86_400_000
+        // O valor pode vir de uma cópia em cache, de antes de ser limitado ao ler a lista.
+        return entry.startMs < now - minAgeMs && entry.startMs > now - Int64(min(channel.archiveDays, SafeInput.maxArchiveDays)) * 86_400_000
     }
 
     public static let minAgeMs: Int64 = 2 * 60_000

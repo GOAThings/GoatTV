@@ -33,7 +33,68 @@ enum CoreTests {
         ("catchup", catchup),
         ("epgCatalog", epgCatalog),
         ("playlistForm", playlistForm),
+        ("providerNumbers", providerNumbers),
+        ("archiveDays", archiveDays),
+        ("duplicateGroups", duplicateGroups),
+        ("m3uLongLine", m3uLongLine),
+        ("controlCharacters", controlCharacters),
     ]
+
+    /// Números do fornecedor fora do que faz sentido: nunca terminam a app, ficam com o valor por omissão.
+    static func providerNumbers() throws {
+        for num in ["\"1e300\"", "\"nan\"", "\"inf\"", "1e300", "\"9223372036854775807\""] {
+            let streams = try Xtream.parseStreams(Data(#"[{"stream_id":"1","num":\#(num)}]"#.utf8))
+            try expect(streams.first?.num, 1, num)
+        }
+        let huge = try Xtream.parseStreams(Data(#"[{"stream_id":"1","tv_archive_duration":"1e19"}]"#.utf8))
+        try expect(huge.first?.archiveDays, 0)
+        let censored = Stalker.parseChannels(try JSON.parse(Data(#"[{"id":"1","cmd":"x","number":"1e300"}]"#.utf8)).array ?? [], endpoint: "", channelName: { $0 })
+        try expect(censored.first?.num, 1)
+        try expect(Xtream.parseShortEpg(Data(#"{"epg_listings":[{"start_timestamp":"9223372036854775807","stop_timestamp":"1"}]}"#.utf8)).count, 0)
+        try expect(Xtream.parseShortEpg(Data(#"{"epg_listings":[{"start_timestamp":"10","stop_timestamp":"20","title":""}]}"#.utf8)).first?.endMs, 20_000)
+        try expect(SafeInput.product(9_223_372_036_854_775_807, 2), nil)
+        try expect(SafeInput.product(3, 4), 12)
+        try expect(JSON.number(1e300).int, nil)
+        try expect(JSON.number(-3).int, -3)
+    }
+
+    /// Um valor enorme de dias de catch-up, ao ler a lista ou já numa cópia em cache.
+    static func archiveDays() throws {
+        let p = Playlist(id: "x", type: .xtream, name: "X", server: "http://s", username: "u", password: "p")
+        let streams = try Xtream.parseStreams(Data(#"[{"stream_id":"1","tv_archive":"1","tv_archive_duration":"106751991168"}]"#.utf8))
+        try expect(streams.first?.archiveDays, SafeInput.maxArchiveDays)
+        let now: Int64 = 1_800_000_000_000
+        let entry = EpgEntry(title: "T", startMs: now - 3_600_000, endMs: now)
+        for days in [106_751_991_167, 106_751_991_168, Int.max] {
+            let ch = Channel(uid: 0, key: "1", num: 1, name: "A", logo: nil, categoryId: "c", streamId: "1", archiveDays: days)
+            try expect(Catchup.available(playlist: p, channel: ch, entry: entry, now: now), true, "\(days)")
+        }
+    }
+
+    /// Ids de grupo repetidos ou iguais aos dos grupos especiais não chegam às listas, nem de uma cópia em cache.
+    static func duplicateGroups() throws {
+        let playlist = Playlist(id: "p", type: .m3u, name: "P", url: "http://l")
+        let channel = Channel(uid: 0, key: "1", num: 1, name: "A", logo: nil, categoryId: "1")
+        let cats = [Category(id: "1", name: "A"), Category(id: "1", name: "B"), Category(id: SpecialCategory.all, name: "All")]
+        let content = PlaylistContent.build(playlist: playlist, categories: cats, channels: [channel], guideUrl: nil)
+        try expect(content.categories.map(\.id), ["1"])
+        let cached = try JSONDecoder().decode(PlaylistContent.self, from: Data(#"""
+        {"playlist":{"id":"p","type":"m3u","name":"P"},"categories":[{"id":"1","name":"A"},{"id":"1","name":"B"},{"id":"__fav__","name":"F"}],
+         "channels":[],"fetchedAt":0}
+        """#.utf8))
+        try expect(cached.categories.map(\.id), ["1"])
+    }
+
+    static func m3uLongLine() throws {
+        let long = String(repeating: "x", count: SafeInput.maxM3ULine + 1)
+        let r = M3UParser.parse(Data("#EXTM3U\n#EXTINF:-1,\(long)\n#EXTINF:-1,A\nhttp://h/a.ts\n".utf8))
+        try expect(r.channels.map(\.name), ["A"])
+    }
+
+    static func controlCharacters() throws {
+        try expect(SafeInput.stripControl("probe\r\n :sout=\u{85}x\u{2028}\u{2029}\u{0}"), "probe :sout=x")
+        try expect(SafeInput.stripControl("VLC/3.0 é"), "VLC/3.0 é")
+    }
 
     static func playlistForm() throws {
         var f = PlaylistForm(type: .xtream)

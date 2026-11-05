@@ -87,7 +87,7 @@ public struct PlaylistLoader: Sendable {
     /// Descarrega e lê um guia XMLTV (`.xml` ou `.xml.gz`), só com os canais da lista.
     public func loadGuide(url: String, channels: [Channel]) async throws -> XMLTVGuide {
         guard let u = URL(string: url), u.scheme != nil else { throw SourceError.badURL }
-        var data = try await get(u, timeout: 120)
+        var data = try await get(u, timeout: 120, maxBytes: SafeInput.maxGuideBytes)
         // Muitos guias vêm em .gz sem Content-Encoding: vê-se pelos dois primeiros bytes.
         if data.count > 2, data[data.startIndex] == 0x1F, data[data.startIndex + 1] == 0x8B {
             guard let unzipped = gunzip?(data) else { throw SourceError.badResponse }
@@ -99,11 +99,12 @@ public struct PlaylistLoader: Sendable {
 
     // MARK: Pedidos
 
-    func get(_ url: URL, timeout: TimeInterval = 60) async throws -> Data {
+    func get(_ url: URL, timeout: TimeInterval = 60, maxBytes: Int = SafeInput.maxPlaylistBytes) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = timeout
-        request.setValue(userAgent.isEmpty ? iptvUserAgent : userAgent, forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await HTTP.fetch(session, request)
+        let agent = SafeInput.stripControl(userAgent)
+        request.setValue(agent.isEmpty ? iptvUserAgent : agent, forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await HTTP.fetch(session, request, maxBytes: maxBytes)
         guard (200..<300).contains(response.statusCode) else { throw SourceError.http(response.statusCode) }
         return data
     }

@@ -31,7 +31,7 @@ public enum JSON: Equatable, Sendable {
 
     public var int: Int? {
         switch self {
-        case .number(let n): return n.isFinite ? Int(n) : nil
+        case .number(let n): return SafeInput.int(n)
         case .string(let s): return Int(s)
         default: return nil
         }

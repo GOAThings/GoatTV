@@ -114,7 +114,7 @@ public enum Stalker {
             let i = result.count
             let logo = c["logo"]?.text
             result.append(Channel(
-                uid: i, key: id, num: c["number"]?.text.flatMap { Double($0) }.map { Int($0) } ?? i + 1,
+                uid: i, key: id, num: c["number"]?.text.flatMap { SafeInput.int(text: $0) } ?? i + 1,
                 name: c["name"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed } ?? channelName(id),
                 logo: logo.flatMap { $0.contains("://") ? $0 : $0.hasPrefix("/") ? commandURL($0, portal: endpoint) : nil },
                 categoryId: c["tv_genre_id"]?.text ?? "", streamId: id, url: cmd, userAgent: userAgent,
@@ -159,7 +159,7 @@ public actor StalkerClient {
                 add(list)
                 let total = js["total_items"]?.text.flatMap { Int($0) } ?? 0
                 let perPage = js["max_page_items"]?.text.flatMap { Int($0) } ?? list.count
-                if list.isEmpty || page * perPage >= total { break }
+                if list.isEmpty || (SafeInput.product(page, perPage) ?? total) >= total { break }
             }
         }
         let channels = Stalker.parseChannels(raw, endpoint: sessions[playlist.id]?.endpoint ?? "", channelName: channelName)
@@ -183,8 +183,9 @@ public actor StalkerClient {
     public func shortEpg(_ playlist: Playlist, streamId: String, size: Int = 4) async throws -> [EpgEntry] {
         let js = try await api(playlist, "itv", "get_short_epg", [("ch_id", streamId), ("size", String(size))])
         return (js.array ?? []).compactMap { e in
-            guard let start = e["start_timestamp"]?.text.flatMap({ Int64($0) }), let stop = e["stop_timestamp"]?.text.flatMap({ Int64($0) }) else { return nil }
-            return EpgEntry(title: e["name"]?.text ?? "", startMs: start * 1000, endMs: stop * 1000)
+            guard let start = e["start_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }),
+                  let stop = e["stop_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }) else { return nil }
+            return EpgEntry(title: e["name"]?.text ?? "", startMs: start, endMs: stop)
         }
     }
 
@@ -240,7 +241,7 @@ public actor StalkerClient {
         request.setValue(Stalker.cookie(mac: identity.mac, token: token, stalkerPortal: endpoint.contains("/stalker_portal/"), action: action, timezone: TimeZone.current.identifier), forHTTPHeaderField: "Cookie")
         request.httpShouldHandleCookies = false
         if !token.isEmpty { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await HTTP.fetch(urlSession, request)
+        let (data, response) = try await HTTP.fetch(urlSession, request, maxBytes: SafeInput.maxPlaylistBytes)
         if response.statusCode == 401 || String(decoding: data, as: UTF8.self).range(of: "Authorization failed", options: .caseInsensitive) != nil { throw ExpiredToken() }
         guard (200..<300).contains(response.statusCode) else { throw SourceError.http(response.statusCode) }
         guard let js = (try? JSON.parse(data))?["js"] else { throw SourceError.badResponse }

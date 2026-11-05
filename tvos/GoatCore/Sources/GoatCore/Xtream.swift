@@ -113,17 +113,17 @@ public enum Xtream {
             let icon = s["stream_icon"]?.text
             let epg = s["epg_channel_id"]?.text?.trimmingCharacters(in: .whitespaces)
             let archive = s["tv_archive"]?.text?.trimmingCharacters(in: .whitespaces) == "1"
-            let duration = s["tv_archive_duration"]?.text.flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }.map { Int($0) }
+            let duration = s["tv_archive_duration"]?.text.flatMap { SafeInput.int(text: $0) }
             channels.append(Channel(
                 uid: i,
                 key: id,
-                num: s["num"]?.text.flatMap { Double($0) }.map { Int($0) } ?? (i + 1),
+                num: s["num"]?.text.flatMap { SafeInput.int(text: $0) } ?? (i + 1),
                 name: name.isEmpty ? channelName(id) : name,
                 logo: (icon?.trimmingCharacters(in: .whitespaces).isEmpty ?? true) ? nil : icon,
                 categoryId: s["category_id"]?.text ?? "",
                 streamId: id,
                 epgId: (epg?.isEmpty ?? true) ? nil : epg,
-                archiveDays: archive ? max(1, duration ?? 1) : 0
+                archiveDays: archive ? min(max(1, duration ?? 1), SafeInput.maxArchiveDays) : 0
             ))
         }
         return channels
@@ -133,11 +133,11 @@ public enum Xtream {
     public static func parseShortEpg(_ data: Data) -> [EpgEntry] {
         guard let json = try? JSON.parse(data), let listings = json["epg_listings"]?.array else { return [] }
         return listings.compactMap { l -> EpgEntry? in
-            guard let start = l["start_timestamp"]?.text.flatMap({ Int64($0) }),
-                  let stop = l["stop_timestamp"]?.text.flatMap({ Int64($0) }) else { return nil }
+            guard let start = l["start_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }),
+                  let stop = l["stop_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }) else { return nil }
             let raw = l["title"]?.text ?? ""
             let title = Data(base64Encoded: raw, options: .ignoreUnknownCharacters).flatMap { String(data: $0, encoding: .utf8) } ?? raw
-            return EpgEntry(title: title.trimmingCharacters(in: .whitespacesAndNewlines), startMs: start * 1000, endMs: stop * 1000)
+            return EpgEntry(title: title.trimmingCharacters(in: .whitespacesAndNewlines), startMs: start, endMs: stop)
         }.sorted { $0.startMs < $1.startMs }
     }
 

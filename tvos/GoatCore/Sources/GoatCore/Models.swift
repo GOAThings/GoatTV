@@ -160,7 +160,9 @@ public final class PlaylistContent: Codable, Sendable {
     public init(playlist: Playlist, categories: [Category], channels: [Channel], account: XtreamAccount? = nil,
                 guideUrl: String? = nil, fetchedAt: Date = Date()) {
         self.playlist = playlist
-        self.categories = categories
+        // Sem ids repetidos nem os dos grupos especiais (as listas do ecrã usam o id). Vale também para as cópias em cache.
+        var seen = Set<String>()
+        self.categories = categories.filter { !SpecialCategory.isSpecial($0.id) && seen.insert($0.id).inserted }
         self.channels = channels
         self.account = account
         self.guideUrl = guideUrl
