@@ -447,6 +447,19 @@ enum CoreTests {
         try expect(trimmed.hasPrefix("HEAD\n"), true, "head")
         try expect(trimmed.hasSuffix("line 100"), true, "tail")
         try expect(trimmed.utf8.count <= 60, true, "max")
+        let hosts = BugReport.redact("""
+            java.net.ConnectException: failed to connect to subscriber-id.host.example/192.0.2.1 (port 80)
+            pretending to be “subscriber-id.host.example”
+            Unable to resolve host "iptv.provider.com": No address
+            at GoatCore.Stalker.load(Stalker.swift:24)
+            com.apple.network failed in NSURLErrorDomain.Foo
+            GoatTV 0.9.8 is fine
+            """, secrets: [])
+        for host in ["subscriber-id", "host.example", "192.0.2.1", "iptv.provider.com"] { try expect(hosts.contains(host), false, host) }
+        for kept in ["java.net.ConnectException", "GoatCore.Stalker.load(Stalker.swift:24)", "com.apple.network", "GoatTV 0.9.8"] { try expect(hosts.contains(kept), true, kept) }
+        try expect(BugReport.host(of: "http://subscriber-id.host.example:80/c/"), "subscriber-id.host.example")
+        try expect(BugReport.host(of: " srv.tv:8080/ "), "srv.tv")
+        try expect(BugReport.host(of: "https://u:p@h.tv/x?y=1"), "h.tv")
     }
 
     static func channelIndex() throws {

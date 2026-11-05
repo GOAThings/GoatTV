@@ -38,4 +38,31 @@ class BugReportTest {
         assertFalse(out.contains("line 1\n"))
         assertEquals(true, out.toByteArray().size <= 60)
     }
+
+    @Test
+    fun masksBareHostsAndKeepsCodeNames() {
+        val out = BugReport.redact(
+            """
+            java.net.ConnectException: failed to connect to subscriber-id.host.example/192.0.2.1 (port 80)
+            pretending to be “subscriber-id.host.example”
+            Unable to resolve host "iptv.provider.com": No address
+            at cc.slokker.itv.data.m3u.M3uSource.load(M3uSource.kt:24)
+            at okhttp3.internal.connection.RealCall.execute(RealCall.kt:154)
+            GoatTV 0.9.8 is fine
+            """.trimIndent(),
+            emptyList(),
+        )
+        for (host in listOf("subscriber-id", "host.example", "192.0.2.1", "iptv.provider.com")) assertFalse("$host leaked:\n$out", out.contains(host))
+        for (kept in listOf("java.net.ConnectException", "cc.slokker.itv.data.m3u.M3uSource.load(M3uSource.kt:24)", "okhttp3.internal.connection.RealCall.execute(RealCall.kt:154)", "GoatTV 0.9.8")) {
+            assertTrue("$kept lost:\n$out", out.contains(kept))
+        }
+    }
+
+    @Test
+    fun configuredHostsGoAsSecretsToo() {
+        assertEquals("subscriber-id.host.example", BugReport.hostOf("http://subscriber-id.host.example:80/c/"))
+        assertEquals("srv.tv", BugReport.hostOf(" srv.tv:8080/ "))
+        assertEquals("h.tv", BugReport.hostOf("https://u:p@h.tv/x?y=1"))
+        assertEquals("seen on *** port 1", BugReport.redact("seen on myportal port 1", listOf(BugReport.hostOf("http://myportal:8080/c/")!!)))
+    }
 }

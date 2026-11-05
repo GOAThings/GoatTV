@@ -1443,7 +1443,12 @@ final class AppModel {
         let device = "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion) · \(model)"
         let header = "GoatTV \(appVersion) · \(device)\n" +
             "Account: \(hasAccount ? "yes" : "no") · playlists: \(playlists.isEmpty ? "none" : playlists.map(\.type.rawValue).joined(separator: ", "))"
-        let secrets = playlists.flatMap { [$0.type == .stalker ? $0.server : nil, $0.username, $0.password, $0.url, $0.epgUrl, $0.serial, $0.deviceId, $0.deviceId2, $0.signature].compactMap { $0 } } + [backend.token, email].compactMap { $0 }
+        var addresses: [String] = playlists.flatMap { [$0.server, $0.url, $0.epgUrl].compactMap { $0 } }
+        if let guide = content?.guideUrl { addresses.append(guide) }
+        let hosts: [String] = addresses.compactMap { BugReport.host(of: $0) }
+        let values: [String] = playlists.flatMap { [$0.server, $0.username, $0.password, $0.url, $0.epgUrl, $0.serial, $0.deviceId, $0.deviceId2, $0.signature].compactMap { $0 } }
+        let account: [String] = [backend.token, email].compactMap { $0 }
+        let secrets = values + hosts + account
         let backend = backend
         let strings = strings
         Task {

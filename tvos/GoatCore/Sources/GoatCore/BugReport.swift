@@ -6,7 +6,17 @@ public enum BugReport {
     /// O servidor aceita até 64 KB de registo.
     public static let maxBytes = 60_000
 
-    /// Troca por `***` os [secrets] e o que tem cara de credencial (URLs inteiros, parâmetros, caminhos Xtream, tokens).
+    /// O servidor de [value] (um URL, ou só o endereço), para sair do relatório mesmo quando aparece sem o resto.
+    public static func host(of value: String) -> String? {
+        var rest = Substring(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        if let scheme = rest.range(of: "://") { rest = rest[scheme.upperBound...] }
+        rest = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        if let at = rest.lastIndex(of: "@") { rest = rest[rest.index(after: at)...] }
+        rest = rest.prefix { $0 != ":" }
+        return rest.isEmpty ? nil : String(rest)
+    }
+
+    /// Troca por `***` os [secrets] e o que tem cara de credencial (URLs inteiros, parâmetros, caminhos Xtream, tokens, servidores).
     public static func redact(_ text: String, secrets: [String]) -> String {
         var out = text
         for secret in Set(secrets.filter { $0.count >= 3 }).sorted(by: { $0.count > $1.count }) {
@@ -16,8 +26,37 @@ public enum BugReport {
             let regex = try! NSRegularExpression(pattern: pattern)
             out = regex.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: template)
         }
-        return out
+        return maskHosts(out)
     }
+
+    /// Tira os servidores sem esquema. Fica por uma passagem só: um registo grande tem milhares de nomes com pontos.
+    private static func maskHosts(_ text: String) -> String {
+        let hostRegex = try! NSRegularExpression(pattern: #"(?<![\w.-])(?:[A-Za-z0-9_-]+\.)+[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9](?![\w-])"#)
+        let ipv4Regex = try! NSRegularExpression(pattern: #"(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w.])"#)
+        var out = ""
+        var cursor = text.startIndex
+        for match in hostRegex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            out += text[cursor..<range.lowerBound]
+            out += looksLikeCode(text[range]) ? text[range] : "***"
+            cursor = range.upperBound
+        }
+        out += text[cursor...]
+        return ipv4Regex.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: "***")
+    }
+
+    /// Um nome com pontos que é código ou um ficheiro (fica, para o relatório servir) e não um servidor. Na dúvida, é servidor.
+    private static func looksLikeCode(_ name: Substring) -> Bool {
+        let labels = name.split(separator: ".").map(String.init)
+        guard labels.count >= 2, let last = labels.last?.lowercased() else { return false }
+        if fileEndings.contains(last) { return true }
+        if last.count == 2 || commonTLDs.contains(last) || name.contains("-") { return false }
+        return name.contains(where: \.isUppercase) || codeRoots.contains(labels[0]) || codeRoots.contains(labels[0] + "." + labels[1])
+    }
+
+    private static let fileEndings: Set<String> = ["kt", "java", "swift", "cpp", "dex", "jar", "apk", "ipa", "dylib", "xml", "json", "png", "jpg", "webp", "gz", "ts", "m3u", "m3u8", "mp4", "mkv", "php", "html", "js", "css", "txt", "log"]
+    private static let commonTLDs: Set<String> = ["com", "net", "org", "info", "biz", "xyz", "top", "site", "online", "club", "live", "pro", "stream", "app", "dev", "tech", "store", "shop", "cloud", "link", "icu", "vip", "fun", "space", "website", "one", "world", "today", "media", "example", "invalid", "test", "local", "lan"]
+    private static let codeRoots: Set<String> = ["java", "javax", "kotlin", "kotlinx", "android", "androidx", "dalvik", "libcore", "sun", "okhttp3", "okio", "retrofit2", "coil", "coil3", "com.android", "com.google", "com.squareup", "com.apple", "org.videolan", "org.json", "cc.slokker"]
 
     private static let rules: [(String, String)] = [
         // Os links dos canais podem ter credenciais em qualquer parte do caminho ou do servidor.

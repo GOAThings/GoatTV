@@ -1912,7 +1912,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val header = "GoatTV ${BuildConfig.VERSION_NAME} · ${BugReport.device}\n" +
                     "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.name.lowercase() }.ifEmpty { "none" }}" +
                     (if (c.testMode) " · test mode" else "")
-                val secrets = playlists.flatMap { listOfNotNull(it.server.takeIf { _ -> it.type == PlaylistType.STALKER }, it.username, it.password, it.url, it.epgUrl, it.serial, it.deviceId, it.deviceId2, it.signature) } + listOfNotNull(c.token, _email.value)
+                val secrets = playlists.flatMap { listOfNotNull(it.server, it.username, it.password, it.url, it.epgUrl, it.serial, it.deviceId, it.deviceId2, it.signature) } +
+                    (playlists.flatMap { listOfNotNull(it.server, it.url, it.epgUrl) } + listOfNotNull(_content.value?.guideUrl)).mapNotNull(BugReport::hostOf) +
+                    listOfNotNull(c.token, _email.value)
                 val log = kotlinx.coroutines.withContext(Dispatchers.IO) { BugReport.collect(getApplication(), header, secrets) }
                 val body = JsonObject().apply {
                     addProperty("app", "goattv")
