@@ -690,7 +690,7 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = fal
         if (guide) GuideList(vm, channels, shown, current, onEpg) else ChannelList(vm, channels, shown, current, onEpg)
     }
     pinFor?.let { id ->
-        PinDialog(LocalStrings.current.enterPin, onClose = { pinFor = null }) { pin ->
+        PinDialog(LocalStrings.current.enterPin, onClose = { pinFor = null }, rejected = vm::pinRejected) { pin ->
             vm.unlockGroup(id, pin).also { if (it) { group = id; pinFor = null } }
         }
     }
@@ -992,10 +992,13 @@ fun MobileMenu(vm: AppViewModel) {
     val needPin = vm.settingsNeedPin()
     var unlockedMenu by remember { mutableStateOf(!needPin) }
     if (!unlockedMenu) {
-        return PinDialog(s.enterPin, onClose = null) { pin -> vm.unlockSettings(pin).also { if (it) unlockedMenu = true } }
+        return PinDialog(s.enterPin, onClose = null, rejected = vm::pinRejected) { pin -> vm.unlockSettings(pin).also { if (it) unlockedMenu = true } }
     }
     var page by remember { mutableStateOf<MenuPage?>(null) }
     var choosingPin by remember { mutableStateOf(false) }
+    // Com PIN, a página do controlo parental e o terminar sessão pedem-no sempre (como na TV).
+    var parentalGate by remember { mutableStateOf(false) }
+    var logoutGate by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     var reporting by remember { mutableStateOf(false) }
     var managingGroups by remember { mutableStateOf(false) }
@@ -1009,6 +1012,16 @@ fun MobileMenu(vm: AppViewModel) {
             vm.setPin(pin)
             choosingPin = false
             true
+        }
+    }
+    if (parentalGate) {
+        return PinDialog(s.enterPin, onClose = { parentalGate = false }, rejected = vm::pinRejected) { pin ->
+            vm.checkPin(pin).also { if (it) { parentalGate = false; page = MenuPage.Parental } }
+        }
+    }
+    if (logoutGate) {
+        return PinDialog(s.enterPin, onClose = { logoutGate = false }, rejected = vm::pinRejected) { pin ->
+            vm.checkPin(pin).also { if (it) { logoutGate = false; vm.logoutThisTv() } }
         }
     }
     picking?.let { p -> return PickPage(p) { picking = null } }
@@ -1045,7 +1058,9 @@ fun MobileMenu(vm: AppViewModel) {
                     MenuRow(s.manageChannels, label(startups, prefs.startup), ItvIcons.Channels, chevron = true) { page = MenuPage.Channels }
                     MenuRow(s.guide, s.refreshLabel(prefs.epgRefreshHours), ItvIcons.Calendar, chevron = true) { page = MenuPage.Guide }
                     MenuRow(s.settingsAppearance, label(languages, prefs.language) + ", " + label(accents, prefs.accent), ItvIcons.Globe, chevron = true) { page = MenuPage.Appearance }
-                    MenuRow(s.parental, if (prefs.pinHash == null) s.settingOff else s.settingOn, ItvIcons.Lock, chevron = true) { page = MenuPage.Parental }
+                    MenuRow(s.parental, if (prefs.pinHash == null) s.settingOff else s.settingOn, ItvIcons.Lock, chevron = true) {
+                        if (prefs.pinHash != null) parentalGate = true else page = MenuPage.Parental
+                    }
                 }
                 Section(s.account) {
                     MenuRow(s.sendReport, when (val r = report) { ReportState.Sending -> "…"; is ReportState.Sent -> r.id; else -> null }, ItvIcons.Report, chevron = true) { reporting = !reporting }
@@ -1053,7 +1068,7 @@ fun MobileMenu(vm: AppViewModel) {
                         Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }
                         MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
                     }
-                    if (!local) MenuRow(s.logout, email?.let(::maskEmail), onClick = vm::logoutThisTv)
+                    if (!local) MenuRow(s.logout, email?.let(::maskEmail)) { if (vm.logoutNeedsPin()) logoutGate = true else vm.logoutThisTv() }
                     when (val u = update) {
                         is UpdateState.Available -> MenuRow(u.release.version, null, onClick = vm::installUpdate)
                         is UpdateState.Downloading -> MenuRow(u.release.version, "${(u.progress * 100).toInt()}%") { }
@@ -1137,24 +1152,24 @@ fun MobileMenu(vm: AppViewModel) {
     }
 }
 
-/** Quatro dígitos com o teclado do telefone. [check] devolve true quando o PIN serve. */
+/** Quatro dígitos com o teclado do telefone. [check] devolve true quando o PIN serve; [rejected] diz porque não serviu. */
 @Composable
-private fun PinDialog(title: String, onClose: (() -> Unit)?, check: (String) -> Boolean) {
+internal fun PinDialog(title: String, onClose: (() -> Unit)?, rejected: () -> String = { "" }, check: (String) -> Boolean) {
     val s = LocalStrings.current
     var pin by remember { mutableStateOf("") }
-    var wrong by remember { mutableStateOf(false) }
+    var wrong by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(24.dp).clip(CardShape).background(Color(0xFF14161E)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Field(s.pinHint, pin, secret = true, keyboard = KeyboardType.NumberPassword) { v ->
                 pin = v.filter(Char::isDigit).take(4)
-                wrong = false
+                wrong = null
                 if (pin.length == 4 && !check(pin)) {
-                    wrong = true
+                    wrong = rejected().ifEmpty { s.wrongPin }
                     pin = ""
                 }
             }
-            if (wrong) Text(s.wrongPin, color = ItvColors.Error, fontSize = 14.sp)
+            wrong?.let { Text(it, color = ItvColors.Error, fontSize = 14.sp) }
             if (onClose != null) ControlButton(ItvIcons.Close, onClick = onClose)
         }
     }

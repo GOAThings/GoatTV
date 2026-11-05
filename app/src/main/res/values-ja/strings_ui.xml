@@ -266,6 +266,10 @@
     <string name="enter_pin">ペアレンタル PIN を入力</string>
     <string name="choose_pin">4桁の PIN を決めてください</string>
     <string name="wrong_pin">PIN が違います</string>
+    <string name="pin_wait">試行回数が多すぎます。%1$s 後にもう一度お試しください。</string>
+    <string name="err_all_locked">このリストのチャンネルはすべてロックされています</string>
+    <string name="err_all_locked_2">\"%1$s\" に開けるものがありません: すべてのチャンネルがロックまたは非表示のグループにあります。</string>
+    <string name="err_all_locked_3">設定のペアレンタルコントロールでロックを変更するか、別のリストを選んでください。</string>
     <string name="pin_set">ペアレンタル PIN を設定しました</string>
     <string name="parental_off_toast">ペアレンタルコントロールをオフにしました</string>
     <string name="current_channel">現在のチャンネル</string>

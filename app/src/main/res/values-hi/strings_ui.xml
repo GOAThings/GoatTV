@@ -266,6 +266,10 @@
     <string name="enter_pin">पैरेंटल PIN डालें</string>
     <string name="choose_pin">4 अंकों का PIN चुनें</string>
     <string name="wrong_pin">गलत PIN</string>
+    <string name="pin_wait">बहुत ज़्यादा कोशिशें। %1$s बाद फिर कोशिश करें।</string>
+    <string name="err_all_locked">इस सूची के सभी चैनल लॉक हैं</string>
+    <string name="err_all_locked_2">\"%1$s\" में खोलने के लिए कुछ नहीं है: सभी चैनल लॉक या छिपे हुए समूहों में हैं।</string>
+    <string name="err_all_locked_3">सेटिंग्स में पैरेंटल कंट्रोल के अंदर लॉक बदलें, या कोई दूसरी सूची चुनें।</string>
     <string name="pin_set">पैरेंटल PIN सेट हुआ</string>
     <string name="parental_off_toast">पैरेंटल कंट्रोल बंद हुआ</string>
     <string name="current_channel">मौजूदा चैनल</string>

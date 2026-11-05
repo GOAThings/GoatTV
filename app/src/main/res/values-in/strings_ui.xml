@@ -266,6 +266,10 @@
     <string name="enter_pin">Masukkan PIN orang tua</string>
     <string name="choose_pin">Pilih PIN 4 digit</string>
     <string name="wrong_pin">PIN salah</string>
+    <string name="pin_wait">Terlalu banyak percobaan. Coba lagi dalam %1$s.</string>
+    <string name="err_all_locked">Semua saluran di daftar ini terkunci</string>
+    <string name="err_all_locked_2">\"%1$s\" tidak punya apa pun untuk dibuka: semua salurannya ada di grup yang terkunci atau tersembunyi.</string>
+    <string name="err_all_locked_3">Ubah kunci di Setelan, pada Kontrol orang tua, atau pilih daftar lain.</string>
     <string name="pin_set">PIN orang tua diatur</string>
     <string name="parental_off_toast">Kontrol orang tua dinonaktifkan</string>
     <string name="current_channel">Saluran saat ini</string>

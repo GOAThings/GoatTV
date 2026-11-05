@@ -266,6 +266,10 @@
     <string name="enter_pin">Saisissez le code PIN parental</string>
     <string name="choose_pin">Choisissez un code PIN à 4 chiffres</string>
     <string name="wrong_pin">Code PIN incorrect</string>
+    <string name="pin_wait">Trop de tentatives. Réessaie dans %1$s.</string>
+    <string name="err_all_locked">Toutes les chaînes de cette liste sont verrouillées</string>
+    <string name="err_all_locked_2">\"%1$s\" n\'a rien à ouvrir : toutes ses chaînes sont dans des groupes verrouillés ou masqués.</string>
+    <string name="err_all_locked_3">Modifie les verrous dans Réglages, sous Contrôle parental, ou choisis une autre liste.</string>
     <string name="pin_set">Code PIN parental défini</string>
     <string name="parental_off_toast">Contrôle parental désactivé</string>
     <string name="current_channel">Chaîne actuelle</string>

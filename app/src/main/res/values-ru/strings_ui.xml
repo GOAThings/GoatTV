@@ -266,6 +266,10 @@
     <string name="enter_pin">Введите родительский PIN-код</string>
     <string name="choose_pin">Придумайте 4-значный PIN-код</string>
     <string name="wrong_pin">Неверный PIN-код</string>
+    <string name="pin_wait">Слишком много попыток. Повторите через %1$s.</string>
+    <string name="err_all_locked">Все каналы этого списка заблокированы</string>
+    <string name="err_all_locked_2">В \"%1$s\" нечего открыть: все каналы находятся в заблокированных или скрытых группах.</string>
+    <string name="err_all_locked_3">Измените блокировки в настройках, в разделе родительского контроля, или выберите другой список.</string>
     <string name="pin_set">Родительский PIN-код задан</string>
     <string name="parental_off_toast">Родительский контроль выключен</string>
     <string name="current_channel">Текущий канал</string>

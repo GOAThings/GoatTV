@@ -266,6 +266,10 @@
     <string name="enter_pin">Ebeveyn PIN\'ini girin</string>
     <string name="choose_pin">4 haneli bir PIN seçin</string>
     <string name="wrong_pin">Yanlış PIN</string>
+    <string name="pin_wait">Çok fazla deneme. %1$s sonra tekrar dene.</string>
+    <string name="err_all_locked">Bu listedeki tüm kanallar kilitli</string>
+    <string name="err_all_locked_2">\"%1$s\" içinde açılacak bir şey yok: tüm kanallar kilitli veya gizli gruplarda.</string>
+    <string name="err_all_locked_3">Kilitleri Ayarlar\'da Ebeveyn denetimi bölümünden değiştir veya başka bir liste seç.</string>
     <string name="pin_set">Ebeveyn PIN\'i belirlendi</string>
     <string name="parental_off_toast">Ebeveyn denetimi kapatıldı</string>
     <string name="current_channel">Geçerli kanal</string>

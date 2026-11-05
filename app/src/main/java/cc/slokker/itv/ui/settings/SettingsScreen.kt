@@ -162,6 +162,7 @@ private sealed interface Route {
     data object Appearance : Route { override fun title(s: Strings) = s.appearance }
     data object Guide : Route { override fun title(s: Strings) = s.guide }
     data object ParentalGate : Route { override fun title(s: Strings) = s.parental }
+    data object LogoutGate : Route { override fun title(s: Strings) = s.logoutThisTv }
     data object SettingsGate : Route { override fun title(s: Strings) = s.settings }
     data object Parental : Route { override fun title(s: Strings) = s.parental }
     data object NewPin : Route { override fun title(s: Strings) = s.newPin }
@@ -352,14 +353,21 @@ fun SettingsContent(
                 Route.ParentalGate -> PinPad(
                     title = LocalStrings.current.enterPin,
                     message = null,
-                    onDone = { pin -> if (vm.checkPin(pin)) replace(Route.Parental) else vm.showToast(I18n.s.wrongPin) },
+                    onDone = { pin -> if (vm.checkPin(pin)) replace(Route.Parental) else vm.showToast(vm.pinRejected()) },
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     enabled = !leaving,
                 )
                 Route.SettingsGate -> PinPad(
                     title = LocalStrings.current.enterPin,
                     message = null,
-                    onDone = { pin -> if (vm.unlockSettings(pin)) replace(Route.Root) else vm.showToast(I18n.s.wrongPin) },
+                    onDone = { pin -> if (vm.unlockSettings(pin)) replace(Route.Root) else vm.showToast(vm.pinRejected()) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                    enabled = !leaving,
+                )
+                Route.LogoutGate -> PinPad(
+                    title = LocalStrings.current.enterPin,
+                    message = null,
+                    onDone = { pin -> if (vm.checkPin(pin)) vm.logoutThisTv() else vm.showToast(vm.pinRejected()) },
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     enabled = !leaving,
                 )
@@ -1115,7 +1123,11 @@ private fun settingItems(
                 Item.Action("connect", s.connectAccount, s.connectAccountSub) { vm.connectAccount() }
             } else {
                 Item.Action("logout", if (confirmLogout) s.pressAgainToConfirm else s.logoutThisTv) {
-                    if (confirmLogout) vm.logoutThisTv() else confirmLogout = true
+                    when {
+                        !confirmLogout -> confirmLogout = true
+                        vm.logoutNeedsPin() -> push(Route.LogoutGate, "logout")
+                        else -> vm.logoutThisTv()
+                    }
                 }
             },
             Item.Info("version", s.version, BuildConfig.VERSION_NAME),
@@ -1164,7 +1176,7 @@ private fun settingItems(
             Item.Check("o:$i", label, value == route.selected, swatch = route.swatches[value]) { route.onPick(value) }
         }
 
-        Route.ParentalGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit -> emptyList()
+        Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit -> emptyList()
     }
 }
 

@@ -78,7 +78,14 @@ class CacheStore(context: Context, private val gson: Gson) {
 
     suspend fun removeAccountGuide(playlistId: String) = withContext(Dispatchers.IO) { File(dir, accountGuideFile(playlistId)).delete() }
 
-    suspend fun clear() = withContext(Dispatchers.IO) { dir.deleteRecursively() }
+    /** Quantas vezes se limpou: uma gravação que começou antes de limpar já não escreve. */
+    private var clearCount = 0
+    private val writeLock = Any()
+
+    suspend fun clear() {
+        synchronized(writeLock) { clearCount++ }
+        withContext(Dispatchers.IO) { synchronized(writeLock) { dir.deleteRecursively() } }
+    }
 
     /** Esquece os canais e o guia de uma lista apagada. */
     suspend fun removePlaylist(playlistId: String) = withContext(Dispatchers.IO) {
@@ -99,13 +106,19 @@ class CacheStore(context: Context, private val gson: Gson) {
         runCatching { GZIPInputStream(file.inputStream()).bufferedReader().use { gson.fromJson(it, type) } }.getOrNull()
     }
 
-    private suspend fun write(name: String, value: Any) = withContext(Dispatchers.IO) {
-        runCatching {
-            dir.mkdirs()
-            // Escreve para um ficheiro temporário e troca: nunca fica meio escrito.
-            val tmp = File(dir, "$name.tmp")
-            GZIPOutputStream(tmp.outputStream()).bufferedWriter().use { gson.toJson(value, it) }
-            tmp.renameTo(File(dir, name))
+    private suspend fun write(name: String, value: Any) {
+        val startedAt = synchronized(writeLock) { clearCount }
+        withContext(Dispatchers.IO) {
+            synchronized(writeLock) {
+                if (startedAt != clearCount) return@synchronized
+                runCatching {
+                    dir.mkdirs()
+                    // Escreve para um ficheiro temporário e troca: nunca fica meio escrito.
+                    val tmp = File(dir, "$name.tmp")
+                    GZIPOutputStream(tmp.outputStream()).bufferedWriter().use { gson.toJson(value, it) }
+                    tmp.renameTo(File(dir, name))
+                }
+            }
         }
     }
 

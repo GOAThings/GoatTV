@@ -266,6 +266,10 @@
     <string name="enter_pin">أدخل الرمز السري للرقابة الأبوية</string>
     <string name="choose_pin">اختر رمزًا سريًا من 4 أرقام</string>
     <string name="wrong_pin">رمز سري خاطئ</string>
+    <string name="pin_wait">محاولات كثيرة جدًا. حاول مرة أخرى بعد %1$s.</string>
+    <string name="err_all_locked">جميع القنوات في هذه القائمة مقفلة</string>
+    <string name="err_all_locked_2">لا يوجد ما يمكن فتحه في \"%1$s\": كل القنوات في مجموعات مقفلة أو مخفية.</string>
+    <string name="err_all_locked_3">غيّر الأقفال من الإعدادات ضمن الرقابة الأبوية، أو اختر قائمة أخرى.</string>
     <string name="pin_set">تم تعيين الرمز السري للرقابة الأبوية</string>
     <string name="parental_off_toast">تم إيقاف الرقابة الأبوية</string>
     <string name="current_channel">القناة الحالية</string>

@@ -266,6 +266,10 @@
     <string name="enter_pin">자녀 보호 PIN을 입력하세요</string>
     <string name="choose_pin">4자리 PIN을 정하세요</string>
     <string name="wrong_pin">PIN이 틀렸어요</string>
+    <string name="pin_wait">시도 횟수가 너무 많아요. %1$s 후에 다시 시도하세요.</string>
+    <string name="err_all_locked">이 목록의 모든 채널이 잠겨 있어요</string>
+    <string name="err_all_locked_2">\"%1$s\"에 열 수 있는 항목이 없어요: 모든 채널이 잠겼거나 숨겨진 그룹에 있어요.</string>
+    <string name="err_all_locked_3">설정의 자녀 보호에서 잠금을 변경하거나 다른 목록을 선택하세요.</string>
     <string name="pin_set">자녀 보호 PIN이 설정되었어요</string>
     <string name="parental_off_toast">자녀 보호가 꺼졌어요</string>
     <string name="current_channel">현재 채널</string>

@@ -63,4 +63,67 @@ class PrefsTest {
         assertNotEquals(Prefs.hashPin("0000"), Prefs.hashPin("0001"))
         assertEquals(64, Prefs.hashPin("1234").length)
     }
+
+    private fun attempts(failures: Int = 0, at: Long = 0L, saved: MutableList<Pair<Int, Long>> = ArrayList()) =
+        PinAttempts(failures, at) { f, t -> saved += f to t }
+
+    @Test
+    fun `wrong PINs bring a growing wait and the right one is refused during it`() {
+        val a = attempts()
+        var now = 1_000_000L
+        repeat(2) { assertFalse(a.check(now, false)); assertEquals(0L, a.waitMs(now)) }
+        assertFalse(a.check(now, false))
+        assertEquals(30_000L, a.waitMs(now))
+        assertFalse("o PIN certo também espera", a.check(now + 1_000, true))
+        assertEquals(29_000L, a.waitMs(now + 1_000))
+        now += 30_000
+        assertFalse(a.check(now, false))
+        assertEquals(60_000L, a.waitMs(now))
+        now += 60_000
+        assertTrue(a.check(now, true))
+        assertEquals(0L, a.waitMs(now))
+        assertFalse("volta ao início depois de acertar", a.check(now, false))
+        assertEquals(0L, a.waitMs(now))
+    }
+
+    @Test
+    fun `the wait stops growing at one hour`() {
+        assertEquals(0L, PinAttempts.delayFor(2))
+        assertEquals(30_000L, PinAttempts.delayFor(3))
+        assertEquals(3_600_000L, PinAttempts.delayFor(30))
+        assertEquals(3_600_000L, PinAttempts.delayFor(Int.MAX_VALUE))
+    }
+
+    @Test
+    fun `attempts carry across prompts and restarts`() {
+        val saved = ArrayList<Pair<Int, Long>>()
+        val first = attempts(saved = saved)
+        repeat(3) { first.check(5_000L, false) }
+        val (failures, at) = saved.last()
+        assertEquals(3, failures)
+        val reopened = attempts(failures, at)
+        assertEquals(10_000L, reopened.waitMs(25_000L))
+        assertFalse(reopened.check(25_000L, true))
+    }
+
+    @Test
+    fun `a clock moved back cannot lock the PIN forever`() {
+        val a = attempts(failures = 3, at = 10_000_000L)
+        assertEquals(30_000L, a.waitMs(1_000L))
+        assertEquals(0L, a.waitMs(31_000L))
+        assertTrue(a.check(31_000L, true))
+    }
+
+    private fun zapChannel(uid: Int, group: String) = Channel(uid, "k$uid", uid, "c$uid", null, group)
+
+    @Test
+    fun `zapping skips what is locked at that moment`() {
+        val list = listOf(zapChannel(0, "a"), zapChannel(1, "locked"), zapChannel(2, "a"), zapChannel(3, "locked"))
+        val locked: (Channel) -> Boolean = { it.categoryId == "locked" }
+        assertEquals(2, nextAllowed(list, 0, 1, locked)?.uid)
+        assertEquals(2, nextAllowed(list, 0, -1, locked)?.uid)
+        assertEquals(0, nextAllowed(list, 2, 1, locked)?.uid)
+        assertEquals(null, nextAllowed(list.filter(locked), 0, 1, locked))
+        assertEquals(1, nextAllowed(list, 0, 1) { false }?.uid)
+    }
 }

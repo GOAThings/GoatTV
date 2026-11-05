@@ -4,8 +4,10 @@ import cc.slokker.itv.data.AppRelease
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.HomeItem
+import cc.slokker.itv.data.PinAttempts
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.SafeInput
+import cc.slokker.itv.data.nextAllowed
 import cc.slokker.itv.data.Updater
 import cc.slokker.itv.data.epg.XmltvGuide
 import kotlinx.coroutines.async
@@ -23,6 +25,8 @@ import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.ui.common.explainPlaylistError
 import android.app.Application
+import android.content.Context
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cc.slokker.itv.ItvApp
@@ -307,6 +311,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var loadJob: Job? = null
     private var saveLastJob: Job? = null
     private var refreshJob: Job? = null
+    /** Sobe ao terminar sessão: o que ainda vinha a caminho vê que já não é desta sessão e não grava nada. */
+    private var sessionGeneration = 0
 
     /** Listas e guias já verificados desde que a app abriu (para "sempre que abrir a app"). */
     private val playlistsChecked = HashSet<String>()
@@ -574,12 +580,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Devolve false só se a sessão foi terminada (401); sem rede segue com o token que há.
      */
     private suspend fun renewToken(): Boolean {
+        val generation = sessionGeneration
         try {
-            c.backend.authRefresh().token?.let {
+            val token = c.backend.authRefresh().token
+            if (generation != sessionGeneration) return false
+            token?.let {
                 c.token = it
                 c.session.updateToken(it)
             }
         } catch (e: HttpException) {
+            if (generation != sessionGeneration) return false
             when (e.code()) {
                 401 -> return false // o interceptor já mandou para a ativação
                 // O dispositivo já não existe na conta (desligado no site, ou "Terminar todas as sessões").
@@ -594,12 +604,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: IOException) {
             // Sem rede agora; o pedido seguinte decide.
         }
-        return true
+        return generation == sessionGeneration
     }
 
     /** A config da conta; null quando [etag] ainda é o atual (304). Erros HTTP saem como HttpException. */
     private suspend fun fetchConfig(etag: String?): ConfigResponse? {
+        val generation = sessionGeneration
         val res = c.backend.config(etag)
+        if (generation != sessionGeneration) return null
         if (res.code() == 304) {
             Log.i(TAG, "Config: sem alterações (304)")
             return null
@@ -830,7 +842,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         // Nada para retomar: começa pelo primeiro canal e mostra a lista para escolher.
-        val first = channelsOf(SpecialCategory.ALL).firstOrNull() ?: loaded.channels.first()
+        val first = channelsOf(SpecialCategory.ALL).firstOrNull() ?: loaded.channels.firstOrNull { !isGroupLocked(it.categoryId) }
+        if (first == null) {
+            // Tudo bloqueado: nunca abre um canal assim. As Definições (com o PIN) ou outra lista resolvem.
+            zapList = emptyList()
+            _screen.value = Screen.Loading("", I18n.s.errAllLocked(playlist.name))
+            return
+        }
         openPanelOnStart = true
         play(first, SpecialCategory.ALL)
     }
@@ -1071,6 +1089,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lê a config da conta e reage a listas apagadas ou alteradas no site. */
     private suspend fun syncConfig() {
+        val generation = sessionGeneration
         val config = try {
             fetchConfig(configEtag) ?: return // 304: nada mudou na conta
         } catch (e: CancellationException) {
@@ -1078,7 +1097,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             return // sem rede: fica o que já havia
         }
+        if (generation != sessionGeneration) return
         c.cache.saveConfig(config)
+        if (generation != sessionGeneration) return
         lastConfig = config
         rememberIndexHashes(config)
         config.device?.name?.let { _deviceName.value = it }
@@ -1086,10 +1107,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _playlists.value = playlists
         _favorites.value = parseFavorites(config.favorites)
         (config.settings as? JsonObject)?.let {
+            val locksBefore = _prefs.value.pinHash to _prefs.value.lockedGroups
             settings = it
             syncedSettings = it.deepCopy()
             settingsRev = config.settingsRev
             applySettings()
+            if (locksBefore != (_prefs.value.pinHash to _prefs.value.lockedGroups)) publishHome(locksChanged = true)
         }
         val current = _content.value?.playlist ?: return
         val updated = playlists.firstOrNull { it.id == current.id }
@@ -1250,19 +1273,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Confere o PIN; se estiver certo, desbloqueia [groupId] até a app fechar. */
     fun unlockGroup(groupId: String, pin: String): Boolean {
-        if (Prefs.hashPin(pin) != _prefs.value.pinHash) return false
+        if (_prefs.value.pinHash == null || !checkPin(pin)) return false
         val playlistId = _content.value?.playlist?.id ?: return true
         _unlocked.value = _unlocked.value + "$playlistId:$groupId"
         return true
     }
 
-    fun checkPin(pin: String): Boolean = _prefs.value.pinHash == null || Prefs.hashPin(pin) == _prefs.value.pinHash
+    /** As tentativas erradas contam em todos os sítios que pedem o PIN, e continuam depois de fechar a app. */
+    private val pinAttempts by lazy {
+        val store = getApplication<Application>().getSharedPreferences("pin_attempts", Context.MODE_PRIVATE)
+        PinAttempts(store.getInt("failures", 0), store.getLong("last_failure_at", 0L)) { failures, at ->
+            store.edit { putInt("failures", failures).putLong("last_failure_at", at) }
+        }
+    }
+
+    fun checkPin(pin: String): Boolean {
+        val hash = _prefs.value.pinHash ?: return true
+        return pinAttempts.check(System.currentTimeMillis(), Prefs.hashPin(pin) == hash)
+    }
+
+    /** O que dizer quando o PIN não entrou: [wrong], ou quanto falta para se poder tentar outra vez. */
+    fun pinRejected(wrong: String = I18n.s.wrongPin): String {
+        val wait = pinAttempts.waitMs(System.currentTimeMillis())
+        return when {
+            wait <= 0 -> wrong
+            wait < 60_000 -> I18n.s.pinWait("${(wait + 999) / 1000} s")
+            else -> I18n.s.pinWait("${(wait + 59_999) / 60_000} min")
+        }
+    }
+
+    /** Terminar sessão pede o PIN, quando há um (é por aí que se saía para as listas desta TV sem ele). */
+    fun logoutNeedsPin(): Boolean = _prefs.value.pinHash != null
 
     /** Define (ou remove, com null) o PIN parental. Sem PIN não há grupos bloqueados. */
     fun setPin(pin: String?) {
         setPref(Prefs.Key.PIN_HASH, pin?.let { Prefs.hashPin(it) })
         if (pin == null) setPref(Prefs.Key.LOCKED_GROUPS, emptyList<String>())
         _unlocked.value = emptySet()
+        pinAttempts.reset()
+        publishHome(locksChanged = true)
     }
 
     fun toggleGroupLock(groupId: String) {
@@ -1270,6 +1319,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val key = "$playlistId:$groupId"
         val current = _prefs.value.lockedGroups
         setPref(Prefs.Key.LOCKED_GROUPS, (if (key in current) current - key else current + key).toList())
+        publishHome(locksChanged = true)
     }
 
     /** Muda uma definição da conta: String, Boolean, Int, lista de Strings, ou null para repor o padrão. */
@@ -1587,7 +1637,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val current = _playing.value ?: return
         if (zapList.size < 2) return
         val index = zapList.indexOfFirst { it.uid == current.uid }.coerceAtLeast(0)
-        val next = zapList[(index + delta).mod(zapList.size)]
+        // A lista foi feita antes: o que conta é o bloqueio neste momento.
+        val next = nextAllowed(zapList, index, delta) { isGroupLocked(it.categoryId) } ?: return
         _catchup.value = null
         setPlaying(next)
     }
@@ -1648,16 +1699,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Põe os canais recentes no ecrã inicial (o primeiro também no "A seguir"). */
-    private fun publishHome() {
+    /**
+     * Põe os canais recentes no ecrã inicial (o primeiro também no "A seguir"). Fica lá sem PIN e depois de a app
+     * fechar, por isso conta o bloqueio tal como está nas definições, mesmo que esteja desbloqueado nesta sessão.
+     */
+    private fun publishHome(locksChanged: Boolean = false) {
         val content = _content.value ?: return
-        val items = channelsOf(SpecialCategory.RECENT).take(HOME_ITEMS).map { ch ->
+        val items = channelsOf(SpecialCategory.RECENT).filterNot { isGroupLockedSetting(it.categoryId) }.take(HOME_ITEMS).map { ch ->
             val now = System.currentTimeMillis()
             // O launcher mostra o mesmo logótipo que a app.
             val logo = channelLogos.value[ch.key]
             HomeItem(if (logo != null) ch.copy(logo = logo) else ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
         }
-        viewModelScope.launch { c.home.update(items) }
+        viewModelScope.launch { if (items.isEmpty() && locksChanged) c.home.clear() else c.home.update(items) }
     }
 
     /** Grupo onde [channel] fica a fazer zapping: o atual, se o tiver, senão o dele. */
@@ -1782,7 +1836,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _reminders.value = _reminders.value - reminder
         viewModelScope.launch { c.cache.saveReminders(_reminders.value) }
         if (!watch) return
-        val channel = _content.value?.byKey?.get(reminder.channelKey) ?: return
+        val content = _content.value ?: return
+        val channel = content.byKey[reminder.channelKey] ?: return
+        if (isGroupLocked(channel.categoryId)) {
+            showToast(I18n.s.groupLocked(content.categoryName(channel.categoryId)))
+            return
+        }
         play(channel, groupFor(channel))
     }
 
@@ -1860,7 +1919,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val current = _second.value ?: return
         if (current.zapList.size < 2) return
         val index = current.zapList.indexOfFirst { it.uid == current.channel.uid }.coerceAtLeast(0)
-        _second.value = current.copy(channel = current.zapList[(index + delta).mod(current.zapList.size)])
+        val id = current.content.playlist.id
+        val next = nextAllowed(current.zapList, index, delta) { _prefs.value.isLocked(id, it.categoryId) && "$id:${it.categoryId}" !in _unlocked.value } ?: return
+        _second.value = current.copy(channel = next)
     }
 
     fun closeSecond() {
@@ -2057,14 +2118,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun resetToActivation() {
+        sessionGeneration++
+        c.token = null
+        configEtag = null
         loadJob?.cancel()
         saveLastJob?.cancel()
         refreshJob?.cancel()
+        indexJob?.cancel()
+        c.epg.closeGuides()
         c.session.clear()
         c.cache.clear() // tem credenciais das listas
         c.home.clear()
         clearEpgMappings()
-        c.token = null
         userId = null
         _email.value = null
         _playlists.value = emptyList()
@@ -2145,6 +2210,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun pushSettings() {
         if (c.testMode || _local.value) return
+        val generation = sessionGeneration
         viewModelScope.launch {
             patchMutex.withLock {
                 repeat(SETTINGS_ATTEMPTS) {
@@ -2163,6 +2229,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         showToast(I18n.s.saveOffline)
                         return@withLock
                     }
+                    if (generation != sessionGeneration) return@withLock
                     if (!res.isSuccessful && res.code() != 409) {
                         if (res.code() != 401) showToast(I18n.s.saveFailed(res.code()))
                         return@withLock

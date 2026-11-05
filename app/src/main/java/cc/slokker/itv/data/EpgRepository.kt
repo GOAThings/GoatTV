@@ -103,6 +103,13 @@ class EpgRepository(
             return state.first { it == null || it.playlistId != playlist.id || it.guide != null || !it.loading }?.guide
         }
 
+        /** Ao terminar sessão: larga o guia e para o que estiver a descarregar (não grava mais nada). */
+        fun close() {
+            job?.cancel()
+            generation++
+            state.value = null
+        }
+
         fun open(
             scope: CoroutineScope,
             content: PlaylistContent,
@@ -235,6 +242,12 @@ class EpgRepository(
 
     /** Esquece o EPG curto (o guia XMLTV renova-se com [open] e `force`). */
     fun clearShort() = shortCache.clear()
+
+    fun closeGuides() {
+        main.close()
+        extra.close()
+        shortCache.clear()
+    }
 
     private fun cacheKey(playlist: Playlist, channel: Channel) = "${playlist.id}:${channel.key}"
 

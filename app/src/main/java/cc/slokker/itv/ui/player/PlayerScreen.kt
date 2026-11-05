@@ -1239,7 +1239,7 @@ fun PlayerScreen(vm: AppViewModel) {
                             panelGroup = group
                             panel = Panel.Channels
                         } else {
-                            pinError = I18n.s.wrongPinRetry
+                            pinError = vm.pinRejected(I18n.s.wrongPinRetry)
                         }
                     },
                     modifier = Modifier.align(Alignment.Center),

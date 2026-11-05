@@ -45,6 +45,7 @@ import cc.slokker.itv.ui.common.semanticsOnlyForScreenReaders
 import cc.slokker.itv.ui.theme.outlineBrush
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import cc.slokker.itv.ui.common.Toast
+import cc.slokker.itv.ui.common.onBackKey
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -200,6 +201,9 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
                 }
             },
     ) {
+        // Terminar sessão nos ecrãs de erro: com PIN, pede-o primeiro.
+        var logoutPin by remember { mutableStateOf(false) }
+        val logout = { if (vm.logoutNeedsPin()) logoutPin = true else vm.logoutThisTv() }
         when (val s = screen) {
             // O mesmo logo da abertura e do carregamento, parado: a abertura acaba exatamente aqui.
             Screen.Starting -> GoatLoading("")
@@ -220,7 +224,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
                     s.error,
                     onRetry = vm::retry,
                     onSettings = vm::openSettings.takeIf { playlists.isNotEmpty() },
-                    onLogout = vm::logoutThisTv.takeIf { !local },
+                    onLogout = logout.takeIf { !local },
                     onAddPlaylist = vm::openAddPlaylist.takeIf { !local && playlists.isEmpty() },
                 )
             } else LoadingScreen(
@@ -229,7 +233,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
                 onRetry = vm::retry,
                 onSettings = vm::openSettings,
                 // Sem conta não há sessão a terminar: as listas corrigem-se nas Definições.
-                onLogout = vm::logoutThisTv.takeIf { !local },
+                onLogout = logout.takeIf { !local },
                 onAddPlaylist = vm::openAddPlaylist.takeIf { !local && playlists.isEmpty() && s.error != null },
             )
             Screen.Player -> if (phone) MobileMain(vm) else PlayerScreen(vm)
@@ -237,6 +241,25 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
                 !phone -> SettingsScreen(vm)
                 playlists.isEmpty() -> PlaylistFormPage(vm, onDone = vm::closeSettings)
                 else -> Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) { MobileMenu(vm) }
+            }
+        }
+        if (logoutPin && screen is Screen.Loading) {
+            if (phone) {
+                cc.slokker.itv.ui.mobile.PinDialog(strings.enterPin, onClose = { logoutPin = false }, rejected = vm::pinRejected) { pin ->
+                    vm.checkPin(pin).also { if (it) { logoutPin = false; vm.logoutThisTv() } }
+                }
+            } else {
+                var error by remember { mutableStateOf<String?>(null) }
+                Box(Modifier.fillMaxSize().onBackKey { logoutPin = false; true }, contentAlignment = Alignment.Center) {
+                    cc.slokker.itv.ui.player.PinDialog(strings.enterPin, error, onDone = { pin ->
+                        if (vm.checkPin(pin)) {
+                            logoutPin = false
+                            vm.logoutThisTv()
+                        } else {
+                            error = vm.pinRejected(strings.wrongPinRetry)
+                        }
+                    })
+                }
             }
         }
         // Abertura: uma vez por arranque, por cima de tudo (o que está por baixo vai carregando). Acaba com o logo

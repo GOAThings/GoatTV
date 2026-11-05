@@ -266,6 +266,10 @@
     <string name="enter_pin">Introduce el PIN parental</string>
     <string name="choose_pin">Elige un PIN de 4 dígitos</string>
     <string name="wrong_pin">PIN incorrecto</string>
+    <string name="pin_wait">Demasiados intentos. Vuelve a intentarlo en %1$s.</string>
+    <string name="err_all_locked">Todos los canales de esta lista están bloqueados</string>
+    <string name="err_all_locked_2">\"%1$s\" no tiene nada que abrir: todos sus canales están en grupos bloqueados u ocultos.</string>
+    <string name="err_all_locked_3">Cambia los bloqueos en Ajustes, en Control parental, o elige otra lista.</string>
     <string name="pin_set">PIN parental definido</string>
     <string name="parental_off_toast">Control parental desactivado</string>
     <string name="current_channel">Canal actual</string>

@@ -266,6 +266,10 @@
     <string name="enter_pin">Gib die Kindersicherungs-PIN ein</string>
     <string name="choose_pin">Wähle eine 4-stellige PIN</string>
     <string name="wrong_pin">Falsche PIN</string>
+    <string name="pin_wait">Zu viele Versuche. Versuche es in %1$s erneut.</string>
+    <string name="err_all_locked">Alle Sender dieser Liste sind gesperrt</string>
+    <string name="err_all_locked_2">\"%1$s\" hat nichts zu öffnen: Alle Sender sind in gesperrten oder ausgeblendeten Gruppen.</string>
+    <string name="err_all_locked_3">Ändere die Sperren in den Einstellungen unter Kindersicherung oder wähle eine andere Liste.</string>
     <string name="pin_set">Kindersicherungs-PIN festgelegt</string>
     <string name="parental_off_toast">Kindersicherung ausgeschaltet</string>
     <string name="current_channel">Aktueller Sender</string>

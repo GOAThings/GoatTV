@@ -359,6 +359,12 @@ class Strings(context: Context) {
         ),
     )
 
+    fun errAllLocked(name: String) = ErrorInfo(
+        s(R.string.err_all_locked),
+        s(R.string.err_all_locked_2, name),
+        listOf(s(R.string.err_all_locked_3)),
+    )
+
     fun errPlaylistEmpty(name: String) = ErrorInfo(
         s(R.string.err_playlist_empty),
         s(R.string.err_playlist_empty_2, name),
@@ -509,6 +515,7 @@ class Strings(context: Context) {
     val enterPin get() = s(R.string.enter_pin)
     val choosePin get() = s(R.string.choose_pin)
     val wrongPin get() = s(R.string.wrong_pin)
+    fun pinWait(time: String) = s(R.string.pin_wait, time)
     val pinSet get() = s(R.string.pin_set)
     val parentalOffToast get() = s(R.string.parental_off_toast)
 
