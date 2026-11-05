@@ -39,7 +39,21 @@ enum CoreTests {
         ("m3uLongLine", m3uLongLine),
         ("controlCharacters", controlCharacters),
         ("pinAttempts", pinAttempts),
+        ("epgFailure", epgFailure),
     ]
+
+    /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.
+    static func epgFailure() throws {
+        func failure(_ status: Int, _ body: String?) throws -> Error {
+            Backend.epgFailure(status, try body.map { try JSON.parse(Data($0.utf8)) })
+        }
+        try expect(try failure(400, #"{"status":400,"code":"mapping_limit","message":"Too many.","data":{}}"#) as? Backend.Rejected,
+                   Backend.Rejected(status: 400, code: "mapping_limit", message: "Too many."))
+        try expect(try failure(429, #"{"data":{"code":"new_country_limit"},"message":"  "}"#) as? Backend.Rejected,
+                   Backend.Rejected(status: 429, code: "new_country_limit", message: nil))
+        try expect(try failure(500, #"{"code":"other","message":"Something went wrong."}"#) as? Backend.Failure, Backend.Failure.http(500))
+        try expect(try failure(429, nil) as? Backend.Failure, Backend.Failure.http(429))
+    }
 
     static func pinAttempts() throws {
         var a = PinAttempts()

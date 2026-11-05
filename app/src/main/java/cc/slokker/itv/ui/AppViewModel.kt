@@ -51,6 +51,8 @@ import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.api.EpgMapping
 import cc.slokker.itv.data.api.EpgMappingRequest
 import cc.slokker.itv.data.api.PlaylistDto
+import cc.slokker.itv.data.api.epgErrorText
+import cc.slokker.itv.data.api.parseServerError
 import cc.slokker.itv.data.api.unescaped
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
@@ -1435,7 +1437,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     } catch (e: CancellationException) {
         throw e
     } catch (e: HttpException) {
-        EpgResult.Error(I18n.s.epgFailed(e.code().toString()))
+        // Limites da conta (associações, países novos): a frase do servidor em vez do código.
+        val error = parseServerError(runCatching { e.response()?.errorBody()?.string() }.getOrNull())
+        EpgResult.Error(epgErrorText(e.code(), error, I18n.s.tooManyRequests, I18n.s.epgFailed(e.code().toString())))
     } catch (e: Exception) {
         EpgResult.Error(I18n.s.epgOffline)
     }

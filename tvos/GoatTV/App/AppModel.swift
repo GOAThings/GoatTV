@@ -1357,6 +1357,11 @@ final class AppModel {
     private func epgCall<T>(_ work: () async throws -> T) async -> EpgResult<T> {
         do {
             return .ok(try await work())
+        } catch let rejected as Backend.Rejected {
+            // Limites da conta (associações, países novos): a frase do servidor em vez do código.
+            if let message = rejected.message { return .error(message) }
+            if rejected.status == 429 { return .error(strings.r("too_many_requests")) }
+            return .error(strings.t("The guide server answered %@", "O servidor do guia respondeu %@", "\(rejected.status)"))
         } catch Backend.Failure.http(let code) {
             return .error(strings.t("The guide server answered %@", "O servidor do guia respondeu %@", "\(code)"))
         } catch {

@@ -55,6 +55,31 @@ public final class Backend: @unchecked Sendable {
         case badResponse
     }
 
+    /// Um erro que o servidor explica (no estilo do PocketBase): o `code` e a frase para a pessoa (em inglês).
+    public struct Rejected: Error, Equatable, Sendable {
+        public var status: Int
+        public var code: String?
+        public var message: String?
+
+        public init(status: Int, code: String?, message: String?) {
+            self.status = status
+            self.code = code
+            self.message = message
+        }
+    }
+
+    /// Os limites do guia da conta que o servidor explica numa frase: mais de 5 canais num só canal de guia, países novos a mais.
+    public static let epgLimits: Set<String> = ["mapping_limit", "new_country_limit"]
+
+    /// O erro de um pedido ao guia: [Rejected] nos limites que o servidor explica, senão [Failure.http].
+    /// O `code` pode vir dentro de `data`; uma frase vazia conta como nenhuma.
+    public static func epgFailure(_ status: Int, _ json: JSON?) -> Error {
+        let code = json?["code"]?.text ?? json?["data"]?["code"]?.text
+        guard let code, epgLimits.contains(code) else { return Failure.http(status) }
+        let message = json?["message"]?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Rejected(status: status, code: code, message: message?.isEmpty == false ? message : nil)
+    }
+
     private let session: URLSession
     private let lock = NSLock()
     private var _token: String?
@@ -279,15 +304,16 @@ public final class Backend: @unchecked Sendable {
         return (json?.array ?? []).map(EpgGuideChannel.init(json:))
     }
 
+    /// 429 `new_country_limit`: países novos a mais (ver [epgFailure]).
     public func epgCountries() async throws -> [EpgCountryInfo] {
         let (status, json, _) = try await send("GET", "api/goattv/epg/countries", body: nil)
-        guard status == 200 else { throw Failure.http(status) }
+        guard status == 200 else { throw Self.epgFailure(status, json) }
         return (json?.array ?? []).map(EpgCountryInfo.init(json:))
     }
 
     public func epgCountryChannels(_ country: String) async throws -> EpgCountryResult {
         let (status, json, _) = try await send("GET", "api/goattv/epg/countries/\(country)/channels", body: nil)
-        guard status == 200, let json else { throw Failure.http(status) }
+        guard status == 200, let json else { throw Self.epgFailure(status, json) }
         return EpgCountryResult(json: json)
     }
 
@@ -299,12 +325,13 @@ public final class Backend: @unchecked Sendable {
         return (json?.object ?? [:]).mapValues(EpgMapping.init(json:))
     }
 
+    /// 400 `mapping_limit`: já há 5 canais com esse canal de guia (ver [epgFailure]).
     public func putEpgMapping(playlistId: String, channelKey: String, country: String, channelId: String, channelName: String) async throws {
-        let (status, _, _) = try await send("PUT", "api/goattv/epg/mappings", body: [
+        let (status, json, _) = try await send("PUT", "api/goattv/epg/mappings", body: [
             "playlist": .string(playlistId), "channel_key": .string(channelKey), "country": .string(country),
             "channel_id": .string(channelId), "channel_name": .string(channelName),
         ])
-        guard (200..<300).contains(status) else { throw Failure.http(status) }
+        guard (200..<300).contains(status) else { throw Self.epgFailure(status, json) }
     }
 
     /// 404: já não estava associado (o resultado é o mesmo).
