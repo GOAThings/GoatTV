@@ -116,6 +116,19 @@ public final class Backend: @unchecked Sendable {
         return json?["token"]?.text
     }
 
+    /// Termina a sessão desta TV no servidor: apaga o registo do dispositivo (o token e a renovação deixam de servir;
+    /// as outras TVs não mudam). Responde sempre 204. Recebe o [token] à parte porque a sessão local já foi apagada,
+    /// e não chama [onSessionEnded]. É só um aviso: prazo curto, e qualquer resposta ou erro (404 num servidor antigo,
+    /// sem rede) é ignorado.
+    public func logout(token: String) async {
+        var request = URLRequest(url: Self.baseURL.appendingPathComponent("api/devices/logout"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 5
+        if let client { request.setValue(client, forHTTPHeaderField: "X-Goat-Client") }
+        request.setValue(token, forHTTPHeaderField: "Authorization")
+        _ = try? await HTTP.fetch(session, request)
+    }
+
     // MARK: Perfil GoatTV
 
     /// O `ETag` da última config lida.

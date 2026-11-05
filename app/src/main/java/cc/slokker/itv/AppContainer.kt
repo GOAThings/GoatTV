@@ -19,8 +19,13 @@ import cc.slokker.itv.data.stalker.StalkerSource
 import cc.slokker.itv.data.xtream.XtreamSource
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -30,6 +35,9 @@ import java.util.concurrent.TimeUnit
 
 /** Alguns servidores IPTV bloqueiam o User-Agent por defeito do OkHttp/ExoPlayer. */
 const val IPTV_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
+
+/** O logout no servidor é só um aviso: não vale a pena esperar mais do que isto. */
+private const val LOGOUT_TIMEOUT_MS = 5_000L
 
 /** Dependências da app (injeção manual). */
 class AppContainer(context: Context) {
@@ -64,7 +72,8 @@ class AppContainer(context: Context) {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->
-            val current = token
+            // Um pedido que já traz o seu token (o logout) fica com ele, e o 401 dele não termina a sessão atual.
+            val current = token.takeIf { chain.request().header("Authorization") == null }
             // Sem "Bearer": o backend espera o token tal como está. O X-Goat-Client diz ao site a app, a versão e o
             // tipo de TV (aparece em Dispositivos).
             val builder = chain.request().newBuilder().header("X-Goat-Client", goatClient)
@@ -83,6 +92,24 @@ class AppContainer(context: Context) {
         .addConverterFactory(GsonConverterFactory.create(GsonBuilder().serializeNulls().create()))
         .build()
         .create()
+
+    /** Pedidos que não são de nenhum ecrã nem da sessão atual (sobrevivem ao fim da sessão e ao ViewModel). */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Avisa o servidor que esta TV terminou a sessão ([token]: o que ela tinha, lido antes de o apagar).
+     * Sem esperar e sem repetir: qualquer resposta ou erro (sem rede, 404 num servidor antigo) é ignorado,
+     * porque a sessão local termina na mesma.
+     */
+    fun logoutDevice(token: String) {
+        appScope.launch {
+            try {
+                withTimeoutOrNull(LOGOUT_TIMEOUT_MS) { backend.deviceLogout(token) }
+            } catch (e: Exception) {
+                // Ignorado (ver acima).
+            }
+        }
+    }
 
     /** User-Agent para os servidores IPTV (o das definições, ou o predefinido). */
     @Volatile

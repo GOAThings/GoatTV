@@ -807,10 +807,22 @@ final class AppModel {
 
     private func sessionEnded() {
         guard screen != .activation else { return }
-        signOut(message: strings.sessionEnded)
+        endSession(message: strings.sessionEnded)
     }
 
-    func signOut(message: String? = nil) {
+    /// "Terminar sessão" pedido pela pessoa: avisa o servidor (que apaga esta TV da conta) e apaga a sessão local.
+    /// Quando a sessão acaba sozinha (401, 404, TV desligada no site) não se avisa: ver [sessionEnded].
+    func signOut() {
+        // O token antes de a sessão local ser apagada. Fora da sessão e do modelo, sem esperar: a sessão local
+        // acaba já, responda o servidor o que responder.
+        if let token = backend.token {
+            let backend = backend
+            Task.detached { await backend.logout(token: token) }
+        }
+        endSession()
+    }
+
+    private func endSession(message: String? = nil) {
         sessionGeneration &+= 1
         guideTask?.cancel()
         indexTask?.cancel()

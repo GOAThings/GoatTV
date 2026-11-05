@@ -2112,8 +2112,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveSettings()
     }
 
-    /** "Terminar sessão nesta TV": apaga só o token local (as listas de quando se usou sem conta ficam). */
+    /**
+     * "Terminar sessão nesta TV": avisa o servidor (que apaga este dispositivo da conta) e apaga a sessão local
+     * (as listas de quando se usou sem conta ficam). Só aqui: quando a sessão acaba sozinha (401, 404) não se avisa.
+     */
     fun logoutThisTv() {
+        // O token antes de a sessão local ser apagada; o aviso não espera nem impede nada (ver logoutDevice).
+        c.token?.takeIf { !c.testMode }?.let(c::logoutDevice)
         viewModelScope.launch { resetToActivation() }
     }
 

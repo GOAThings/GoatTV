@@ -38,6 +38,14 @@ interface BackendApi {
     @POST("api/collections/devices/auth-refresh")
     suspend fun authRefresh(): AuthRefreshResponse
 
+    /**
+     * Termina a sessão desta TV no servidor: apaga o registo do dispositivo (o token e a renovação deixam de
+     * servir; as outras TVs não mudam). Responde sempre 204, mesmo com um token inválido. O token vai à parte
+     * porque, quando isto sai, a sessão local já foi apagada (ver AppContainer.logoutDevice).
+     */
+    @POST("api/devices/logout")
+    suspend fun deviceLogout(@Header("Authorization") token: String): Response<Unit>
+
     /** Um relatório para a zona admin do site (ver BugReport); com o token, fica ligado à conta. Responde `{id, created_at}`. */
     @POST("api/reports")
     suspend fun sendReport(@Body body: JsonObject): Response<JsonObject>
