@@ -302,7 +302,7 @@ struct PlayerScreen: View {
         .defaultFocus($focus, .surface)
         .onAppear {
             focus = .surface
-            if model.prefs.startup == Prefs.Startup.list { openChannels() } else if model.current == nil { showGroups() }
+            if model.current == nil { showGroups() } else if model.prefs.startup == Prefs.Startup.list { openChannels() }
         }
         // Lista sem nada que se possa abrir: fica a lista de grupos, onde os bloqueados pedem o PIN.
         .onChange(of: model.current == nil) { _, empty in

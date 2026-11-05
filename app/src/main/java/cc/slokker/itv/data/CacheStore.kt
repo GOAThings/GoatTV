@@ -8,6 +8,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
@@ -79,11 +80,11 @@ class CacheStore(context: Context, private val gson: Gson) {
     suspend fun removeAccountGuide(playlistId: String) = withContext(Dispatchers.IO) { File(dir, accountGuideFile(playlistId)).delete() }
 
     /** Quantas vezes se limpou: uma gravação que começou antes de limpar já não escreve. */
-    private var clearCount = 0
+    private val clearCount = AtomicInteger()
     private val writeLock = Any()
 
     suspend fun clear() {
-        synchronized(writeLock) { clearCount++ }
+        clearCount.incrementAndGet()
         withContext(Dispatchers.IO) { synchronized(writeLock) { dir.deleteRecursively() } }
     }
 
@@ -107,10 +108,11 @@ class CacheStore(context: Context, private val gson: Gson) {
     }
 
     private suspend fun write(name: String, value: Any) {
-        val startedAt = synchronized(writeLock) { clearCount }
+        // O lock só dentro do IO: quem chama pode estar na thread principal, e uma gravação grande demora.
+        val startedAt = clearCount.get()
         withContext(Dispatchers.IO) {
             synchronized(writeLock) {
-                if (startedAt != clearCount) return@synchronized
+                if (startedAt != clearCount.get()) return@synchronized
                 runCatching {
                     dir.mkdirs()
                     // Escreve para um ficheiro temporário e troca: nunca fica meio escrito.

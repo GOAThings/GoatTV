@@ -57,7 +57,7 @@ public enum HTTP {
 
 #if !canImport(FoundationNetworking)
 /// Descarrega um corpo para memória e para assim que passa do limite (o `data(for:)` só o devolve depois de ler tudo).
-/// Tem uma sessão só para o pedido, com a mesma configuração: é com o delegate da sessão que o corpo chega aos bocados.
+/// O delegate é só desta tarefa, na mesma sessão: as ligações continuam a ser reaproveitadas.
 private final class LimitedDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let maxBytes: Int
     // Só se mexe nisto na fila do delegate, que é em série; a continuação é posta antes de a tarefa começar.
@@ -67,9 +67,9 @@ private final class LimitedDownload: NSObject, URLSessionDataDelegate, @unchecke
 
     init(maxBytes: Int) { self.maxBytes = maxBytes }
 
-    func run(_ base: URLSession, _ request: URLRequest) async throws -> (Data, URLResponse) {
-        let session = URLSession(configuration: base.configuration, delegate: self, delegateQueue: nil)
+    func run(_ session: URLSession, _ request: URLRequest) async throws -> (Data, URLResponse) {
         let task = session.dataTask(with: request)
+        task.delegate = self
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(Data, URLResponse), Error>) in
                 self.continuation = continuation
@@ -92,7 +92,6 @@ private final class LimitedDownload: NSObject, URLSessionDataDelegate, @unchecke
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        session.finishTasksAndInvalidate()
         let result: Result<(Data, URLResponse), Error>
         if tooLarge {
             result = .failure(SourceError.badResponse)

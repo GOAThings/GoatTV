@@ -10,10 +10,12 @@ import java.io.Reader
  * nunca um crash. Folgados, porque há fornecedores com listas e guias enormes.
  */
 object SafeInput {
-    /** Listas (M3U, Xtream, Stalker), já descomprimidas. */
+    /** Respostas JSON (Xtream, Stalker), que ficam em memória para se lerem. */
     const val MAX_PLAYLIST_BYTES = 200L * 1024 * 1024
+    /** Listas M3U: lêem-se em streaming e só ficam os canais, e as m3u_plus trazem filmes e séries às dezenas de milhar. */
+    const val MAX_M3U_BYTES = 4L * 1024 * 1024 * 1024
     /** Guias XMLTV, já descomprimidos: lêem-se em streaming, por isso podem ser muito maiores. */
-    const val MAX_GUIDE_BYTES = 2L * 1024 * 1024 * 1024
+    const val MAX_GUIDE_BYTES = 8L * 1024 * 1024 * 1024
     const val MAX_M3U_LINE = 4 * 1024 * 1024
     /** Uma etiqueta, um CDATA ou um título de um guia. */
     const val MAX_XMLTV_TEXT = 1024 * 1024

@@ -3,8 +3,10 @@ import Foundation
 /// Limites e conversões para o que vem dos servidores IPTV e da conta: um valor fora do que faz sentido fica de fora
 /// (ou é um pedido falhado), nunca termina a app. Os limites são folgados, porque há fornecedores com listas enormes.
 public enum SafeInput {
-    /// Listas (M3U, Xtream, Stalker), já descomprimidas.
+    /// Respostas JSON (Xtream, Stalker).
     public static let maxPlaylistBytes = 200 * 1024 * 1024
+    /// Listas M3U: as m3u_plus trazem filmes e séries às dezenas de milhar, e só ficam os canais.
+    public static let maxM3UBytes = 1024 * 1024 * 1024
     /// Guias XMLTV: o corpo e o resultado de o descomprimir (aqui ficam em memória para se lerem).
     public static let maxGuideBytes = 1024 * 1024 * 1024
     public static let maxM3ULine = 4 * 1024 * 1024

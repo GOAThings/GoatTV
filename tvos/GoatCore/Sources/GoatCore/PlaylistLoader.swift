@@ -37,7 +37,7 @@ public struct PlaylistLoader: Sendable {
     private func loadM3U(_ playlist: Playlist) async throws -> PlaylistContent {
         guard let raw = playlist.url?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { throw SourceError.noURL }
         guard let url = URL(string: raw), url.scheme != nil else { throw SourceError.badURL }
-        let data = try await get(url)
+        let data = try await get(url, maxBytes: SafeInput.maxM3UBytes)
         let name = channelName
         let result = M3UParser.parse(data) { name(String($0)) }
         let epg = playlist.epgUrl.flatMap { $0.trimmed.isEmpty ? nil : $0 } ?? result.epgUrl

@@ -25,7 +25,7 @@ class M3uSource(private val http: OkHttpClient) {
         http.newCall(request).execute().use { res ->
             if (!res.isSuccessful) throw SourceException(SourceException.Kind.HTTP, I18n.s.m3uHttp(res.code), httpCode = res.code)
             SafeInput.outOfMemoryAsIo {
-                val result = LimitedReader(res.body.charStream(), SafeInput.MAX_PLAYLIST_BYTES).use { M3uParser.parse(it.boundedLines()) }
+                val result = LimitedReader(res.body.charStream(), SafeInput.MAX_M3U_BYTES).use { M3uParser.parse(it.boundedLines()) }
                 PlaylistContent.build(
                     playlist = playlist,
                     categories = result.categories,
