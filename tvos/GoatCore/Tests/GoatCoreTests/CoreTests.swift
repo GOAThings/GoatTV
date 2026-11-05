@@ -40,6 +40,18 @@ enum CoreTests {
         ("controlCharacters", controlCharacters),
         ("pinAttempts", pinAttempts),
         ("epgFailure", epgFailure),
+        ("lanRequestAccepts", lanRequestAccepts),
+        ("lanRequestRefuses", lanRequestRefuses),
+        ("lanRequestHosts", lanRequestHosts),
+        ("lanRequestLimit", lanRequestLimit),
+        ("lanRequestMalformed", lanRequestMalformed),
+        ("lanPeer", lanPeer),
+        ("phoneListLeavesOutHiddenAndLocked", phoneListLeavesOutHiddenAndLocked),
+        ("phoneListLockedEvenWithoutPin", phoneListLockedEvenWithoutPin),
+        ("phoneListNoCurrent", phoneListNoCurrent),
+        ("phoneListLogos", phoneListLogos),
+        ("phoneListCap", phoneListCap),
+        ("phoneKeys", phoneKeys),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.
