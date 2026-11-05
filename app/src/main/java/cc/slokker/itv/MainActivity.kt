@@ -88,11 +88,29 @@ class MainActivity : AppCompatActivity() {
                 lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = "Demo", url = url)) }
             }
         }
+        // O GoatRemote no telemóvel vê os canais e escolhe um através do estado desta atividade.
+        PhoneChannels.attach(vm)
         // Aberta a partir do ecrã inicial (um canal da linha da GoatTV ou do "A seguir").
         if (savedInstanceState == null) openLink(intent)
         setContent {
             ItvTheme { ItvRoot() }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        PhoneChannels.resumed = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        PhoneChannels.resumed = false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Ao rodar/recriar, o ViewModel fica para a atividade nova; ao fechar a app, sai.
+        if (!isChangingConfigurations) PhoneChannels.detach(vm)
     }
 
     override fun onNewIntent(intent: Intent) {

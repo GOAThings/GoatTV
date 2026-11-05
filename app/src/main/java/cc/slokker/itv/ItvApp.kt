@@ -3,6 +3,7 @@ package cc.slokker.itv
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.I18n
 import android.app.Application
+import android.content.pm.PackageManager
 import cc.slokker.itv.data.BugReport
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -19,6 +20,8 @@ class ItvApp : Application(), SingletonImageLoader.Factory {
         BugReport.installCrashHandler(this)
         I18n.s = Strings.of(this)
         container = AppContainer(this)
+        // Os canais para o GoatRemote na rede de casa: só nas TVs, num telemóvel não se abre porta nenhuma.
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) PhoneChannels(container).start()
     }
 
     // Os logos vêm dos servidores IPTV: usar o mesmo cliente (e User-Agent) das listas.

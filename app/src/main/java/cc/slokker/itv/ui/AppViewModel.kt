@@ -4,6 +4,7 @@ import cc.slokker.itv.data.AppRelease
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.HomeItem
+import cc.slokker.itv.data.PhoneChannelList
 import cc.slokker.itv.data.PinAttempts
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.SafeInput
@@ -1702,6 +1703,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _playlists.value.firstOrNull { it.id == playlistId }?.let { switchPlaylist(it) }
         }
     }
+
+    // ---- GoatRemote (o comando no telemóvel, ver PhoneChannels) -------------------------------
+
+    /** Há canais para o telemóvel: a lista está aberta (no player ou nas Definições), não a carregar nem na ativação. */
+    fun phoneReady(): Boolean = _content.value != null && (_screen.value == Screen.Player || _screen.value == Screen.Settings)
+
+    /** Os grupos e canais como o ecrã os mostra, sem os escondidos nem os bloqueados nas definições (mesmo desbloqueados). */
+    internal fun phoneChannelList(): PhoneChannelList? {
+        val content = _content.value?.takeIf { phoneReady() } ?: return null
+        val others = I18n.s.others
+        val groups = orderedGroups(includeHidden = false)
+            .filterNot { isGroupLockedSetting(it.id) }
+            .map { group -> (if (group.id == PlaylistContent.OTHERS) group.copy(name = others) else group) to channelsOf(group.id) }
+        return PhoneChannelList(
+            playlist = content.playlist,
+            groups = groups,
+            prefs = _prefs.value,
+            favorites = _favorites.value[content.playlist.id].orEmpty().toSet(),
+            current = _playing.value?.key,
+            logos = channelLogos.value,
+            byKey = content.byKey,
+        )
+    }
+
+    /** O canal [key] da lista aberta, se o telemóvel o puder ver e abrir (nunca pede o PIN). */
+    fun phoneChannel(key: String): Channel? {
+        val content = _content.value?.takeIf { phoneReady() } ?: return null
+        return content.byKey[key]?.takeIf { PhoneChannelList.allowed(_prefs.value, content.playlist.id, it) }
+    }
+
+    /** O logótipo que o ecrã mostra para o canal [key], se o telemóvel o puder ver. */
+    fun phoneLogoUrl(key: String): String? = phoneChannel(key)?.let { PhoneChannelList.logoUrl(it, channelLogos.value) }
+
+    /** O telemóvel escolheu [channel]: como escolhê-lo na lista de canais (o último canal grava-se na mesma). */
+    fun playFromPhone(channel: Channel) = play(channel, groupFor(channel))
 
     /**
      * Põe os canais recentes no ecrã inicial (o primeiro também no "A seguir"). Fica lá sem PIN e depois de a app
