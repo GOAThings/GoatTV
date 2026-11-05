@@ -1997,3 +1997,55 @@ final class AppModel {
         }
     }
 }
+
+#if os(tvOS)
+// MARK: GoatRemote (o comando no telemóvel, ver PhoneChannels)
+
+@MainActor
+extension AppModel {
+    /// Há canais para o telemóvel: a lista está no ecrã, não a carregar nem na ativação.
+    func phoneReady() -> Bool { content != nil && screen == .player }
+
+    /// Os grupos e canais como o ecrã os mostra, sem os escondidos nem os bloqueados nas definições (mesmo desbloqueados).
+    func phoneChannelList() -> PhoneChannelList? {
+        guard phoneReady(), let content, let library else { return nil }
+        let id = content.playlist.id
+        var logos: [String: String] = [:]
+        let groups = library.orderedGroups(includeHidden: false)
+            .filter { !PhoneChannelList.isLockedSetting(prefs, id, $0.id) }
+            .map { (group: ChannelGroup) -> PhoneChannelList.Group in
+                let channels = library.channels(in: group.id)
+                for ch in channels { logos[ch.key] = logo(for: ch)?.absoluteString ?? "" }
+                let named = group.id == PlaylistContent.others ? ChannelGroup(id: group.id, name: strings.others) : group
+                return PhoneChannelList.Group(named, channels)
+            }
+        return PhoneChannelList(
+            playlist: content.playlist,
+            groups: groups,
+            prefs: prefs,
+            favorites: Set(favorites[id] ?? []),
+            current: current?.key,
+            logos: logos,
+            byKey: content.byKey
+        )
+    }
+
+    /// O canal [key] da lista aberta, se o telemóvel o puder ver e abrir (nunca pede o PIN).
+    func phoneChannel(_ key: String) -> Channel? {
+        guard phoneReady(), let content, let channel = content.byKey[key],
+              PhoneChannelList.allowed(prefs, content.playlist.id, channel) else { return nil }
+        return channel
+    }
+
+    /// O logótipo que o ecrã mostra para o canal [key], se o telemóvel o puder ver.
+    func phoneLogoURL(_ key: String) -> String? {
+        guard let channel = phoneChannel(key) else { return nil }
+        return PhoneChannelList.logoURL(channel, logos: [channel.key: logo(for: channel)?.absoluteString ?? ""])
+    }
+
+    /// O telemóvel escolheu [channel]: como escolhê-lo na lista de canais (o último canal grava-se na mesma).
+    func playFromPhone(_ channel: Channel) {
+        play(channel, from: groupFor(channel))
+    }
+}
+#endif

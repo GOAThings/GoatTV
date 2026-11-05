@@ -52,6 +52,8 @@ targets:
         # As listas IPTV são quase sempre http://.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        # A porta 6471 (os canais para o GoatRemote, ver GoatTV/App/PhoneChannels.swift).
+        NSLocalNetworkUsageDescription: GoatTV uses the local network so the GoatRemote phone app can show and change channels.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cc.slokker.goattv
