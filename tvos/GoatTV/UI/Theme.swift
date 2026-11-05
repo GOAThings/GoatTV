@@ -275,6 +275,7 @@ struct EyeMark: View {
 
 /// Teclado numérico para o PIN parental (4 dígitos).
 struct PinPad: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.panelActivity) private var panelActivity
     let title: String
     var subtitle: String?
@@ -283,6 +284,8 @@ struct PinPad: View {
 
     @State private var digits = ""
     @State private var wrong = false
+    /// Quanto falta para se poder tentar outra vez, depois de demasiadas tentativas.
+    @State private var waitMessage: String?
     @FocusState private var focus: String?
 
     init(title: String, subtitle: String? = nil, onPin: @escaping (String) -> Bool) {
@@ -304,7 +307,7 @@ struct PinPad: View {
             }
             .padding(.vertical, 8)
             if wrong {
-                Text("✕").font(Fonts.rowTitle).foregroundStyle(Theme.error)
+                Text(waitMessage ?? "✕").font(Fonts.rowTitle).foregroundStyle(Theme.error)
             }
             VStack(spacing: 14) {
                 ForEach([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["", "0", "⌫"]], id: \.self) { row in
@@ -343,6 +346,7 @@ struct PinPad: View {
         if digits.count == 4 {
             if !onPin(digits) {
                 wrong = true
+                waitMessage = model.pinWaitMessage()
                 digits = ""
             }
         }

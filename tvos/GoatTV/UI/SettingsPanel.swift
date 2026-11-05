@@ -19,6 +19,7 @@ struct SettingsPanel: View {
         case guide
         case settingsGate
         case parentalGate
+        case signOutGate
         case parental
         case newPin
         case lockedGroups
@@ -247,6 +248,12 @@ struct SettingsPanel: View {
                 replace(.parental)
                 return true
             }
+        case .signOutGate:
+            PinPad(title: s.t("Enter the PIN", "Escreve o PIN"), subtitle: s.t("Sign out of this TV", "Terminar sessão nesta TV")) { pin in
+                guard model.checkPin(pin) else { return false }
+                model.signOut()
+                return true
+            }
         case .newPin:
             PinPad(title: s.t("New PIN", "PIN novo"), subtitle: s.t("4 digits", "4 algarismos")) { pin in
                 model.setPin(pin)
@@ -458,6 +465,7 @@ struct SettingsPanel: View {
         case .appearance: return s.t("Appearance", "Aspeto")
         case .guide: return s.t("TV guide", "Guia de programação")
         case .parentalGate, .parental: return s.t("Parental controls", "Controlo parental")
+        case .signOutGate: return s.t("Sign out of this TV", "Terminar sessão nesta TV")
         case .newPin: return s.t("New PIN", "PIN novo")
         case .lockedGroups: return s.t("Locked groups", "Grupos bloqueados")
         case .lists: return s.playlists
@@ -792,7 +800,13 @@ struct SettingsPanel: View {
                 .info("email", s.account, model.email.map(Self.maskEmail) ?? "—"),
                 .info("device", s.t("This TV", "Esta TV"), model.deviceName ?? "—"),
                 .action("logout", confirm == "logout" ? s.t("Press again to confirm", "Carrega outra vez para confirmar") : s.t("Sign out of this TV", "Terminar sessão nesta TV")) {
-                    if confirm == "logout" { model.signOut() } else { confirm = "logout" }
+                    if confirm != "logout" {
+                        confirm = "logout"
+                    } else if model.signOutNeedsPin {
+                        push(.signOutGate, from: "logout")
+                    } else {
+                        model.signOut()
+                    }
                 },
                 .info("version", s.t("Version", "Versão"), model.appVersion),
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
@@ -896,7 +910,7 @@ struct SettingsPanel: View {
             })
             return list
 
-        case .settingsGate, .parentalGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report:
+        case .settingsGate, .parentalGate, .signOutGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report:
             return []
         }
     }

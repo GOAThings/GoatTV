@@ -110,6 +110,8 @@ final class AppModel {
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var saveChain: Task<Void, Never>?
     @ObservationIgnored private var playingSince = Date()
+    /// Sobe ao terminar sessão: o que ainda vinha a caminho vê que já não é desta sessão e não grava nada.
+    @ObservationIgnored private var sessionGeneration = 0
 
     /// Ficar num canal pelo menos isto para ele contar como visto (recentes, canal anterior).
     private static let watchedSeconds: Double = 5
@@ -352,6 +354,7 @@ final class AppModel {
                 player.stop()
                 content = nil
                 current = nil
+                clearTopShelf()
                 screen = isLocal ? .newPlaylist : .noPlaylists
             }
         }
@@ -429,12 +432,16 @@ final class AppModel {
     }
 
     private func refreshAccount() async {
+        let generation = sessionGeneration
         do {
-            if let token = try await backend.authRefresh() {
+            let renewed = try await backend.authRefresh()
+            guard generation == sessionGeneration else { return }
+            if let token = renewed {
                 backend.token = token
                 session.saveToken(token)
             }
         } catch Backend.Failure.http(let code) where code == 401 || code == 404 {
+            guard generation == sessionGeneration else { return }
             DebugLog.add("Account: token refused (HTTP \(code))")
             sessionEnded()
             return
@@ -442,6 +449,7 @@ final class AppModel {
             // Sem rede agora: segue com o token que há.
             DebugLog.add("Account: token refresh failed: \(error)")
         }
+        guard generation == sessionGeneration else { return }
         do {
             // Com uma lista já no ecrã, só se lê a config se mudou (304 quando não).
             guard let config = try await backend.config(ifChanged: content != nil) else {
@@ -450,10 +458,13 @@ final class AppModel {
                 }
                 return
             }
+            guard generation == sessionGeneration else { return }
             cache.save(config.raw, as: "config")
             let previousPlaylist = content?.playlist
+            let locksBefore = (prefs.pinHash, prefs.lockedGroups)
             apply(config)
             adoptLocalProfile()
+            if locksBefore.0 != prefs.pinHash || locksBefore.1 != prefs.lockedGroups { updateTopShelf() }
             guard let playlist = startPlaylist() else {
                 content = nil
                 player.stop()
@@ -466,9 +477,11 @@ final class AppModel {
                 await load(playlist, resume: true, quiet: true)
             }
         } catch Backend.Failure.http(let code) {
+            guard generation == sessionGeneration else { return }
             DebugLog.add("Account: config HTTP \(code)")
             if content == nil { screen = .error(strings.errBackend(code)) }
         } catch {
+            guard generation == sessionGeneration else { return }
             DebugLog.add("Account: config failed: \(error)")
             if content == nil { screen = .error(strings.errBackendOffline()) }
         }
@@ -607,7 +620,37 @@ final class AppModel {
 
     @ObservationIgnored private var settingsUnlocked = false
 
-    func checkPin(_ pin: String) -> Bool { prefs.pinHash == nil || Prefs.hashPin(pin) == prefs.pinHash }
+    /// As tentativas erradas contam em todos os sítios que pedem o PIN, e continuam depois de fechar a app.
+    @ObservationIgnored private var pinAttempts = PinAttempts(
+        failures: UserDefaults.standard.integer(forKey: "pin.failures"),
+        lastFailureAt: Int64(UserDefaults.standard.double(forKey: "pin.last_failure_at"))
+    )
+
+    private func savePinAttempts() {
+        UserDefaults.standard.set(pinAttempts.failures, forKey: "pin.failures")
+        UserDefaults.standard.set(Double(pinAttempts.lastFailureAt), forKey: "pin.last_failure_at")
+    }
+
+    func checkPin(_ pin: String) -> Bool {
+        guard let hash = prefs.pinHash else { return true }
+        let accepted = pinAttempts.check(now: nowMs(), correct: Prefs.hashPin(pin) == hash)
+        savePinAttempts()
+        return accepted
+    }
+
+    /// Quanto falta para se poder tentar o PIN outra vez, para mostrar; nil se já se pode.
+    func pinWaitMessage() -> String? {
+        let wait = pinAttempts.waitMs(now: nowMs())
+        savePinAttempts()
+        guard wait > 0 else { return nil }
+        return strings.r("pin_wait", wait < 60_000 ? "\((wait + 999) / 1000) s" : "\((wait + 59_999) / 60_000) min")
+    }
+
+    /// O que dizer quando o PIN não entrou.
+    func pinRejected() -> String { pinWaitMessage() ?? strings.r("wrong_pin") }
+
+    /// Terminar sessão pede o PIN, quando há um (é por aí que se saía para as listas desta TV sem ele).
+    var signOutNeedsPin: Bool { prefs.pinHash != nil }
 
     var settingsNeedPin: Bool { prefs.settingsPin && prefs.pinHash != nil && !settingsUnlocked }
 
@@ -626,7 +669,7 @@ final class AppModel {
 
     /// Confere o PIN; se estiver certo, o grupo fica desbloqueado até a app fechar.
     func unlockGroup(_ groupId: String, pin: String) -> Bool {
-        guard let id = content?.playlist.id, Prefs.hashPin(pin) == prefs.pinHash else { return false }
+        guard let id = content?.playlist.id, prefs.pinHash != nil, checkPin(pin) else { return false }
         unlocked.insert("\(id):\(groupId)")
         return true
     }
@@ -639,8 +682,11 @@ final class AppModel {
             settings["locked_groups"] = .array([])
         }
         unlocked = []
+        pinAttempts.reset()
+        savePinAttempts()
         applySettings()
         saveSettings()
+        updateTopShelf()
     }
 
     func toggleGroupLock(_ groupId: String) {
@@ -649,6 +695,7 @@ final class AppModel {
         let key = "\(id):\(groupId)"
         if set.contains(key) { set.remove(key) } else { set.insert(key) }
         setPref("locked_groups", .strings(set.sorted()))
+        updateTopShelf()
     }
 
     /// A largura de um painel (dp do Android a dobrar, com a escala da interface).
@@ -764,13 +811,19 @@ final class AppModel {
     }
 
     func signOut(message: String? = nil) {
+        sessionGeneration &+= 1
+        guideTask?.cancel()
+        indexTask?.cancel()
+        watchTask?.cancel()
         player.stop()
         session.clear()
         cache.clear()
+        clearTopShelf()
         backend.token = nil
         content = nil
         current = nil
         previous = nil
+        unlocked = []
         playlists = []
         favorites = [:]
         settings = [:]
@@ -818,10 +871,12 @@ final class AppModel {
 
     /// Descarrega a lista. [quiet]: já há canais no ecrã, só se trocam quando chegar a nova.
     private func load(_ playlist: Playlist, resume: Bool, quiet: Bool = false) async {
+        let generation = sessionGeneration
         if !quiet || content == nil { screen = .loading(playlist.name) }
         DebugLog.add("Playlist \(playlist.type.rawValue) loading\(quiet ? " (quiet)" : "")")
         do {
             let loaded = try await loader.load(playlist)
+            guard generation == sessionGeneration else { return }
             DebugLog.add("Playlist loaded: \(loaded.categories.count) groups, \(loaded.channels.count) channels")
             if loaded.channels.isEmpty {
                 if content == nil || !quiet { screen = .error(strings.errPlaylistEmpty(playlist.name)) }
@@ -832,6 +887,7 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch {
+            guard generation == sessionGeneration else { return }
             DebugLog.add("Playlist failed: \(error)")
             if content == nil || !quiet { screen = .error(strings.explainPlaylistError(playlist.name, error)) }
         }
@@ -892,7 +948,15 @@ final class AppModel {
                 : (session.lastPlaylist == loaded.playlist.id ? session.lastChannel : nil)
             let channel = lastKey.flatMap { loaded.byKey[$0] }.flatMap { library.isGroupLocked($0.categoryId) ? nil : $0 }
                 ?? library.channels(in: SpecialCategory.all).first
-            if let channel, channel != current { play(channel, from: groupId, remember: false) }
+            if let channel {
+                if channel != current { play(channel, from: groupId, remember: false) }
+            } else {
+                // Tudo bloqueado ou escondido: nunca abre um canal assim. A lista de grupos pede o PIN.
+                player.stop()
+                catchup = nil
+                current = nil
+                showToast(strings.t("Every channel in this playlist is locked", "Todos os canais desta lista estão bloqueados"))
+            }
         } else if let current, let updated = loaded.byKey[current.key] {
             self.current = updated
         }
@@ -935,7 +999,8 @@ final class AppModel {
     /// ↑/↓: o canal seguinte ou anterior do grupo (dá a volta nas pontas).
     func zap(_ delta: Int) {
         guard let library, let current else { return }
-        var list = library.channels(in: groupId)
+        // Num grupo escolhido não há filtro: o que conta é o bloqueio neste momento.
+        var list = library.channels(in: groupId).filter { !library.isGroupLocked($0.categoryId) }
         if list.isEmpty { list = library.channels(in: SpecialCategory.all) }
         guard list.count > 1 else { return }
         let step = prefs.reverseZap ? -delta : delta
@@ -1100,7 +1165,11 @@ final class AppModel {
     func consumeReminder(_ reminder: Reminder, watch: Bool) {
         reminders.removeAll { $0 == reminder }
         saveReminders()
-        guard watch, let channel = content?.byKey[reminder.channelKey] else { return }
+        guard watch, let content, let channel = content.byKey[reminder.channelKey] else { return }
+        if library?.isGroupLocked(channel.categoryId) ?? true {
+            showToast(strings.r("group_locked", content.categoryName(channel.categoryId) ?? channel.categoryId))
+            return
+        }
         play(channel, from: groupFor(channel))
     }
 
@@ -1194,10 +1263,14 @@ final class AppModel {
 
     /// ↑/↓ no segundo canal (dá a volta nas pontas, como o principal).
     func zapSecond(_ delta: Int) {
-        guard var s = second, s.zapList.count > 1 else { return }
+        guard var s = second else { return }
+        let id = s.content.playlist.id
+        let list = s.zapList.filter { !prefs.isLocked(id, $0.categoryId) || unlocked.contains("\(id):\($0.categoryId)") }
+        guard list.count > 1 else { return }
         let step = prefs.reverseZap ? -delta : delta
-        let i = s.zapList.firstIndex { $0.key == s.channel.key } ?? 0
-        s.channel = s.zapList[((i + step) % s.zapList.count + s.zapList.count) % s.zapList.count]
+        let key = s.channel.key
+        let i = list.firstIndex { $0.key == key } ?? 0
+        s.channel = list[((i + step) % list.count + list.count) % list.count]
         second = s
         playSecond()
     }
@@ -1209,7 +1282,7 @@ final class AppModel {
     }
 
     func playPrevious() {
-        guard let previous else { return }
+        guard let previous, !(library?.isGroupLocked(previous.categoryId) ?? true) else { return }
         play(previous)
     }
 
@@ -1803,12 +1876,13 @@ final class AppModel {
     }
 
     /// O que a Top Shelf mostra (favoritos e recentes da lista em uso, sem escondidos nem bloqueados), no App Group
-    /// partilhado com a extensão. Sem App Group (a IPA normal), não faz nada.
+    /// partilhado com a extensão. Fica lá sem PIN e depois de a app fechar, por isso conta o bloqueio tal como está nas
+    /// definições, mesmo que esteja desbloqueado nesta sessão. Sem App Group (a IPA normal), não faz nada.
     func updateTopShelf() {
-        guard hasTopShelf, let content, let library, let dir = AppGroup.container()?.url else { return }
+        guard hasTopShelf, let content, let dir = AppGroup.container()?.url else { return }
         func items(_ keys: [String]) -> JSON {
             let channels = keys.compactMap { content.byKey[$0] }
-                .filter { !isChannelHidden($0) && !library.isGroupLocked($0.categoryId) }
+                .filter { !isChannelHidden($0) && !prefs.isLocked(content.playlist.id, $0.categoryId) }
             return .array(channels.prefix(12).map { ch in
                 var item: [String: JSON] = ["key": .string(ch.key), "name": .string(ch.name)]
                 if let logo = logo(for: ch) { item["logo"] = .string(logo.absoluteString) }
@@ -1829,6 +1903,16 @@ final class AppModel {
         } catch {
             NSLog("GoatTV TopShelf: não deu para gravar: %@", "\(error)")
         }
+        #if os(tvOS)
+        TVTopShelfContentProvider.topShelfContentDidChange()
+        #endif
+    }
+
+    /// Tira da Top Shelf o que lá ficou (ao terminar sessão, ou sem listas). Sem App Group, não faz nada.
+    private func clearTopShelf() {
+        guard hasTopShelf, let dir = AppGroup.container()?.url else { return }
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent("topshelf.json"))
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent("topshelf-cards", isDirectory: true))
         #if os(tvOS)
         TVTopShelfContentProvider.topShelfContentDidChange()
         #endif

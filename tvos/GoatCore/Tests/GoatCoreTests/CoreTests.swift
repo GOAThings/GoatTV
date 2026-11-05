@@ -38,7 +38,35 @@ enum CoreTests {
         ("duplicateGroups", duplicateGroups),
         ("m3uLongLine", m3uLongLine),
         ("controlCharacters", controlCharacters),
+        ("pinAttempts", pinAttempts),
     ]
+
+    static func pinAttempts() throws {
+        var a = PinAttempts()
+        var now: Int64 = 1_000_000
+        for _ in 0..<2 {
+            try expect(a.check(now: now, correct: false), false)
+            try expect(a.waitMs(now: now), 0)
+        }
+        try expect(a.check(now: now, correct: false), false)
+        try expect(a.waitMs(now: now), 30_000)
+        try expect(a.check(now: now + 1_000, correct: true), false, "o PIN certo também espera")
+        now += 30_000
+        try expect(a.check(now: now, correct: false), false)
+        try expect(a.waitMs(now: now), 60_000)
+        // Reabrir a app: continua a contar.
+        var reopened = PinAttempts(failures: a.failures, lastFailureAt: a.lastFailureAt)
+        try expect(reopened.waitMs(now: now + 10_000), 50_000)
+        now += 60_000
+        try expect(a.check(now: now, correct: true), true)
+        try expect(a.failures, 0)
+        try expect(PinAttempts.delay(failures: 2), 0)
+        try expect(PinAttempts.delay(failures: Int.max), 3_600_000)
+        // O relógio andou para trás: não fica preso para sempre.
+        var back = PinAttempts(failures: 3, lastFailureAt: 10_000_000)
+        try expect(back.waitMs(now: 1_000), 30_000)
+        try expect(back.check(now: 31_000, correct: true), true)
+    }
 
     /// Números do fornecedor fora do que faz sentido: nunca terminam a app, ficam com o valor por omissão.
     static func providerNumbers() throws {

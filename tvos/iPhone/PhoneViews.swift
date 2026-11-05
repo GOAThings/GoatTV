@@ -178,6 +178,7 @@ private struct PhoneError: View {
     @Environment(AppModel.self) private var model
     let info: ErrorInfo
     @State private var adding = false
+    @State private var askingSignOut = false
 
     var body: some View {
         let s = model.strings
@@ -189,13 +190,36 @@ private struct PhoneError: View {
                 Group {
                     if model.isLocal || model.playlists.isEmpty { MenuRow(s.r("add_playlist")) { adding = true } }
                     MenuRow(s.r("retry")) { model.retry() }
-                    if model.hasAccount { MenuRow(s.r("logout")) { model.signOut() } }
+                    if model.hasAccount {
+                        MenuRow(s.r("logout")) {
+                            if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
+                        }
+                    }
                 }
                 .background(cardFill, in: cardShape)
             }
             .padding(20)
         }
         .sheet(isPresented: $adding) { PlaylistFormPage { adding = false } }
+        .modifier(SignOutPrompt(isPresented: $askingSignOut))
+    }
+}
+
+/// Terminar sessão pede o PIN, quando há um (em todos os botões, como na TV).
+private struct SignOutPrompt: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var isPresented: Bool
+    @State private var pin = ""
+
+    func body(content: Content) -> some View {
+        content.alert(model.strings.r("enter_pin"), isPresented: $isPresented) {
+            SecureField("PIN", text: $pin).keyboardType(.numberPad)
+            Button("OK") {
+                if model.checkPin(pin) { model.signOut() } else { model.showToast(model.pinRejected()) }
+                pin = ""
+            }
+            Button(model.strings.r("cancel"), role: .cancel) { pin = "" }
+        }
     }
 }
 
@@ -701,7 +725,9 @@ private struct ChannelsTab: View {
         .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { pinFor != nil }, set: { if !$0 { pinFor = nil } })) {
             SecureField("PIN", text: $pin).keyboardType(.numberPad)
             Button("OK") {
-                if let g = pinFor, model.unlockGroup(g.id, pin: pin) { group = g.id }
+                if let g = pinFor {
+                    if model.unlockGroup(g.id, pin: pin) { group = g.id } else { model.showToast(model.pinRejected()) }
+                }
                 pin = ""
             }
             Button(model.strings.r("cancel"), role: .cancel) { pin = "" }
@@ -1110,6 +1136,11 @@ private struct MenuTab: View {
     @State private var choosingPin = false
     @State private var pinText = ""
     @State private var unlocked = false
+    /// Com PIN, a página do controlo parental e o terminar sessão pedem-no sempre (como na TV).
+    @State private var path = NavigationPath()
+    @State private var askingParental = false
+    @State private var parentalPin = ""
+    @State private var askingSignOut = false
     @State private var reporting = false
     @State private var message = ""
     @State private var picking: Picking?
@@ -1215,7 +1246,7 @@ private struct MenuTab: View {
 
     var body: some View {
         let s = model.strings
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 14) { rootRows }.padding(.vertical, 8)
             }
@@ -1272,6 +1303,15 @@ private struct MenuTab: View {
             }
             Button(s.r("cancel"), role: .cancel) {}
         }
+        .alert(s.r("enter_pin"), isPresented: $askingParental) {
+            SecureField("PIN", text: $parentalPin).keyboardType(.numberPad)
+            Button("OK") {
+                if model.checkPin(parentalPin) { path.append(Page.parental) } else { model.showToast(model.pinRejected()) }
+                parentalPin = ""
+            }
+            Button(s.r("cancel"), role: .cancel) { parentalPin = "" }
+        }
+        .modifier(SignOutPrompt(isPresented: $askingSignOut))
         .alert(s.r("choose_pin"), isPresented: $choosingPin) {
             SecureField("PIN", text: $pinText).keyboardType(.numberPad)
             Button("OK") {
@@ -1299,6 +1339,7 @@ private struct MenuTab: View {
                         .onChange(of: pinText) { _, new in
                             guard new.count == 4 else { return }
                             unlocked = model.unlockSettings(new)
+                            if !unlocked { model.showToast(model.pinRejected()) }
                             pinText = ""
                         }
                 }
@@ -1343,7 +1384,16 @@ private struct MenuTab: View {
             pageRow(.channels, value: label(startupOptions, p.startup), icon: "list.bullet")
             pageRow(.guide, value: refreshOptions.first { $0.0 == .number(Double(p.epgRefreshHours)) }?.1 ?? "", icon: "calendar")
             pageRow(.appearance, value: "\(label(languageOptions, languageCode)), \(label(accentOptions, p.accent))", icon: "globe")
-            pageRow(.parental, value: p.pinHash == nil ? s.t("Off", "Desligado") : s.t("On", "Ligado"), icon: "lock")
+            if p.pinHash == nil {
+                pageRow(.parental, value: s.t("Off", "Desligado"), icon: "lock")
+            } else {
+                Button {
+                    askingParental = true
+                } label: {
+                    MenuRowLabel(title: title(of: .parental), value: s.t("On", "Ligado"), icon: "lock", chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
         }
         section(s.r("account")) {
             Button {
@@ -1351,7 +1401,11 @@ private struct MenuTab: View {
             } label: {
                 MenuRowLabel(title: s.r("send_report"), icon: "bubble.left", chevron: true)
             }
-            if model.hasAccount { MenuRow(s.r("logout"), value: model.email.map(phoneMaskEmail)) { model.signOut() } }
+            if model.hasAccount {
+                MenuRow(s.r("logout"), value: model.email.map(phoneMaskEmail)) {
+                    if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
+                }
+            }
             MenuRow(s.r("version"), value: model.appVersion) {}
         }
     }

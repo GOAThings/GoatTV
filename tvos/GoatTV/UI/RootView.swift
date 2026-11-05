@@ -107,7 +107,9 @@ struct ErrorScreen: View {
                         Button(s.r("settings")) { settings = .root }
                     }
                     if model.hasAccount {
-                        Button(s.r("logout")) { model.signOut() }
+                        Button(s.r("logout")) {
+                            if model.signOutNeedsPin { settings = .signOutGate } else { model.signOut() }
+                        }
                     }
                 }
                 .buttonStyle(PillButtonStyle())
