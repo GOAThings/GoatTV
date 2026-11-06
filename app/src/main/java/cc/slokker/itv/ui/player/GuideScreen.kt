@@ -95,6 +95,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.draw.drawBehind
@@ -127,6 +130,15 @@ private val GuideListCache = LazyLayoutCacheWindow(ahead = ROW_HEIGHT * 4, behin
 @OptIn(ExperimentalFoundationApi::class)
 private fun guideListState(first: Int) = LazyListState(GuideListCache, first)
 
+/**
+ * O scroll das barras laterais (na TV, a linha com foco fica a 30% da altura e a lista desliza por baixo), mas com a
+ * linha escolhida certa na 3.ª posição: a 30% ficava uma tira da linha de cima cortada por baixo da régua.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+private val GuideScrollSpec = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - size * 2
+}
+
 /** Um bloco da grelha: um programa, ou um intervalo sem informação. */
 private data class Slot(val entry: EpgEntry?, val start: Long, val end: Long)
 
@@ -137,6 +149,7 @@ private data class Slot(val entry: EpgEntry?, val start: Long, val end: Long)
  * para cima/baixo mantém a hora. ↑ na primeira linha passa para o grupo (← → muda de grupo).
  * OK: em direto vê o canal; já passou e há arquivo vê em catch-up; ainda vai dar marca um lembrete.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TvGuide(
     vm: AppViewModel,
@@ -212,8 +225,8 @@ internal fun TvGuide(
         }
     }
 
-    // A lista anda como a das barras laterais: a linha escolhida pede para ser vista (mais abaixo, em cada linha) e o
-    // Compose da TV mantém-na a 30% da altura, a deslizar. Um salto de página para fora da vista vai lá direto antes.
+    // A lista anda como a das barras laterais: a linha escolhida pede para ser vista (mais abaixo, em cada linha) e
+    // fica na 3.ª posição, com a lista a deslizar (GuideScrollSpec). Um salto de página para fora da vista vai lá direto.
     LaunchedEffect(row, channels) {
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == row }) listState.scrollToItem((row - 3).coerceAtLeast(0))
     }
@@ -353,32 +366,34 @@ internal fun TvGuide(
                 Spacer(Modifier.matchParentSize().graphicsLayer().guidePlate(plateTarget))
                 Column(Modifier.graphicsLayer()) {
                     TimeRuler(windowStart, timelineWidth, now, s)
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                        itemsIndexed(channels, key = { _, ch -> ch.uid }) { index, ch ->
-                            val entries = remember(ch, version) { entriesOf(ch) }
-                            // Canais sem guia completo: pede o EPG curto quando a linha aparece.
-                            LaunchedEffect(ch.key) {
-                                if (entries.isEmpty()) {
-                                    kotlinx.coroutines.delay(300)
-                                    vm.epgFor(ch)
+                    CompositionLocalProvider(LocalBringIntoViewSpec provides GuideScrollSpec) {
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                            itemsIndexed(channels, key = { _, ch -> ch.uid }) { index, ch ->
+                                val entries = remember(ch, version) { entriesOf(ch) }
+                                // Canais sem guia completo: pede o EPG curto quando a linha aparece.
+                                LaunchedEffect(ch.key) {
+                                    if (entries.isEmpty()) {
+                                        kotlinx.coroutines.delay(300)
+                                        vm.epgFor(ch)
+                                    }
                                 }
+                                val bring = remember { BringIntoViewRequester() }
+                                if (index == row && !onHeader) LaunchedEffect(Unit) { bring.bringIntoView() }
+                                GuideRow(
+                                    modifier = Modifier.bringIntoViewRequester(bring),
+                                    vm = vm,
+                                    channel = ch,
+                                    entries = entries,
+                                    selectedSlot = if (index == row && !onHeader) selectedSlot else null,
+                                    isPlaying = ch.key == playing.key,
+                                    windowStart = windowStart,
+                                    timelineWidth = timelineWidth,
+                                    now = now,
+                                    showNumbers = prefs.showNumbers,
+                                    showLogos = prefs.showLogos,
+                                    reminders = reminders.size,
+                                )
                             }
-                            val bring = remember { BringIntoViewRequester() }
-                            if (index == row && !onHeader) LaunchedEffect(Unit) { bring.bringIntoView() }
-                            GuideRow(
-                                modifier = Modifier.bringIntoViewRequester(bring),
-                                vm = vm,
-                                channel = ch,
-                                entries = entries,
-                                selectedSlot = if (index == row && !onHeader) selectedSlot else null,
-                                isPlaying = ch.key == playing.key,
-                                windowStart = windowStart,
-                                timelineWidth = timelineWidth,
-                                now = now,
-                                showNumbers = prefs.showNumbers,
-                                showLogos = prefs.showLogos,
-                                reminders = reminders.size,
-                            )
                         }
                     }
                 }

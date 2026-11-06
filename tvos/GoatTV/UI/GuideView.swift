@@ -99,8 +99,8 @@ struct GuideView: View {
                 GeometryReader { geo in
                     let timelineWidth = geo.size.width - channelColumn
                     let perPage = max(1, Int((geo.size.height - rulerHeight) / rowHeight))
-                    // Como nas barras laterais: a linha escolhida fica a 30% da altura e a lista desliza por baixo.
-                    let top = max(0, min(row - perPage * 3 / 10, list.count - perPage))
+                    // Como nas barras laterais: a linha escolhida fica parada (na 3.ª posição) e a lista desliza por baixo.
+                    let top = max(0, min(row - 2, list.count - perPage))
                     // Linhas a mais em cima e em baixo, para as que entram já estarem lá enquanto a lista desliza.
                     let first = max(0, top - scrollMargin)
                     let rendered = list.isEmpty ? [] : Array(list[first..<min(list.count, top + perPage + scrollMargin)])
