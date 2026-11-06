@@ -320,7 +320,10 @@ internal fun TvGuide(
                         Rect(left, top, right, top + item.size - ROW_GAP.toPx() * 2)
                     }
                 }
-                Column(Modifier.guidePlate(plateTarget)) {
+                // A placa e a grelha em camadas próprias: a placa mexe-se em cada frame da animação sem obrigar a
+                // redesenhar os textos das linhas todas.
+                Spacer(Modifier.matchParentSize().graphicsLayer().guidePlate(plateTarget))
+                Column(Modifier.graphicsLayer()) {
                     TimeRuler(windowStart, timelineWidth, now, s)
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                         itemsIndexed(channels, key = { _, ch -> ch.uid }) { index, ch ->
@@ -365,7 +368,11 @@ private val GuideScrim = Brush.verticalGradient(
 
 private val RULER_HEIGHT = 30.dp
 
-/** A placa do bloco escolhido, a deslizar até [target] (em "diferença": o texto por baixo fica escuro). */
+/**
+ * A placa do bloco escolhido, a deslizar até [target], por trás dos blocos (o texto do escolhido já é escuro). Em
+ * "diferença" por cima obrigava a desenhar a grelha toda numa camada à parte em cada frame: na SHIELD, com o vídeo
+ * em ecrã inteiro por trás, isso fazia saltar frames.
+ */
 @Composable
 private fun Modifier.guidePlate(target: () -> Rect?): Modifier {
     val current by rememberUpdatedState(target)
@@ -392,18 +399,15 @@ private fun Modifier.guidePlate(target: () -> Rect?): Modifier {
             }
         }
     }
-    return graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
-            if (!shown) return@drawWithContent
-            drawRoundRect(
-                Color.White,
-                Offset(left.value, top.value),
-                Size(right.value - left.value, bottom.value - top.value),
-                CornerRadius(CELL_RADIUS.toPx()),
-                blendMode = BlendMode.Difference,
-            )
-        }
+    return drawBehind {
+        if (!shown) return@drawBehind
+        drawRoundRect(
+            Color.White,
+            Offset(left.value, top.value),
+            Size(right.value - left.value, bottom.value - top.value),
+            CornerRadius(CELL_RADIUS.toPx()),
+        )
+    }
 }
 
 private val PlateSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
@@ -661,8 +665,8 @@ private fun GuideTimeline(
             val left = (c.start - windowStart) * pxPerMs
             val width = (c.end - c.start) * pxPerMs - gap
             if (width < 4.dp.toPx()) continue
-            // O escolhido não muda aqui: a placa que desliza (em diferença) pinta-o de branco e o texto de escuro.
-            drawRoundRect(
+            // O escolhido não tem fundo aqui: é a placa branca que desliza por trás da grelha.
+            if (!c.selected) drawRoundRect(
                 when {
                     c.live -> Color.White.copy(alpha = 0.1f)
                     c.past -> Color.White.copy(alpha = 0.025f)
@@ -681,7 +685,8 @@ private fun GuideTimeline(
                 drawRoundRect(accent, Offset(left + pad, barY), Size(barW * p, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
             }
             val ink = when {
-                c.past && !c.selected -> ItvColors.TextFaint
+                c.selected -> Color.Black
+                c.past -> ItvColors.TextFaint
                 else -> ItvColors.Text
             }
             var x = left + pad
@@ -692,7 +697,7 @@ private fun GuideTimeline(
             }
             if (painter != null && width > 40.dp.toPx()) {
                 translate(x, (size.height - iconSize) / 2) {
-                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(ItvColors.TextDim)) }
+                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(if (c.selected) Color.Black else ItvColors.TextDim)) }
                 }
                 x += iconSize + 6.dp.toPx()
             }
@@ -709,7 +714,13 @@ private fun GuideTimeline(
             val timeLayout = if (c.startMs != null && !c.live && width > 90.dp.toPx()) {
                 measurer.measure(
                     formatTime(c.startMs),
-                    time.copy(color = if (c.past && !c.selected) ItvColors.TextFaint.copy(alpha = 0.45f) else ItvColors.TextFaint),
+                    time.copy(
+                        color = when {
+                            c.selected -> Color.Black.copy(alpha = 0.6f)
+                            c.past -> ItvColors.TextFaint.copy(alpha = 0.45f)
+                            else -> ItvColors.TextFaint
+                        },
+                    ),
                     maxLines = 1,
                     constraints = Constraints(maxWidth = maxWidth),
                 )
