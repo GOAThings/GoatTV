@@ -1034,8 +1034,9 @@ final class AppModel {
         var id: String { "\(channel.uid):\(programme?.startMs ?? 0)" }
     }
 
-    /// Procura canais pelo nome e programas pelo título (sem acentos nem maiúsculas), como no Android.
-    func search(_ query: String) -> [SearchHit] {
+    /// Procura canais pelo nome e programas pelo título (sem acentos nem maiúsculas), como no Android. Com
+    /// [withPast], também os das últimas 24 h que ainda se podem ver em catch-up.
+    func search(_ query: String, withPast: Bool = false) -> [SearchHit] {
         guard let content, let library else { return [] }
         let q = Self.searchKey(query)
         guard q.count >= 2 else { return [] }
@@ -1047,7 +1048,9 @@ final class AppModel {
         let until = now + 12 * 3_600_000
         var shows: [SearchHit] = []
         for ch in visible where shows.count < 40 {
-            let hits = self.programmes(for: ch).filter { $0.endMs > now && $0.startMs < until && Self.searchKey($0.title).contains(q) }.prefix(2)
+            let hits = self.programmes(for: ch).filter {
+                ($0.endMs > now || (withPast && $0.endMs > now - 86_400_000 && canCatchup(ch, $0))) && $0.startMs < until && Self.searchKey($0.title).contains(q)
+            }.prefix(withPast ? 3 : 2)
             shows += hits.map { SearchHit(channel: ch, programme: $0) }
         }
         return Array(channels) + shows.prefix(40).sorted { ($0.programme?.startMs ?? 0) < ($1.programme?.startMs ?? 0) }
@@ -1314,6 +1317,20 @@ final class AppModel {
         if added { list.append(channel.key) } else { list.removeAll { $0 == channel.key } }
         favorites[id] = list
         showToast(added ? strings.favoriteAdded(channel.name) : strings.favoriteRemoved(channel.name))
+        saveFavorites()
+    }
+
+    /// Move um favorito [delta] posições (−1 = para cima).
+    func moveFavorite(_ channel: Channel, by delta: Int) {
+        guard let id = content?.playlist.id, var list = favorites[id], let from = list.firstIndex(of: channel.key) else { return }
+        let to = min(max(from + delta, 0), list.count - 1)
+        guard to != from else { return }
+        list.insert(list.remove(at: from), at: to)
+        favorites[id] = list
+        saveFavorites()
+    }
+
+    private func saveFavorites() {
         if isLocal {
             persistLocal()
             return
