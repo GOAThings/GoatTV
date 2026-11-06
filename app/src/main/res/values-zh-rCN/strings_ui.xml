@@ -564,4 +564,14 @@
     <string name="greeting_afternoon">下午好</string>
     <string name="greeting_evening">晚上好</string>
     <string name="group_channels">%1$s 个频道</string>
+    <string name="search_recent">最近搜索</string>
+    <string name="search_now">正在播出</string>
+    <string name="search_later">稍后</string>
+    <string name="search_past">已播出</string>
+    <string name="search_channels">频道</string>
+    <string name="search_programmes">节目</string>
+    <string name="favorites_reorder">排序</string>
+    <string name="done">完成</string>
+    <string name="favorites_hint">要添加更多，请点按频道的星标或长按该频道。</string>
+    <string name="watch_again">重看</string>
 </resources>

@@ -29,6 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.fillMaxHeight
+import cc.slokker.itv.ui.player.VideoView
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -79,7 +83,7 @@ internal fun MobileHome(
     val locked = remember(data, unlocked) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = HOME_BAR_SPACE)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBarSpace.current)) {
         item {
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 6.dp), verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
@@ -228,8 +232,58 @@ private fun GroupTile(vm: AppViewModel, group: GroupTileInfo, modifier: Modifier
     }
 }
 
+/**
+ * O canal a dar fora do ecrã do canal: uma barra por cima dos separadores com o vídeo pequeno, o programa, pausa e
+ * fechar. Tocar nela volta ao canal em grande.
+ */
+@Composable
+internal fun MiniPlayer(vm: AppViewModel, channel: Channel, playback: MobilePlayback, onOpen: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
+    val accent = LocalAccent.current
+    val now = rememberNow()
+    val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    val current = remember(epg, now, channel.key) { vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(62.dp)
+            .shadow(16.dp, MiniShape)
+            .clip(MiniShape)
+            .background(Color(0xFF1A1E2A))
+            .clickable(onClick = onOpen),
+    ) {
+        Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 84.dp, height = 47.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black)) {
+                AndroidView(
+                    factory = { VideoView(it).also { v -> playback.view = v } },
+                    update = { playback.view = it },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(channel.name, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val sub = current?.let { "${it.title} · ${s.minutesLeft(((it.endMs - now) / 60_000 + 1).toInt())}" }
+                if (sub != null) Text(sub, color = ItvColors.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(
+                if (playback.playing) ItvIcons.Pause else ItvIcons.Play, null, tint = ItvColors.Text,
+                modifier = Modifier.size(44.dp).clip(CircleShape)
+                    .clickable { if (playback.playing) playback.player.pause() else playback.player.play() }
+                    .padding(10.dp),
+            )
+            Icon(ItvIcons.Close, null, tint = ItvColors.TextDim, modifier = Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose).padding(11.dp))
+        }
+        if (current != null) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.08f))) {
+                Box(Modifier.fillMaxWidth(current.progress(now)).fillMaxHeight().background(accent.brush))
+            }
+        }
+    }
+}
+
+private val MiniShape = RoundedCornerShape(16.dp)
 private val HeroShape = RoundedCornerShape(20.dp)
 private val TileShape = RoundedCornerShape(16.dp)
 private val TileFill = Color.White.copy(alpha = 0.06f)
-private val HOME_BAR_SPACE = 92.dp
 private const val HOME_RECENTS = 6

@@ -1365,6 +1365,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         persistConfigCache()
     }
 
+    /** Move um favorito [delta] posições (−1 = para cima). */
+    fun moveFavorite(channel: Channel, delta: Int) {
+        val playlistId = _content.value?.playlist?.id ?: return
+        val keys = _favorites.value[playlistId].orEmpty().toMutableList()
+        val from = keys.indexOf(channel.key)
+        val to = (from + delta).coerceIn(0, keys.lastIndex)
+        if (from < 0 || from == to) return
+        keys.add(to, keys.removeAt(from))
+        _favorites.value = _favorites.value + (playlistId to keys)
+        patchUser("favorites", c.gson.toJsonTree(_favorites.value))
+        persistConfigCache()
+    }
+
     suspend fun epgFor(channel: Channel): List<EpgEntry> {
         val content = _content.value ?: return emptyList()
         return c.epg.shortEpg(content.playlist, channel).shifted()
@@ -1776,8 +1789,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Resultado da pesquisa: um canal, ou um programa (a dar agora ou mais logo) num canal. */
     data class SearchHit(val channel: Channel, val programme: EpgEntry? = null)
 
-    /** Procura canais pelo nome e programas pelo título (sem acentos nem maiúsculas). */
-    fun search(query: String): List<SearchHit> {
+    /**
+     * Procura canais pelo nome e programas pelo título (sem acentos nem maiúsculas). Com [withPast], também os das
+     * últimas 24 h que ainda se podem ver em catch-up.
+     */
+    fun search(query: String, withPast: Boolean = false): List<SearchHit> {
         val content = _content.value ?: return emptyList()
         val q = searchKey(query)
         if (q.length < 2) return emptyList()
@@ -1787,8 +1803,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val until = now + 12 * 3600_000L
         val programmes = visible.asSequence().flatMap { ch ->
             guideEntries(ch).asSequence()
-                .filter { it.endMs > now && it.startMs < until && q in searchKey(it.title) }
-                .take(2)
+                .filter { (it.endMs > now || (withPast && it.endMs > now - 24 * 3600_000L && canCatchup(ch, it))) && it.startMs < until && q in searchKey(it.title) }
+                .take(if (withPast) 3 else 2)
                 .map { SearchHit(ch, it) }
         }.take(MAX_SEARCH).toList().sortedBy { it.programme?.startMs }
         return channels + programmes

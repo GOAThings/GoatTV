@@ -580,4 +580,14 @@
     <string name="greeting_afternoon">Good afternoon</string>
     <string name="greeting_evening">Good evening</string>
     <string name="group_channels">%1$s channels</string>
+    <string name="search_recent">Recent searches</string>
+    <string name="search_now">On now</string>
+    <string name="search_later">Later</string>
+    <string name="search_past">Already aired</string>
+    <string name="search_channels">Channels</string>
+    <string name="search_programmes">Programmes</string>
+    <string name="favorites_reorder">Reorder</string>
+    <string name="done">Done</string>
+    <string name="favorites_hint">To add more, tap the star on a channel or hold it.</string>
+    <string name="watch_again">Watch again</string>
 </resources>

@@ -564,4 +564,14 @@
     <string name="greeting_afternoon">こんにちは</string>
     <string name="greeting_evening">こんばんは</string>
     <string name="group_channels">%1$s チャンネル</string>
+    <string name="search_recent">最近の検索</string>
+    <string name="search_now">放送中</string>
+    <string name="search_later">このあと</string>
+    <string name="search_past">放送済み</string>
+    <string name="search_channels">チャンネル</string>
+    <string name="search_programmes">番組</string>
+    <string name="favorites_reorder">並べ替え</string>
+    <string name="done">完了</string>
+    <string name="favorites_hint">追加するには、チャンネルの星をタップするか長押ししてください。</string>
+    <string name="watch_again">もう一度見る</string>
 </resources>

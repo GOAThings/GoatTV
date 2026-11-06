@@ -574,4 +574,14 @@
     <string name="greeting_afternoon">مساء الخير</string>
     <string name="greeting_evening">مساء الخير</string>
     <string name="group_channels">%1$s قناة</string>
+    <string name="search_recent">عمليات البحث الأخيرة</string>
+    <string name="search_now">يُعرض الآن</string>
+    <string name="search_later">لاحقًا</string>
+    <string name="search_past">عُرض سابقًا</string>
+    <string name="search_channels">القنوات</string>
+    <string name="search_programmes">البرامج</string>
+    <string name="favorites_reorder">ترتيب</string>
+    <string name="done">تم</string>
+    <string name="favorites_hint">لإضافة المزيد، اضغط على نجمة القناة أو اضغط عليها مطولًا.</string>
+    <string name="watch_again">إعادة المشاهدة</string>
 </resources>

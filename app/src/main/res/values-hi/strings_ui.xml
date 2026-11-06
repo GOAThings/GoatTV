@@ -566,4 +566,14 @@
     <string name="greeting_afternoon">नमस्कार</string>
     <string name="greeting_evening">शुभ संध्या</string>
     <string name="group_channels">%1$s चैनल</string>
+    <string name="search_recent">हाल की खोजें</string>
+    <string name="search_now">अभी चल रहा है</string>
+    <string name="search_later">बाद में</string>
+    <string name="search_past">प्रसारित हो चुका</string>
+    <string name="search_channels">चैनल</string>
+    <string name="search_programmes">कार्यक्रम</string>
+    <string name="favorites_reorder">क्रम बदलें</string>
+    <string name="done">हो गया</string>
+    <string name="favorites_hint">और जोड़ने के लिए, किसी चैनल के तारे पर टैप करें या उसे दबाए रखें।</string>
+    <string name="watch_again">फिर से देखें</string>
 </resources>

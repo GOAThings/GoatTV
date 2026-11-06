@@ -568,4 +568,14 @@
     <string name="greeting_afternoon">Bon après-midi</string>
     <string name="greeting_evening">Bonsoir</string>
     <string name="group_channels">%1$s chaînes</string>
+    <string name="search_recent">Recherches récentes</string>
+    <string name="search_now">En ce moment</string>
+    <string name="search_later">Plus tard</string>
+    <string name="search_past">Déjà diffusé</string>
+    <string name="search_channels">Chaînes</string>
+    <string name="search_programmes">Programmes</string>
+    <string name="favorites_reorder">Réorganiser</string>
+    <string name="done">Terminé</string>
+    <string name="favorites_hint">Pour en ajouter, touchez l\'étoile d\'une chaîne ou appuyez longuement dessus.</string>
+    <string name="watch_again">Revoir</string>
 </resources>

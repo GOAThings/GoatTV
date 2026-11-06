@@ -566,4 +566,14 @@
     <string name="greeting_afternoon">İyi günler</string>
     <string name="greeting_evening">İyi akşamlar</string>
     <string name="group_channels">%1$s kanal</string>
+    <string name="search_recent">Son aramalar</string>
+    <string name="search_now">Şu an yayında</string>
+    <string name="search_later">Daha sonra</string>
+    <string name="search_past">Yayınlandı</string>
+    <string name="search_channels">Kanallar</string>
+    <string name="search_programmes">Programlar</string>
+    <string name="favorites_reorder">Sırala</string>
+    <string name="done">Bitti</string>
+    <string name="favorites_hint">Daha fazla eklemek için bir kanalın yıldızına dokunun veya basılı tutun.</string>
+    <string name="watch_again">Tekrar izle</string>
 </resources>

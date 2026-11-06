@@ -568,4 +568,14 @@
     <string name="greeting_afternoon">Buenas tardes</string>
     <string name="greeting_evening">Buenas noches</string>
     <string name="group_channels">%1$s canales</string>
+    <string name="search_recent">Búsquedas recientes</string>
+    <string name="search_now">En emisión</string>
+    <string name="search_later">Más tarde</string>
+    <string name="search_past">Ya emitido</string>
+    <string name="search_channels">Canales</string>
+    <string name="search_programmes">Programas</string>
+    <string name="favorites_reorder">Ordenar</string>
+    <string name="done">Listo</string>
+    <string name="favorites_hint">Para añadir más, toca la estrella de un canal o mantenlo pulsado.</string>
+    <string name="watch_again">Volver a ver</string>
 </resources>

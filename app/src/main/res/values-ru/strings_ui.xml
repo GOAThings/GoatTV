@@ -570,4 +570,14 @@
     <string name="greeting_afternoon">Добрый день</string>
     <string name="greeting_evening">Добрый вечер</string>
     <string name="group_channels">Каналов: %1$s</string>
+    <string name="search_recent">Недавние запросы</string>
+    <string name="search_now">Сейчас в эфире</string>
+    <string name="search_later">Позже</string>
+    <string name="search_past">Уже прошло</string>
+    <string name="search_channels">Каналы</string>
+    <string name="search_programmes">Передачи</string>
+    <string name="favorites_reorder">Упорядочить</string>
+    <string name="done">Готово</string>
+    <string name="favorites_hint">Чтобы добавить ещё, нажмите на звёздочку канала или удерживайте его.</string>
+    <string name="watch_again">Смотреть снова</string>
 </resources>

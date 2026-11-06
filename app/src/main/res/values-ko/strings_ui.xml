@@ -564,4 +564,14 @@
     <string name="greeting_afternoon">좋은 오후예요</string>
     <string name="greeting_evening">좋은 저녁이에요</string>
     <string name="group_channels">채널 %1$s개</string>
+    <string name="search_recent">최근 검색</string>
+    <string name="search_now">방송 중</string>
+    <string name="search_later">나중에</string>
+    <string name="search_past">방송 종료</string>
+    <string name="search_channels">채널</string>
+    <string name="search_programmes">프로그램</string>
+    <string name="favorites_reorder">순서 변경</string>
+    <string name="done">완료</string>
+    <string name="favorites_hint">더 추가하려면 채널의 별을 탭하거나 길게 누르세요.</string>
+    <string name="watch_again">다시 보기</string>
 </resources>

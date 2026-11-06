@@ -566,4 +566,14 @@
     <string name="greeting_afternoon">Guten Tag</string>
     <string name="greeting_evening">Guten Abend</string>
     <string name="group_channels">%1$s Sender</string>
+    <string name="search_recent">Letzte Suchen</string>
+    <string name="search_now">Läuft gerade</string>
+    <string name="search_later">Später</string>
+    <string name="search_past">Bereits gelaufen</string>
+    <string name="search_channels">Sender</string>
+    <string name="search_programmes">Sendungen</string>
+    <string name="favorites_reorder">Sortieren</string>
+    <string name="done">Fertig</string>
+    <string name="favorites_hint">Tippe auf den Stern eines Senders oder halte ihn gedrückt, um mehr hinzuzufügen.</string>
+    <string name="watch_again">Nochmal ansehen</string>
 </resources>

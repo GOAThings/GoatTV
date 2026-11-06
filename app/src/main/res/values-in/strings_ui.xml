@@ -564,4 +564,14 @@
     <string name="greeting_afternoon">Selamat siang</string>
     <string name="greeting_evening">Selamat malam</string>
     <string name="group_channels">%1$s saluran</string>
+    <string name="search_recent">Pencarian terbaru</string>
+    <string name="search_now">Sedang tayang</string>
+    <string name="search_later">Nanti</string>
+    <string name="search_past">Sudah tayang</string>
+    <string name="search_channels">Saluran</string>
+    <string name="search_programmes">Acara</string>
+    <string name="favorites_reorder">Urutkan</string>
+    <string name="done">Selesai</string>
+    <string name="favorites_hint">Untuk menambah lagi, ketuk bintang pada saluran atau tahan saluran itu.</string>
+    <string name="watch_again">Tonton lagi</string>
 </resources>
