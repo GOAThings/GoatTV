@@ -13,6 +13,8 @@ private let rowHeight: CGFloat = 84
 private let heroHeight: CGFloat = 250
 private let cellRadius: CGFloat = 14
 private let plateSpring = Animation.spring(response: 0.28, dampingFraction: 1)
+/// Linhas desenhadas fora da vista, em cima e em baixo da grelha.
+private let scrollMargin = 4
 private let rulerHeight: CGFloat = 52
 private let halfHour: Int64 = 30 * 60_000
 /// Largura visível da grelha: 2 horas.
@@ -97,24 +99,34 @@ struct GuideView: View {
                 GeometryReader { geo in
                     let timelineWidth = geo.size.width - channelColumn
                     let perPage = max(1, Int((geo.size.height - rulerHeight) / rowHeight))
-                    let top = max(0, min(row - 2, list.count - perPage))
-                    let visible = list.isEmpty ? [] : Array(list[top..<min(list.count, top + perPage)])
+                    // Como nas barras laterais: a linha escolhida fica a 30% da altura e a lista desliza por baixo.
+                    let top = max(0, min(row - perPage * 3 / 10, list.count - perPage))
+                    // Linhas a mais em cima e em baixo, para as que entram já estarem lá enquanto a lista desliza.
+                    let first = max(0, top - scrollMargin)
+                    let rendered = list.isEmpty ? [] : Array(list[first..<min(list.count, top + perPage + scrollMargin)])
                     let inWindow = now >= windowStart && now < windowStart + windowMs
                     let nowX = channelColumn + CGFloat(now - windowStart) / CGFloat(windowMs) * timelineWidth
                     ZStack(alignment: .topLeading) {
                         VStack(alignment: .leading, spacing: 0) {
                             ruler(timelineWidth)
-                            ForEach(Array(visible.enumerated()), id: \.element.uid) { offset, ch in
-                                GuideRow(
-                                    channel: ch,
-                                    entries: model.programmes(for: ch),
-                                    selected: (top + offset == row && !onHeader) ? selected : nil,
-                                    isPlaying: ch.key == playing.key,
-                                    windowStart: windowStart,
-                                    timelineWidth: timelineWidth,
-                                    now: now
-                                )
+                            ZStack(alignment: .topLeading) {
+                                ForEach(Array(rendered.enumerated()), id: \.element.uid) { offset, ch in
+                                    GuideRow(
+                                        channel: ch,
+                                        entries: model.programmes(for: ch),
+                                        selected: (first + offset == row && !onHeader) ? selected : nil,
+                                        isPlaying: ch.key == playing.key,
+                                        windowStart: windowStart,
+                                        timelineWidth: timelineWidth,
+                                        now: now
+                                    )
+                                    .offset(y: CGFloat(first + offset) * rowHeight)
+                                }
                             }
+                            .offset(y: -CGFloat(top) * rowHeight)
+                            .animation(plateSpring, value: top)
+                            .frame(width: geo.size.width, height: max(0, geo.size.height - rulerHeight), alignment: .topLeading)
+                            .clipped()
                         }
                         // A linha da hora atual (a etiqueta com a hora fica na régua).
                         if inWindow {
@@ -134,7 +146,7 @@ struct GuideView: View {
                         }
                         // A placa branca do programa escolhido desliza de bloco em bloco (em "diferença": o texto por
                         // baixo fica escuro).
-                        if let selected, !onHeader, row >= top, row < top + visible.count {
+                        if let selected, !onHeader, row >= top, row < top + perPage {
                             let perMs = timelineWidth / CGFloat(windowMs)
                             let start = max(selected.start, windowStart)
                             let end = min(selected.end, windowStart + windowMs)

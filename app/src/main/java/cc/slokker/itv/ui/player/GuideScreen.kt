@@ -95,6 +95,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.scale
 import java.util.Calendar
@@ -210,12 +212,10 @@ internal fun TvGuide(
         }
     }
 
-    // A linha escolhida fica sempre à vista (com duas linhas de contexto por cima).
+    // A lista anda como a das barras laterais: a linha escolhida pede para ser vista (mais abaixo, em cada linha) e o
+    // Compose da TV mantém-na a 30% da altura, a deslizar. Um salto de página para fora da vista vai lá direto antes.
     LaunchedEffect(row, channels) {
-        val visible = listState.layoutInfo.visibleItemsInfo
-        if (visible.isEmpty() || row <= visible.first().index || row >= visible.last().index) {
-            listState.animateScrollToItem((row - 2).coerceAtLeast(0))
-        }
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == row }) listState.scrollToItem((row - 3).coerceAtLeast(0))
     }
 
     Box(
@@ -363,7 +363,10 @@ internal fun TvGuide(
                                     vm.epgFor(ch)
                                 }
                             }
+                            val bring = remember { BringIntoViewRequester() }
+                            if (index == row && !onHeader) LaunchedEffect(Unit) { bring.bringIntoView() }
                             GuideRow(
+                                modifier = Modifier.bringIntoViewRequester(bring),
                                 vm = vm,
                                 channel = ch,
                                 entries = entries,
@@ -574,9 +577,10 @@ private fun GuideRow(
     showLogos: Boolean,
     /** Só para voltar a ver os ícones quando os lembretes mudam. */
     reminders: Int,
+    modifier: Modifier = Modifier,
 ) {
     val rowSelected = selectedSlot != null
-    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT).padding(vertical = ROW_GAP)) {
+    Row(modifier.fillMaxWidth().height(ROW_HEIGHT).padding(vertical = ROW_GAP)) {
         Row(
             Modifier
                 .width(CHANNEL_COLUMN)
