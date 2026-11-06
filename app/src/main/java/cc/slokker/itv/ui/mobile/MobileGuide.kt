@@ -191,8 +191,8 @@ private fun TimeRuler(origin: Long, pxPerMs: Float, column: Float, now: Long, of
             while (true) {
                 val x = column + (t - origin) * pxPerMs - offset()
                 if (x > size.width) break
-                // A hora debaixo da etiqueta vermelha não se mostra.
-                if (kotlin.math.abs(x + 22.dp.toPx() - nowX) > 46.dp.toPx()) {
+                // A hora debaixo da etiqueta vermelha, e a que já vai a sair pela esquerda, não se mostram.
+                if (x >= column && kotlin.math.abs(x + 22.dp.toPx() - nowX) > 46.dp.toPx()) {
                     val layout = measurer.measure(formatTime(t), label)
                     drawText(layout, topLeft = Offset(x + 4.dp.toPx(), (size.height - layout.size.height) / 2))
                 }

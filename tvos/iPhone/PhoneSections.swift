@@ -264,7 +264,8 @@ struct PhoneGuideGrid: View {
             ForEach(0..<max(count, 1), id: \.self) { i in
                 let t = first + Int64(i) * Self.halfHourMs
                 let x = CGFloat(t - origin) * perMs - shift
-                if abs(x + 22 - nowX) > 46 {
+                // A hora debaixo da etiqueta vermelha, e a que já vai a sair pela esquerda, não se mostram.
+                if x >= 0, abs(x + 22 - nowX) > 46 {
                     Text(hhmm(Date(timeIntervalSince1970: Double(t) / 1000))).font(.caption).foregroundStyle(Theme.textDim)
                         .fixedSize().offset(x: x + 4)
                 }
