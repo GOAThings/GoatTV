@@ -1101,9 +1101,9 @@ struct Hud<Buttons: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             // Começa devagar, para não se ver onde acaba.
-            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.1), location: 0.2),
-                                   .init(color: .black.opacity(0.42), location: 0.45), .init(color: .black.opacity(0.7), location: 0.7),
-                                   .init(color: .black.opacity(0.85), location: 1)],
+            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.08), location: 0.15),
+                                   .init(color: .black.opacity(0.38), location: 0.35), .init(color: .black.opacity(0.66), location: 0.55),
+                                   .init(color: .black.opacity(0.82), location: 0.75), .init(color: .black.opacity(0.9), location: 1)],
                            startPoint: .top, endPoint: .bottom)
         )
     }

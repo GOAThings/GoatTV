@@ -384,10 +384,11 @@ private val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 
 private val HudScrim = Brush.verticalGradient(
     // Começa devagar, para não se ver onde acaba.
     0f to Color.Transparent,
-    0.2f to Color.Black.copy(alpha = 0.1f),
-    0.45f to Color.Black.copy(alpha = 0.42f),
-    0.7f to Color.Black.copy(alpha = 0.7f),
-    1f to Color.Black.copy(alpha = 0.85f),
+    0.15f to Color.Black.copy(alpha = 0.08f),
+    0.35f to Color.Black.copy(alpha = 0.38f),
+    0.55f to Color.Black.copy(alpha = 0.66f),
+    0.75f to Color.Black.copy(alpha = 0.82f),
+    1f to Color.Black.copy(alpha = 0.9f),
 )
 
 
