@@ -100,6 +100,13 @@
     <string name="back_to_live">zurück zu live</string>
     <string name="sleep_timer">Sleep-Timer</string>
     <string name="sleep_remaining">Aus in %1$s Min.</string>
+    <string name="minutes_left">Noch %1$s Min.</string>
+    <string name="section_watching">Fernsehen</string>
+    <string name="section_interface">Oberfläche</string>
+    <string name="section_library">Listen &amp; Konto</string>
+    <string name="section_language_text">Sprache &amp; Text</string>
+    <string name="section_channel_list">Senderliste</string>
+    <string name="section_panels_colour">Bereiche &amp; Farbe</string>
     <string name="sleep_set">GoatTV stoppt in %1$s Min.</string>
     <string name="sleep_off">Sleep-Timer aus</string>
     <string name="sleep_soon">GoatTV stoppt in %1$s s</string>

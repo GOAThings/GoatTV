@@ -100,6 +100,13 @@
     <string name="back_to_live">вернуться в эфир</string>
     <string name="sleep_timer">Таймер сна</string>
     <string name="sleep_remaining">Выключение через %1$s мин</string>
+    <string name="minutes_left">Осталось %1$s мин</string>
+    <string name="section_watching">Просмотр</string>
+    <string name="section_interface">Интерфейс</string>
+    <string name="section_library">Плейлисты и аккаунт</string>
+    <string name="section_language_text">Язык и текст</string>
+    <string name="section_channel_list">Список каналов</string>
+    <string name="section_panels_colour">Панели и цвет</string>
     <string name="sleep_set">GoatTV остановится через %1$s мин</string>
     <string name="sleep_off">Таймер сна выключен</string>
     <string name="sleep_soon">GoatTV остановится через %1$s с</string>

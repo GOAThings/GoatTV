@@ -100,6 +100,13 @@
     <string name="back_to_live">실시간으로 돌아가기</string>
     <string name="sleep_timer">취침 타이머</string>
     <string name="sleep_remaining">%1$s분 후 종료</string>
+    <string name="minutes_left">%1$s분 남음</string>
+    <string name="section_watching">시청</string>
+    <string name="section_interface">인터페이스</string>
+    <string name="section_library">목록 및 계정</string>
+    <string name="section_language_text">언어 및 텍스트</string>
+    <string name="section_channel_list">채널 목록</string>
+    <string name="section_panels_colour">패널 및 색상</string>
     <string name="sleep_set">%1$s분 후 GoatTV가 종료돼요</string>
     <string name="sleep_off">취침 타이머 꺼짐</string>
     <string name="sleep_soon">%1$s초 후 GoatTV가 종료돼요</string>

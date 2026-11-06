@@ -100,6 +100,13 @@
     <string name="back_to_live">लाइव पर लौटें</string>
     <string name="sleep_timer">स्लीप टाइमर</string>
     <string name="sleep_remaining">%1$s मिनट में बंद</string>
+    <string name="minutes_left">%1$s मिनट बाकी</string>
+    <string name="section_watching">देखना</string>
+    <string name="section_interface">इंटरफ़ेस</string>
+    <string name="section_library">सूचियाँ और खाता</string>
+    <string name="section_language_text">भाषा और टेक्स्ट</string>
+    <string name="section_channel_list">चैनल सूची</string>
+    <string name="section_panels_colour">पैनल और रंग</string>
     <string name="sleep_set">GoatTV %1$s मिनट में रुक जाएगा</string>
     <string name="sleep_off">स्लीप टाइमर बंद</string>
     <string name="sleep_soon">GoatTV %1$s सेकंड में रुक जाएगा</string>

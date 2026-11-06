@@ -100,6 +100,13 @@
     <string name="back_to_live">ライブに戻る</string>
     <string name="sleep_timer">スリープタイマー</string>
     <string name="sleep_remaining">%1$s 分後にオフ</string>
+    <string name="minutes_left">残り %1$s 分</string>
+    <string name="section_watching">視聴</string>
+    <string name="section_interface">インターフェース</string>
+    <string name="section_library">リストとアカウント</string>
+    <string name="section_language_text">言語とテキスト</string>
+    <string name="section_channel_list">チャンネル一覧</string>
+    <string name="section_panels_colour">パネルと色</string>
     <string name="sleep_set">GoatTV は %1$s 分後に停止します</string>
     <string name="sleep_off">スリープタイマーをオフにしました</string>
     <string name="sleep_soon">GoatTV は %1$s 秒後に停止します</string>

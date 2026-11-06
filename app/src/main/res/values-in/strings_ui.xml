@@ -100,6 +100,13 @@
     <string name="back_to_live">kembali ke siaran langsung</string>
     <string name="sleep_timer">Timer tidur</string>
     <string name="sleep_remaining">Mati dalam %1$s mnt</string>
+    <string name="minutes_left">Sisa %1$s mnt</string>
+    <string name="section_watching">Menonton</string>
+    <string name="section_interface">Antarmuka</string>
+    <string name="section_library">Daftar &amp; akun</string>
+    <string name="section_language_text">Bahasa &amp; teks</string>
+    <string name="section_channel_list">Daftar saluran</string>
+    <string name="section_panels_colour">Panel &amp; warna</string>
     <string name="sleep_set">GoatTV akan berhenti dalam %1$s mnt</string>
     <string name="sleep_off">Timer tidur nonaktif</string>
     <string name="sleep_soon">GoatTV akan berhenti dalam %1$s dtk</string>

@@ -567,7 +567,10 @@ fun PlayerScreen(vm: AppViewModel) {
             val started = SystemClock.uptimeMillis()
             // Com o vidro quase opaco o fundo nem se vê, por isso não vale a pena renová-lo.
             val opaque = prefs.glassOpacity >= 95 && backdrop.image != null
-            if (opaque) {
+            // Enquanto se navega com o comando, o fundo fica parado: copiar e desfocar o vídeo a cada frame
+            // competia com o scroll pelo CPU e pela GPU. Desfocado, nem se nota que esperou pelo fim das teclas.
+            val navigating = SystemClock.uptimeMillis() - lastInput[0] < BACKDROP_PAUSE_MS
+            if (opaque || navigating) {
                 delay(50)
                 continue
             }
@@ -1276,6 +1279,9 @@ private const val FREEZE_HEIGHT = 720
 private const val BACKDROP_WIDTH = 128
 private const val BACKDROP_HEIGHT = 72
 private const val DEFAULT_BACKDROP_FPS = 30f
+
+/** Quanto tempo depois da última tecla o fundo do vidro volta a acompanhar o vídeo. */
+private const val BACKDROP_PAUSE_MS = 400L
 
 /** Estado da reprodução do canal atual (tentativas, erro, etc.). */
 private class PlaybackSession {

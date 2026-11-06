@@ -37,7 +37,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.Dp
+import cc.slokker.itv.ui.theme.ControlRadius
+import cc.slokker.itv.ui.common.LocalChannelLogos
+import cc.slokker.itv.ui.glass.panelListState
+import cc.slokker.itv.ui.glass.slidingFocus
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,6 +80,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -242,7 +263,17 @@ private fun logoSourceLabel(source: String, s: Strings): String = when (source) 
 
 /** Uma linha de definições. [key] serve para devolver o foco à linha certa ao voltar atrás. */
 private sealed class Item(val key: String) {
-    class Nav(key: String, val title: String, val value: String? = null, val subtitle: String? = null, val onClick: () -> Unit) : Item(key)
+    /** Abre outra página ou escolha. [icon]: ícone à esquerda (página principal); [logo]: logótipo do canal à esquerda. */
+    class Nav(
+        key: String,
+        val title: String,
+        val value: String? = null,
+        val subtitle: String? = null,
+        val icon: ImageVector? = null,
+        val logo: String? = null,
+        val showLogo: Boolean = false,
+        val onClick: () -> Unit,
+    ) : Item(key)
     /** Sim/não. Com [eye], um olho (visível) ou um olho riscado e esbatido (escondido) em vez do interruptor. */
     class Toggle(
         key: String,
@@ -263,7 +294,7 @@ private sealed class Item(val key: String) {
         val showLogo: Boolean = false,
         val onClick: () -> Unit,
     ) : Item(key)
-    class Action(key: String, val title: String, val subtitle: String? = null, val onClick: () -> Unit) : Item(key)
+    class Action(key: String, val title: String, val subtitle: String? = null, val icon: ImageVector? = null, val onClick: () -> Unit) : Item(key)
     class Info(key: String, val title: String, val value: String) : Item(key)
     class Header(key: String, val text: String) : Item(key)
 }
@@ -339,16 +370,25 @@ fun SettingsContent(
         val entry = s.last()
         // A página que está a sair não pode ficar com o foco (senão ele salta ao terminar a animação).
         val leaving = transition.targetState == EnterExitState.PostExit
-        Column(Modifier.focusProperties { canFocus = !leaving }) {
+        Column(Modifier.fillMaxSize().focusProperties { canFocus = !leaving }) {
             // A página de uma lista mostra o nome atual (pode ter mudado aqui, no site ou noutra TV).
             val playlistsNow by vm.playlists.collectAsStateWithLifecycle()
             val title = (entry.route as? Route.PlaylistDetail)?.let { r -> playlistsNow.firstOrNull { it.id == r.id }?.name }
                 ?: entry.route.title(LocalStrings.current)
+            // Nas subpáginas, de onde se veio ("‹ Definições") por cima do título.
+            val parent = s.getOrNull(s.lastIndex - 1)?.route
+            if (parent != null) {
+                Row(Modifier.padding(start = 6.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(ItvIcons.Back, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim)
+                    Text(parent.title(LocalStrings.current), style = MaterialTheme.typography.labelMedium, color = ItvColors.TextDim)
+                }
+            }
             Text(
                 title,
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 12.dp, top = if (parent != null) 0.dp else 2.dp, bottom = 6.dp),
             )
+            Box(Modifier.weight(1f)) {
             when (entry.route) {
                 Route.ParentalGate -> PinPad(
                     title = LocalStrings.current.enterPin,
@@ -396,6 +436,13 @@ fun SettingsContent(
                     }
                 }
             }
+            }
+            Text(
+                "GoatTV ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.labelSmall,
+                color = ItvColors.TextFaint,
+                modifier = Modifier.padding(start = 12.dp, top = 8.dp),
+            )
         }
     }
 }
@@ -453,34 +500,43 @@ private fun settingItems(
 
     // Atualização da app: título e estado (a descarregar, a instalar…).
     val updateState by vm.update.collectAsStateWithLifecycle()
+    val channelLogos = LocalChannelLogos.current
     val reportState by vm.report.collectAsStateWithLifecycle()
-    fun updateItem(key: String): Item? = when (val u = updateState) {
-        is UpdateState.Available -> Item.Action(key, s.updateTo(u.release.version), u.release.notes.lineSequence().firstOrNull { it.isNotBlank() }?.trimStart('-', '*', ' ')) { vm.installUpdate() }
-        is UpdateState.Downloading -> Item.Action(key, s.updateTo(u.release.version), s.downloading((u.progress * 100).toInt())) {}
-        is UpdateState.Installing -> Item.Action(key, s.updateTo(u.release.version), s.installing) {}
+    fun updateItem(key: String, icon: ImageVector? = null): Item? = when (val u = updateState) {
+        is UpdateState.Available -> Item.Action(key, s.updateTo(u.release.version), u.release.notes.lineSequence().firstOrNull { it.isNotBlank() }?.trimStart('-', '*', ' '), icon) { vm.installUpdate() }
+        is UpdateState.Downloading -> Item.Action(key, s.updateTo(u.release.version), s.downloading((u.progress * 100).toInt()), icon) {}
+        is UpdateState.Installing -> Item.Action(key, s.updateTo(u.release.version), s.installing, icon) {}
         // Falhou: o motivo por extenso; carregar procura outra vez e volta a oferecer a atualização.
-        is UpdateState.Failed -> Item.Action(key, s.updateFailedTitle, u.message) { vm.checkForUpdate(manual = true) }
+        is UpdateState.Failed -> Item.Action(key, s.updateFailedTitle, u.message, icon) { vm.checkForUpdate(manual = true) }
         else -> null
     }
 
     return when (route) {
         Route.Root -> buildList {
-            updateItem("update")?.let { add(it) }
+            // No topo, sem secção: o canal a ver e a atualização (se houver). Depois as páginas, por secções.
             if (player != null && playing != null) {
-                add(Item.Nav("current", s.currentChannel, subtitle = playing.name) { push(Route.Current, "current") })
+                add(
+                    Item.Nav("current", playing.name, subtitle = s.currentChannel, logo = channelLogos[playing.key] ?: playing.logo, showLogo = true) {
+                        push(Route.Current, "current")
+                    },
+                )
             }
-            add(Item.Nav("general", s.general, subtitle = s.generalSummary) { push(Route.General, "general") })
-            add(Item.Nav("playback", s.playback, subtitle = s.playbackSummary) { push(Route.Playback, "playback") })
-            add(Item.Nav("zapping", s.zapping, subtitle = s.zappingSummary) { push(Route.Zapping, "zapping") })
-            add(Item.Nav("appearance", s.appearance, subtitle = s.appearanceSummary) { push(Route.Appearance, "appearance") })
-            add(Item.Nav("guide", s.guide, subtitle = s.guideSummary) { push(Route.Guide, "guide") })
+            updateItem("update", ItvIcons.Update)?.let { add(it) }
+            add(Item.Header("hwatch", s.sectionWatching))
+            add(Item.Nav("playback", s.playback, subtitle = s.playbackSummary, icon = ItvIcons.PlayCircle) { push(Route.Playback, "playback") })
+            add(Item.Nav("zapping", s.zapping, subtitle = s.zappingSummary, icon = ItvIcons.SwapVert) { push(Route.Zapping, "zapping") })
+            add(Item.Nav("guide", s.guide, subtitle = s.guideSummary, icon = ItvIcons.Calendar) { push(Route.Guide, "guide") })
+            add(Item.Header("hui", s.sectionInterface))
+            add(Item.Nav("appearance", s.appearance, subtitle = s.appearanceSummary, icon = ItvIcons.Palette) { push(Route.Appearance, "appearance") })
+            add(Item.Nav("general", s.general, subtitle = s.generalSummary, icon = ItvIcons.Tune) { push(Route.General, "general") })
+            add(Item.Header("hlib", s.sectionLibrary))
+            add(Item.Nav("lists", s.playlists, subtitle = content?.playlist?.name, icon = ItvIcons.Playlist) { push(Route.Lists, "lists") })
             add(
-                Item.Nav("parental", s.parental, subtitle = if (prefs.pinHash != null) s.on else s.off) {
+                Item.Nav("parental", s.parental, subtitle = if (prefs.pinHash != null) s.on else s.off, icon = ItvIcons.Lock) {
                     push(if (prefs.pinHash != null) Route.ParentalGate else Route.Parental, "parental")
                 },
             )
-            add(Item.Nav("lists", s.playlists, subtitle = content?.playlist?.name) { push(Route.Lists, "lists") })
-            add(Item.Nav("account", s.account, subtitle = if (local) s.noAccount else email?.let(::maskEmail)) { push(Route.Account, "account") })
+            add(Item.Nav("account", s.account, subtitle = if (local) s.noAccount else email?.let(::maskEmail), icon = ItvIcons.Account) { push(Route.Account, "account") })
         }
 
         Route.Current -> buildList {
@@ -825,12 +881,19 @@ private fun settingItems(
         )
 
         Route.Appearance -> listOf(
+            Item.Header("hlang", s.sectionLanguageText),
             pref(Prefs.Key.LANGUAGE, s.language, listOf("auto" to s.languageAuto) + Strings.LANGUAGES, prefs.language),
             pref(
                 Prefs.Key.UI_SCALE, s.uiScale,
                 (Prefs.UI_SCALE_MIN..Prefs.UI_SCALE_MAX step 5).map { it to s.percent(it) },
                 prefs.uiScale,
             ),
+            pref(
+                Prefs.Key.TEXT_SIZE, s.textSize,
+                listOf(Prefs.TextSize.SMALL to s.sizeSmall, Prefs.TextSize.NORMAL to s.sizeNormal, Prefs.TextSize.LARGE to s.sizeLarge),
+                prefs.textSize,
+            ),
+            Item.Header("hlist", s.sectionChannelList),
             Item.Toggle(Prefs.Key.SHOW_NUMBERS, s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) },
             Item.Toggle(Prefs.Key.SHOW_LOGOS, s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) },
             Item.Nav(Prefs.Key.LOGO_SOURCE, s.logoSource, value = logoSourceLabel(prefs.logoSource, s)) { push(Route.LogoSource, Prefs.Key.LOGO_SOURCE) },
@@ -839,15 +902,11 @@ private fun settingItems(
                 listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName),
                 prefs.sort,
             ),
+            Item.Header("hpanels", s.sectionPanelsColour),
             pref(
                 Prefs.Key.PANEL_WIDTH, s.panelWidth,
                 listOf(300 to s.widthNarrow, 340 to s.widthNormal, 400 to s.widthWide, 460 to s.widthExtraWide),
                 prefs.panelWidth,
-            ),
-            pref(
-                Prefs.Key.TEXT_SIZE, s.textSize,
-                listOf(Prefs.TextSize.SMALL to s.sizeSmall, Prefs.TextSize.NORMAL to s.sizeNormal, Prefs.TextSize.LARGE to s.sizeLarge),
-                prefs.textSize,
             ),
             Item.Nav(Prefs.Key.ACCENT, s.accent, value = s.accentName(prefs.accent)) {
                 push(
@@ -1188,28 +1247,66 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
         ?: focusable.firstOrNull()
     val focus = remember { FocusRequester() }
     val start = remember { items.indexOf(target).coerceAtLeast(0) }
-    val state = remember { LazyListState((start - 3).coerceAtLeast(0)) }
+    val state = remember { panelListState((start - 3).coerceAtLeast(0)) }
     LaunchedEffect(Unit) { if (target != null) focusWithRetry(focus) }
+    // Como na lista de canais: um só contorno que desliza até à linha com foco (lido só no desenho).
+    var focusedKey by remember { mutableStateOf<String?>(null) }
 
-    LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-        items(items, key = { it.key }) { item ->
-            val mod = if (item === target) Modifier.focusRequester(focus) else Modifier
+    // As linhas de cada secção (entre títulos) ficam num bloco: cantos redondos só no início e no fim, e um traço
+    // fino entre elas.
+    val edges = remember(items) {
+        items.mapIndexed { i, it ->
+            if (it is Item.Header) null else (i == 0 || items[i - 1] is Item.Header) to (i == items.lastIndex || items[i + 1] is Item.Header)
+        }
+    }
+
+    LazyColumn(
+        state = state,
+        contentPadding = PaddingValues(vertical = 4.dp),
+        modifier = Modifier.slidingFocus(state) { focusedKey }.fadeBottom(state),
+    ) {
+        itemsIndexed(items, key = { _, it -> it.key }) { index, item ->
+            val (first, last) = edges[index] ?: (false to false)
+            val inset = when {
+                item is Item.Nav && item.showLogo -> 66.dp
+                item is Item.Nav && item.icon != null || item is Item.Action && item.icon != null -> 62.dp
+                item is Item.Check && item.showLogo -> 58.dp
+                else -> 12.dp
+            }
+            val mod = (if (item === target) Modifier.focusRequester(focus) else Modifier)
+                .onFocusChanged { if (it.isFocused) focusedKey = item.key }
+                .cardSegment(first, last, inset)
             val dim = LocalContentColor.current.copy(alpha = 0.82f)
             when (item) {
-                is Item.Header -> SectionLabel(item.text)
+                is Item.Header -> SectionLabel(item.text, if (index > 0) Modifier.padding(top = 8.dp) else Modifier)
                 is Item.Nav -> GlassRow(
                     enabled = enabled,
+                    outlineFocus = true,
+                    slidingFocus = true,
                     onClick = item.onClick,
                     title = item.title,
                     subtitle = item.subtitle,
                     subtitleLines = 1,
-                    trailing = item.value?.let { value ->
-                        { TrailingValue(value, LocalContentColor.current.copy(alpha = 0.82f)) }
+                    leading = when {
+                        item.showLogo -> {
+                            {
+                                LogoImage(item.logo, item.title, 40.dp)
+                                Spacer(Modifier.width(14.dp))
+                            }
+                        }
+                        item.icon != null -> { { IconTile(item.icon) } }
+                        else -> null
+                    },
+                    trailing = {
+                        item.value?.let { TrailingValue(it, LocalContentColor.current.copy(alpha = 0.82f)) }
+                        Icon(ItvIcons.Chevron, contentDescription = null, modifier = Modifier.size(22.dp), tint = LocalContentColor.current.copy(alpha = 0.5f))
                     },
                     modifier = mod,
                 )
                 is Item.Toggle -> GlassRow(
                     enabled = enabled,
+                    outlineFocus = true,
+                    slidingFocus = true,
                     onClick = { item.onToggle(!item.checked) },
                     title = item.title,
                     subtitle = item.subtitle,
@@ -1219,6 +1316,8 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
                 )
                 is Item.Check -> GlassRow(
                     enabled = enabled,
+                    outlineFocus = true,
+                    slidingFocus = true,
                     onClick = item.onClick,
                     title = item.title,
                     subtitle = item.subtitle,
@@ -1245,9 +1344,21 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
                     },
                     modifier = mod,
                 )
-                is Item.Action -> GlassRow(enabled = enabled, onClick = item.onClick, title = item.title, subtitle = item.subtitle, subtitleLines = 1, modifier = mod)
+                is Item.Action -> GlassRow(
+                    enabled = enabled,
+                    outlineFocus = true,
+                    slidingFocus = true,
+                    onClick = item.onClick,
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    subtitleLines = 1,
+                    leading = item.icon?.let { icon -> { IconTile(icon, brand = true) } },
+                    modifier = mod,
+                )
                 is Item.Info -> GlassRow(
                     enabled = enabled,
+                    outlineFocus = true,
+                    slidingFocus = true,
                     onClick = {},
                     title = item.title,
                     trailing = { TrailingValue(item.value, dim) },
@@ -1257,6 +1368,49 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
         }
     }
 }
+
+/** Ícone de uma página, num quadrado arredondado; [brand] no gradiente da marca (ex.: a atualização). */
+@Composable
+private fun IconTile(icon: ImageVector, brand: Boolean = false) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (brand) Modifier.background(LocalAccent.current.brush) else Modifier.background(Color.White.copy(alpha = 0.08f))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = if (brand) Color.White else ItvColors.Text.copy(alpha = 0.85f))
+    }
+    Spacer(Modifier.width(14.dp))
+}
+
+/** O pedaço de bloco por trás de uma linha: fundo leve, cantos redondos em [first]/[last] e um traço por cima, a partir de [inset]. */
+private fun Modifier.cardSegment(first: Boolean, last: Boolean, inset: Dp) = drawBehind {
+    val r = ControlRadius.toPx()
+    val top = if (first) CornerRadius(r) else CornerRadius.Zero
+    val bottom = if (last) CornerRadius(r) else CornerRadius.Zero
+    drawPath(Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), top, top, bottom, bottom)) }, CardFill)
+    if (!first) {
+        val x = inset.toPx()
+        drawRect(CardDivider, topLeft = Offset(x, 0f), size = Size(size.width - x - 12.dp.toPx(), 1.dp.toPx()))
+    }
+}
+
+private val CardFill = Color.White.copy(alpha = 0.04f)
+private val CardDivider = Color.White.copy(alpha = 0.07f)
+
+/** A lista desvanece em baixo quando há mais para ver. */
+private fun Modifier.fadeBottom(state: LazyListState) =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        if (!state.canScrollForward) return@drawWithContent
+        val h = 40.dp.toPx()
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - h, endY = size.height),
+            topLeft = Offset(0f, size.height - h),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /** Reordenar grupos (ver [OrderPage]). */
 @Composable
@@ -1284,8 +1438,9 @@ private fun ChannelsOrderPage(vm: AppViewModel, groupId: String, enabled: Boolea
 private fun OrderPage(groups: List<Pair<String, String>>, enabled: Boolean, onMove: (id: String, delta: Int) -> Unit) {
     val s = LocalStrings.current
     var moving by remember { mutableStateOf<String?>(null) }
-    val state = remember { LazyListState() }
+    val state = remember { panelListState(0) }
     val first = remember { FocusRequester() }
+    var focusedId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { focusWithRetry(first) }
     // O grupo em movimento fica sempre à vista.
     LaunchedEffect(groups, moving) {
@@ -1295,17 +1450,25 @@ private fun OrderPage(groups: List<Pair<String, String>>, enabled: Boolean, onMo
             state.scrollToItem((index - 3).coerceAtLeast(0))
         }
     }
-    LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+    LazyColumn(
+        state = state,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        contentPadding = PaddingValues(vertical = 4.dp),
+        modifier = Modifier.slidingFocus(state) { focusedId },
+    ) {
         items(groups, key = { it.first }) { (id, name) ->
             val isMoving = moving == id
             GlassRow(
                 enabled = enabled,
                 onClick = { moving = if (isMoving) null else id },
                 selected = isMoving,
+                outlineFocus = true,
+                slidingFocus = true,
                 title = name,
                 trailing = { Text(if (isMoving) s.moving else "↕", style = MaterialTheme.typography.bodySmall, color = if (isMoving) LocalAccent.current.start else LocalContentColor.current.copy(alpha = 0.6f)) },
                 modifier = Modifier
                     .then(if (id == groups.firstOrNull()?.first) Modifier.focusRequester(first) else Modifier)
+                    .onFocusChanged { if (it.isFocused) focusedId = id }
                     .onPreviewKeyEvent { e ->
                         if (!isMoving || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (e.key.nativeKeyCode) {

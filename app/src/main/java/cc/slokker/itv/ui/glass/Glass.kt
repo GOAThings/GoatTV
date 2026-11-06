@@ -51,6 +51,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
@@ -63,7 +64,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
@@ -85,6 +89,7 @@ import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import cc.slokker.itv.ui.theme.GoatPalette
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.theme.TvSafePadding
@@ -228,6 +233,20 @@ private val PROGRESS_HEIGHT = 2.dp
 
 /** O contorno da linha com foco em [GlassRow] com outlineFocus (o traço é cortado a meio pela forma da linha). */
 private val OUTLINE_WIDTH = 2.dp
+
+/**
+ * O destaque de uma lista com [GlassRow] `slidingFocus`: o mesmo contorno e véu do `outlineFocus`, desenhados uma vez
+ * pela lista em [top], com a altura [height] da linha com foco. Como só ele se mexe, desliza de linha em linha em vez
+ * de acender e apagar em cada uma.
+ */
+/** O véu fica por baixo das linhas e o contorno por cima, para não ser tapado pelo fundo da linha selecionada. */
+fun ContentDrawScope.drawSlidingFocus(top: Float, height: Float, brush: Brush, alpha: Float = 1f) {
+    if (height <= 0f || alpha <= 0f) { drawContent(); return }
+    val outline = ItvShapes.Row.createOutline(Size(size.width, height), layoutDirection, this)
+    translate(top = top) { drawOutline(outline, Color.White.copy(alpha = OUTLINE_VEIL * alpha)) }
+    drawContent()
+    translate(top = top) { drawOutline(outline, brush, alpha = alpha, style = Stroke(OUTLINE_WIDTH.toPx() * 2)) }
+}
 private const val OUTLINE_VEIL = 0.12f
 
 /** Transição do destaque de foco nas linhas. */
@@ -254,6 +273,10 @@ fun GlassRow(
     subtitleLines: Int = 2,
     enabled: Boolean = true,
     outlineFocus: Boolean = false,
+    /** A lista desenha um só destaque que desliza entre as linhas ([drawSlidingFocus]): a linha não desenha o seu. */
+    slidingFocus: Boolean = false,
+    /** O [selected] fica marcado como na palete: fundo azul escuro e um traço à esquerda (em vez do fundo claro). */
+    accentSelected: Boolean = false,
     /** Barra fina por baixo do texto (ex.: quanto já passou do programa), de 0 a 1. */
     progress: Float? = null,
     /** Guarda o lugar da barra mesmo sem [progress] (linhas com a mesma altura numa lista). */
@@ -267,10 +290,11 @@ fun GlassRow(
     // destaque não saltar de linha em linha enquanto a lista desliza. Pinta-se só no desenho (sem
     // recompor a linha a cada frame) e o texto troca de cor uma vez, a meio.
     val fade = animateFloatAsState(if (focused && enabled) 1f else 0f, tween(FOCUS_FADE_MS), label = "row")
-    val dark by remember(outlineFocus) { derivedStateOf { !outlineFocus && fade.value > 0.5f } }
+    val dark by remember(outlineFocus, slidingFocus) { derivedStateOf { !outlineFocus && !slidingFocus && fade.value > 0.5f } }
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
-    val rest = if (selected && !outlineFocus) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
+    val rest = if (selected && !outlineFocus && !accentSelected && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
     val outlineBrush = LocalOutlineBrush.current
@@ -290,12 +314,18 @@ fun GlassRow(
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus) 1f else 1.02f),
     ) {
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
             Modifier
                 .drawBehind {
+                    if (selected && accentSelected) {
+                        val r = CornerRadius(ControlRadius.toPx())
+                        drawRoundRect(GoatPalette.BrandSoft, cornerRadius = r)
+                        drawRect(GoatPalette.Link, size = size.copy(width = 4.dp.toPx()))
+                    }
+                    if (slidingFocus) return@drawBehind
                     val a = fade.value.takeIf { it > 0f } ?: return@drawBehind
                     if (outlineFocus) {
                         val outline = shape.createOutline(size, layoutDirection, this)

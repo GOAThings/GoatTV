@@ -100,6 +100,13 @@
     <string name="back_to_live">canlı yayına dön</string>
     <string name="sleep_timer">Uyku zamanlayıcısı</string>
     <string name="sleep_remaining">%1$s dk sonra kapanır</string>
+    <string name="minutes_left">%1$s dk kaldı</string>
+    <string name="section_watching">İzleme</string>
+    <string name="section_interface">Arayüz</string>
+    <string name="section_library">Listeler ve hesap</string>
+    <string name="section_language_text">Dil ve metin</string>
+    <string name="section_channel_list">Kanal listesi</string>
+    <string name="section_panels_colour">Paneller ve renk</string>
     <string name="sleep_set">GoatTV %1$s dk sonra duracak</string>
     <string name="sleep_off">Uyku zamanlayıcısı kapalı</string>
     <string name="sleep_soon">GoatTV %1$s sn sonra duracak</string>

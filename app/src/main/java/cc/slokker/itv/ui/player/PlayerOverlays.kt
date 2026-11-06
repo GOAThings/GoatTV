@@ -2,6 +2,41 @@ package cc.slokker.itv.ui.player
 
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import coil3.request.allowHardware
+import coil3.request.SuccessResult
+import coil3.request.ImageRequest
+import coil3.SingletonImageLoader
+import cc.slokker.itv.ui.common.LocalChannelLogos
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.ContentScale
+import coil3.toBitmap
+import coil3.compose.AsyncImage
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlin.math.sqrt
+import java.util.concurrent.ConcurrentHashMap
+import android.graphics.Color as AndroidColor
+import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Paint
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.i18n.LocalStrings
@@ -37,6 +72,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -54,7 +90,8 @@ import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.theme.ItvColors
 
 /**
- * Barra "a ver agora" em vidro, em baixo: canal, programa atual com progresso, a seguir e hora.
+ * Barra "a ver agora" em baixo, sem cartão de vidro: o vídeo escurece em baixo e por cima ficam o logótipo, o programa
+ * (horas, quanto falta e os dados da stream), o seguinte, a barra de progresso larga e os botões.
  * [actions] são os botões por baixo (pesquisa, guia, favorito…), que recebem o programa atual.
  */
 @Composable
@@ -67,57 +104,222 @@ internal fun NowPlayingBar(
 ) {
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val isFavorite = channel.key in favorites[data.playlist.id].orEmpty()
+    val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
+    val next = epg.firstOrNull { it.startMs >= (current?.endMs ?: now) }
+    val s = LocalStrings.current
 
     Column(
         Modifier
-            .padding(start = 48.dp, end = 48.dp, bottom = 27.dp)
             .fillMaxWidth()
-            .glass(ItvShapes.Panel)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .background(HudScrim)
+            .padding(start = 48.dp, end = 48.dp, top = 96.dp, bottom = 27.dp),
     ) {
-        // Só o essencial: o canal com os dados da stream por baixo, e o que está a dar e a seguir.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(0.8f)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            if (prefs.showLogos) {
+                HudLogo(channel, Modifier.size(width = 132.dp, height = 76.dp))
+                Spacer(Modifier.width(20.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                ChannelLine(channel, isFavorite)
                 Text(
-                    if (isFavorite) "${channel.name}  ★" else channel.name,
-                    style = MaterialTheme.typography.headlineSmall,
+                    current?.title ?: channel.name,
+                    style = MaterialTheme.typography.headlineSmall.copy(shadow = TextShadow),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
                 )
-                if (badges.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        badges.forEach { QualityBadge(it) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (current != null) {
+                        ProgrammeTimes(current, now, Modifier.padding(end = 14.dp))
+                    } else if (epg.isEmpty()) {
+                        Text(s.noGuide, color = ItvColors.TextDim, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 14.dp))
                     }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { badges.forEach { QualityBadge(it) } }
                 }
             }
-            Spacer(Modifier.width(28.dp))
-            NowNext(epg, now, Modifier.weight(1.2f), compact = true)
+            if (next != null) {
+                Spacer(Modifier.width(24.dp))
+                Column(Modifier.widthIn(max = 300.dp), horizontalAlignment = Alignment.End) {
+                    Text(s.next(formatTime(next.startMs)), color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall)
+                    Text(next.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
+        Spacer(Modifier.height(14.dp))
+        WideProgress(current?.progress(now))
         if (actions != null) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                actions(epg.firstOrNull { it.startMs <= now && it.endMs > now })
+                actions(current)
             }
         }
     }
 }
+
+/** Número e nome do canal (com ★ se for favorito), pequenos, por cima do programa. */
+@Composable
+private fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (isFavorite) "${channel.name}  ★" else channel.name,
+            style = style.copy(shadow = TextShadow),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** "14:15 — 15:45", uma barra curta e quanto falta. */
+@Composable
+private fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier) {
+    val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow)
+    val left = ((current.endMs - now) / 60_000 + 1).toInt()
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text("${formatTime(current.startMs)} — ${formatTime(current.endMs)}", style = style)
+        ProgressBar(current.progress(now), Modifier.padding(horizontal = 12.dp).width(56.dp))
+        Text(LocalStrings.current.minutesLeft(left), style = style)
+    }
+}
+
+/** A barra de progresso larga do HUD, com um ponto no sítio onde o programa vai. Sem guia fica só o traço. */
+@Composable
+private fun WideProgress(progress: Float?) {
+    val brush = LocalAccent.current.brush
+    Spacer(
+        Modifier
+            .fillMaxWidth()
+            .height(14.dp)
+            .drawBehind {
+                val h = 4.dp.toPx()
+                val y = (size.height - h) / 2
+                val r = CornerRadius(h / 2)
+                drawRoundRect(Color.White.copy(alpha = 0.22f), Offset(0f, y), Size(size.width, h), r)
+                val p = progress ?: return@drawBehind
+                val x = size.width * p.coerceIn(0f, 1f)
+                drawRoundRect(brush, Offset(0f, y), Size(x, h), r)
+                drawCircle(Color.White.copy(alpha = 0.25f), radius = 7.dp.toPx(), center = Offset(x, size.height / 2))
+                drawCircle(Color.White, radius = 5.dp.toPx(), center = Offset(x, size.height / 2))
+            },
+    )
+}
+
+/**
+ * O logótipo sem placa, a ocupar a caixa toda (os largos ficam largos), com uma sombra suave com a forma dele para se
+ * separar do vídeo. Os escuros sem fundo próprio levam antes um brilho claro (uma sombra escura não os salvava).
+ * Sem logo (ou se falhar), as iniciais.
+ */
+@Composable
+private fun HudLogo(channel: Channel, modifier: Modifier) {
+    val url = LocalChannelLogos.current[channel.key] ?: channel.logo
+    var failed by remember(url) { mutableStateOf(url == null) }
+    var look by remember(url) { mutableStateOf(url?.let { LogoLooks[it] }) }
+    val context = LocalContext.current
+    // Mede-se e faz-se a sombra numa cópia pequena e à parte (sem bitmaps de hardware), uma vez por logótipo.
+    LaunchedEffect(url) {
+        if (url == null || LogoLooks.containsKey(url)) return@LaunchedEffect
+        val request = ImageRequest.Builder(context).data(url).size(LOGO_SAMPLE).allowHardware(false).build()
+        val image = (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image ?: return@LaunchedEffect
+        val made = withContext(Dispatchers.Default) { runCatching { logoLook(image.toBitmap()) }.getOrNull() } ?: return@LaunchedEffect
+        LogoLooks[url] = made
+        look = made
+    }
+    Box(
+        modifier.drawBehind {
+            val l = look ?: return@drawBehind
+            if (failed) return@drawBehind
+            // Onde o ContentScale.Fit põe o logótipo dentro do padding; a sombra (maior, com o desfoque) à volta.
+            val scale = minOf((size.width - 20.dp.toPx()) / l.width, (size.height - 16.dp.toPx()) / l.height)
+            val left = (size.width - l.width * scale) / 2 + l.dx * scale
+            val top = (size.height - l.height * scale) / 2 + l.dy * scale + if (l.dark) 0f else 1.dp.toPx()
+            drawImage(
+                l.shadow,
+                dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
+                dstSize = IntSize((l.shadow.width * scale).roundToInt(), (l.shadow.height * scale).roundToInt()),
+                colorFilter = ColorFilter.tint(if (l.dark) LogoGlow else LogoShadow),
+            )
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (failed || url == null) {
+            Text(
+                channel.name.take(2).uppercase(),
+                style = MaterialTheme.typography.headlineSmall.copy(shadow = TextShadow),
+                color = ItvColors.TextDim,
+            )
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** A sombra de um logótipo (só o alfa, desfocado) e onde fica em relação a ele, no tamanho da amostra. */
+private class LogoLook(val shadow: ImageBitmap, val dx: Int, val dy: Int, val width: Int, val height: Int, val dark: Boolean)
+
+/** Já medidos: url do logótipo → sombra. */
+private val LogoLooks = ConcurrentHashMap<String, LogoLook>()
+
+private fun logoLook(source: Bitmap): LogoLook {
+    val offset = IntArray(2)
+    val blur = Paint().apply { maskFilter = BlurMaskFilter(LOGO_BLUR, BlurMaskFilter.Blur.NORMAL) }
+    val shadow = source.extractAlpha(blur, offset)
+    return LogoLook(shadow.asImageBitmap(), offset[0], offset[1], source.width, source.height, isDarkLogo(source))
+}
+
+/**
+ * Escuro e sem fundo próprio: o brilho médio (percebido) só das partes não transparentes, numa cópia pequena.
+ * Com fundo próprio (quase tudo opaco) vê-se sempre.
+ */
+private fun isDarkLogo(source: Bitmap): Boolean {
+    val small = Bitmap.createScaledBitmap(source, 32, 32, true)
+    val pixels = IntArray(32 * 32)
+    small.getPixels(pixels, 0, 32, 0, 0, 32, 32)
+    var opaque = 0
+    var light = 0.0
+    for (c in pixels) {
+        if (AndroidColor.alpha(c) < 128) continue
+        opaque++
+        val r = AndroidColor.red(c) / 255.0
+        val g = AndroidColor.green(c) / 255.0
+        val b = AndroidColor.blue(c) / 255.0
+        light += sqrt(0.299 * r * r + 0.587 * g * g + 0.114 * b * b)
+    }
+    if (opaque == 0 || opaque > pixels.size * 0.85) return false
+    return light / opaque < DARK_LOGO
+}
+
+private const val DARK_LOGO = 0.38
+private const val LOGO_SAMPLE = 96
+private const val LOGO_BLUR = 3.5f
+private val LogoShadow = Color.Black.copy(alpha = 0.7f)
+private val LogoGlow = Color.White.copy(alpha = 0.55f)
 
 @Composable
 private fun QualityBadge(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,
-        color = ItvColors.TextDim,
+        color = ItvColors.Text.copy(alpha = 0.85f),
         modifier = Modifier
-            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
+            .background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
 }
 
-/** Cartão compacto ao mudar de canal: logo, número e grupo, programa atual e progresso. */
+/**
+ * Ao mudar de canal, no mesmo estilo do HUD mas sem botões nem cartão: o canto de baixo escurece um pouco
+ * e o texto leva sombra, para se ler em cima de imagens claras.
+ */
 @Composable
 internal fun ZapCard(channel: Channel, vm: AppViewModel) {
     val now = rememberNow()
@@ -127,34 +329,53 @@ internal fun ZapCard(channel: Channel, vm: AppViewModel) {
 
     Row(
         Modifier
-            .padding(start = 48.dp, bottom = 48.dp)
-            .width(420.dp)
-            .glass(ItvShapes.Card)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .drawBehind {
+                // Canto escurecido (a partir do canto do ecrã, onde o cartão encosta).
+                val r = 760.dp.toPx()
+                drawRect(
+                    Brush.radialGradient(
+                        0f to Color.Black.copy(alpha = 0.78f),
+                        0.5f to Color.Black.copy(alpha = 0.42f),
+                        1f to Color.Transparent,
+                        center = Offset(0f, size.height),
+                        radius = r,
+                    ),
+                    topLeft = Offset(0f, size.height - r),
+                    size = Size(r, r),
+                )
+            }
+            .padding(start = 48.dp, bottom = 48.dp, top = 48.dp, end = 48.dp)
+            .widthIn(max = 640.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (prefs.showLogos) {
-            ChannelLogo(channel, 56.dp)
+            HudLogo(channel, Modifier.size(width = 108.dp, height = 62.dp))
             Spacer(Modifier.width(16.dp))
         }
-        Column(Modifier.weight(1f)) {
+        Column {
+            ChannelLine(channel, isFavorite = false, style = MaterialTheme.typography.labelMedium)
             Text(
                 current?.title ?: channel.name,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge.copy(shadow = TextShadow),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(vertical = 2.dp),
             )
-            if (current != null) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(formatTime(current.startMs), style = MaterialTheme.typography.labelSmall, color = ItvColors.TextDim)
-                    ProgressBar(current.progress(now), Modifier.weight(1f).padding(horizontal = 10.dp))
-                    Text(formatTime(current.endMs), style = MaterialTheme.typography.labelSmall, color = ItvColors.TextDim)
-                }
-            }
+            if (current != null) ProgrammeTimes(current, now)
         }
     }
 }
+
+/** Sombra do texto do HUD e do zapping (sem cartão por trás). */
+private val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 8f)
+
+/** O escurecido do HUD: transparente em cima, quase preto junto aos botões. */
+private val HudScrim = Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.35f to Color.Black.copy(alpha = 0.55f),
+    1f to Color.Black.copy(alpha = 0.85f),
+)
+
 
 /** Cápsula "A sintonizar…" com um ponto a pulsar. */
 @Composable

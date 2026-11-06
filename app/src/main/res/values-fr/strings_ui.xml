@@ -100,6 +100,13 @@
     <string name="back_to_live">retour au direct</string>
     <string name="sleep_timer">Minuterie de mise en veille</string>
     <string name="sleep_remaining">Arrêt dans %1$s min</string>
+    <string name="minutes_left">Encore %1$s min</string>
+    <string name="section_watching">Visionnage</string>
+    <string name="section_interface">Interface</string>
+    <string name="section_library">Listes et compte</string>
+    <string name="section_language_text">Langue et texte</string>
+    <string name="section_channel_list">Liste des chaînes</string>
+    <string name="section_panels_colour">Panneaux et couleur</string>
     <string name="sleep_set">GoatTV s\'arrêtera dans %1$s min</string>
     <string name="sleep_off">Minuterie désactivée</string>
     <string name="sleep_soon">GoatTV s\'arrêtera dans %1$s s</string>

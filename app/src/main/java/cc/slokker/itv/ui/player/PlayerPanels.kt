@@ -9,6 +9,12 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.drawOutline
+import cc.slokker.itv.ui.theme.GoatPalette
+import cc.slokker.itv.ui.glass.panelListState
+import cc.slokker.itv.ui.glass.slidingFocus
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -114,31 +120,51 @@ internal fun SidePanel(
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
     val shape = ItvShapes.Panel
-    Row {
+    // Os grupos abrem num painel próprio, ao lado dos canais, que ficam atrás esbatidos. Os dois ficam montados:
+    // abrir é só animar largura e opacidade (lidas no desenho), sem reconstruir as listas.
+    val toGroups = animateFloatAsState(
+        targetValue = if (mode == Panel.Groups) 1f else 0f,
+        animationSpec = tween(PANEL_ANIM_MS, easing = FastOutSlowInEasing),
+        label = "panel",
+    )
+    val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
+    val groupsWidth = (prefs.panelWidth * 0.85f).dp
+    // Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (→ abre-o).
+    var preview by remember(group) { mutableStateOf(group) }
+    val shownGroup = if (mode == Panel.Groups) preview else group
+    Row(Modifier.padding(start = 32.dp, top = 27.dp, bottom = 27.dp)) {
     Box(
         Modifier
-            .padding(start = 32.dp, top = 27.dp, bottom = 27.dp)
+            .fillMaxHeight()
+            .layout { measurable, constraints ->
+                // Largura a crescer com a animação; o conteúdo é sempre medido à largura toda (não recompõe).
+                val full = groupsWidth.roundToPx()
+                val placeable = measurable.measure(constraints.copy(minWidth = full, maxWidth = full))
+                val w = (full * toGroups.value).toInt()
+                layout(w, placeable.height) { if (w > 0) placeable.placeRelative(w - full, 0) }
+            }
+            .padding(end = 12.dp)
+            .glass(shape)
+            .clip(shape)
+            .focusProperties { canFocus = mode == Panel.Groups },
+    ) {
+        Box(content.graphicsLayer { alpha = toGroups.value }) {
+            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+        }
+    }
+    Box(
+        Modifier
             .width(prefs.panelWidth.dp)
             .fillMaxHeight()
+            .graphicsLayer { alpha = 1f - 0.45f * toGroups.value }
             .glass(shape)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
             // e as margens ficam por dentro para o brilho do foco ter espaço.
-            .clip(shape),
+            .clip(shape)
+            .focusProperties { canFocus = mode == Panel.Channels },
     ) {
-        // As duas listas ficam montadas: trocar é só deslizar e fazer fade na GPU, sem reconstruir nada.
-        // Lido só na fase de desenho (graphicsLayer): a animação não recompõe as listas.
-        val toGroups = animateFloatAsState(
-            targetValue = if (mode == Panel.Groups) 1f else 0f,
-            animationSpec = tween(PANEL_ANIM_MS, easing = FastOutSlowInEasing),
-            label = "panel",
-        )
-        val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
-        // Grupos entram pela esquerda (estão "antes" dos canais); canais pela direita.
-        PanelLayer(visible = { 1f - toGroups.value }, shift = { toGroups.value }, active = mode == Panel.Channels, modifier = content) {
-            ChannelList(group, playing, vm, onPlay, onOpenGroups, onClose, onOpenEpg, active = mode == Panel.Channels && epgChannel == null)
-        }
-        PanelLayer(visible = { toGroups.value }, shift = { toGroups.value - 1f }, active = mode == Panel.Groups, modifier = content) {
-            GroupList(group, vm, onSelectGroup, onSettings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+        Box(content) {
+            ChannelList(shownGroup, playing, vm, onPlay, onOpenGroups, onClose, onOpenEpg, active = mode == Panel.Channels && epgChannel == null)
         }
     }
     // → na lista de canais: o EPG do canal com foco, ao lado.
@@ -211,7 +237,7 @@ private fun ChannelList(
     val favoriteKeys = remember(favorites, data) { favorites[data.playlist.id].orEmpty().toSet() }
 
     val startIndex = remember(channels) { channels.indexOfFirst { it.uid == playing.uid }.coerceAtLeast(0) }
-    val state = remember(channels) { LazyListState((startIndex - 3).coerceAtLeast(0)) }
+    val state = remember(channels) { panelListState((startIndex - 3).coerceAtLeast(0)) }
     val initialFocus = remember { FocusRequester() }
     // O canal com foco é um estado lido só dentro das linhas: mudar o foco recompõe as duas linhas
     // envolvidas, não a lista toda (o scroll fica fluido).
@@ -322,6 +348,7 @@ private fun ChannelList(
             state = state,
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
+            modifier = Modifier.slidingFocus(state) { focusedUid },
         ) {
             items(channels, key = { it.uid }) { ch ->
                 val isPlaying = ch.uid == playing.uid
@@ -332,6 +359,7 @@ private fun ChannelList(
                     selected = isPlaying,
                     // Só contorno no foco: os logótipos (muitos brancos sobre transparente) não precisam de placa.
                     outlineFocus = true,
+                    slidingFocus = true,
                     title = ch.name,
                     // Todas as linhas com a mesma altura: o programa numa linha (anda para o lado na que tem foco),
                     // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
@@ -363,7 +391,7 @@ private fun ChannelList(
                     },
                     trailing = if (ch.key in favoriteKeys || isPlaying) {
                         {
-                            if (ch.key in favoriteKeys) Text("★", color = if (isPlaying) LocalAccent.current.start else LocalContentColor.current)
+                            if (ch.key in favoriteKeys) Text("★", color = GoatPalette.Warning)
                             if (isPlaying) LiveDot()
                         }
                     } else {
@@ -389,6 +417,7 @@ private fun GroupList(
     selected: String,
     vm: AppViewModel,
     onSelectGroup: (String) -> Unit,
+    onFocusGroup: (String) -> Unit,
     onSettings: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
@@ -416,9 +445,28 @@ private fun GroupList(
     val allCount = remember(data, prefs.hiddenGroups, prefs.hiddenChannels, prefs.lockedGroups, unlocked) { vm.channelsOf(SpecialCategory.ALL).size }
     val initialFocus = remember { FocusRequester() }
     var focusedGroup by remember { mutableStateOf<String?>(null) }
+    // Só depois de o foco parar um instante: a correr pelos grupos não se reconstrói a lista de canais a cada tecla.
+    LaunchedEffect(Unit) {
+        snapshotFlow { focusedGroup }.collectLatest { id ->
+            if (id == null) return@collectLatest
+            delay(GROUP_PREVIEW_MS)
+            onFocusGroup(id)
+        }
+    }
     val selectedIndex = groups.indexOfFirst { it.id == selected }.coerceAtLeast(0)
-    val state = remember { LazyListState((selectedIndex - 3).coerceAtLeast(0)) }
+    val state = remember { panelListState((selectedIndex - 3).coerceAtLeast(0)) }
     val pillFocus = remember { FocusRequester() }
+    // ↑ ↓ andam de grupo em grupo por aqui (como na lista de canais), não pela procura de foco do Compose, que
+    // à volta dos botões do cabeçalho às vezes deixava o foco perdido fora da lista.
+    val rowFocus = remember(groups.size) { List(groups.size) { FocusRequester() } }
+    val scope = rememberCoroutineScope()
+    fun focusRow(index: Int) {
+        if (runCatching { rowFocus[index].requestFocus() }.getOrDefault(false)) return
+        scope.launch {
+            state.scrollToItem((index - 3).coerceAtLeast(0))
+            focusWithRetry(rowFocus[index])
+        }
+    }
 
     // Ao ficar visível: foco no grupo da lista de canais de onde se veio (trazido para a vista se preciso).
     LaunchedEffect(active, selectedIndex) {
@@ -438,10 +486,26 @@ private fun GroupList(
     Box {
     Column(
         Modifier.onPreviewKeyEvent { e ->
-            // Nos botões do cabeçalho (⇄, ⚙) as setas só mudam o foco.
+            if (e.type != KeyEventType.KeyDown || playlistMenu) return@onPreviewKeyEvent false
             val group = focusedGroup
-            if (e.type != KeyEventType.KeyDown || playlistMenu || group == null) return@onPreviewKeyEvent false
-            when (e.key.nativeKeyCode) {
+            val code = e.key.nativeKeyCode
+            // Nos botões do cabeçalho (⇄, ⚙): ↓ volta ao primeiro grupo; as outras setas só mudam o foco.
+            if (group == null) {
+                if (code != AndroidKeyEvent.KEYCODE_DPAD_DOWN || groups.isEmpty()) return@onPreviewKeyEvent false
+                focusRow(0)
+                return@onPreviewKeyEvent true
+            }
+            when (code) {
+                // ↑ no primeiro grupo sobe para os botões do cabeçalho; ↓ no último fica.
+                AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                    val index = groups.indexOfFirst { it.id == group }
+                    if (index < 0) return@onPreviewKeyEvent false
+                    val up = code == AndroidKeyEvent.KEYCODE_DPAD_UP
+                    if (up && index == 0) return@onPreviewKeyEvent false
+                    val to = if (up) index - 1 else index + 1
+                    if (to <= groups.lastIndex) focusRow(to)
+                    true
+                }
                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                     onSelectGroup(group)
                     true
@@ -474,6 +538,7 @@ private fun GroupList(
         }
         LazyColumn(
             state = state,
+            modifier = Modifier.slidingFocus(state, plate = true) { focusedGroup?.let { "g:$it" } },
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
         ) {
@@ -489,6 +554,7 @@ private fun GroupList(
                     onClick = { onSelectGroup(g.id) },
                     selected = g.id == selected,
                     enabled = !playlistMenu,
+                    slidingFocus = true,
                     title = g.name,
                     trailing = {
                         if (locked) {
@@ -501,6 +567,7 @@ private fun GroupList(
                     },
                     modifier = Modifier
                         .then(if (index == selectedIndex) Modifier.focusRequester(initialFocus) else Modifier)
+                        .focusRequester(rowFocus[index])
                         .onFocusChanged { if (it.isFocused) focusedGroup = g.id },
                 )
             }
@@ -561,6 +628,9 @@ private fun PanelHeader(title: String, subtitle: String, hint: String? = null, a
     }
 }
 
+private const val GROUP_PREVIEW_MS = 400L
+
+
 /** Ponto "em direto" do canal a ver. */
 @Composable
 private fun LiveDot() {
@@ -569,7 +639,7 @@ private fun LiveDot() {
             .padding(start = 8.dp)
             .width(8.dp)
             .height(8.dp)
-            .glass(RoundedCornerShape(50), tint = LocalAccent.current.start, fallbackTint = LocalAccent.current.start),
+            .glass(RoundedCornerShape(50), tint = GoatPalette.Live, fallbackTint = GoatPalette.Live),
     )
 }
 

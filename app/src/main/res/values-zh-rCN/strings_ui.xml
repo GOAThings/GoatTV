@@ -100,6 +100,13 @@
     <string name="back_to_live">回到直播</string>
     <string name="sleep_timer">睡眠定时</string>
     <string name="sleep_remaining">%1$s 分钟后关闭</string>
+    <string name="minutes_left">还剩 %1$s 分钟</string>
+    <string name="section_watching">观看</string>
+    <string name="section_interface">界面</string>
+    <string name="section_library">列表和账户</string>
+    <string name="section_language_text">语言和文字</string>
+    <string name="section_channel_list">频道列表</string>
+    <string name="section_panels_colour">面板和颜色</string>
     <string name="sleep_set">GoatTV 将在 %1$s 分钟后停止</string>
     <string name="sleep_off">睡眠定时已关闭</string>
     <string name="sleep_soon">GoatTV 将在 %1$s 秒后停止</string>

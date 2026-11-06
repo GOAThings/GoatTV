@@ -25,6 +25,17 @@ import androidx.tv.material3.Typography
 import androidx.tv.material3.darkColorScheme
 import cc.slokker.itv.R
 
+/** A palete comum às apps GOAT (tema escuro), usada pelo redesenho dos painéis. */
+object GoatPalette {
+    val Text = Color(0xFFE4E4E4)
+    val Muted = Color(0xFF9298A8)
+    val Raised = Color(0xFF1E2029)
+    val BrandSoft = Color(0xFF18204A)
+    val Link = Color(0xFF7C92E0)
+    val Live = Color(0xFFF2777E)
+    val Warning = Color(0xFFE5B454)
+}
+
 object ItvColors {
     val Sky = Color(0xFF38BDF8)
     val Indigo = Color(0xFF818CF8)

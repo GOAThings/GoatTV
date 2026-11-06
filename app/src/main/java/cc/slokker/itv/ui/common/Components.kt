@@ -52,6 +52,9 @@ import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.theme.ItvColors
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -134,8 +137,13 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
             )
         }
         if (logo != null) {
+            // Pedido com o tamanho fixo (o mesmo das listas que pré-carregam os logos): assim o Coil encontra-o na cache
+            // de memória logo ao compor, e a linha nova aparece num só frame em vez de se compor duas vezes.
+            val context = LocalContext.current
+            val px = with(LocalDensity.current) { size.roundToPx() }
+            val request = remember(logo, px) { ImageRequest.Builder(context).data(logo).size(px).build() }
             AsyncImage(
-                model = logo,
+                model = request,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 onError = { showInitials = true },

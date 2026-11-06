@@ -100,6 +100,13 @@
     <string name="back_to_live">torna alla diretta</string>
     <string name="sleep_timer">Timer di spegnimento</string>
     <string name="sleep_remaining">Si spegne tra %1$s min</string>
+    <string name="minutes_left">Mancano %1$s min</string>
+    <string name="section_watching">Visione</string>
+    <string name="section_interface">Interfaccia</string>
+    <string name="section_library">Liste e account</string>
+    <string name="section_language_text">Lingua e testo</string>
+    <string name="section_channel_list">Elenco canali</string>
+    <string name="section_panels_colour">Pannelli e colore</string>
     <string name="sleep_set">GoatTV si fermerà tra %1$s min</string>
     <string name="sleep_off">Timer di spegnimento disattivato</string>
     <string name="sleep_soon">GoatTV si fermerà tra %1$s s</string>
