@@ -90,7 +90,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import cc.slokker.itv.ui.theme.GoatPalette
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.scale
 import java.util.Calendar
@@ -112,6 +116,14 @@ private const val WINDOW_MS = 4 * HALF_HOUR
 private const val PAST_LIMIT_MS = 24 * 3600_000L
 private const val FUTURE_LIMIT_MS = 36 * 3600_000L
 private const val PAGE_ROWS = 6
+private const val HELD_HERO_DELAY_MS = 150L
+
+/** Linhas já compostas fora do ecrã (as que vão entrar ao descer ou subir não se fazem no frame da tecla). */
+@OptIn(ExperimentalFoundationApi::class)
+private val GuideListCache = LazyLayoutCacheWindow(ahead = ROW_HEIGHT * 4, behind = ROW_HEIGHT * 3)
+
+@OptIn(ExperimentalFoundationApi::class)
+private fun guideListState(first: Int) = LazyListState(GuideListCache, first)
 
 /** Um bloco da grelha: um programa, ou um intervalo sem informação. */
 private data class Slot(val entry: EpgEntry?, val start: Long, val end: Long)
@@ -150,7 +162,7 @@ internal fun TvGuide(
     var onHeader by remember { mutableStateOf(false) }
     val minTime = floorHalfHour(opened - PAST_LIMIT_MS)
     val maxTime = opened + FUTURE_LIMIT_MS
-    val listState = rememberLazyListState((row - 2).coerceAtLeast(0))
+    val listState = remember { guideListState((row - 2).coerceAtLeast(0)) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }
 
@@ -167,6 +179,17 @@ internal fun TvGuide(
 
     val selectedChannel = channels.getOrNull(row)
     val selectedSlot = selectedChannel?.let { ch -> remember(ch, version, focusTime) { slotAt(entriesOf(ch), focusTime) } }
+
+    // O programa em cima segue a escolha um frame depois (com a tecla segurada, só quando se para): o frame da tecla
+    // fica só com a grelha e a placa começa a deslizar a tempo.
+    val heroTarget = if (selectedChannel != null && selectedSlot != null) selectedChannel to selectedSlot else null
+    var hero by remember { mutableStateOf(heroTarget) }
+    var held by remember { mutableStateOf(false) }
+    LaunchedEffect(heroTarget) {
+        delay(if (held) HELD_HERO_DELAY_MS else 16)
+        hero = heroTarget
+    }
+    val tabs = remember(groups, data) { groups.map { it.id to it.name.ifBlank { data.categoryName(it.id) } } }
 
     fun moveTo(slot: Slot) {
         focusTime = maxOf(slot.start, minTime)
@@ -221,7 +244,11 @@ internal fun TvGuide(
             .focusRequester(focus)
             .focusable()
             .onKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                if (e.type != KeyEventType.KeyDown) {
+                    held = false
+                    return@onKeyEvent false
+                }
+                held = e.nativeKeyEvent.repeatCount > 0
                 val ch = channels.getOrNull(row)
                 val slot = selectedSlot
                 when (e.key.nativeKeyCode) {
@@ -281,12 +308,13 @@ internal fun TvGuide(
     ) {
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GroupTabs(groups.map { it.id to it.name.ifBlank { data.categoryName(it.id) } }, group, onHeader, Modifier.weight(1f))
+                GroupTabs(tabs, group, onHeader, Modifier.weight(1f))
                 Text(formatTime(now), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, shadow = TextShadow))
             }
             Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
-                if (selectedChannel != null && selectedSlot != null) {
-                    GuideHero(vm, s, selectedChannel, selectedSlot, now, onHeader, prefs.showLogos)
+                val shown = hero
+                if (shown != null) {
+                    GuideHero(vm, s, shown.first, shown.second, now, onHeader, prefs.showLogos)
                 } else {
                     Text(s.noChannelsInGroup, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyLarge)
                 }
