@@ -175,12 +175,12 @@ struct PlayerScreen: View {
             }
 
             if zapCard, !hud, panel == .none, let channel = model.current {
-                VStack {
-                    Spacer()
-                    HStack {
-                        ZapCard(channel: channel, now: now)
-                        Spacer(minLength: 0)
-                    }
+                ZStack(alignment: .bottomLeading) {
+                    // O canto escurecido, a desvanecer até ao meio do ecrã (sem orla).
+                    EllipticalGradient(stops: [.init(color: .black.opacity(0.7), location: 0), .init(color: .black.opacity(0.35), location: 0.45),
+                                               .init(color: .clear, location: 1)],
+                                       center: .bottomLeading, startRadiusFraction: 0, endRadiusFraction: 1.3)
+                    ZapCard(channel: channel, now: now)
                 }
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -985,13 +985,14 @@ struct PlayerScreen: View {
             .padding(.horizontal, 6)
             Spacer(minLength: 0)
         }
+        .opacity(0.5)
         .padding(.vertical, 28)
         .padding(.horizontal, 16)
         .frame(width: model.panelPoints(model.prefs.panelWidth))
-        .frame(maxHeight: .infinity, alignment: .top)
+        // Com minHeight 0 fica da altura do ecrã (o que não cabe é cortado), em vez de crescer com as linhas.
+        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
         .clipped()
         .glass()
-        .opacity(0.55)
         .allowsHitTesting(false)
         .animation(.easeOut(duration: 0.15), value: group)
     }
@@ -1032,11 +1033,6 @@ struct ZapCard: View {
         }
         .frame(maxWidth: 1180, alignment: .leading)
         .padding(96)
-        .background(
-            RadialGradient(stops: [.init(color: .black.opacity(0.78), location: 0), .init(color: .black.opacity(0.42), location: 0.5),
-                                   .init(color: .clear, location: 1)],
-                           center: .bottomLeading, startRadius: 0, endRadius: 1500)
-        )
     }
 }
 
@@ -1139,9 +1135,9 @@ struct ProgrammeTimes: View {
     var body: some View {
         HStack(spacing: 18) {
             if let entry {
-                Text("\(hhmm(entry.start)) — \(hhmm(entry.end))")
+                Text("\(hhmm(entry.start)) — \(hhmm(entry.end))").fixedSize()
                 ProgressLine(value: entry.progress(now: now), height: 5).frame(width: barWidth)
-                Text(model.strings.r("minutes_left", "\(max(0, (entry.endMs - now + 59_999) / 60_000))"))
+                Text(model.strings.r("minutes_left", "\(max(0, (entry.endMs - now + 59_999) / 60_000))")).fixedSize()
             } else {
                 Text(model.strings.noGuideInfo)
             }
