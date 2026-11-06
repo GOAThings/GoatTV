@@ -580,4 +580,5 @@
     <string name="done">Готово</string>
     <string name="favorites_hint">Чтобы добавить ещё, нажмите на звёздочку канала или удерживайте его.</string>
     <string name="watch_again">Смотреть снова</string>
+    <string name="group_channels_one">Каналов: 1</string>
 </resources>

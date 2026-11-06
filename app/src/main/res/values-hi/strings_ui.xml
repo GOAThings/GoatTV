@@ -576,4 +576,5 @@
     <string name="done">हो गया</string>
     <string name="favorites_hint">और जोड़ने के लिए, किसी चैनल के तारे पर टैप करें या उसे दबाए रखें।</string>
     <string name="watch_again">फिर से देखें</string>
+    <string name="group_channels_one">1 चैनल</string>
 </resources>

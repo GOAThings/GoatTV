@@ -187,7 +187,7 @@ class Strings(context: Context) {
             else -> R.string.greeting_evening
         },
     )
-    fun groupChannels(count: Int) = s(R.string.group_channels, count)
+    fun groupChannels(count: Int) = if (count == 1) s(R.string.group_channels_one) else s(R.string.group_channels, count)
     val searchRecent get() = s(R.string.search_recent)
     val searchNow get() = s(R.string.search_now)
     val searchLater get() = s(R.string.search_later)

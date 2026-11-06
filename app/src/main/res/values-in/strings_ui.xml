@@ -574,4 +574,5 @@
     <string name="done">Selesai</string>
     <string name="favorites_hint">Untuk menambah lagi, ketuk bintang pada saluran atau tahan saluran itu.</string>
     <string name="watch_again">Tonton lagi</string>
+    <string name="group_channels_one">1 saluran</string>
 </resources>

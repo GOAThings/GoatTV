@@ -590,4 +590,5 @@
     <string name="done">Concluído</string>
     <string name="favorites_hint">Para juntar mais, toca na estrela de um canal ou mantém o dedo nele.</string>
     <string name="watch_again">Rever</string>
+    <string name="group_channels_one">1 canal</string>
 </resources>

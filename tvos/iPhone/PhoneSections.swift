@@ -6,6 +6,11 @@ private let pillFill = Color.white.opacity(0.08)
 
 private func nowMillis() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
+/// "1 canal" / "N canais".
+func channelCount(_ s: Strings, _ n: Int) -> String {
+    n == 1 ? s.r("group_channels_one") : s.r("group_channels", "\(n)")
+}
+
 /// "Hoje", "Amanhã" ou o dia da semana e o dia (ex.: "Dom 8").
 func phoneDayLabel(_ s: Strings, _ ms: Int64) -> String {
     let date = Date(timeIntervalSince1970: Double(ms) / 1000)
@@ -576,7 +581,7 @@ struct PhoneFavorites: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.r("favorites")).font(.system(size: 30, weight: .heavy))
-                    Text(s.r("group_channels", "\(channels.count)")).font(.footnote).foregroundStyle(Theme.textFaint)
+                    Text(channelCount(s, channels.count)).font(.footnote).foregroundStyle(Theme.textFaint)
                 }
                 Spacer()
                 if channels.count > 1 {

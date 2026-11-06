@@ -188,7 +188,7 @@ private struct GroupTile: View {
                 .frame(height: 24)
                 Text(locked ? "🔒 \(group.name)" : group.name).font(.system(size: 16, weight: .bold))
                     .foregroundStyle(locked ? Theme.textFaint : Theme.text).lineLimit(1).padding(.top, 12)
-                Text(locked ? " " : model.strings.r("group_channels", "\(channels.count)")).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
+                Text(locked ? " " : channelCount(model.strings, channels.count)).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)

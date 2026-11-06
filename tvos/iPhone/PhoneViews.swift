@@ -1338,7 +1338,7 @@ private struct MenuTab: View {
                     .background(Theme.accent(p.accent), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(content.playlist.name).font(.headline).foregroundStyle(Theme.text).lineLimit(1)
-                    Text("\(playlistTypeName(content.playlist.type)) · \(s.r("group_channels", "\(content.channels.count)"))").font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
+                    Text("\(playlistTypeName(content.playlist.type)) · \(channelCount(s, content.channels.count))").font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }

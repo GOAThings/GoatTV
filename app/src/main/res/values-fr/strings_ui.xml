@@ -578,4 +578,5 @@
     <string name="done">Terminé</string>
     <string name="favorites_hint">Pour en ajouter, touchez l\'étoile d\'une chaîne ou appuyez longuement dessus.</string>
     <string name="watch_again">Revoir</string>
+    <string name="group_channels_one">1 chaîne</string>
 </resources>

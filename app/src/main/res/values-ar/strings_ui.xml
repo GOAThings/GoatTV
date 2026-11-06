@@ -584,4 +584,5 @@
     <string name="done">تم</string>
     <string name="favorites_hint">لإضافة المزيد، اضغط على نجمة القناة أو اضغط عليها مطولًا.</string>
     <string name="watch_again">إعادة المشاهدة</string>
+    <string name="group_channels_one">قناة واحدة</string>
 </resources>

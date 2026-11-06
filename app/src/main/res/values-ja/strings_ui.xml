@@ -574,4 +574,5 @@
     <string name="done">完了</string>
     <string name="favorites_hint">追加するには、チャンネルの星をタップするか長押ししてください。</string>
     <string name="watch_again">もう一度見る</string>
+    <string name="group_channels_one">1 チャンネル</string>
 </resources>

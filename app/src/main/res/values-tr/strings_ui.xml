@@ -576,4 +576,5 @@
     <string name="done">Bitti</string>
     <string name="favorites_hint">Daha fazla eklemek için bir kanalın yıldızına dokunun veya basılı tutun.</string>
     <string name="watch_again">Tekrar izle</string>
+    <string name="group_channels_one">1 kanal</string>
 </resources>

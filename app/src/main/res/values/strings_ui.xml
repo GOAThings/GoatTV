@@ -590,4 +590,5 @@
     <string name="done">Done</string>
     <string name="favorites_hint">To add more, tap the star on a channel or hold it.</string>
     <string name="watch_again">Watch again</string>
+    <string name="group_channels_one">1 channel</string>
 </resources>

@@ -578,4 +578,5 @@
     <string name="done">Fine</string>
     <string name="favorites_hint">Per aggiungerne altri, tocca la stella di un canale o tienilo premuto.</string>
     <string name="watch_again">Rivedi</string>
+    <string name="group_channels_one">1 canale</string>
 </resources>
