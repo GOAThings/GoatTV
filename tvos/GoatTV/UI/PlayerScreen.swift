@@ -1175,7 +1175,10 @@ struct WideProgress: View {
 
 extension View {
     /// Sombra para o texto ler-se por cima do vídeo.
-    func hudShadow() -> some View { shadow(color: .black.opacity(0.8), radius: 4, y: 1) }
+    /// Uma sombra curta e escura que contorna as letras, e outra larga e leve por baixo.
+    func hudShadow() -> some View {
+        shadow(color: .black.opacity(0.85), radius: 1.5, y: 1).shadow(color: .black.opacity(0.45), radius: 6)
+    }
 }
 
 /// Botão da barra (ícone e texto numa cápsula), como os do Android.

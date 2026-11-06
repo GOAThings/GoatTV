@@ -378,7 +378,8 @@ private fun ZapCorner(center: Offset, radius: Float) = Brush.radialGradient(
 )
 
 /** Sombra do texto do HUD e do zapping (sem cartão por trás). */
-internal val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 8f)
+// Curta e escura: contorna as letras (lê-se por cima de qualquer imagem) sem parecer uma mancha.
+internal val TextShadow = Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f), 4f)
 
 /** O escurecido do HUD: transparente em cima, quase preto junto aos botões. */
 private val HudScrim = Brush.verticalGradient(

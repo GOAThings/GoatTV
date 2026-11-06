@@ -91,11 +91,15 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import cc.slokker.itv.ui.theme.GoatPalette
 import kotlinx.coroutines.launch
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.scale
 import java.util.Calendar
 
 /** Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui). */
 /** A informação do programa escolhido, entre os grupos e a grelha. */
 private val HERO_HEIGHT = 118.dp
+/** Altura do meio dessa informação (margem de cima + grupos + metade). */
+private val HERO_CENTER = 20.dp + 40.dp + HERO_HEIGHT / 2
 
 private val CHANNEL_COLUMN = 210.dp
 private val ROW_HEIGHT = 44.dp
@@ -195,6 +199,25 @@ internal fun TvGuide(
         modifier
             .fillMaxSize()
             .background(GuideScrim)
+            .drawBehind {
+                // O lado do logótipo e do programa, escurecido como o canto do zapping (o vídeo aí é claro).
+                val center = Offset(0f, HERO_CENTER.toPx())
+                val ry = HERO_HEIGHT.toPx() * 1.5f
+                scale(scaleX = size.width * 0.55f / ry, scaleY = 1f, pivot = center) {
+                    drawCircle(
+                        Brush.radialGradient(
+                            0f to Color.Black.copy(alpha = 0.6f),
+                            0.45f to Color.Black.copy(alpha = 0.35f),
+                            0.75f to Color.Black.copy(alpha = 0.1f),
+                            1f to Color.Transparent,
+                            center = center,
+                            radius = ry,
+                        ),
+                        radius = ry,
+                        center = center,
+                    )
+                }
+            }
             .focusRequester(focus)
             .focusable()
             .onKeyEvent { e ->
@@ -333,10 +356,11 @@ internal fun TvGuide(
 /** Escurecido do guia: o vídeo vê-se em cima (por trás dos grupos e do programa) e quase nada por trás da grelha. */
 private val GuideScrim = Brush.verticalGradient(
     0f to Color.Black.copy(alpha = 0.55f),
-    0.14f to Color.Black.copy(alpha = 0.15f),
-    0.26f to Color.Black.copy(alpha = 0.22f),
-    0.46f to Color.Black.copy(alpha = 0.82f),
-    1f to Color.Black.copy(alpha = 0.93f),
+    0.12f to Color.Black.copy(alpha = 0.15f),
+    0.24f to Color.Black.copy(alpha = 0.3f),
+    0.38f to Color.Black.copy(alpha = 0.8f),
+    0.52f to Color.Black.copy(alpha = 0.9f),
+    1f to Color.Black.copy(alpha = 0.95f),
 )
 
 private val RULER_HEIGHT = 30.dp
@@ -470,7 +494,11 @@ private fun TimeRuler(windowStart: Long, timelineWidth: Dp, now: Long, s: String
         }
         Box(Modifier.width(timelineWidth).fillMaxHeight()) {
             val step = timelineWidth / 4
+            val nowX = timelineWidth * ((now - windowStart).toFloat() / WINDOW_MS)
+            val showNow = now in windowStart until windowStart + WINDOW_MS
             for (i in 0 until 4) {
+                // A hora que fica por baixo da etiqueta vermelha não se mostra.
+                if (showNow && (step * i + 24.dp - nowX).value.let { kotlin.math.abs(it) } < 60f) continue
                 Text(
                     formatTime(windowStart + i * HALF_HOUR),
                     style = MaterialTheme.typography.labelLarge,
@@ -677,7 +705,8 @@ private fun GuideTimeline(
                 maxLines = 1,
                 constraints = Constraints(maxWidth = maxWidth),
             )
-            val timeLayout = if (c.startMs != null && width > 90.dp.toPx()) {
+            // No que está a dar a barra já diz onde vai: a hora de início sairia por cima dela.
+            val timeLayout = if (c.startMs != null && !c.live && width > 90.dp.toPx()) {
                 measurer.measure(
                     formatTime(c.startMs),
                     time.copy(color = if (c.past && !c.selected) ItvColors.TextFaint.copy(alpha = 0.45f) else ItvColors.TextFaint),

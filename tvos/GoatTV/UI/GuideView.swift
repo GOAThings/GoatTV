@@ -155,11 +155,19 @@ struct GuideView: View {
             .padding(.horizontal, GuideLayout.marginSide)
             .padding(.vertical, GuideLayout.marginTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(alignment: .topLeading) {
+                // O lado do logótipo e do programa, escurecido como o canto do zapping (o vídeo aí é claro).
+                EllipticalGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .black.opacity(0.35), location: 0.45),
+                                           .init(color: .black.opacity(0.1), location: 0.75), .init(color: .clear, location: 1)],
+                                   center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5)
+                    .frame(width: 2100, height: 720)
+                    .offset(x: -1050, y: GuideLayout.marginTop + 60 + heroHeight / 2 - 360)
+            }
             .background(
                 // O vídeo vê-se em cima (por trás dos grupos e do programa) e quase nada por trás da grelha.
-                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .black.opacity(0.15), location: 0.14),
-                                       .init(color: .black.opacity(0.22), location: 0.26), .init(color: .black.opacity(0.82), location: 0.46),
-                                       .init(color: .black.opacity(0.93), location: 1)],
+                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .black.opacity(0.15), location: 0.12),
+                                       .init(color: .black.opacity(0.3), location: 0.24), .init(color: .black.opacity(0.8), location: 0.38),
+                                       .init(color: .black.opacity(0.9), location: 0.52), .init(color: .black.opacity(0.95), location: 1)],
                                startPoint: .top, endPoint: .bottom)
             )
         }
@@ -342,10 +350,15 @@ struct GuideView: View {
                 .frame(width: channelColumn, alignment: .leading)
             ZStack(alignment: .leading) {
                 ForEach(0..<4, id: \.self) { i in
+                    let x = timelineWidth / 4 * CGFloat(i) + 12
+                    let nowX = CGFloat(now - windowStart) / CGFloat(windowMs) * timelineWidth
+                    let hidden = now >= windowStart && now < windowStart + windowMs && abs(x + 36 - nowX) < 120
+                    // A hora que fica por baixo da etiqueta vermelha não se mostra.
                     Text(hhmm(Date(timeIntervalSince1970: Double(windowStart + Int64(i) * halfHour) / 1000)))
                         .font(.system(size: 25, weight: .medium))
                         .foregroundStyle(Theme.textDim)
-                        .offset(x: timelineWidth / 4 * CGFloat(i) + 12)
+                        .opacity(hidden ? 0 : 1)
+                        .offset(x: x)
                 }
             }
             .frame(width: timelineWidth, alignment: .leading)
@@ -481,7 +494,8 @@ private struct GuideRow: View {
                         .font(.system(size: 26, weight: c.selected ? .semibold : .regular))
                         .foregroundStyle(ink)
                         .lineLimit(1)
-                    if let start = c.startLabel, width > 180 {
+                    // No que está a dar a barra já diz onde vai: a hora de início sairia por cima dela.
+                    if let start = c.startLabel, !c.live, width > 180 {
                         Text(hhmm(Date(timeIntervalSince1970: Double(start) / 1000)))
                             .font(.system(size: 20))
                             .foregroundStyle(Theme.textFaint.opacity(c.past && !c.selected ? 0.6 : 1))
