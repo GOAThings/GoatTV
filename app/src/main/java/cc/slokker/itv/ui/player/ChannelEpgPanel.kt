@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
+import cc.slokker.itv.ui.glass.fadeEdges
+import androidx.compose.ui.layout.layout
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.Channel
@@ -122,7 +124,19 @@ internal fun ChannelEpgPanel(
             GlassRow(onClick = { onPlay(channel) }, modifier = Modifier.focusRequester(focus), title = s.watch)
             return@Column
         }
-        LazyColumn(state = state, contentPadding = PaddingValues(vertical = 4.dp)) {
+        LazyColumn(
+            state = state,
+            contentPadding = PaddingValues(horizontal = LIST_BLEED, vertical = 4.dp),
+            // O esbatido das pontas desenha a lista numa camada, que corta o que sai dela: a linha com foco cresce um
+            // pouco, por isso a camada vai [LIST_BLEED] para cada lado, por cima da margem do painel.
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val bleed = LIST_BLEED.roundToPx() * 2
+                    val p = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleed, minWidth = constraints.minWidth + bleed))
+                    layout(constraints.maxWidth, p.height) { p.place(-bleed / 2, 0) }
+                }
+                .fadeEdges(state),
+        ) {
             itemsIndexed(shown, key = { _, e -> e.startMs }) { i, e ->
                 // Separador quando muda o dia (Hoje, Amanhã…).
                 if (i == 0 || dayLabel(s, shown[i - 1].startMs) != dayLabel(s, e.startMs)) {
@@ -150,6 +164,8 @@ internal fun ChannelEpgPanel(
         }
     }
 }
+
+private val LIST_BLEED = 8.dp
 
 /** Quanto do que já passou se mostra (para o catch-up). */
 private const val PAST_SHOWN_MS = 6 * 3600_000L

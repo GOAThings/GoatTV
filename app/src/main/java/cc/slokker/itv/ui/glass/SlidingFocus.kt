@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawOutline
@@ -85,6 +87,30 @@ fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, focusedK
 
 /** O destaque que desliza: rápido o bastante para acompanhar o comando carregado, sem ressaltar. */
 private val HighlightSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+
+/**
+ * A lista desvanece nas pontas quando há mais para ver (em cima só com [top]): uma linha a meio de sair não fica
+ * cortada a direito por baixo do título.
+ */
+fun Modifier.fadeEdges(state: LazyListState, top: Boolean = true) =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val h = 40.dp.toPx()
+        if (top && state.canScrollBackward) {
+            drawRect(
+                Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = h),
+                size = Size(size.width, h),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (state.canScrollForward) {
+            drawRect(
+                Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - h, endY = size.height),
+                topLeft = Offset(0f, size.height - h),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
 
 @OptIn(ExperimentalFoundationApi::class)
 private val PanelListCache = LazyLayoutCacheWindow(ahead = 360.dp, behind = 160.dp)

@@ -5,6 +5,7 @@ import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.outlineBrush
+import cc.slokker.itv.ui.glass.fadeEdges
 import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
@@ -1263,7 +1264,7 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
     LazyColumn(
         state = state,
         contentPadding = PaddingValues(vertical = 4.dp),
-        modifier = Modifier.slidingFocus(state) { focusedKey }.fadeBottom(state),
+        modifier = Modifier.slidingFocus(state) { focusedKey }.fadeEdges(state, top = false),
     ) {
         itemsIndexed(items, key = { _, it -> it.key }) { index, item ->
             val (first, last) = edges[index] ?: (false to false)
@@ -1398,19 +1399,6 @@ private fun Modifier.cardSegment(first: Boolean, last: Boolean, inset: Dp) = dra
 
 private val CardFill = Color.White.copy(alpha = 0.04f)
 private val CardDivider = Color.White.copy(alpha = 0.07f)
-
-/** A lista desvanece em baixo quando há mais para ver. */
-private fun Modifier.fadeBottom(state: LazyListState) =
-    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
-        drawContent()
-        if (!state.canScrollForward) return@drawWithContent
-        val h = 40.dp.toPx()
-        drawRect(
-            Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = size.height - h, endY = size.height),
-            topLeft = Offset(0f, size.height - h),
-            blendMode = BlendMode.DstIn,
-        )
-    }
 
 /** Reordenar grupos (ver [OrderPage]). */
 @Composable
