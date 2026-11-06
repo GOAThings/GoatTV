@@ -77,11 +77,11 @@ struct PlayerScreen: View {
         static let pip = VideoBox(size: CGSize(width: 704, height: 396), alignment: .topTrailing, top: 48, trailing: 64, z: 0.5)
         static let left = VideoBox(size: CGSize(width: 960, height: 540), alignment: .leading)
         static let right = VideoBox(size: CGSize(width: 960, height: 540), alignment: .trailing)
-        static let guide = VideoBox(size: GuideLayout.previewSize, alignment: .topTrailing, top: GuideLayout.marginTop, trailing: GuideLayout.marginSide, z: 2)
     }
 
     private var mainBox: VideoBox {
-        if tvGuide { return .guide }
+        // Com o guia aberto o vídeo continua em ecrã inteiro (o guia fica por cima, escurecido).
+        if tvGuide { return .full }
         guard model.second != nil else { return .full }
         if split { return swapped ? .right : .left }
         return swapped ? .pip : .full

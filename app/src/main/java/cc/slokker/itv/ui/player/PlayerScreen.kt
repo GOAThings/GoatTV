@@ -901,29 +901,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     }
                 },
         ) {
-            // Guia de TV: desenha-se antes do vídeo, que encolhe para o canto (fica à vista por cima do guia).
-            if (showGuide) {
-                TvGuide(
-                    vm = vm,
-                    playing = current,
-                    startGroup = selectedGroup,
-                    onPlay = { ch, group ->
-                        vm.play(ch, group)
-                        showGuide = false
-                    },
-                    onCatchup = { ch, entry ->
-                        vm.playCatchup(ch, entry)
-                        showGuide = false
-                    },
-                )
-            }
-
             val split = second != null && dualLayout == DualLayout.SPLIT && !showGuide
             val bigModifier = when {
-                showGuide -> Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = GUIDE_PREVIEW_TOP, end = GUIDE_PREVIEW_END)
-                    .size(GUIDE_PREVIEW_WIDTH, GUIDE_PREVIEW_HEIGHT)
                 split -> Modifier.align(Alignment.CenterStart).fillMaxWidth(0.5f).aspectRatio(16f / 9f)
                 else -> Modifier.fillMaxSize()
             }
@@ -971,6 +950,23 @@ fun PlayerScreen(vm: AppViewModel) {
 
             AnimatedVisibility(panel != Panel.None, enter = fadeIn(), exit = fadeOut()) {
                 Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.6f), 0.6f to Color.Transparent)))
+            }
+
+            // Guia de TV: por cima do vídeo, que continua em ecrã inteiro (escurecido por trás da grelha).
+            if (showGuide) {
+                TvGuide(
+                    vm = vm,
+                    playing = current,
+                    startGroup = selectedGroup,
+                    onPlay = { ch, group ->
+                        vm.play(ch, group)
+                        showGuide = false
+                    },
+                    onCatchup = { ch, entry ->
+                        vm.playCatchup(ch, entry)
+                        showGuide = false
+                    },
+                )
             }
 
             if (!session.ready && session.error == null && !showGuide && numberEntry.isEmpty()) {

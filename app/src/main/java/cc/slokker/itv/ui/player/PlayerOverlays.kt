@@ -162,7 +162,7 @@ internal fun NowPlayingBar(
 
 /** Número e nome do canal (com ★ se for favorito), pequenos, por cima do programa. */
 @Composable
-private fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
+internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow))
         Spacer(Modifier.width(8.dp))
@@ -177,7 +177,7 @@ private fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle 
 
 /** "14:15 — 15:45", uma barra curta e quanto falta. */
 @Composable
-private fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier) {
+internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier) {
     val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow)
     val left = ((current.endMs - now) / 60_000 + 1).toInt()
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -215,7 +215,7 @@ private fun WideProgress(progress: Float?) {
  * Sem logo (ou se falhar), as iniciais.
  */
 @Composable
-private fun HudLogo(channel: Channel, modifier: Modifier) {
+internal fun HudLogo(channel: Channel, modifier: Modifier) {
     val url = LocalChannelLogos.current[channel.key] ?: channel.logo
     var failed by remember(url) { mutableStateOf(url == null) }
     var look by remember(url) { mutableStateOf(url?.let { LogoLooks[it] }) }
@@ -378,7 +378,7 @@ private fun ZapCorner(center: Offset, radius: Float) = Brush.radialGradient(
 )
 
 /** Sombra do texto do HUD e do zapping (sem cartão por trás). */
-private val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 8f)
+internal val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 8f)
 
 /** O escurecido do HUD: transparente em cima, quase preto junto aos botões. */
 private val HudScrim = Brush.verticalGradient(

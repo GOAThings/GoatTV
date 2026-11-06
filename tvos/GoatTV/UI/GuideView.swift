@@ -1,15 +1,18 @@
 import GoatCore
 import SwiftUI
 
-/// Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui).
+/// As margens do guia (o vídeo continua em ecrã inteiro por trás).
 enum GuideLayout {
-    static let previewSize = CGSize(width: 512, height: 288)
     static let marginTop: CGFloat = 40
-    static let marginSide: CGFloat = 64
+    static let marginSide: CGFloat = 56
 }
 
 private let channelColumn: CGFloat = 420
-private let rowHeight: CGFloat = 92
+private let rowHeight: CGFloat = 84
+/// A informação do programa escolhido, entre os grupos e a grelha.
+private let heroHeight: CGFloat = 250
+private let cellRadius: CGFloat = 14
+private let plateSpring = Animation.spring(response: 0.28, dampingFraction: 1)
 private let rulerHeight: CGFloat = 52
 private let halfHour: Int64 = 30 * 60_000
 /// Largura visível da grelha: 2 horas.
@@ -24,7 +27,8 @@ struct GuideSlot: Equatable {
     var end: Int64
 }
 
-/// Guia de TV em grelha (como no Android): canais nas linhas, horas nas colunas, o canal a dar no canto. O foco é
+/// Guia de TV em grelha por cima do vídeo (como no Android): os grupos em cima, o programa escolhido como no HUD, e
+/// canais nas linhas, horas nas colunas, com o vídeo em ecrã inteiro por trás (escurecido atrás da grelha). O foco é
 /// gerido à mão (linha + hora): ← → seguem os programas, ↑ ↓ mantêm a hora. ↑ na primeira linha passa para o grupo
 /// (← → muda de grupo). OK: em direto vê o canal; já passou e há arquivo vê em catch-up; ainda vai dar marca um
 /// lembrete. Play/pausa volta à hora atual.
@@ -70,28 +74,33 @@ struct GuideView: View {
         let selected = current.map { slotAt(model.programmes(for: $0), focusTime) }
 
         Button(action: select) {
-            VStack(alignment: .leading, spacing: 28) {
-                HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        groupSwitcher
-                        if let current, let selected {
-                            detail(current, selected)
-                        } else {
-                            Text(model.strings.t("No channels in this group", "Não há canais neste grupo"))
-                                .font(Fonts.rowTitle).foregroundStyle(Theme.textDim)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    // Aqui por baixo vê-se o canal a dar (o vídeo do player, encolhido).
-                    Color.clear.frame(width: GuideLayout.previewSize.width, height: GuideLayout.previewSize.height)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    groupTabs
+                    Spacer(minLength: 24)
+                    Text(hhmm(Date(timeIntervalSince1970: Double(now) / 1000)))
+                        .font(.system(size: 30, weight: .bold).monospacedDigit())
+                        .hudShadow()
                 }
-                .frame(height: GuideLayout.previewSize.height)
+                Group {
+                    if let current, let selected {
+                        hero(current, selected)
+                    } else {
+                        Text(model.strings.t("No channels in this group", "Não há canais neste grupo"))
+                            .font(Fonts.rowTitle).foregroundStyle(Theme.textDim)
+                    }
+                }
+                .padding(.leading, 40)
+                .padding(.bottom, 20)
+                .frame(maxWidth: .infinity, minHeight: heroHeight, maxHeight: heroHeight, alignment: .bottomLeading)
 
                 GeometryReader { geo in
                     let timelineWidth = geo.size.width - channelColumn
                     let perPage = max(1, Int((geo.size.height - rulerHeight) / rowHeight))
                     let top = max(0, min(row - 2, list.count - perPage))
                     let visible = list.isEmpty ? [] : Array(list[top..<min(list.count, top + perPage)])
+                    let inWindow = now >= windowStart && now < windowStart + windowMs
+                    let nowX = channelColumn + CGFloat(now - windowStart) / CGFloat(windowMs) * timelineWidth
                     ZStack(alignment: .topLeading) {
                         VStack(alignment: .leading, spacing: 0) {
                             ruler(timelineWidth)
@@ -107,20 +116,52 @@ struct GuideView: View {
                                 )
                             }
                         }
-                        // A linha da hora atual.
-                        if now >= windowStart, now < windowStart + windowMs {
+                        // A linha da hora atual (a etiqueta com a hora fica na régua).
+                        if inWindow {
                             Rectangle()
-                                .fill(Theme.accent(model.prefs.accent))
-                                .frame(width: 3, height: geo.size.height)
-                                .offset(x: channelColumn + CGFloat(now - windowStart) / CGFloat(windowMs) * timelineWidth - 1)
+                                .fill(Theme.hex(0xF2777E).opacity(0.9))
+                                .frame(width: 3, height: geo.size.height - rulerHeight)
+                                .offset(x: nowX - 1, y: rulerHeight)
+                            Text(hhmm(Date(timeIntervalSince1970: Double(now) / 1000)))
+                                .font(.system(size: 20, weight: .bold).monospacedDigit())
+                                .foregroundStyle(Theme.hex(0x0B0B0B))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 3)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.hex(0xF2777E)))
+                                .fixedSize()
+                                .frame(width: 160)
+                                .offset(x: nowX - 80, y: 8)
+                        }
+                        // A placa branca do programa escolhido desliza de bloco em bloco (em "diferença": o texto por
+                        // baixo fica escuro).
+                        if let selected, !onHeader, row >= top, row < top + visible.count {
+                            let perMs = timelineWidth / CGFloat(windowMs)
+                            let start = max(selected.start, windowStart)
+                            let end = min(selected.end, windowStart + windowMs)
+                            let rect = CGRect(x: channelColumn + CGFloat(start - windowStart) * perMs,
+                                              y: rulerHeight + CGFloat(row - top) * rowHeight + 4,
+                                              width: max(0, CGFloat(end - start) * perMs - 6), height: rowHeight - 8)
+                            RoundedRectangle(cornerRadius: cellRadius, style: .continuous)
+                                .fill(Color.white)
+                                .frame(width: rect.width, height: rect.height)
+                                .offset(x: rect.minX, y: rect.minY)
+                                .blendMode(.difference)
+                                .animation(plateSpring, value: rect)
                         }
                     }
+                    .compositingGroup()
                 }
             }
             .padding(.horizontal, GuideLayout.marginSide)
             .padding(.vertical, GuideLayout.marginTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Theme.background)
+            .background(
+                // O vídeo vê-se em cima (por trás dos grupos e do programa) e quase nada por trás da grelha.
+                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .black.opacity(0.15), location: 0.14),
+                                       .init(color: .black.opacity(0.22), location: 0.26), .init(color: .black.opacity(0.82), location: 0.46),
+                                       .init(color: .black.opacity(0.93), location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            )
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focused)
@@ -228,53 +269,68 @@ struct GuideView: View {
 
     // MARK: Partes
 
-    private var groupSwitcher: some View {
-        let name = groups.first { $0.id == group }?.name ?? model.strings.all
-        return HStack(spacing: 18) {
-            Text("‹").font(.system(size: 30, weight: .semibold)).opacity(0.6)
-            Text(name).font(.system(size: 28, weight: .semibold)).lineLimit(1)
-            Text("›").font(.system(size: 30, weight: .semibold)).opacity(0.6)
+    /// Os grupos em separadores; com foco (↑ na primeira linha) o atual fica branco e ← → mudam.
+    private var groupTabs: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(groups) { g in
+                        let on = g.id == group
+                        Text(g.name)
+                            .font(.system(size: 26, weight: .semibold))
+                            .lineLimit(1)
+                            .foregroundStyle(on && onHeader ? Color.black : (on ? Theme.text : Theme.textDim))
+                            .padding(.horizontal, 26)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(on && onHeader ? Color.white : Color.white.opacity(on ? 0.14 : 0)))
+                            .id(g.id)
+                    }
+                }
+            }
+            .scrollDisabled(true)
+            .onChange(of: group, initial: true) { _, id in
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .leading) }
+            }
         }
-        .foregroundStyle(onHeader ? Color.black : Theme.text)
-        .padding(.horizontal, 26)
-        .padding(.vertical, 10)
-        .background(Capsule().fill(onHeader ? Color.white : Color.white.opacity(0.14)))
     }
 
-    @ViewBuilder
-    private func detail(_ ch: Channel, _ slot: GuideSlot) -> some View {
+    /// O programa escolhido, como no HUD: logótipo, canal, título, horas (e o que falta, se está a dar) e o que o OK faz.
+    private func hero(_ ch: Channel, _ slot: GuideSlot) -> some View {
         let s = model.strings
         let e = slot.entry
-        Text(e?.title ?? s.noGuideInfo)
-            .font(.system(size: 46, weight: .semibold))
-            .lineLimit(1)
-        if let e {
-            Text(["\(GuideView.dayLabel(s, e.startMs)) \(hhmm(e.start)) – \(hhmm(e.end))",
-                  s.t("%@ min", "%@ min", "\((e.endMs - e.startMs) / 60_000)"),
-                  ch.name].joined(separator: "  ·  "))
-                .font(.system(size: 27))
-                .foregroundStyle(Theme.textDim)
-                .lineLimit(1)
-        } else {
-            Text(ch.name).font(.system(size: 27)).foregroundStyle(Theme.textDim)
-        }
         let live = e == nil || e!.isOn(at: now)
-        if let e, live {
-            ProgressLine(value: e.progress(now: now), height: 5).frame(width: 440)
-        }
-        HStack(spacing: 34) {
-            if onHeader {
-                KeyHint(key: "← →", label: s.t("Change group", "Mudar de grupo"))
-            } else if live {
-                KeyHint(key: "OK", label: s.t("Watch", "Ver"))
-            } else if let e, e.startMs > now {
-                KeyHint(key: "OK", label: model.hasReminder(ch, e) ? s.t("Remove reminder", "Tirar lembrete") : s.t("Remind me", "Lembrar"))
-            } else if let e, model.canCatchup(ch, e) {
-                KeyHint(key: "OK", label: s.t("Watch on catch-up", "Ver em catch-up"))
-            } else {
-                Text(s.t("Not available on catch-up", "Sem catch-up")).font(.system(size: 25)).foregroundStyle(Theme.textFaint)
+        return HStack(alignment: .bottom, spacing: 32) {
+            if model.prefs.showLogos {
+                ChannelLogo(url: model.logo(for: ch), name: ch.name, size: CGSize(width: 208, height: 116), shadow: true)
             }
-            if !onHeader { KeyHint(key: "▶︎❚❚", label: s.t("Back to now", "Voltar a agora")) }
+            VStack(alignment: .leading, spacing: 6) {
+                ChannelLine(channel: ch, size: 24)
+                Text(e?.title ?? s.noGuideInfo).font(.system(size: 48, weight: .bold)).lineLimit(1)
+                if let e, live {
+                    ProgrammeTimes(entry: e, now: now, barWidth: 112)
+                } else if let e {
+                    Text("\(GuideView.dayLabel(s, e.startMs)) \(hhmm(e.start)) — \(hhmm(e.end))  ·  " + s.t("%@ min", "%@ min", "\((e.endMs - e.startMs) / 60_000)"))
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
+                HStack(spacing: 34) {
+                    if onHeader {
+                        KeyHint(key: "← →", label: s.t("Change group", "Mudar de grupo"))
+                    } else if live {
+                        KeyHint(key: "OK", label: s.t("Watch", "Ver"))
+                    } else if let e, e.startMs > now {
+                        KeyHint(key: "OK", label: model.hasReminder(ch, e) ? s.t("Remove reminder", "Tirar lembrete") : s.t("Remind me", "Lembrar"))
+                    } else if let e, model.canCatchup(ch, e) {
+                        KeyHint(key: "OK", label: s.t("Watch on catch-up", "Ver em catch-up"))
+                    } else {
+                        Text(s.t("Not available on catch-up", "Sem catch-up")).font(.system(size: 25)).foregroundStyle(Theme.textFaint)
+                    }
+                    if !onHeader { KeyHint(key: "▶︎❚❚", label: s.t("Back to now", "Voltar a agora")) }
+                }
+                .padding(.top, 8)
+            }
+            .hudShadow()
         }
     }
 
@@ -343,6 +399,8 @@ private struct GuideRow: View {
         let live: Bool
         let selected: Bool
         let icon: String?
+        /// Quanto já passou (o que está a dar).
+        var progress: Double? = nil
     }
 
     var body: some View {
@@ -358,11 +416,13 @@ private struct GuideRow: View {
                 Text(channel.name)
                     .font(.system(size: 27, weight: selected != nil ? .semibold : .regular))
                     .lineLimit(1)
+                // O canal a dar: o ponto de "em direto".
+                if isPlaying { Circle().fill(Theme.hex(0xF2777E)).frame(width: 12, height: 12) }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
             .frame(width: channelColumn - 12, height: rowHeight - 8)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(selected != nil ? 0.14 : (isPlaying ? 0.07 : 0))))
+            .background(RoundedRectangle(cornerRadius: cellRadius, style: .continuous).fill(Color.white.opacity(selected != nil ? 0.08 : 0)))
             .padding(.trailing, 12)
 
             ZStack(alignment: .topLeading) {
@@ -392,7 +452,8 @@ private struct GuideRow: View {
             list.append(Cell(
                 id: "\(e.startMs)", title: e.title, startLabel: e.startMs >= windowStart ? e.startMs : nil,
                 start: max(e.startMs, windowStart), end: min(e.endMs, windowEnd),
-                past: past, live: e.isOn(at: now), selected: selected?.entry == e, icon: icon
+                past: past, live: e.isOn(at: now), selected: selected?.entry == e, icon: icon,
+                progress: e.isOn(at: now) ? e.progress(now: now) : nil
             ))
         }
         // Bloco vazio escolhido (sem informação nessa hora).
@@ -409,10 +470,11 @@ private struct GuideRow: View {
         let left = CGFloat(c.start - windowStart) * perMs
         let width = CGFloat(c.end - c.start) * perMs - 6
         if width >= 8 {
-            let ink: Color = c.selected ? .black : (c.past ? Theme.textDim : Theme.text)
+            // O escolhido não muda aqui: a placa que desliza (em diferença) pinta-o de branco e o texto de escuro.
+            let ink: Color = c.past && !c.selected ? Theme.textFaint : Theme.text
             HStack(spacing: 10) {
                 if let icon = c.icon, width > 80 {
-                    Image(systemName: icon).font(.system(size: 20)).foregroundStyle(c.selected ? Color.black : Theme.textDim)
+                    Image(systemName: icon).font(.system(size: 20)).foregroundStyle(Theme.textDim)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(c.title)
@@ -422,7 +484,7 @@ private struct GuideRow: View {
                     if let start = c.startLabel, width > 180 {
                         Text(hhmm(Date(timeIntervalSince1970: Double(start) / 1000)))
                             .font(.system(size: 20))
-                            .foregroundStyle(c.selected ? Color.black.opacity(0.6) : Theme.textFaint)
+                            .foregroundStyle(Theme.textFaint.opacity(c.past && !c.selected ? 0.6 : 1))
                     }
                 }
                 Spacer(minLength: 0)
@@ -430,9 +492,21 @@ private struct GuideRow: View {
             .padding(.horizontal, 16)
             .frame(width: width, height: rowHeight - 8, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(c.selected ? Color.white : Color.white.opacity(c.live ? 0.13 : (c.past ? 0.04 : 0.08)))
+                RoundedRectangle(cornerRadius: cellRadius, style: .continuous)
+                    .fill(Color.white.opacity(c.live ? 0.1 : (c.past ? 0.025 : 0.06)))
             )
+            // O que está a dar: quanto já passou, numa barra fina em baixo.
+            .overlay(alignment: .bottomLeading) {
+                if let p = c.progress, !c.selected {
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.18))
+                        Capsule().fill(Theme.accent(model.prefs.accent)).frame(width: (width - 32) * p)
+                    }
+                    .frame(width: width - 32, height: 4)
+                    .padding(.leading, 16)
+                    .padding(.bottom, 9)
+                }
+            }
             .offset(x: left)
         }
     }

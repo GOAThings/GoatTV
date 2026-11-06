@@ -74,16 +74,34 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import cc.slokker.itv.ui.theme.GoatPalette
+import kotlinx.coroutines.launch
 import java.util.Calendar
 
 /** Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui). */
-internal val GUIDE_PREVIEW_WIDTH = 256.dp
-internal val GUIDE_PREVIEW_HEIGHT = 144.dp
-internal val GUIDE_PREVIEW_TOP = 20.dp
-internal val GUIDE_PREVIEW_END = 32.dp
+/** A informação do programa escolhido, entre os grupos e a grelha. */
+private val HERO_HEIGHT = 118.dp
 
 private val CHANNEL_COLUMN = 210.dp
-private val ROW_HEIGHT = 46.dp
+private val ROW_HEIGHT = 44.dp
+/** Espaço entre linhas (metade em cima, metade em baixo) e entre programas. */
+private val ROW_GAP = 2.dp
+private val CELL_GAP = 3.dp
 private const val HALF_HOUR = 30 * 60_000L
 /** Largura visível da grelha: 2 horas. */
 private const val WINDOW_MS = 4 * HALF_HOUR
@@ -95,7 +113,8 @@ private const val PAGE_ROWS = 6
 private data class Slot(val entry: EpgEntry?, val start: Long, val end: Long)
 
 /**
- * Guia de TV em grelha: canais nas linhas, horas nas colunas, o canal a dar no canto.
+ * Guia de TV em grelha por cima do vídeo (que continua em ecrã inteiro, escurecido por trás): os grupos em cima,
+ * o programa escolhido como no HUD, e canais nas linhas, horas nas colunas.
  * O foco é gerido à mão (linha + hora), como nos guias das boxes: andar para os lados segue os programas,
  * para cima/baixo mantém a hora. ↑ na primeira linha passa para o grupo (← → muda de grupo).
  * OK: em direto vê o canal; já passou e há arquivo vê em catch-up; ainda vai dar marca um lembrete.
@@ -175,7 +194,7 @@ internal fun TvGuide(
     Box(
         modifier
             .fillMaxSize()
-            .background(ItvColors.Background)
+            .background(GuideScrim)
             .focusRequester(focus)
             .focusable()
             .onKeyEvent { e ->
@@ -235,39 +254,51 @@ internal fun TvGuide(
                     else -> false
                 }
             }
-            .padding(horizontal = GUIDE_PREVIEW_END, vertical = GUIDE_PREVIEW_TOP),
+            .padding(horizontal = 28.dp, vertical = 20.dp),
     ) {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().height(GUIDE_PREVIEW_HEIGHT)) {
-                Column(Modifier.weight(1f).padding(end = 24.dp)) {
-                    GroupSwitcher(groups.firstOrNull { it.id == group }?.name ?: data.categoryName(group), onHeader)
-                    Spacer(Modifier.height(12.dp))
-                    if (selectedChannel != null && selectedSlot != null) {
-                        SlotDetail(vm, s, selectedChannel, selectedSlot, now, onHeader)
-                    } else {
-                        Text(s.noChannelsInGroup, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-                // Aqui por baixo vê-se o canal a dar (o vídeo do player, encolhido).
-                Spacer(Modifier.width(GUIDE_PREVIEW_WIDTH))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GroupTabs(groups.map { it.id to it.name.ifBlank { data.categoryName(it.id) } }, group, onHeader, Modifier.weight(1f))
+                Text(formatTime(now), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, shadow = TextShadow))
             }
-            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
+                if (selectedChannel != null && selectedSlot != null) {
+                    GuideHero(vm, s, selectedChannel, selectedSlot, now, onHeader, prefs.showLogos)
+                } else {
+                    Text(s.noChannelsInGroup, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val timelineWidth = maxWidth - CHANNEL_COLUMN
                 val dpPerMs = timelineWidth.value / WINDOW_MS
                 fun x(t: Long): Dp = ((t - windowStart) * dpPerMs).dp
-                // Linha da hora atual.
+                // Linha da hora atual (a etiqueta com a hora fica na régua).
                 if (now in windowStart until windowStart + WINDOW_MS) {
                     Box(
                         Modifier
-                            .offset(x = CHANNEL_COLUMN + x(now) - 1.dp)
+                            .offset(x = CHANNEL_COLUMN + x(now) - 1.dp, y = RULER_HEIGHT)
                             .width(2.dp)
                             .fillMaxHeight()
-                            .background(LocalAccent.current.brush),
+                            .background(GoatPalette.Live.copy(alpha = 0.9f)),
                     )
                 }
-                Column {
-                    TimeRuler(windowStart, timelineWidth, s)
+                // A placa branca do programa escolhido desliza de bloco em bloco (de linha em linha também).
+                val density = LocalDensity.current
+                val plateTarget: () -> Rect? = target@{
+                    val slot = selectedSlot
+                    if (onHeader || slot == null) return@target null
+                    val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == row } ?: return@target null
+                    with(density) {
+                        val start = maxOf(slot.start, windowStart)
+                        val end = minOf(slot.end, windowStart + WINDOW_MS)
+                        val left = CHANNEL_COLUMN.toPx() + x(start).toPx()
+                        val right = CHANNEL_COLUMN.toPx() + x(end).toPx() - CELL_GAP.toPx()
+                        val top = RULER_HEIGHT.toPx() + item.offset + ROW_GAP.toPx()
+                        Rect(left, top, right, top + item.size - ROW_GAP.toPx() * 2)
+                    }
+                }
+                Column(Modifier.guidePlate(plateTarget)) {
+                    TimeRuler(windowStart, timelineWidth, now, s)
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                         itemsIndexed(channels, key = { _, ch -> ch.uid }) { index, ch ->
                             val entries = remember(ch, version) { entriesOf(ch) }
@@ -299,66 +330,142 @@ internal fun TvGuide(
     }
 }
 
-@Composable
-private fun GroupSwitcher(name: String, focused: Boolean) {
-    Row(
-        Modifier
-            .clip(ItvShapes.Control)
-            .background(if (focused) Color.White else Color.White.copy(alpha = 0.14f))
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("‹", style = MaterialTheme.typography.titleMedium, color = if (focused) Color.Black else ItvColors.TextFaint)
-        Spacer(Modifier.width(12.dp))
-        Text(name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, color = if (focused) Color.Black else ItvColors.Text)
-        Spacer(Modifier.width(12.dp))
-        Text("›", style = MaterialTheme.typography.titleMedium, color = if (focused) Color.Black else ItvColors.TextFaint)
-    }
-}
+/** Escurecido do guia: o vídeo vê-se em cima (por trás dos grupos e do programa) e quase nada por trás da grelha. */
+private val GuideScrim = Brush.verticalGradient(
+    0f to Color.Black.copy(alpha = 0.55f),
+    0.14f to Color.Black.copy(alpha = 0.15f),
+    0.26f to Color.Black.copy(alpha = 0.22f),
+    0.46f to Color.Black.copy(alpha = 0.82f),
+    1f to Color.Black.copy(alpha = 0.93f),
+)
 
-/** Detalhe do bloco escolhido, em cima: título, horas, estado e o que o OK faz. */
+private val RULER_HEIGHT = 30.dp
+
+/** A placa do bloco escolhido, a deslizar até [target] (em "diferença": o texto por baixo fica escuro). */
 @Composable
-private fun SlotDetail(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean) {
-    val e = slot.entry
-    Text(
-        e?.title ?: s.noGuideInfo,
-        style = MaterialTheme.typography.headlineSmall,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-    Text(
-        listOfNotNull(
-            e?.let { "${dayLabel(s, it.startMs)} ${formatTime(it.startMs)} – ${formatTime(it.endMs)}" },
-            e?.let { s.minutes(((it.endMs - it.startMs) / 60_000).toInt()) },
-            channel.name,
-        ).joinToString("  ·  "),
-        color = ItvColors.TextDim,
-        style = MaterialTheme.typography.bodyMedium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-    Spacer(Modifier.height(10.dp))
-    val live = e == null || (e.startMs <= now && e.endMs > now)
-    if (e != null && live) {
-        ProgressBar(e.progress(now), Modifier.width(220.dp))
-        Spacer(Modifier.height(10.dp))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-        when {
-            onHeader -> KeyHint("← →", s.changeGroup)
-            live -> KeyHint("OK", s.watch)
-            e!!.startMs > now -> KeyHint("OK", if (vm.hasReminder(channel, e)) s.removeReminder else s.setReminder)
-            vm.canCatchup(channel, e) -> KeyHint("OK", s.watchCatchup)
-            else -> Text(s.noCatchup, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodyMedium)
+private fun Modifier.guidePlate(target: () -> Rect?): Modifier {
+    val current by rememberUpdatedState(target)
+    val left = remember { Animatable(0f) }
+    val top = remember { Animatable(0f) }
+    val right = remember { Animatable(0f) }
+    val bottom = remember { Animatable(0f) }
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { current() }.collect { r ->
+            if (r == null) {
+                shown = false
+                return@collect
+            }
+            if (!shown) {
+                // Aparece já no sítio (ao abrir, ou ao voltar dos grupos).
+                left.snapTo(r.left); top.snapTo(r.top); right.snapTo(r.right); bottom.snapTo(r.bottom)
+                shown = true
+            } else {
+                launch { left.animateTo(r.left, PlateSpring) }
+                launch { top.animateTo(r.top, PlateSpring) }
+                launch { right.animateTo(r.right, PlateSpring) }
+                launch { bottom.animateTo(r.bottom, PlateSpring) }
+            }
         }
-        if (!onHeader) KeyHint("0", s.backToNow)
+    }
+    return graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            if (!shown) return@drawWithContent
+            drawRoundRect(
+                Color.White,
+                Offset(left.value, top.value),
+                Size(right.value - left.value, bottom.value - top.value),
+                CornerRadius(CELL_RADIUS.toPx()),
+                blendMode = BlendMode.Difference,
+            )
+        }
+}
+
+private val PlateSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+private val CELL_RADIUS = 7.dp
+
+/** Os grupos em separadores; com foco (↑ na primeira linha) o atual fica branco e ← → mudam. */
+@Composable
+private fun GroupTabs(groups: List<Pair<String, String>>, selected: String, focused: Boolean, modifier: Modifier) {
+    val state = rememberLazyListState()
+    val index = groups.indexOfFirst { it.first == selected }
+    LaunchedEffect(index) { if (index >= 0) state.animateScrollToItem((index - 1).coerceAtLeast(0)) }
+    LazyRow(state = state, modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        items(groups, key = { it.first }) { (id, name) ->
+            val on = id == selected
+            Text(
+                name,
+                maxLines = 1,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = when {
+                    on && focused -> Color.Black
+                    on -> ItvColors.Text
+                    else -> ItvColors.TextDim
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        when {
+                            on && focused -> Color.White
+                            on -> Color.White.copy(alpha = 0.14f)
+                            else -> Color.Transparent
+                        },
+                    )
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+/** O programa escolhido, como no HUD: logótipo, canal, título, horas (e o que falta, se está a dar) e o que o OK faz. */
+@Composable
+private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean) {
+    val e = slot.entry
+    val live = e == null || (e.startMs <= now && e.endMs > now)
+    Row(verticalAlignment = Alignment.Bottom) {
+        if (showLogos) {
+            HudLogo(channel, Modifier.size(width = 104.dp, height = 60.dp))
+            Spacer(Modifier.width(16.dp))
+        }
+        Column {
+            ChannelLine(channel, isFavorite = false, style = MaterialTheme.typography.labelMedium)
+            Text(
+                e?.title ?: s.noGuideInfo,
+                style = MaterialTheme.typography.headlineSmall.copy(shadow = TextShadow),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(vertical = 2.dp),
+            )
+            if (e != null && live) {
+                ProgrammeTimes(e, now)
+            } else if (e != null) {
+                Text(
+                    "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} — ${formatTime(e.endMs)}  ·  ${s.minutes(((e.endMs - e.startMs) / 60_000).toInt())}",
+                    style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow),
+                    color = ItvColors.TextDim,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    onHeader -> KeyHint("← →", s.changeGroup)
+                    live -> KeyHint("OK", s.watch)
+                    e!!.startMs > now -> KeyHint("OK", if (vm.hasReminder(channel, e)) s.removeReminder else s.setReminder)
+                    vm.canCatchup(channel, e) -> KeyHint("OK", s.watchCatchup)
+                    else -> Text(s.noCatchup, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (!onHeader) KeyHint("0", s.backToNow)
+            }
+        }
     }
 }
 
 @Composable
-private fun TimeRuler(windowStart: Long, timelineWidth: Dp, s: Strings) {
-    Row(Modifier.fillMaxWidth().height(26.dp)) {
-        Box(Modifier.width(CHANNEL_COLUMN).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+private fun TimeRuler(windowStart: Long, timelineWidth: Dp, now: Long, s: Strings) {
+    Row(Modifier.fillMaxWidth().height(RULER_HEIGHT)) {
+        Box(Modifier.width(CHANNEL_COLUMN).fillMaxHeight().padding(start = 16.dp), contentAlignment = Alignment.CenterStart) {
             Text(dayLabel(s, windowStart), style = MaterialTheme.typography.labelLarge, color = ItvColors.TextDim)
         }
         Box(Modifier.width(timelineWidth).fillMaxHeight()) {
@@ -369,6 +476,24 @@ private fun TimeRuler(windowStart: Long, timelineWidth: Dp, s: Strings) {
                     style = MaterialTheme.typography.labelLarge,
                     color = ItvColors.TextDim,
                     modifier = Modifier.offset(x = step * i + 6.dp).align(Alignment.CenterStart),
+                )
+            }
+            // A hora atual, numa etiqueta por cima da linha vermelha.
+            if (now in windowStart until windowStart + WINDOW_MS) {
+                val x = timelineWidth * ((now - windowStart).toFloat() / WINDOW_MS)
+                Text(
+                    formatTime(now),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color(0xFF0B0B0B),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .layout { measurable, constraints ->
+                            val p = measurable.measure(constraints)
+                            layout(p.width, p.height) { p.place(x.roundToPx() - p.width / 2, 0) }
+                        }
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(GoatPalette.Live)
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
                 )
             }
         }
@@ -391,20 +516,14 @@ private fun GuideRow(
     reminders: Int,
 ) {
     val rowSelected = selectedSlot != null
-    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT).padding(vertical = 2.dp)) {
+    Row(Modifier.fillMaxWidth().height(ROW_HEIGHT).padding(vertical = ROW_GAP)) {
         Row(
             Modifier
                 .width(CHANNEL_COLUMN)
                 .fillMaxHeight()
-                .padding(end = 6.dp)
-                .clip(ItvShapes.Control)
-                .background(
-                    when {
-                        rowSelected -> Color.White.copy(alpha = 0.14f)
-                        isPlaying -> Color.White.copy(alpha = 0.07f)
-                        else -> Color.Transparent
-                    },
-                )
+                .padding(end = 8.dp)
+                .clip(RoundedCornerShape(CELL_RADIUS))
+                .background(if (rowSelected) Color.White.copy(alpha = 0.08f) else Color.Transparent)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -420,7 +539,13 @@ private fun GuideRow(
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (rowSelected) FontWeight.SemiBold else FontWeight.Normal),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            // O canal a dar: o ponto de "em direto".
+            if (isPlaying) {
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(GoatPalette.Live))
+            }
         }
         GuideTimeline(vm, channel, entries, selectedSlot, windowStart, now, reminders, Modifier.width(timelineWidth).fillMaxHeight())
     }
@@ -437,6 +562,9 @@ private class Cell(
     val live: Boolean,
     val selected: Boolean,
     val icon: Int,
+    /** O programa inteiro (para a barra do que está a dar). */
+    val entryStart: Long? = null,
+    val entryEnd: Long = 0,
 )
 
 private const val ICON_NONE = 0
@@ -478,6 +606,7 @@ private fun GuideTimeline(
                     Cell(
                         e.title, e.startMs.takeIf { it >= windowStart }, maxOf(e.startMs, windowStart), minOf(e.endMs, windowEnd),
                         past, live = e.startMs <= now && e.endMs > now, selected = selectedSlot?.entry == e, icon = icon,
+                        entryStart = e.startMs, entryEnd = e.endMs,
                     ),
                 )
             }
@@ -493,30 +622,38 @@ private fun GuideTimeline(
     val time = MaterialTheme.typography.labelSmall
     val bell = rememberVectorPainter(ItvIcons.Bell)
     val history = rememberVectorPainter(ItvIcons.History)
+    val accent = LocalAccent.current.brush
     Canvas(modifier) {
         val pxPerMs = size.width / WINDOW_MS
-        val gap = 3.dp.toPx()
+        val gap = CELL_GAP.toPx()
         val pad = 8.dp.toPx()
-        val radius = CornerRadius(4.dp.toPx())
+        val radius = CornerRadius(CELL_RADIUS.toPx())
         val iconSize = 14.dp.toPx()
         for (c in cells) {
             val left = (c.start - windowStart) * pxPerMs
             val width = (c.end - c.start) * pxPerMs - gap
             if (width < 4.dp.toPx()) continue
+            // O escolhido não muda aqui: a placa que desliza (em diferença) pinta-o de branco e o texto de escuro.
             drawRoundRect(
                 when {
-                    c.selected -> Color.White
-                    c.live -> Color.White.copy(alpha = 0.13f)
-                    c.past -> Color.White.copy(alpha = 0.04f)
-                    else -> Color.White.copy(alpha = 0.08f)
+                    c.live -> Color.White.copy(alpha = 0.1f)
+                    c.past -> Color.White.copy(alpha = 0.025f)
+                    else -> Color.White.copy(alpha = 0.06f)
                 },
                 Offset(left, 0f),
                 Size(width, size.height),
                 radius,
             )
+            // O que está a dar: quanto já passou, numa barra fina em baixo.
+            if (c.live && !c.selected && c.entryStart != null) {
+                val barY = size.height - 6.dp.toPx()
+                val barW = width - pad * 2
+                val p = ((now - c.entryStart).toFloat() / (c.entryEnd - c.entryStart)).coerceIn(0f, 1f)
+                drawRoundRect(Color.White.copy(alpha = 0.18f), Offset(left + pad, barY), Size(barW, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+                drawRoundRect(accent, Offset(left + pad, barY), Size(barW * p, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
+            }
             val ink = when {
-                c.selected -> Color.Black
-                c.past -> ItvColors.TextDim
+                c.past && !c.selected -> ItvColors.TextFaint
                 else -> ItvColors.Text
             }
             var x = left + pad
@@ -527,7 +664,7 @@ private fun GuideTimeline(
             }
             if (painter != null && width > 40.dp.toPx()) {
                 translate(x, (size.height - iconSize) / 2) {
-                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(if (c.selected) Color.Black else ItvColors.TextDim)) }
+                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(ItvColors.TextDim)) }
                 }
                 x += iconSize + 6.dp.toPx()
             }
@@ -543,7 +680,7 @@ private fun GuideTimeline(
             val timeLayout = if (c.startMs != null && width > 90.dp.toPx()) {
                 measurer.measure(
                     formatTime(c.startMs),
-                    time.copy(color = if (c.selected) Color.Black.copy(alpha = 0.6f) else ItvColors.TextFaint),
+                    time.copy(color = if (c.past && !c.selected) ItvColors.TextFaint.copy(alpha = 0.45f) else ItvColors.TextFaint),
                     maxLines = 1,
                     constraints = Constraints(maxWidth = maxWidth),
                 )
