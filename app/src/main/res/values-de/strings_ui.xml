@@ -560,4 +560,10 @@
     <string name="guide_now">Jetzt</string>
     <string name="player_live">LIVE</string>
     <string name="player_go_live">Zu Live</string>
+    <string name="home_screen">Startbildschirm</string>
+    <string name="home_continue">Weiterschauen</string>
+    <string name="greeting_morning">Guten Morgen</string>
+    <string name="greeting_afternoon">Guten Tag</string>
+    <string name="greeting_evening">Guten Abend</string>
+    <string name="group_channels">%1$s Sender</string>
 </resources>

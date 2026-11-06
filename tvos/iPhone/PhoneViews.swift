@@ -232,6 +232,17 @@ struct PhoneMain: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = PhoneMain.startTab
     @State private var epgFor: Channel?
+    /// O ecrã inicial (recentes e grupos), sem nada a dar; o vídeo só aparece quando se escolhe um canal.
+    @State private var home = true
+    @State private var homeGroup: String?
+    @State private var homePinFor: ChannelGroup?
+    @State private var homePin = ""
+
+    /// Abriu-se um canal: sai do ecrã inicial.
+    private func played() {
+        home = false
+        homeGroup = nil
+    }
 
     private static var startTab: PhoneTab {
         #if DEBUG
@@ -242,10 +253,11 @@ struct PhoneMain: View {
 
     var body: some View {
         let settings = tab == .menu
-        let landscape = vertical == .compact && !settings
+        let video = !settings && !home
+        let landscape = vertical == .compact && video
         GeometryReader { geo in
         VStack(spacing: 0) {
-            if !settings {
+            if video {
                 // Ao alto, 16:9 com a largura toda; deitado, o ecrã todo.
                 VideoPane(fullscreen: landscape) { epgFor = model.current }
                     .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
@@ -254,7 +266,36 @@ struct PhoneMain: View {
             if !landscape {
                 Group {
                     switch tab {
-                    case .tv: ChannelsTab(epgFor: $epgFor)
+                    case .tv:
+                        if !home {
+                            ChannelsTab(epgFor: $epgFor)
+                        } else if let id = homeGroup {
+                            VStack(spacing: 0) {
+                                ZStack {
+                                    Text(model.groups.first { $0.id == id }?.name ?? "").font(.headline).lineLimit(1).padding(.horizontal, 70)
+                                    HStack {
+                                        Button { homeGroup = nil } label: {
+                                            HStack(spacing: 2) { Image(systemName: "chevron.left").font(.body.weight(.semibold)); Text("TV") }
+                                                .foregroundStyle(Theme.sky)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 10)
+                                }
+                                .padding(.vertical, 10)
+                                ChannelList(channels: model.channels(in: id), group: id, epgFor: $epgFor)
+                            }
+                        } else {
+                            PhoneHome(
+                                onPlay: { channel in
+                                    model.play(channel, from: channel.key == model.current?.key ? model.groupId : model.groupFor(channel))
+                                    played()
+                                },
+                                onGroup: { homeGroup = $0 },
+                                onLockedGroup: { homePinFor = $0 },
+                                onSearch: { tab = .search }
+                            )
+                        }
                     case .guide: ChannelsTab(epgFor: $epgFor, guide: true)
                     case .favorites: ChannelList(channels: model.channels(in: SpecialCategory.favorites), group: SpecialCategory.favorites, epgFor: $epgFor)
                     case .search: SearchTab(epgFor: $epgFor)
@@ -263,17 +304,40 @@ struct PhoneMain: View {
                 }
                 .frame(maxHeight: .infinity)
                 // A barra fica colada ao fundo do ecrã, por baixo da lista.
-                .safeAreaInset(edge: .bottom, spacing: 0) { TabRow(tab: $tab) }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    // Tocar em "TV" já na TV volta ao ecrã inicial.
+                    TabRow(tab: $tab) { if $0 == .tv { home = true; homeGroup = nil } }
+                }
             }
         }
         }
-        .sheet(item: $epgFor) { GuideSheet(channel: $0) }
+        .sheet(item: $epgFor) { GuideSheet(channel: $0).environment(\.played, played) }
+        .environment(\.played, played)
+        .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { homePinFor != nil }, set: { if !$0 { homePinFor = nil } })) {
+            SecureField("PIN", text: $homePin).keyboardType(.numberPad)
+            Button("OK") {
+                if let g = homePinFor {
+                    if model.unlockGroup(g.id, pin: homePin) { homeGroup = g.id } else { model.showToast(model.pinRejected()) }
+                }
+                homePin = ""
+            }
+            Button(model.strings.r("cancel"), role: .cancel) { homePin = "" }
+        }
+        // Ao abrir: o ecrã inicial, ou (nas Definições) já o último canal.
+        .onAppear {
+            home = model.prefs.phoneStartup == Prefs.PhoneStartup.home
+            if home { model.player.stop() }
+        }
+        // O modelo abre canais sozinho (ao carregar a lista, ao voltar à app): no ecrã inicial ficam fechados.
+        .onChange(of: model.zapCount) { _, _ in
+            if home { model.player.stop() }
+        }
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
         .onChange(of: tab) { old, new in
             if new == .menu {
                 model.closeSecond()
                 model.player.stop()
-            } else if old == .menu, let current = model.current {
+            } else if old == .menu, !home, let current = model.current {
                 model.play(current, remember: false)
             }
         }
@@ -283,10 +347,10 @@ struct PhoneMain: View {
         }
         // Ao voltar à app, o modelo retoma o canal: nas Definições fica fechado.
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, tab == .menu else { return }
+            guard phase == .active, tab == .menu || home else { return }
             Task {
                 try? await Task.sleep(for: .milliseconds(200))
-                if tab == .menu { model.player.stop() }
+                if tab == .menu || home { model.player.stop() }
             }
         }
         // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta.
@@ -824,6 +888,7 @@ private struct GuideRow: View {
     let slot: Int64?
     let now: Int64
     @Binding var epgFor: Channel?
+    @Environment(\.played) private var played
 
     var body: some View {
         let at = slot ?? now
@@ -833,8 +898,10 @@ private struct GuideRow: View {
         Button {
             if slot == nil {
                 model.play(channel, from: group)
+                played()
             } else if catchup, let entry {
                 model.playCatchup(channel, entry)
+                played()
             } else {
                 epgFor = channel
             }
@@ -871,6 +938,7 @@ private struct ChannelCard: View {
     /// O programa encontrado na pesquisa, em vez do que está a dar.
     var found: EpgEntry?
     @Binding var epgFor: Channel?
+    @Environment(\.played) private var played
 
     var body: some View {
         let playing = model.current?.key == channel.key
@@ -881,6 +949,7 @@ private struct ChannelCard: View {
                 epgFor = channel
             } else {
                 model.play(channel, from: group)
+                played()
             }
         } label: {
             HStack(spacing: 14) {
@@ -933,6 +1002,7 @@ private struct ThinProgress: View {
 private struct GuideSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.played) private var played
     let channel: Channel
     @State private var pickingLogo: Bool?
 
@@ -947,6 +1017,7 @@ private struct GuideSheet: View {
                     Button {
                         if catchup {
                             model.playCatchup(channel, e)
+                            played()
                             dismiss()
                         } else if future {
                             model.toggleReminder(channel, e)
@@ -1018,6 +1089,8 @@ private struct SearchTab: View {
 private struct TabRow: View {
     @Environment(AppModel.self) private var model
     @Binding var tab: PhoneTab
+    /// Toque no separador que já está aberto.
+    var reselect: (PhoneTab) -> Void = { _ in }
 
     var body: some View {
         let s = model.strings
@@ -1036,6 +1109,7 @@ private struct TabRow: View {
     private func item(_ t: PhoneTab, _ label: String, _ icon: String) -> some View {
         let on = tab == t
         return Button {
+            if tab == t { reselect(t) }
             tab = t
         } label: {
             VStack(spacing: 2) {
@@ -1206,7 +1280,7 @@ private struct MenuTab: View {
 
     private var startupOptions: [(String, String)] {
         let s = model.strings
-        return [("last", s.r("startup_last")), ("list", s.r("startup_list"))]
+        return [(Prefs.PhoneStartup.home, s.r("home_screen")), (Prefs.PhoneStartup.last, s.r("startup_last"))]
     }
 
     private var languageOptions: [(String, String)] {
@@ -1381,7 +1455,7 @@ private struct MenuTab: View {
             let format = formatOptions.first { $0.0 == p.streamFormat.map { JSON.string($0) } }?.1 ?? ""
             let buffer = label(bufferOptions, p.buffer).components(separatedBy: " (").first ?? ""
             pageRow(.playback, value: "\(format.components(separatedBy: " ").first ?? ""), \(buffer)", icon: "play")
-            pageRow(.channels, value: label(startupOptions, p.startup), icon: "list.bullet")
+            pageRow(.channels, value: label(startupOptions, p.phoneStartup), icon: "list.bullet")
             pageRow(.guide, value: refreshOptions.first { $0.0 == .number(Double(p.epgRefreshHours)) }?.1 ?? "", icon: "calendar")
             pageRow(.appearance, value: "\(label(languageOptions, languageCode)), \(label(accentOptions, p.accent))", icon: "globe")
             if p.pinHash == nil {
@@ -1436,7 +1510,7 @@ private struct MenuTab: View {
             }
         case .channels:
             section(nil) {
-                pick(s.r("on_startup"), "startup", p.startup, startupOptions)
+                pick(s.r("on_startup"), "phone_startup", p.phoneStartup, startupOptions)
                 pick(s.t("Sort channels", "Ordenar canais"), "sort", p.sort, [("number", s.t("Playlist order", "Pela ordem da lista")), ("name", s.t("By name (A–Z)", "Por nome (A–Z)"))])
                 toggle(s.t("Channel numbers", "Números dos canais"), "show_numbers", p.showNumbers)
                 toggle(s.t("Channel logos", "Logos dos canais"), "show_logos", p.showLogos)

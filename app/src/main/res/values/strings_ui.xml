@@ -574,4 +574,10 @@
     <string name="guide_now">Now</string>
     <string name="player_live">LIVE</string>
     <string name="player_go_live">Go live</string>
+    <string name="home_screen">Home screen</string>
+    <string name="home_continue">Continue</string>
+    <string name="greeting_morning">Good morning</string>
+    <string name="greeting_afternoon">Good afternoon</string>
+    <string name="greeting_evening">Good evening</string>
+    <string name="group_channels">%1$s channels</string>
 </resources>

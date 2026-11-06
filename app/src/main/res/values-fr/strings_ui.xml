@@ -562,4 +562,10 @@
     <string name="guide_now">Maintenant</string>
     <string name="player_live">EN DIRECT</string>
     <string name="player_go_live">Revenir au direct</string>
+    <string name="home_screen">Écran d\'accueil</string>
+    <string name="home_continue">Reprendre</string>
+    <string name="greeting_morning">Bonjour</string>
+    <string name="greeting_afternoon">Bon après-midi</string>
+    <string name="greeting_evening">Bonsoir</string>
+    <string name="group_channels">%1$s chaînes</string>
 </resources>

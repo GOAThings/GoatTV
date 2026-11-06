@@ -43,6 +43,8 @@ public struct Prefs: Equatable, Sendable {
     public var reverseZap = false
     public var infoSeconds = 4
     public var startup = Startup.last
+    /// Telemóvel: ao abrir, o ecrã inicial (recentes e grupos) ou já o último canal a dar.
+    public var phoneStartup = PhoneStartup.home
     /// Voltar no player, com tudo fechado: abre o guia ou sai da app.
     public var backAction = BackAction.guide
     public var exitConfirm = true
@@ -88,6 +90,7 @@ public struct Prefs: Equatable, Sendable {
     }
     public enum UpDown { public static let zap = "zap", list = "list" }
     public enum Startup { public static let last = "last", list = "list" }
+    public enum PhoneStartup { public static let home = "home", last = "last" }
     public enum Sort { public static let number = "number", name = "name" }
     public enum TextSize {
         public static let small = "small", normal = "normal", large = "large"
@@ -157,6 +160,7 @@ public struct Prefs: Equatable, Sendable {
         reverseZap = bool("reverse_zap", d.reverseZap)
         infoSeconds = clamp(int("info_seconds", d.infoSeconds), 0, 30)
         startup = str("startup", d.startup, [Startup.last, Startup.list])
+        phoneStartup = str("phone_startup", d.phoneStartup, [PhoneStartup.home, PhoneStartup.last])
         backAction = str("back_action", d.backAction, [BackAction.guide, BackAction.exit])
         exitConfirm = bool("exit_confirm", d.exitConfirm)
         showNumbers = bool("show_numbers", d.showNumbers)

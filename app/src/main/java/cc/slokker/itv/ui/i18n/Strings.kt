@@ -177,6 +177,17 @@ class Strings(context: Context) {
     val sleepTimer get() = s(R.string.sleep_timer)
     fun sleepRemaining(min: Int) = s(R.string.sleep_remaining, min)
     fun minutesLeft(min: Int) = s(R.string.minutes_left, min)
+    val homeScreen get() = s(R.string.home_screen)
+    val homeContinue get() = s(R.string.home_continue)
+    /** Bom dia / boa tarde / boa noite, pela [hour] (0–23). */
+    fun greeting(hour: Int) = s(
+        when (hour) {
+            in 5..11 -> R.string.greeting_morning
+            in 12..19 -> R.string.greeting_afternoon
+            else -> R.string.greeting_evening
+        },
+    )
+    fun groupChannels(count: Int) = s(R.string.group_channels, count)
     val sectionWatching get() = s(R.string.section_watching)
     val sectionInterface get() = s(R.string.section_interface)
     val sectionLibrary get() = s(R.string.section_library)

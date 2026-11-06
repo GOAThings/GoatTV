@@ -560,4 +560,10 @@
     <string name="guide_now">Şimdi</string>
     <string name="player_live">CANLI</string>
     <string name="player_go_live">Canlıya git</string>
+    <string name="home_screen">Ana ekran</string>
+    <string name="home_continue">Devam et</string>
+    <string name="greeting_morning">Günaydın</string>
+    <string name="greeting_afternoon">İyi günler</string>
+    <string name="greeting_evening">İyi akşamlar</string>
+    <string name="group_channels">%1$s kanal</string>
 </resources>

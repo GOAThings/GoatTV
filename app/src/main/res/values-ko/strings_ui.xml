@@ -558,4 +558,10 @@
     <string name="guide_now">지금</string>
     <string name="player_live">라이브</string>
     <string name="player_go_live">라이브로</string>
+    <string name="home_screen">홈 화면</string>
+    <string name="home_continue">이어 보기</string>
+    <string name="greeting_morning">좋은 아침이에요</string>
+    <string name="greeting_afternoon">좋은 오후예요</string>
+    <string name="greeting_evening">좋은 저녁이에요</string>
+    <string name="group_channels">채널 %1$s개</string>
 </resources>

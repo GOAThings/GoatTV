@@ -558,4 +558,10 @@
     <string name="guide_now">Sekarang</string>
     <string name="player_live">LANGSUNG</string>
     <string name="player_go_live">Ke siaran langsung</string>
+    <string name="home_screen">Layar utama</string>
+    <string name="home_continue">Lanjutkan</string>
+    <string name="greeting_morning">Selamat pagi</string>
+    <string name="greeting_afternoon">Selamat siang</string>
+    <string name="greeting_evening">Selamat malam</string>
+    <string name="group_channels">%1$s saluran</string>
 </resources>

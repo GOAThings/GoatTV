@@ -562,4 +562,10 @@
     <string name="guide_now">Ora</string>
     <string name="player_live">IN DIRETTA</string>
     <string name="player_go_live">Vai alla diretta</string>
+    <string name="home_screen">Schermata iniziale</string>
+    <string name="home_continue">Continua</string>
+    <string name="greeting_morning">Buongiorno</string>
+    <string name="greeting_afternoon">Buon pomeriggio</string>
+    <string name="greeting_evening">Buonasera</string>
+    <string name="group_channels">%1$s canali</string>
 </resources>

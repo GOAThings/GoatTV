@@ -568,4 +568,10 @@
     <string name="guide_now">الآن</string>
     <string name="player_live">مباشر</string>
     <string name="player_go_live">إلى البث المباشر</string>
+    <string name="home_screen">الشاشة الرئيسية</string>
+    <string name="home_continue">متابعة</string>
+    <string name="greeting_morning">صباح الخير</string>
+    <string name="greeting_afternoon">مساء الخير</string>
+    <string name="greeting_evening">مساء الخير</string>
+    <string name="group_channels">%1$s قناة</string>
 </resources>

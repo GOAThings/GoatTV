@@ -45,6 +45,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -143,6 +145,9 @@ private val ListShape = RoundedCornerShape(12.dp)
 private const val SELECTED_ALPHA = 0.13f
 private enum class Tab { Tv, Guide, Favorites, Search, Menu }
 
+/** Chamado depois de abrir um canal a partir de uma lista: no ecrã inicial, passa a mostrar o vídeo. */
+private val LocalOnPlayed = staticCompositionLocalOf<() -> Unit> { {} }
+
 /** Primeira vez no telemóvel: conta GOAT ou listas só neste aparelho. */
 @Composable
 fun MobileWelcome(onAccount: () -> Unit, onLocal: () -> Unit) {
@@ -188,13 +193,18 @@ fun MobileMain(vm: AppViewModel) {
     val data = content ?: return
     var tab by rememberSaveable { mutableStateOf(Tab.Tv) }
     val settings = tab == Tab.Menu
-    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = !settings)
+    // Ao abrir, o ecrã inicial (recentes e grupos) sem nada a dar; o vídeo só aparece quando se escolhe um canal.
+    var home by rememberSaveable { mutableStateOf(prefs.phoneStartup == Prefs.PhoneStartup.HOME) }
+    var homeGroup by rememberSaveable { mutableStateOf<String?>(null) }
+    var homePinFor by remember { mutableStateOf<String?>(null) }
+    val video = !settings && !home
+    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = video)
     val activity = LocalContext.current as? Activity
     val main = activity as? MainActivity
     val pip = main?.inPip == true
-    val landscape = !settings && (pip || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    val landscape = video && (pip || LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
     // Nas Definições o canal está fechado: não há nada para levar para a janela pequena.
-    val pipOnLeave = prefs.pipEnabled && !settings
+    val pipOnLeave = prefs.pipEnabled && video
     DisposableEffect(main, pipOnLeave) {
         main?.setPipOnLeave(pipOnLeave)
         onDispose { main?.setPipOnLeave(false) }
@@ -238,51 +248,90 @@ fun MobileMain(vm: AppViewModel) {
 
     FullscreenBars(landscape)
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
-    BackHandler(landscape || showingOptions || epgFor != null || tab != Tab.Tv) {
+    BackHandler(landscape || showingOptions || epgFor != null || tab != Tab.Tv || homeGroup != null || !home) {
         when {
             showingOptions -> showingOptions = false
             landscape -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             epgFor != null -> epgFor = null
-            else -> tab = Tab.Tv
+            tab != Tab.Tv -> tab = Tab.Tv
+            homeGroup != null -> homeGroup = null
+            // Do canal volta-se ao ecrã inicial (o vídeo para).
+            else -> home = true
         }
     }
+    // Quem abre um canal (listas, guia, procura, catch-up) sai do ecrã inicial.
+    val played: () -> Unit = {
+        home = false
+        homeGroup = null
+    }
 
-    Column(Modifier.fillMaxSize().background(ItvColors.Background)) {
-        if (settings) {
-            Spacer(Modifier.statusBarsPadding())
-        } else {
-            Box(
-                if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
-            ) {
-                VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onGuide = if (landscape) null else ({ epgFor = current }), onOptions = { showingOptions = true }, onFullscreen = {
-                    activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                })
+    CompositionLocalProvider(LocalOnPlayed provides played) {
+        Column(Modifier.fillMaxSize().background(ItvColors.Background)) {
+            if (!video) {
+                Spacer(Modifier.statusBarsPadding())
+            } else {
+                Box(
+                    if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
+                ) {
+                    VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onGuide = if (landscape) null else ({ epgFor = current }), onOptions = { showingOptions = true }, onFullscreen = {
+                        activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    })
+                }
             }
-        }
-        if (!landscape) {
-            Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
-                when (tab) {
-                    Tab.Tv -> ChannelsTab(vm, current) { epgFor = it }
-                    Tab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
-                    Tab.Favorites -> ChannelList(vm, vm.channelsOf(SpecialCategory.FAVORITES), SpecialCategory.FAVORITES, current) { epgFor = it }
-                    Tab.Search -> SearchTab(vm, current) { epgFor = it }
-                    Tab.Menu -> MobileMenu(vm)
-                }
-                // A barra fica colada ao fundo do ecrã, por cima da lista.
-                BottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
-                epgFor?.let { channel ->
-                    EpgSheet(vm, channel, onPick = { logo -> epgPick = channel to logo }) { epgFor = null }
-                }
-                epgPick?.let { (channel, logo) ->
-                    EpgPickPage(vm, channel, logo) {
-                        epgPick = null
-                        epgFor = null
+            if (!landscape) {
+                Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
+                    when (tab) {
+                        Tab.Tv -> when {
+                            !home -> ChannelsTab(vm, current) { epgFor = it }
+                            homeGroup != null -> homeGroup?.let { id ->
+                                Column(Modifier.fillMaxSize()) {
+                                    PageHeader(vm.guideGroups().firstOrNull { it.id == id }?.name?.ifBlank { null } ?: data.categoryName(id), "TV") { homeGroup = null }
+                                    ChannelList(vm, vm.channelsOf(id), id, current) { epgFor = it }
+                                }
+                            }
+                            else -> MobileHome(
+                                vm, data, current,
+                                onPlay = { ch ->
+                                    vm.play(ch, if (ch.key == current.key) vm.selectedCategory.value else vm.groupFor(ch))
+                                    played()
+                                },
+                                onGroup = { homeGroup = it },
+                                onLockedGroup = { homePinFor = it },
+                                onSearch = { tab = Tab.Search },
+                            )
+                        }
+                        Tab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
+                        Tab.Favorites -> ChannelList(vm, vm.channelsOf(SpecialCategory.FAVORITES), SpecialCategory.FAVORITES, current) { epgFor = it }
+                        Tab.Search -> SearchTab(vm, current) { epgFor = it }
+                        Tab.Menu -> MobileMenu(vm)
+                    }
+                    // A barra fica colada ao fundo do ecrã, por cima da lista. Tocar em "TV" já na TV volta ao início.
+                    BottomBar(tab, Modifier.align(Alignment.BottomCenter)) {
+                        if (it == Tab.Tv && tab == Tab.Tv) {
+                            home = true
+                            homeGroup = null
+                        }
+                        tab = it
+                    }
+                    epgFor?.let { channel ->
+                        EpgSheet(vm, channel, onPick = { logo -> epgPick = channel to logo }) { epgFor = null }
+                    }
+                    epgPick?.let { (channel, logo) ->
+                        EpgPickPage(vm, channel, logo) {
+                            epgPick = null
+                            epgFor = null
+                        }
                     }
                 }
             }
         }
     }
     if (showingOptions && !pip) PlayerOptionsSheet(vm, playback) { showingOptions = false }
+    homePinFor?.let { id ->
+        PinDialog(LocalStrings.current.enterPin, onClose = { homePinFor = null }, rejected = vm::pinRejected) { pin ->
+            vm.unlockGroup(id, pin).also { if (it) { homeGroup = id; homePinFor = null } }
+        }
+    }
     var reminder by remember { mutableStateOf<Reminder?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -297,7 +346,7 @@ fun MobileMain(vm: AppViewModel) {
                     Text(r.title, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(r.channelName, color = ItvColors.TextDim, fontSize = 13.sp)
                 }
-                ControlButton(ItvIcons.Play) { vm.consumeReminder(r, watch = true); reminder = null }
+                ControlButton(ItvIcons.Play) { vm.consumeReminder(r, watch = true); reminder = null; played() }
                 ControlButton(ItvIcons.Close) { vm.consumeReminder(r, watch = false); reminder = null }
             }
         }
@@ -704,9 +753,10 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
         return
     }
     val list = rememberLazyListState()
+    val played = LocalOnPlayed.current
     LazyColumn(state = list, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = BAR_SPACE)) {
         items(channels, key = { it.uid }) { channel ->
-            ChannelCard(vm, channel, channel.key == current.key, onClick = { vm.play(channel, groupId) }, onLong = { onEpg(channel) })
+            ChannelCard(vm, channel, channel.key == current.key, onClick = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
         }
     }
 }
@@ -716,6 +766,7 @@ private fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Stri
 private fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: String, current: Channel, onEpg: (Channel) -> Unit) {
     val s = LocalStrings.current
     val now = rememberNow()
+    val played = LocalOnPlayed.current
     var slot by rememberSaveable { mutableStateOf<Long?>(null) }
     val halfHour = 1_800_000L
     val first = now - now % halfHour + halfHour
@@ -738,7 +789,7 @@ private fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: String
         } else {
             LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = BAR_SPACE)) {
                 items(channels, key = { it.uid }) { channel ->
-                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onPlay = { vm.play(channel, groupId) }, onLong = { onEpg(channel) })
+                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onPlay = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
                 }
             }
         }
@@ -765,6 +816,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
     val at = slot ?: now
     val entry = entries.firstOrNull { it.startMs <= at && it.endMs > at }
     val catchup = slot != null && entry != null && vm.canCatchup(channel, entry)
+    val played = LocalOnPlayed.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -773,7 +825,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
             .combinedClickable(onClick = {
                 when {
                     slot == null -> onPlay()
-                    catchup -> vm.playCatchup(channel, entry!!)
+                    catchup -> { vm.playCatchup(channel, entry!!); played() }
                     else -> onLong()
                 }
             }, onLongClick = onLong)
@@ -847,6 +899,7 @@ private fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, fo
 @Composable
 private fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean) -> Unit, onClose: () -> Unit) {
     val s = LocalStrings.current
+    val played = LocalOnPlayed.current
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
     val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg.distinctBy { it.startMs } } }
@@ -886,6 +939,7 @@ private fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean)
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = catchup || future) {
                             if (catchup) {
                                 vm.playCatchup(channel, e)
+                                played()
                                 onClose()
                             } else {
                                 vm.toggleReminder(channel, e)
@@ -911,6 +965,7 @@ private fun SearchTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Un
     val s = LocalStrings.current
     var query by rememberSaveable { mutableStateOf("") }
     val hits = remember(query) { vm.search(query) }
+    val played = LocalOnPlayed.current
     Column(Modifier.fillMaxSize().padding(top = 12.dp)) {
         Field(s.searchHint, query, Modifier.padding(horizontal = 12.dp)) { query = it }
         Spacer(Modifier.height(10.dp))
@@ -921,7 +976,7 @@ private fun SearchTab(vm: AppViewModel, current: Channel, onEpg: (Channel) -> Un
                 items(hits) { hit ->
                     val future = (hit.programme?.startMs ?: 0L) > System.currentTimeMillis()
                     ChannelCard(vm, hit.channel, hit.channel.key == current.key, found = hit.programme, onClick = {
-                        if (future) onEpg(hit.channel) else vm.play(hit.channel, vm.groupFor(hit.channel))
+                        if (future) onEpg(hit.channel) else { vm.play(hit.channel, vm.groupFor(hit.channel)); played() }
                     }, onLong = { onEpg(hit.channel) })
                 }
             }
@@ -1038,7 +1093,7 @@ fun MobileMenu(vm: AppViewModel) {
     fun prefRow(key: String, title: String, options: List<Pair<Any?, String>>, value: Any?) = PickRow(title, options, value, open) { vm.setPref(key, it) }
     val formats = listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)")
     val buffers = listOf(Prefs.Buffer.LIVE to s.bufferLive, Prefs.Buffer.SMALL to s.bufferSmall, Prefs.Buffer.NORMAL to s.bufferNormal, Prefs.Buffer.LARGE to s.bufferLarge)
-    val startups = listOf(Prefs.Startup.LAST to s.startupLast, Prefs.Startup.LIST to s.startupList)
+    val startups = listOf(Prefs.PhoneStartup.HOME to s.homeScreen, Prefs.PhoneStartup.LAST to s.startupLast)
     val languages = listOf("auto" to s.languageAuto) + Strings.LANGUAGES
     val accents = Accent.ALL.map { it.id to s.accentName(it.id) }
     fun label(options: List<Pair<Any?, String>>, value: Any?) = options.firstOrNull { it.first == value }?.second.orEmpty()
@@ -1055,7 +1110,7 @@ fun MobileMenu(vm: AppViewModel) {
                 }
                 Section(null) {
                     MenuRow(s.playback, label(formats, format).substringBefore(" ") + ", " + label(buffers, prefs.buffer).substringBefore(" ("), ItvIcons.Play, chevron = true) { page = MenuPage.Playback }
-                    MenuRow(s.manageChannels, label(startups, prefs.startup), ItvIcons.Channels, chevron = true) { page = MenuPage.Channels }
+                    MenuRow(s.manageChannels, label(startups, prefs.phoneStartup), ItvIcons.Channels, chevron = true) { page = MenuPage.Channels }
                     MenuRow(s.guide, s.refreshLabel(prefs.epgRefreshHours), ItvIcons.Calendar, chevron = true) { page = MenuPage.Guide }
                     MenuRow(s.settingsAppearance, label(languages, prefs.language) + ", " + label(accents, prefs.accent), ItvIcons.Globe, chevron = true) { page = MenuPage.Appearance }
                     MenuRow(s.parental, if (prefs.pinHash == null) s.settingOff else s.settingOn, ItvIcons.Lock, chevron = true) {
@@ -1101,7 +1156,7 @@ fun MobileMenu(vm: AppViewModel) {
             MenuPage.Channels -> {
                 PageHeader(s.manageChannels, s.settings) { page = null }
                 Section(null) {
-                    prefRow(Prefs.Key.STARTUP, s.onStartup, startups, prefs.startup)
+                    prefRow(Prefs.Key.PHONE_STARTUP, s.onStartup, startups, prefs.phoneStartup)
                     prefRow(Prefs.Key.SORT, s.sortChannels, listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName), prefs.sort)
                     ToggleRow(s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) }
                     ToggleRow(s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) }

@@ -560,4 +560,10 @@
     <string name="guide_now">अभी</string>
     <string name="player_live">लाइव</string>
     <string name="player_go_live">लाइव पर जाएं</string>
+    <string name="home_screen">होम स्क्रीन</string>
+    <string name="home_continue">जारी रखें</string>
+    <string name="greeting_morning">सुप्रभात</string>
+    <string name="greeting_afternoon">नमस्कार</string>
+    <string name="greeting_evening">शुभ संध्या</string>
+    <string name="group_channels">%1$s चैनल</string>
 </resources>

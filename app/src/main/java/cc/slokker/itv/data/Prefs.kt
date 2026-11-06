@@ -55,6 +55,8 @@ data class Prefs(
     val reverseZap: Boolean = false,
     val infoSeconds: Int = 4,
     val startup: String = Startup.LAST,
+    /** Telemóvel: ao abrir, o ecrã inicial (recentes e grupos) ou já o último canal a dar. */
+    val phoneStartup: String = PhoneStartup.HOME,
     /** Voltar no player, com tudo fechado: abre o guia ou sai da app. */
     val backAction: String = BackAction.GUIDE,
     // Aspeto
@@ -128,6 +130,7 @@ data class Prefs(
         const val REVERSE_ZAP = "reverse_zap"
         const val INFO_SECONDS = "info_seconds"
         const val STARTUP = "startup"
+        const val PHONE_STARTUP = "phone_startup"
         const val SHOW_NUMBERS = "show_numbers"
         const val SHOW_LOGOS = "show_logos"
         const val LOGO_SOURCE = "logo_source"
@@ -169,6 +172,7 @@ data class Prefs(
     object Aspect { const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill" }
     object UpDown { const val ZAP = "zap"; const val LIST = "list" }
     object Startup { const val LAST = "last"; const val LIST = "list" }
+    object PhoneStartup { const val HOME = "home"; const val LAST = "last" }
     object BackAction { const val GUIDE = "guide"; const val EXIT = "exit" }
     object Sort { const val NUMBER = "number"; const val NAME = "name" }
     object TextSize {
@@ -219,6 +223,7 @@ data class Prefs(
                 reverseZap = bool(Key.REVERSE_ZAP, d.reverseZap),
                 infoSeconds = int(Key.INFO_SECONDS, d.infoSeconds).coerceIn(0, 30),
                 startup = str(Key.STARTUP, d.startup, setOf(Startup.LAST, Startup.LIST)),
+                phoneStartup = str(Key.PHONE_STARTUP, d.phoneStartup, setOf(PhoneStartup.HOME, PhoneStartup.LAST)),
                 showNumbers = bool(Key.SHOW_NUMBERS, d.showNumbers),
                 showLogos = bool(Key.SHOW_LOGOS, d.showLogos),
                 logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString

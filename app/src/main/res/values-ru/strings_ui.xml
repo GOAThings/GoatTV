@@ -564,4 +564,10 @@
     <string name="guide_now">Сейчас</string>
     <string name="player_live">ЭФИР</string>
     <string name="player_go_live">В эфир</string>
+    <string name="home_screen">Главный экран</string>
+    <string name="home_continue">Продолжить</string>
+    <string name="greeting_morning">Доброе утро</string>
+    <string name="greeting_afternoon">Добрый день</string>
+    <string name="greeting_evening">Добрый вечер</string>
+    <string name="group_channels">Каналов: %1$s</string>
 </resources>

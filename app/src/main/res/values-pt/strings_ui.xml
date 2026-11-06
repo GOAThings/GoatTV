@@ -576,4 +576,10 @@
     <string name="guide_now">Agora</string>
     <string name="player_live">DIRETO</string>
     <string name="player_go_live">Ir para o direto</string>
+    <string name="home_screen">Ecrã inicial</string>
+    <string name="home_continue">Continuar</string>
+    <string name="greeting_morning">Bom dia</string>
+    <string name="greeting_afternoon">Boa tarde</string>
+    <string name="greeting_evening">Boa noite</string>
+    <string name="group_channels">%1$s canais</string>
 </resources>
