@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.Channel
@@ -138,7 +139,8 @@ internal fun ChannelEpgPanel(
                     modifier = if (i == current) Modifier.focusRequester(focus) else Modifier,
                     selected = live,
                     leading = {
-                        Text(formatTime(e.startMs), Modifier.width(56.dp), color = ItvColors.TextDim, style = MaterialTheme.typography.labelLarge)
+                        // Da cor do texto da linha (escura na placa branca do foco), um pouco apagada.
+                        Text(formatTime(e.startMs), Modifier.width(56.dp), color = LocalContentColor.current.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge)
                     },
                     trailing = icon?.let { ic -> { Icon(ic, contentDescription = null, modifier = Modifier.size(16.dp)) } },
                     title = e.title,

@@ -134,7 +134,8 @@ internal fun NowPlayingBar(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (current != null) {
-                        ProgrammeTimes(current, now, Modifier.padding(end = 14.dp))
+                        // A barra larga por baixo já mostra o progresso: aqui só as horas.
+                        ProgrammeTimes(current, now, Modifier.padding(end = 14.dp), bar = false)
                     } else if (epg.isEmpty()) {
                         Text(s.noGuide, color = ItvColors.TextDim, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 14.dp))
                     }
@@ -175,14 +176,14 @@ internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle
     }
 }
 
-/** "14:15 — 15:45", uma barra curta e quanto falta. */
+/** "14:15 — 15:45", uma barra curta ([bar]) e quanto falta. */
 @Composable
-internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier) {
+internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier, bar: Boolean = true) {
     val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow)
     val left = ((current.endMs - now) / 60_000 + 1).toInt()
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text("${formatTime(current.startMs)} — ${formatTime(current.endMs)}", style = style)
-        ProgressBar(current.progress(now), Modifier.padding(horizontal = 12.dp).width(56.dp))
+        if (bar) ProgressBar(current.progress(now), Modifier.padding(horizontal = 12.dp).width(56.dp)) else Text("  ·  ", style = style)
         Text(LocalStrings.current.minutesLeft(left), style = style)
     }
 }

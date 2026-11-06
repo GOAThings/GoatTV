@@ -1063,7 +1063,8 @@ struct Hud<Buttons: View>: View {
                     ChannelLine(channel: channel, size: 26)
                     Text(pair.now?.title ?? channel.name).font(.system(size: 52, weight: .bold)).lineLimit(1)
                     HStack(spacing: 24) {
-                        ProgrammeTimes(entry: pair.now, now: now, barWidth: 112)
+                        // A barra larga por baixo já mostra o progresso: aqui só as horas.
+                        ProgrammeTimes(entry: pair.now, now: now, bar: false)
                         HStack(spacing: 10) {
                             ForEach(badges, id: \.self) { badge in
                                 Text(badge)
@@ -1134,12 +1135,18 @@ struct ProgrammeTimes: View {
     let entry: EpgEntry?
     let now: Int64
     var barWidth: CGFloat = 112
+    /// Sem a barra curta (o HUD tem a larga por baixo).
+    var bar = true
 
     var body: some View {
         HStack(spacing: 18) {
             if let entry {
                 Text("\(hhmm(entry.start)) — \(hhmm(entry.end))").fixedSize()
-                ProgressLine(value: entry.progress(now: now), height: 5).frame(width: barWidth)
+                if bar {
+                    ProgressLine(value: entry.progress(now: now), height: 5).frame(width: barWidth)
+                } else {
+                    Text("·")
+                }
                 Text(model.strings.r("minutes_left", "\(max(0, (entry.endMs - now + 59_999) / 60_000))")).fixedSize()
             } else {
                 Text(model.strings.noGuideInfo)
