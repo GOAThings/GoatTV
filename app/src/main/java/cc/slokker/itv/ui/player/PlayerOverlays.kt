@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
@@ -115,7 +116,7 @@ internal fun NowPlayingBar(
         Modifier
             .fillMaxWidth()
             .background(HudScrim)
-            .padding(start = 48.dp, end = 48.dp, top = 96.dp, bottom = 27.dp),
+            .padding(start = 48.dp, end = 48.dp, top = 150.dp, bottom = 27.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             if (prefs.showLogos) {
@@ -327,23 +328,22 @@ internal fun ZapCard(channel: Channel, vm: AppViewModel) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
 
+    // O ecrã todo, com o canto de baixo à esquerda escurecido: uma elipse que desvanece até meio do ecrã (antes era
+    // desenhada só à volta do cartão e acabava de repente).
+    Box(
+        Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val corner = Offset(0f, size.height)
+                val ry = size.height * 0.8f
+                scale(scaleX = size.width * 0.7f / ry, scaleY = 1f, pivot = corner) {
+                    drawCircle(ZapCorner(corner, ry), radius = ry, center = corner)
+                }
+            },
+        contentAlignment = Alignment.BottomStart,
+    ) {
     Row(
         Modifier
-            .drawBehind {
-                // Canto escurecido (a partir do canto do ecrã, onde o cartão encosta).
-                val r = 760.dp.toPx()
-                drawRect(
-                    Brush.radialGradient(
-                        0f to Color.Black.copy(alpha = 0.78f),
-                        0.5f to Color.Black.copy(alpha = 0.42f),
-                        1f to Color.Transparent,
-                        center = Offset(0f, size.height),
-                        radius = r,
-                    ),
-                    topLeft = Offset(0f, size.height - r),
-                    size = Size(r, r),
-                )
-            }
             .padding(start = 48.dp, bottom = 48.dp, top = 48.dp, end = 48.dp)
             .widthIn(max = 640.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -364,15 +364,29 @@ internal fun ZapCard(channel: Channel, vm: AppViewModel) {
             if (current != null) ProgrammeTimes(current, now)
         }
     }
+    }
 }
+
+@Suppress("FunctionName")
+private fun ZapCorner(center: Offset, radius: Float) = Brush.radialGradient(
+    0f to Color.Black.copy(alpha = 0.75f),
+    0.35f to Color.Black.copy(alpha = 0.5f),
+    0.7f to Color.Black.copy(alpha = 0.15f),
+    1f to Color.Transparent,
+    center = center,
+    radius = radius,
+)
 
 /** Sombra do texto do HUD e do zapping (sem cartão por trás). */
 private val TextShadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 1f), 8f)
 
 /** O escurecido do HUD: transparente em cima, quase preto junto aos botões. */
 private val HudScrim = Brush.verticalGradient(
+    // Começa devagar, para não se ver onde acaba.
     0f to Color.Transparent,
-    0.35f to Color.Black.copy(alpha = 0.55f),
+    0.2f to Color.Black.copy(alpha = 0.1f),
+    0.45f to Color.Black.copy(alpha = 0.42f),
+    0.7f to Color.Black.copy(alpha = 0.7f),
     1f to Color.Black.copy(alpha = 0.85f),
 )
 

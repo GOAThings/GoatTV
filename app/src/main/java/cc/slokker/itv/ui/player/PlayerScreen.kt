@@ -987,7 +987,7 @@ fun PlayerScreen(vm: AppViewModel) {
             AnimatedVisibility(
                 visible = infoAllowed && !infoFull,
                 modifier = Modifier.align(Alignment.BottomStart),
-                enter = fadeIn() + slideInHorizontally { -it / 8 },
+                enter = fadeIn(),
                 exit = fadeOut(),
             ) {
                 ZapCard(current, vm)

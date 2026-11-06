@@ -177,9 +177,9 @@ struct PlayerScreen: View {
             if zapCard, !hud, panel == .none, let channel = model.current {
                 ZStack(alignment: .bottomLeading) {
                     // O canto escurecido, a desvanecer até ao meio do ecrã (sem orla).
-                    EllipticalGradient(stops: [.init(color: .black.opacity(0.7), location: 0), .init(color: .black.opacity(0.35), location: 0.45),
-                                               .init(color: .clear, location: 1)],
-                                       center: .bottomLeading, startRadiusFraction: 0, endRadiusFraction: 1.3)
+                    EllipticalGradient(stops: [.init(color: .black.opacity(0.75), location: 0), .init(color: .black.opacity(0.5), location: 0.35),
+                                               .init(color: .black.opacity(0.15), location: 0.7), .init(color: .clear, location: 1)],
+                                       center: .bottomLeading, startRadiusFraction: 0, endRadiusFraction: 1.5)
                     ZapCard(channel: channel, now: now)
                 }
                 .ignoresSafeArea()
@@ -1068,6 +1068,7 @@ struct Hud<Buttons: View>: View {
                             ForEach(badges, id: \.self) { badge in
                                 Text(badge)
                                     .font(.system(size: 20, weight: .bold))
+                                    .fixedSize()
                                     .foregroundStyle(Theme.textDim)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 4)
@@ -1095,11 +1096,13 @@ struct Hud<Buttons: View>: View {
             buttons()
         }
         .padding(.horizontal, 96)
-        .padding(.top, 200)
+        .padding(.top, 300)
         .padding(.bottom, 44)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.55), location: 0.35),
+            // Começa devagar, para não se ver onde acaba.
+            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.1), location: 0.2),
+                                   .init(color: .black.opacity(0.42), location: 0.45), .init(color: .black.opacity(0.7), location: 0.7),
                                    .init(color: .black.opacity(0.85), location: 1)],
                            startPoint: .top, endPoint: .bottom)
         )
