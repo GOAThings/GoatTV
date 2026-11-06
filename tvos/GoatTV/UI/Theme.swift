@@ -74,17 +74,33 @@ extension View {
 /// Linha de uma lista: sem fundo, com contorno quando tem foco (como no GoatTV Android).
 struct RowButtonStyle: ButtonStyle {
     var outline: AnyShapeStyle = AnyShapeStyle(Color.white)
+    /// A lista desenha um só destaque que desliza entre as linhas ([slidingHighlight]): a linha não desenha o seu.
+    var sliding = false
 
     func makeBody(configuration: Configuration) -> some View {
-        RowButton(configuration: configuration, outline: outline)
+        RowButton(configuration: configuration, outline: outline, sliding: sliding)
     }
 
     private struct RowButton: View {
         let configuration: Configuration
         let outline: AnyShapeStyle
+        let sliding: Bool
         @Environment(\.isFocused) private var focused
 
         var body: some View {
+            if sliding {
+                configuration.label
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .rowFocusAnchor(focused)
+            } else {
+                plain
+            }
+        }
+
+        private var plain: some View {
             configuration.label
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
@@ -131,13 +147,17 @@ struct ChannelLogo: View {
     let url: URL?
     let name: String
     var size = CGSize(width: 96, height: 60)
+    /// Por cima do vídeo (HUD, zapping): uma sombra suave com a forma do logótipo, para se separar da imagem.
+    var shadow = false
 
     var body: some View {
         ZStack {
             if let url {
                 AsyncImage(url: url, transaction: Transaction(animation: nil)) { phase in
                     switch phase {
-                    case .success(let image): image.resizable().scaledToFit()
+                    case .success(let image):
+                        image.resizable().scaledToFit()
+                            .shadow(color: .black.opacity(shadow ? 0.7 : 0), radius: shadow ? 4 : 0, y: shadow ? 1 : 0)
                     default: initials
                     }
                 }
@@ -188,17 +208,37 @@ enum Fonts {
 /// está) tem um fundo claro translúcido.
 struct FillRowStyle: ButtonStyle {
     var selected = false
+    /// A lista desenha um só destaque que desliza ([slidingHighlight]): a linha só diz onde está quando tem foco.
+    var sliding = false
 
     func makeBody(configuration: Configuration) -> some View {
-        FillRow(configuration: configuration, selected: selected)
+        FillRow(configuration: configuration, selected: selected, sliding: sliding)
     }
 
     private struct FillRow: View {
         let configuration: Configuration
         let selected: Bool
+        let sliding: Bool
         @Environment(\.isFocused) private var focused
 
         var body: some View {
+            if sliding {
+                configuration.label
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(selected && !focused ? 0.16 : 0))
+                    )
+                    .contentShape(Rectangle())
+                    .rowFocusAnchor(focused)
+            } else {
+                plain
+            }
+        }
+
+        private var plain: some View {
             configuration.label
                 .foregroundStyle(focused ? Color.black : Theme.text)
                 .padding(.horizontal, 24)
@@ -367,5 +407,84 @@ struct PinPad: View {
                     .animation(.easeOut(duration: 0.1), value: focused)
             }
         }
+    }
+}
+
+// MARK: Destaque que desliza
+
+/// Onde está a linha com foco de uma lista (só a que tem foco publica).
+struct RowFocusKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) { value = value ?? nextValue() }
+}
+
+/// Como no Android (e na Apple TV): um só destaque que desliza de linha em linha em vez de cada linha acender e apagar.
+private let highlightSpring = Animation.spring(response: 0.28, dampingFraction: 1)
+
+struct SlidingHighlight: ViewModifier {
+    /// A placa branca dos grupos (pintada em "diferença": o texto por baixo fica escuro); senão contorno e véu.
+    let plate: Bool
+    let outline: AnyShapeStyle
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        if plate {
+            content
+                .overlayPreferenceValue(RowFocusKey.self) { anchor in
+                    GeometryReader { geo in
+                        if let anchor {
+                            let r = geo[anchor]
+                            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                .fill(Color.white)
+                                .frame(width: r.width, height: r.height)
+                                .offset(x: r.minX, y: r.minY)
+                                .animation(highlightSpring, value: r)
+                        }
+                    }
+                    .blendMode(.difference)
+                    .allowsHitTesting(false)
+                }
+                .compositingGroup()
+        } else {
+            content
+                .backgroundPreferenceValue(RowFocusKey.self) { anchor in
+                    GeometryReader { geo in
+                        if let anchor {
+                            let r = geo[anchor]
+                            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                .fill(Color.white.opacity(0.12))
+                                .frame(width: r.width, height: r.height)
+                                .offset(x: r.minX, y: r.minY)
+                                .animation(highlightSpring, value: r)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+                .overlayPreferenceValue(RowFocusKey.self) { anchor in
+                    GeometryReader { geo in
+                        if let anchor {
+                            let r = geo[anchor]
+                            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                .strokeBorder(outline, lineWidth: 3)
+                                .frame(width: r.width, height: r.height)
+                                .offset(x: r.minX, y: r.minY)
+                                .animation(highlightSpring, value: r)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+        }
+    }
+}
+
+extension View {
+    /// Esta linha é a do destaque enquanto tiver foco.
+    func rowFocusAnchor(_ focused: Bool) -> some View {
+        anchorPreference(key: RowFocusKey.self, value: .bounds) { focused ? $0 : nil }
+    }
+
+    /// Desenha o destaque da lista (ver [SlidingHighlight]); as linhas usam o estilo com `sliding: true`.
+    func slidingHighlight(plate: Bool = false, outline: AnyShapeStyle = AnyShapeStyle(Color.white), radius: CGFloat = 18) -> some View {
+        modifier(SlidingHighlight(plate: plate, outline: outline, radius: radius))
     }
 }

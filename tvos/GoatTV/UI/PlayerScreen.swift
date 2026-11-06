@@ -36,6 +36,8 @@ struct PlayerScreen: View {
     @State private var browseGroup = SpecialCategory.all
     @State private var showGuide = false
     @State private var playlistMenu = false
+    /// Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (mostrados ao parar nele).
+    @State private var previewGroup: String?
     @State private var activity = 0
     /// A escrever num campo das Definições: o painel não fecha sozinho.
     @State private var typing = false
@@ -175,12 +177,14 @@ struct PlayerScreen: View {
             if zapCard, !hud, panel == .none, let channel = model.current {
                 VStack {
                     Spacer()
-                    ZapCard(channel: channel, now: now)
+                    HStack {
+                        ZapCard(channel: channel, now: now)
+                        Spacer(minLength: 0)
+                    }
                 }
-                .padding(.leading, 64)
-                .padding(.bottom, 64)
                 .ignoresSafeArea()
-                .transition(.move(edge: .leading).combined(with: .opacity))
+                .allowsHitTesting(false)
+                .transition(.opacity)
             }
 
             if hud, panel == .none, model.catchup == nil, let channel = model.current {
@@ -188,20 +192,29 @@ struct PlayerScreen: View {
                     Spacer()
                     hudView(channel)
                 }
-                .padding(.horizontal, 64)
-                .padding(.bottom, 48)
                 .ignoresSafeArea()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if panel == .channels || panel == .groups || isPin {
-                HStack(alignment: .top, spacing: 0) {
+                HStack(alignment: .top, spacing: 20) {
                     sidePanel
                     if panel == .channels, showGuide, let channel = focusedChannel {
                         ChannelGuidePanel(channel: channel, now: now)
                             .transition(.opacity)
                     }
+                    if panel == .groups {
+                        channelPreview(previewGroup ?? browseGroup)
+                            .transition(.opacity)
+                    }
                     Spacer(minLength: 0)
+                }
+                // O grupo com foco só passa para os canais ao lado quando se pára nele (refazer a lista a cada
+                // tecla atrasava o destaque).
+                .task(id: focusedGroupId) {
+                    guard let id = focusedGroupId else { return }
+                    try? await Task.sleep(for: .milliseconds(400))
+                    if !Task.isCancelled { previewGroup = id }
                 }
                 .padding(.leading, 40)
                 .padding(.vertical, 40)
@@ -737,7 +750,7 @@ struct PlayerScreen: View {
         }
         .padding(.vertical, 28)
         .padding(.horizontal, 16)
-        .frame(width: model.panelPoints(model.prefs.panelWidth))
+        .frame(width: model.panelPoints(model.prefs.panelWidth) * (panel == .groups ? 0.85 : 1))
         .frame(maxHeight: .infinity, alignment: .top)
         .glass()
         .focusSection()
@@ -800,7 +813,7 @@ struct PlayerScreen: View {
                         } label: {
                             ChannelRow(channel: channel, now: now, guideVersion: guideVersion)
                         }
-                        .buttonStyle(RowButtonStyle(outline: outline))
+                        .buttonStyle(RowButtonStyle(outline: outline, sliding: true))
                         .focused($focus, equals: .channel(channel.uid))
                         .accessibilityIdentifier("channel:\(channel.key)")
                         .contextMenu {
@@ -811,6 +824,7 @@ struct PlayerScreen: View {
                         .id(channel.uid)
                     }
                 }
+                .slidingHighlight(outline: outline)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 6)
             }
@@ -914,13 +928,14 @@ struct PlayerScreen: View {
                                 Text("\(model.channels(in: group.id).count)").font(Fonts.rowValue).opacity(0.75)
                             }
                         }
-                        .buttonStyle(FillRowStyle(selected: group.id == browseGroup))
+                        .buttonStyle(FillRowStyle(selected: group.id == browseGroup, sliding: true))
                         .focused($focus, equals: .group(group.id))
                         .accessibilityIdentifier("group:\(group.id)")
                         .disabled(playlistMenu)
                         .id(group.id)
                     }
                 }
+                .slidingHighlight(plate: true, radius: 16)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 6)
             }
@@ -938,7 +953,51 @@ struct PlayerScreen: View {
         }
     }
 
+    private var focusedGroupId: String? {
+        if case .group(let id)? = focus { return id }
+        return nil
+    }
+
+    /// Os canais de um grupo, esbatidos ao lado dos grupos: só para ver (sem foco); → abre-o.
+    private func channelPreview(_ group: String) -> some View {
+        let channels = model.channels(in: group)
+        let guideVersion = model.guideVersion
+        let playing = channels.firstIndex { $0.key == model.current?.key } ?? 0
+        let shown = channels.dropFirst(max(0, playing - 3)).prefix(14)
+        return VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.groups.first { $0.id == group }?.name ?? model.strings.all).font(Fonts.panelTitle).lineLimit(1)
+                Text(model.strings.channelCount(channels.count))
+                    .font(Fonts.panelSubtitle)
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            VStack(spacing: 6) {
+                ForEach(shown) { channel in
+                    ChannelRow(channel: channel, now: now, guideVersion: guideVersion)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 28)
+        .padding(.horizontal, 16)
+        .frame(width: model.panelPoints(model.prefs.panelWidth))
+        .frame(maxHeight: .infinity, alignment: .top)
+        .clipped()
+        .glass()
+        .opacity(0.55)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.15), value: group)
+    }
+
     private func showGroups() {
+        previewGroup = nil
         showGuide = false
         panel = .groups
         activity += 1
@@ -951,7 +1010,7 @@ struct PlayerScreen: View {
     }
 }
 
-/// O cartão pequeno ao mudar de canal (em baixo à esquerda): logótipo, canal, programa e progresso.
+/// Ao mudar de canal, em baixo à esquerda: o mesmo estilo do HUD, sem cartão, por cima de um canto escurecido.
 struct ZapCard: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
@@ -960,35 +1019,29 @@ struct ZapCard: View {
     var body: some View {
         let _ = model.guideVersion
         let current = Guide.nowNext(model.programmes(for: channel), now: now).now
-        HStack(spacing: 24) {
+        HStack(spacing: 36) {
             if model.prefs.showLogos {
-                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 104, height: 64))
+                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 216, height: 124), shadow: true)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    if model.prefs.showNumbers {
-                        Text("\(channel.num)").font(.callout.monospacedDigit()).foregroundStyle(Theme.textFaint)
-                    }
-                    Text(channel.name).font(.callout.bold()).foregroundStyle(Theme.textDim).lineLimit(1)
-                }
-                Text(current?.title ?? model.strings.noGuideInfo).font(.headline).lineLimit(1)
-                if let current {
-                    HStack(spacing: 14) {
-                        Text(hhmm(current.start)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.textFaint)
-                        ProgressLine(value: current.progress(now: now), height: 4)
-                        Text(hhmm(current.end)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.textFaint)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                ChannelLine(channel: channel, size: 24)
+                Text(current?.title ?? channel.name).font(.system(size: 42, weight: .bold)).lineLimit(1)
+                ProgrammeTimes(entry: current, now: now, barWidth: 220)
             }
+            .hudShadow()
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
-        .frame(width: 820, alignment: .leading)
-        .glass(radius: 26)
+        .frame(maxWidth: 1180, alignment: .leading)
+        .padding(96)
+        .background(
+            RadialGradient(stops: [.init(color: .black.opacity(0.78), location: 0), .init(color: .black.opacity(0.42), location: 0.5),
+                                   .init(color: .clear, location: 1)],
+                           center: .bottomLeading, startRadius: 0, endRadius: 1500)
+        )
     }
 }
 
-/// A barra de baixo quando se carrega em OK: canal com os dados da stream, agora e a seguir, e os botões.
+/// O HUD (OK): sem painel de vidro, o fundo escurece em baixo; logótipo, canal, programa com as horas e o que falta,
+/// a qualidade, a seguir, a barra larga do programa e os botões por baixo.
 struct Hud<Buttons: View>: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
@@ -1005,60 +1058,125 @@ struct Hud<Buttons: View>: View {
         let _ = model.guideVersion
         let pair = Guide.nowNext(model.programmes(for: channel), now: now)
         let badges = [model.player.resolution, model.player.format.map { $0 == StreamFormat.hls ? "HLS" : "TS" }].compactMap { $0 }
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(alignment: .top, spacing: 48) {
-                HStack(spacing: 24) {
-                    if model.prefs.showLogos {
-                        ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 120, height: 74))
-                    }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.isFavorite(channel) ? "\(channel.name)  ★" : channel.name)
-                            .font(.title3.bold())
-                            .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 40) {
+                if model.prefs.showLogos {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 244, height: 136), shadow: true)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    ChannelLine(channel: channel, size: 26)
+                    Text(pair.now?.title ?? channel.name).font(.system(size: 52, weight: .bold)).lineLimit(1)
+                    HStack(spacing: 24) {
+                        ProgrammeTimes(entry: pair.now, now: now, barWidth: 112)
                         HStack(spacing: 10) {
                             ForEach(badges, id: \.self) { badge in
                                 Text(badge)
-                                    .font(.caption2.bold())
+                                    .font(.system(size: 20, weight: .bold))
                                     .foregroundStyle(Theme.textDim)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 3)
-                                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 4)
+                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.14)))
                             }
                         }
                     }
                 }
-                .frame(width: 560, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    if let current = pair.now {
-                        HStack(spacing: 12) {
-                            Text(model.strings.now.uppercased()).font(.caption2.bold()).foregroundStyle(Theme.sky)
-                            Text(current.title).font(.headline).lineLimit(1)
-                        }
-                        HStack(spacing: 14) {
-                            Text(hhmm(current.start)).font(.caption.monospacedDigit()).foregroundStyle(Theme.textFaint)
-                            ProgressLine(value: current.progress(now: now), height: 5)
-                            Text(hhmm(current.end)).font(.caption.monospacedDigit()).foregroundStyle(Theme.textFaint)
-                        }
-                    } else {
-                        Text(model.strings.noGuideInfo).font(.headline).foregroundStyle(Theme.textDim)
+                .hudShadow()
+                Spacer(minLength: 24)
+                if let next = pair.next {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text("\(model.strings.next.uppercased()) · \(hhmm(next.start))")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(Theme.textFaint)
+                        Text(next.title).font(.system(size: 28, weight: .semibold)).lineLimit(1)
                     }
-                    if let next = pair.next {
-                        HStack(spacing: 12) {
-                            Text(model.strings.next.uppercased()).font(.caption2.bold()).foregroundStyle(Theme.textFaint)
-                            Text("\(hhmm(next.start))  \(next.title)").font(.callout).foregroundStyle(Theme.textDim).lineLimit(1)
-                        }
-                    }
+                    .frame(maxWidth: 520, alignment: .trailing)
+                    .hudShadow()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            WideProgress(value: pair.now?.progress(now: now))
+                .padding(.top, 30)
+                .padding(.bottom, 14)
             buttons()
         }
-        .padding(.horizontal, 36)
-        .padding(.vertical, 28)
+        .padding(.horizontal, 96)
+        .padding(.top, 200)
+        .padding(.bottom, 44)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(radius: 34)
+        .background(
+            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.55), location: 0.35),
+                                   .init(color: .black.opacity(0.85), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        )
     }
+}
+
+/// Número, nome do canal e ★ se for favorito (por cima do título no HUD e no zapping).
+struct ChannelLine: View {
+    @Environment(AppModel.self) private var model
+    let channel: Channel
+    var size: CGFloat = 26
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if model.prefs.showNumbers {
+                Text("\(channel.num)").font(.system(size: size, weight: .semibold).monospacedDigit()).foregroundStyle(Theme.textFaint)
+            }
+            Text(model.isFavorite(channel) ? "\(channel.name)  ★" : channel.name)
+                .font(.system(size: size, weight: .bold))
+                .foregroundStyle(Theme.textDim)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// "14:15 — 15:45", uma barra pequena e quanto falta; sem guia, o aviso.
+struct ProgrammeTimes: View {
+    @Environment(AppModel.self) private var model
+    let entry: EpgEntry?
+    let now: Int64
+    var barWidth: CGFloat = 112
+
+    var body: some View {
+        HStack(spacing: 18) {
+            if let entry {
+                Text("\(hhmm(entry.start)) — \(hhmm(entry.end))")
+                ProgressLine(value: entry.progress(now: now), height: 5).frame(width: barWidth)
+                Text(model.strings.r("minutes_left", "\(max(0, (entry.endMs - now + 59_999) / 60_000))"))
+            } else {
+                Text(model.strings.noGuideInfo)
+            }
+        }
+        .font(.system(size: 26, weight: .medium).monospacedDigit())
+        .foregroundStyle(Theme.textDim)
+        .lineLimit(1)
+    }
+}
+
+/// A barra larga do programa no HUD, com a cor de destaque e um botão branco no ponto em que vai.
+struct WideProgress: View {
+    @Environment(AppModel.self) private var model
+    let value: Double?
+
+    var body: some View {
+        GeometryReader { geo in
+            let x = geo.size.width * min(max(value ?? 0, 0), 1)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.22)).frame(height: 6)
+                if value != nil {
+                    Capsule().fill(Theme.accent(model.prefs.accent)).frame(width: x, height: 6)
+                    Circle().fill(Color.white.opacity(0.25)).frame(width: 30, height: 30).offset(x: x - 15)
+                    Circle().fill(Color.white).frame(width: 18, height: 18).offset(x: x - 9)
+                }
+            }
+            .frame(height: geo.size.height)
+        }
+        .frame(height: 30)
+    }
+}
+
+extension View {
+    /// Sombra para o texto ler-se por cima do vídeo.
+    func hudShadow() -> some View { shadow(color: .black.opacity(0.8), radius: 4, y: 1) }
 }
 
 /// Botão da barra (ícone e texto numa cápsula), como os do Android.

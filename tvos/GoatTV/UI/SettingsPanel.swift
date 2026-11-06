@@ -116,12 +116,28 @@ struct SettingsPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title(page))
-                .font(Fonts.panelTitle)
-                .lineLimit(1)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 6)
+            VStack(alignment: .leading, spacing: 2) {
+                // Nas subpáginas, de onde se veio ("‹ Definições") por cima do título.
+                if stack.count > 1 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left").font(.system(size: 20 * Fonts.scale, weight: .semibold))
+                        Text(title(stack[stack.count - 2])).lineLimit(1)
+                    }
+                    .font(.system(size: 24 * Fonts.scale, weight: .semibold))
+                    .foregroundStyle(Theme.textFaint)
+                }
+                Text(title(page))
+                    .font(Fonts.panelTitle)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 6)
             content
+                .frame(maxHeight: .infinity, alignment: .top)
+            Text("GoatTV \(model.appVersion)")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.textFaint)
+                .padding(.horizontal, 24)
         }
         .padding(.vertical, 28)
         .padding(.horizontal, 16)
@@ -301,14 +317,105 @@ struct SettingsPanel: View {
         default:
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(items(page)) { item in
-                        row(item).accessibilityIdentifier(item.id)
+                    // As linhas de cada secção (entre títulos) ficam num bloco, com um traço fino entre elas.
+                    ForEach(sections(items(page)), id: \.id) { section in
+                        if let header = section.header {
+                            row(header).accessibilityIdentifier(header.id)
+                        }
+                        VStack(spacing: 0) {
+                            ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, item in
+                                row(item)
+                                    .accessibilityIdentifier(item.id)
+                                    .overlay(alignment: .top) {
+                                        if index > 0 {
+                                            Rectangle()
+                                                .fill(Color.white.opacity(0.07))
+                                                .frame(height: 1)
+                                                .padding(.leading, leadingInset(item))
+                                                .padding(.trailing, 24)
+                                        }
+                                    }
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.04)))
                     }
                 }
-                .padding(.vertical, 8)
+                .slidingHighlight(outline: outline, radius: 16)
+                .padding(.top, 8)
+                .padding(.bottom, 56)
                 .padding(.horizontal, 8)
             }
+            // A lista desvanece em baixo (há mais para ver).
+            .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9),
+                                         .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
         }
+    }
+
+    private struct Section {
+        let id: String
+        let header: Item?
+        let rows: [Item]
+    }
+
+    private func sections(_ list: [Item]) -> [Section] {
+        var out: [Section] = []
+        var header: Item?
+        var rows: [Item] = []
+        func flush() {
+            if header != nil || !rows.isEmpty { out.append(Section(id: header?.id ?? "s\(out.count)", header: header, rows: rows)) }
+        }
+        for item in list {
+            if case .header = item {
+                flush()
+                header = item
+                rows = []
+            } else {
+                rows.append(item)
+            }
+        }
+        flush()
+        return out
+    }
+
+    private var outline: AnyShapeStyle { Theme.outline(model.prefs.outlineColor, accent: model.prefs.accent) }
+
+    /// Ícone das páginas na página principal.
+    private func icon(_ id: String) -> String? {
+        guard page == .root else { return nil }
+        switch id {
+        case "update": return "arrow.down.circle.fill"
+        case "playback": return "play.circle"
+        case "zapping": return "arrow.up.arrow.down"
+        case "guide": return "calendar"
+        case "appearance": return "paintpalette"
+        case "general": return "slider.horizontal.3"
+        case "lists": return "list.bullet"
+        case "parental": return "lock"
+        case "account": return "person.crop.circle"
+        default: return nil
+        }
+    }
+
+    /// À esquerda da linha: o logótipo do canal a ver, ou o ícone da página num quadrado (a atualização na cor de destaque).
+    @ViewBuilder
+    private func leading(_ id: String) -> some View {
+        if page == .root, id == "current", let channel = model.current {
+            ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 80, height: 50))
+        } else if let icon = icon(id) {
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(id == "update" ? Color.white : Theme.text.opacity(0.85))
+                .frame(width: 60, height: 60)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(id == "update" ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(0.08)))
+                )
+        }
+    }
+
+    private func leadingInset(_ item: Item) -> CGFloat {
+        if page == .root, item.id == "current" { return 126 }
+        return icon(item.id) == nil ? 24 : 106
     }
 
     /// Reordenar: OK pega/larga um item; com ele "na mão", ↑/↓ movem-no (os outros ficam sem foco).
@@ -325,12 +432,13 @@ struct SettingsPanel: View {
                                     .foregroundStyle(isMoving ? AnyShapeStyle(Theme.sky) : AnyShapeStyle(Color.secondary))
                             }
                         }
-                        .buttonStyle(FillRowStyle(selected: isMoving))
+                        .buttonStyle(FillRowStyle(selected: isMoving, sliding: true))
                         .focused($focus, equals: "o:" + id)
                         .disabled(moving != nil && !isMoving)
                         .id(id)
                     }
                 }
+                .slidingHighlight(outline: outline, radius: 16)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 8)
             }
@@ -388,26 +496,29 @@ struct SettingsPanel: View {
                 .padding(.bottom, 4)
         case .nav(let id, let title, let value, let subtitle, let next):
             Button { push(next, from: id) } label: {
-                RowContent(title: title, subtitle: subtitle) {
-                    if let value, !value.isEmpty {
-                        Text(value).font(Fonts.rowValue).opacity(0.82).lineLimit(1)
+                HStack(spacing: 22) {
+                    leading(id)
+                    RowContent(title: title, subtitle: subtitle) {
+                        if let value, !value.isEmpty {
+                            Text(value).font(Fonts.rowValue).opacity(0.82).lineLimit(1)
+                        }
+                        Image(systemName: "chevron.right").font(.system(size: 22, weight: .semibold)).opacity(0.6)
                     }
-                    Image(systemName: "chevron.right").font(.system(size: 22, weight: .semibold)).opacity(0.6)
                 }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .toggle(let id, let title, let on, let subtitle, let change):
             Button { change(!on) } label: {
                 RowContent(title: title, subtitle: subtitle) { SwitchMark(on: on) }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .eye(let id, let title, let visible, let change):
             Button { change(!visible) } label: {
                 RowContent(title: title, subtitle: nil) { EyeMark(visible: visible) }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .check(let id, let title, let checked, let subtitle, let swatch, let pick):
             Button(action: pick) {
@@ -420,7 +531,7 @@ struct SettingsPanel: View {
                     }
                 }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .logoCheck(let id, let title, let checked, let subtitle, let logo, let pick):
             Button(action: pick) {
@@ -431,13 +542,16 @@ struct SettingsPanel: View {
                     }
                 }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .action(let id, let title, let subtitle, let perform):
             Button(action: perform) {
-                RowContent(title: title, subtitle: subtitle)
+                HStack(spacing: 22) {
+                    leading(id)
+                    RowContent(title: title, subtitle: subtitle)
+                }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         case .info(let id, let title, let value):
             Button {} label: {
@@ -445,7 +559,7 @@ struct SettingsPanel: View {
                     Text(value).font(Fonts.rowValue).opacity(0.82).lineLimit(1)
                 }
             }
-            .buttonStyle(FillRowStyle())
+            .buttonStyle(FillRowStyle(sliding: true))
             .focused($focus, equals: id)
         }
     }
@@ -505,18 +619,22 @@ struct SettingsPanel: View {
                                     subtitle: s.t("Download GoatTV.ipa from github.com/GOAThings/GoatTV and install it again with your signing service",
                                                   "Descarrega o GoatTV.ipa em github.com/GOAThings/GoatTV e volta a instalá-lo com o teu serviço de assinatura")) {})
             }
+            // No topo, sem secção: o canal a ver e a atualização (se houver). Depois as páginas, por secções.
             if let channel = model.current {
-                list.append(.nav("current", s.t("Current channel", "Canal atual"), subtitle: channel.name, to: .current))
+                list.insert(.nav("current", channel.name, subtitle: s.t("Current channel", "Canal atual"), to: .current), at: 0)
             }
             list += [
-                .nav("general", s.t("General", "Geral"), subtitle: s.t("Exit, User-Agent", "Saída, User-Agent"), to: .general),
+                .header("hwatch", s.r("section_watching")),
                 .nav("playback", s.t("Playback", "Reprodução"), subtitle: s.t("Format, buffer, player, picture, HDR", "Formato, buffer, player, imagem, HDR"), to: .playback),
                 .nav("zapping", s.t("Channel switching", "Mudança de canal"), subtitle: s.t("↑/↓ keys, info, startup", "Teclas ↑/↓, informação, arranque"), to: .zapping),
-                .nav("appearance", s.t("Appearance", "Aspeto"), subtitle: s.t("Language, panels, numbers, logos", "Idioma, painéis, números, logos"), to: .appearance),
                 .nav("guide", s.t("TV guide", "Guia de programação"), subtitle: s.t("Updates, time offset", "Atualização, desvio horário"), to: .guide),
+                .header("hui", s.r("section_interface")),
+                .nav("appearance", s.t("Appearance", "Aspeto"), subtitle: s.t("Language, panels, numbers, logos", "Idioma, painéis, números, logos"), to: .appearance),
+                .nav("general", s.t("General", "Geral"), subtitle: s.t("Exit, User-Agent", "Saída, User-Agent"), to: .general),
+                .header("hlib", s.r("section_library")),
+                .nav("lists", s.playlists, subtitle: model.content?.playlist.name, to: .lists),
                 .nav("parental", s.t("Parental controls", "Controlo parental"), subtitle: prefs.pinHash != nil ? s.t("On", "Ativo") : s.t("Off", "Desligado"),
                      to: prefs.pinHash != nil ? .parentalGate : .parental),
-                .nav("lists", s.playlists, subtitle: model.content?.playlist.name, to: .lists),
                 .nav("account", s.account, subtitle: model.hasAccount ? model.email.map(Self.maskEmail) : s.t("No account (this TV only)", "Sem conta (só nesta TV)"), to: .account),
             ]
             return list
@@ -614,14 +732,17 @@ struct SettingsPanel: View {
 
         case .appearance:
             return [
+                .header("hlang", s.r("section_language_text")),
                 pickItem("language"),
+                pickItem("ui_scale"),
+                pickItem("text_size"),
+                .header("hlist", s.r("section_channel_list")),
                 .toggle("show_numbers", s.t("Channel numbers", "Números dos canais"), prefs.showNumbers) { model.setPref("show_numbers", .bool($0)) },
                 .toggle("show_logos", s.t("Channel logos", "Logos dos canais"), prefs.showLogos) { model.setPref("show_logos", .bool($0)) },
                 .nav("logo_source", s.t("Logo source", "Origem dos logótipos"), value: logoSourceLabel(prefs.logoSource), to: .logoSource),
                 pickItem("sort"),
+                .header("hpanels", s.r("section_panels_colour")),
                 pickItem("panel_width"),
-                pickItem("text_size"),
-                pickItem("ui_scale"),
                 pickItem("accent"),
                 pickItem("outline_color"),
                 pickItem("glass_opacity"),
