@@ -824,7 +824,7 @@ private fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = fal
                 )
             }
         }
-        if (guide) GuideGrid(vm, channels, shown, current, onEpg) else ChannelList(vm, channels, shown, current, onEpg)
+        if (guide) GuideList(vm, channels, shown, current, onEpg) else ChannelList(vm, channels, shown, current, onEpg)
     }
     pinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { pinFor = null }, rejected = vm::pinRejected) { pin ->

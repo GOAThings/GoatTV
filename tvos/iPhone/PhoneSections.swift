@@ -154,204 +154,144 @@ struct MiniPlayer: View {
     }
 }
 
-// MARK: Guia em grelha
+// MARK: Guia
 
-/// O guia do telemóvel em grelha, como o da TV: os canais à esquerda, os programas a deslizar de lado (com o dedo),
-/// a hora atual numa linha vermelha e os dias por cima. Tocar num programa a dar abre o canal; num que já passou,
-/// o catch-up (se houver); num que vem aí, marca um lembrete. Manter o dedo abre o guia do canal.
-struct PhoneGuideGrid: View {
+/// O guia do telemóvel: o que dá em cada canal à hora escolhida (Agora, ou de meia em meia hora para trás, para o
+/// catch-up, e para a frente), com quanto falta e o que vem a seguir.
+struct PhoneGuideList: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.played) private var played
     let channels: [Channel]
     let group: String
     @Binding var epgFor: Channel?
-    @State private var origin = PhoneGuideGrid.halfHour(nowMillis() - PhoneGuideGrid.pastMs)
-    @State private var offset: CGFloat?
-    @State private var dragStart: CGFloat?
-    @State private var horizontal: Bool?
-    @State private var width: CGFloat = 0
-    @State private var now = nowMillis()
-
-    private static let halfHourMs: Int64 = 1_800_000
-    private static let pastMs: Int64 = 12 * 3_600_000
-    private static let futureMs: Int64 = 7 * 86_400_000
-    private let slot: CGFloat = 120
-    private let column: CGFloat = 76
-    private var perMs: CGFloat { slot / CGFloat(Self.halfHourMs) }
-    private var maxOffset: CGFloat { max(0, CGFloat(Self.pastMs + Self.futureMs) * perMs - (width - column)) }
-    private var shift: CGFloat { offset ?? CGFloat(now - Self.halfHourMs / 2 - origin) * perMs }
+    @State private var slot: Int64?
 
     var body: some View {
         let s = model.strings
+        let now = nowMillis()
+        let halfHour: Int64 = 1_800_000
+        let first = now - now % halfHour + halfHour
         VStack(spacing: 0) {
-            dayChips(s)
-            ruler
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(channels) { channel in row(channel) }
-                }
-                .padding(.bottom, 12)
-            }
-            .overlay(alignment: .topLeading) {
-                let x = column + CGFloat(now - origin) * perMs - shift
-                if x >= column {
-                    Rectangle().fill(Theme.hex(0xF2777E).opacity(0.9)).frame(width: 2).offset(x: x - 1).allowsHitTesting(false)
-                }
-            }
-        }
-        .background { GeometryReader { geo in Color.clear.onAppear { width = geo.size.width }.onChange(of: geo.size.width) { _, w in width = w } } }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { v in
-                    if horizontal == nil { horizontal = abs(v.translation.width) > abs(v.translation.height) }
-                    guard horizontal == true else { return }
-                    if dragStart == nil { dragStart = shift }
-                    offset = clamp((dragStart ?? 0) - v.translation.width)
-                }
-                .onEnded { v in
-                    if horizontal == true, let start = dragStart {
-                        withAnimation(.easeOut(duration: 0.45)) { offset = clamp(start - v.predictedEndTranslation.width) }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        // Para trás, para o catch-up; "Agora" começa ao centro.
+                        ForEach(-36..<0, id: \.self) { i in
+                            let time = first + Int64(i) * halfHour
+                            slotButton(hhmm(Date(timeIntervalSince1970: Double(time) / 1000)), on: slot == time) { slot = time }
+                        }
+                        slotButton(s.r("guide_now"), on: slot == nil) { slot = nil }.id("now")
+                        ForEach(0..<12, id: \.self) { i in
+                            let time = first + Int64(i) * halfHour
+                            slotButton(hhmm(Date(timeIntervalSince1970: Double(time) / 1000)), on: slot == time) { slot = time }
+                        }
                     }
-                    dragStart = nil
-                    horizontal = nil
+                    .padding(.horizontal, 6).padding(.bottom, 6)
                 }
-        )
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
-                now = nowMillis()
+                .onAppear { proxy.scrollTo("now", anchor: .center) }
             }
-        }
-    }
-
-    private func clamp(_ x: CGFloat) -> CGFloat { min(max(x, 0), maxOffset) }
-
-    /// Os dias: Hoje (volta à hora atual), Amanhã, e os seguintes às 18:00.
-    private func dayChips(_ s: Strings) -> some View {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        let left = origin + Int64(shift / perMs) + Self.halfHourMs
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(0..<7, id: \.self) { i in
-                    let day = cal.date(byAdding: .day, value: i, to: today) ?? today
-                    let start = Int64(day.timeIntervalSince1970 * 1000)
-                    let end = Int64((cal.date(byAdding: .day, value: 1, to: day) ?? day).timeIntervalSince1970 * 1000)
-                    let on = left >= start && left < end
-                    Button {
-                        let target = i == 0 ? now - Self.halfHourMs / 2 : start + 18 * 3_600_000
-                        withAnimation(.easeInOut(duration: 0.35)) { offset = clamp(CGFloat(target - origin) * perMs) }
-                    } label: {
-                        Text(phoneDayLabel(s, start + 12 * 3_600_000)).font(.subheadline.weight(.semibold))
-                            .foregroundStyle(on ? Color.black : Theme.text)
-                            .padding(.horizontal, 14).padding(.vertical, 7)
-                            .background(on ? Color.white : pillFill, in: Capsule())
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
+            if channels.isEmpty {
+                Text(s.r("no_channels_in_group")).foregroundStyle(Theme.textFaint)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(channels) { channel in
+                            PhoneGuideRow(channel: channel, group: group, slot: slot, now: now, epgFor: $epgFor)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 6).padding(.vertical, 6)
                 }
             }
-            .padding(.horizontal, 12)
         }
-        .padding(.bottom, 6)
     }
 
-    /// As horas de meia em meia hora, com a hora atual numa etiqueta vermelha.
-    private var ruler: some View {
-        let first = origin + Int64(shift / perMs) / Self.halfHourMs * Self.halfHourMs
-        let nowX = CGFloat(now - origin) * perMs - shift
-        let count = Int((width - column) / slot) + 2
-        return ZStack(alignment: .leading) {
-            ForEach(0..<max(count, 1), id: \.self) { i in
-                let t = first + Int64(i) * Self.halfHourMs
-                let x = CGFloat(t - origin) * perMs - shift
-                // A hora debaixo da etiqueta vermelha, e a que já vai a sair pela esquerda, não se mostram.
-                if x >= 0, abs(x + 22 - nowX) > 46 {
-                    Text(hhmm(Date(timeIntervalSince1970: Double(t) / 1000))).font(.caption).foregroundStyle(Theme.textDim)
-                        .fixedSize().offset(x: x + 4)
-                }
-            }
-            if nowX >= 0 {
-                Text(hhmm(Date(timeIntervalSince1970: Double(now) / 1000))).font(.caption.weight(.bold)).foregroundStyle(Theme.hex(0x0B0B0B))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Theme.hex(0xF2777E), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .fixedSize()
-                    .alignmentGuide(.leading) { $0.width / 2 }
-                    .offset(x: nowX)
-            }
+    private func slotButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline.weight(on ? .bold : .regular)).foregroundStyle(on ? Color.black : Theme.textFaint)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(on ? Color.white : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 30)
-        .clipped()
-        .padding(.leading, column)
+        .buttonStyle(.plain)
     }
+}
 
-    private func row(_ channel: Channel) -> some View {
+/// Um canal no guia: o programa à hora escolhida (com quanto falta, se está a dar) e o seguinte, com o sino do
+/// lembrete. Agora, tocar abre o canal; no passado, o catch-up; a outra hora, o guia dele.
+private struct PhoneGuideRow: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.played) private var played
+    let channel: Channel
+    let group: String
+    let slot: Int64?
+    let now: Int64
+    @Binding var epgFor: Channel?
+
+    var body: some View {
+        let s = model.strings
         let entries = model.programmes(for: channel)
-        let left = origin + Int64(shift / perMs)
-        let right = left + Int64((width - column) / perMs)
-        let visible = entries.filter { $0.endMs > left && $0.startMs < right }
-        let playing = model.current?.key == channel.key
-        return HStack(spacing: 0) {
-            ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 44, height: 30))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(playing ? Theme.sky.opacity(0.18) : pillFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .padding(.leading, 12).padding(.trailing, 8).padding(.vertical, 4)
-                .frame(width: column)
-            ZStack(alignment: .topLeading) {
-                if entries.isEmpty {
-                    Text(model.strings.r("no_guide")).font(.footnote).foregroundStyle(Theme.textFaint)
-                        .padding(8).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(.vertical, 4)
-                }
-                ForEach(visible, id: \.startMs) { e in cell(channel, e) }
+        let at = slot ?? now
+        let entry = entries.first { $0.startMs <= at && $0.endMs > at }
+        let next = entries.first { $0.startMs >= (entry?.endMs ?? at) }
+        let live = entry.map { $0.startMs <= now && $0.endMs > now } == true
+        let playing = slot == nil && model.current?.key == channel.key
+        let catchup = slot != nil && entry.map { $0.endMs <= now && model.canCatchup(channel, $0) } == true
+        HStack(spacing: 14) {
+            if model.prefs.showLogos {
+                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 56, height: 38))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .clipped()
-        }
-        .frame(height: 58)
-        .task(id: channel.key) { model.requestShortEpg(channel) }
-    }
-
-    private func cell(_ channel: Channel, _ e: EpgEntry) -> some View {
-        let x = CGFloat(e.startMs - origin) * perMs - shift
-        let w = max(CGFloat(e.endMs - e.startMs) * perMs - 3, 4)
-        let live = e.startMs <= now && e.endMs > now
-        let past = e.endMs <= now
-        let reminded = model.hasReminder(channel, e)
-        return VStack(alignment: .leading, spacing: 1) {
-            Text(e.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(past ? Theme.textFaint : Theme.text).lineLimit(1)
-            if !live { Text(hhmm(e.start)).font(.system(size: 11)).foregroundStyle(Theme.textFaint) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry?.title ?? channel.name).font(.body.weight(.semibold)).foregroundStyle(playing ? Theme.sky : Theme.text).lineLimit(1)
+                Group {
+                    if let entry {
+                        Text("\(hhmm(entry.start)) – \(hhmm(entry.end))" + (live ? " · " + s.r("minutes_left", "\(max(0, (entry.endMs - now + 59_999) / 60_000))") : ""))
+                    } else {
+                        Text(s.r("no_guide"))
+                    }
+                }
+                .font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
+                if live, let entry {
+                    ProgressBarLine(value: Double(entry.progress(now: now)), tint: playing ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(0.34)))
+                        .padding(.top, 5)
+                }
+                if let next {
+                    let reminded = model.hasReminder(channel, next)
+                    HStack(spacing: 7) {
+                        Text(s.r("next", hhmm(next.start))).foregroundStyle(Theme.textFaint)
+                        Text(next.title).foregroundStyle(Theme.textDim).lineLimit(1)
+                        Spacer(minLength: 0)
+                        // O lembrete do programa seguinte, sem abrir nada.
+                        Button { model.toggleReminder(channel, next) } label: {
+                            Image(systemName: reminded ? "bell.fill" : "bell").font(.footnote)
+                                .foregroundStyle(reminded ? Theme.sky : Theme.textFaint.opacity(0.6))
+                                .frame(width: 30, height: 26)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .font(.caption)
+                    .padding(.top, 2)
+                }
+            }
             Spacer(minLength: 0)
-            if live { ProgressBarLine(value: Double(e.progress(now: now)), tint: AnyShapeStyle(Theme.accent(model.prefs.accent))) }
+            if catchup { Image(systemName: "gobackward").foregroundStyle(Theme.textFaint) }
         }
-        // O título fica à vista mesmo com o programa a começar fora do ecrã (como no guia da TV).
-        .padding(.leading, max(0, -x) + 8).padding(.trailing, 8).padding(.vertical, 7)
-        .frame(width: w, height: 50, alignment: .topLeading)
-        .background(Color.white.opacity(live ? 0.1 : past ? 0.025 : 0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            if reminded { Circle().fill(Theme.sky).frame(width: 7, height: 7).padding(7) }
-        }
-        .contentShape(Rectangle())
+        .padding(.horizontal, 10).padding(.vertical, 11)
+        .background(playing ? Theme.sky.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture {
-            let t = nowMillis()
-            if e.startMs <= t, e.endMs > t {
+            if slot == nil {
                 model.play(channel, from: group)
                 played()
-            } else if e.startMs > t {
-                model.toggleReminder(channel, e)
-            } else if model.canCatchup(channel, e) {
-                model.playCatchup(channel, e)
+            } else if catchup, let entry {
+                model.playCatchup(channel, entry)
                 played()
             } else {
                 epgFor = channel
             }
         }
         .onLongPressGesture { epgFor = channel }
-        .offset(x: x, y: 4)
+        .task { model.requestShortEpg(channel) }
     }
-
-    private static func halfHour(_ ms: Int64) -> Int64 { ms - ms % halfHourMs }
 }
 
 // MARK: Procurar

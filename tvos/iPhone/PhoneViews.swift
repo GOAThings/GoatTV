@@ -806,7 +806,7 @@ private struct ChannelsTab: View {
             .onChange(of: shown) { _, id in withAnimation { proxy.scrollTo(id, anchor: .center) } }
             }
             if guide {
-                PhoneGuideGrid(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
+                PhoneGuideList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
             } else {
                 ChannelList(channels: model.channels(in: shown), group: shown, epgFor: $epgFor)
             }
