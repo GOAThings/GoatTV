@@ -11,6 +11,8 @@ import SwiftUI
 ///
 ///   GET /channels      a lista aberta: grupos e canais pela ordem do ecrã, sem escondidos nem bloqueados
 ///                      (`PhoneChannelList`). 503 enquanto não há lista (ativação, a carregar, erro, sem listas).
+///   GET /now           o canal a ver e, com guia, o programa e o seguinte (pequeno: o telemóvel pergunta a cada
+///                      poucos segundos). 503 como o /channels.
 ///   GET /logo/<chave>  o logótipo do canal, pedido pela TV ao fornecedor (o telemóvel nunca fala com ele)
 ///   POST /play/<chave> põe o canal a dar, como escolhê-lo na lista. 409 se a GoatTV não estiver à frente (o
 ///                      telemóvel abre-a e tenta outra vez), 404 se não puder ser visto.
@@ -188,6 +190,8 @@ final class PhoneChannels {
         let path = request.path
         if method == "GET", path == "/channels" {
             await channels(link)
+        } else if method == "GET", path == "/now" {
+            await now(link)
         } else if method == "GET", path.hasPrefix("/logo/") {
             await logo(link, PhoneChannelList.decodeKey(String(path.dropFirst("/logo/".count))))
         } else if method == "POST", path.hasPrefix("/play/") {
@@ -217,6 +221,14 @@ final class PhoneChannels {
             return
         }
         let body = await Task.detached(priority: .userInitiated) { list.json() }.value
+        await reply(link, "200 OK", type: "application/json; charset=utf-8", body: body)
+    }
+
+    private func now(_ link: PhoneLink) async {
+        guard let body = model?.phoneNow() else {
+            await reply(link, "503 Service Unavailable", text: "sem lista")
+            return
+        }
         await reply(link, "200 OK", type: "application/json; charset=utf-8", body: body)
     }
 

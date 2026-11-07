@@ -53,6 +53,18 @@ class PhoneChannelListTest {
     private fun parse(bytes: ByteArray): JsonObject = JsonParser.parseString(bytes.toString(Charsets.UTF_8)).asJsonObject
 
     @Test
+    fun nowHasTheChannelAndProgrammes() {
+        val json = parse(PhoneChannelList.nowJson("k1", EpgEntry("Notícias \"às 8\"", 1000, 2000), null))
+        assertEquals("k1", json.get("current").asString)
+        assertEquals("Notícias \"às 8\"", json.getAsJsonObject("now").get("title").asString)
+        assertEquals(1000L, json.getAsJsonObject("now").get("start").asLong)
+        assertEquals(2000L, json.getAsJsonObject("now").get("end").asLong)
+        assertTrue(json.get("next").isJsonNull)
+        val empty = parse(PhoneChannelList.nowJson(null, null, null))
+        assertTrue(empty.get("current").isJsonNull && empty.get("now").isJsonNull)
+    }
+
+    @Test
     fun hiddenAndLockedGroupsAreLeftOut() {
         val json = parse(list().json())
         assertEquals("p1", json.getAsJsonObject("playlist").get("id").asString)

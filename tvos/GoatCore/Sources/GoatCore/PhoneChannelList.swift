@@ -41,6 +41,17 @@ public struct PhoneChannelList: Sendable {
     }
 
     public static let maxBytes = 8 * 1024 * 1024
+
+    /// O JSON do /now: o canal a ver e, com guia, o programa e o seguinte. É pequeno, para o telemóvel perguntar a
+    /// cada poucos segundos sem pedir a lista inteira.
+    public static func nowJSON(current: String?, now: EpgEntry?, next: EpgEntry?) -> Data {
+        func programme(_ e: EpgEntry?) -> String {
+            guard let e else { return "null" }
+            return "{\"title\":\(quote(e.title)),\"start\":\(e.startMs),\"end\":\(e.endMs)}"
+        }
+        let key = current.map { quote($0) } ?? "null"
+        return Data("{\"current\":\(key),\"now\":\(programme(now)),\"next\":\(programme(next))}".utf8)
+    }
     private static let end = "]}"
     private static let truncatedEnd = "],\"truncated\":true}"
 

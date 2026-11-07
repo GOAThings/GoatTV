@@ -29,6 +29,8 @@ import java.util.concurrent.TimeUnit
  *
  *   GET /channels      a lista aberta: grupos e canais pela ordem do ecrã, sem escondidos nem bloqueados
  *                      ([PhoneChannelList]). 503 enquanto não há lista (ativação, a carregar, erro, sem listas).
+ *   GET /now           o canal a ver e, com guia, o programa e o seguinte (pequeno: o telemóvel pergunta a cada
+ *                      poucos segundos). 503 como o /channels.
  *   GET /logo/<chave>  o logótipo do canal, pedido pela TV ao fornecedor (o telemóvel nunca fala com ele)
  *   POST /play/<chave> põe o canal a dar, como escolhê-lo na lista. 409 se a GoatTV não estiver à frente (o
  *                      telemóvel abre-a pelo GoatLauncher e tenta outra vez), 404 se não puder ser visto.
@@ -111,6 +113,7 @@ class PhoneChannels(private val container: AppContainer) {
         val path = request.path
         when {
             method == "GET" && path == "/channels" -> channels(client)
+            method == "GET" && path == "/now" -> now(client)
             method == "GET" && path.startsWith("/logo/") -> logo(client, PhoneChannelList.decodeKey(path.removePrefix("/logo/")))
             method == "POST" && path.startsWith("/play/") -> play(client, PhoneChannelList.decodeKey(path.removePrefix("/play/")))
             else -> notFound(client)
@@ -125,6 +128,15 @@ class PhoneChannels(private val container: AppContainer) {
             return
         }
         reply(client, "application/json; charset=utf-8", list.json())
+    }
+
+    private suspend fun now(client: Socket) {
+        val json = withContext(Dispatchers.Main.immediate) { viewModel?.phoneNow() }
+        if (json == null) {
+            reply(client, TEXT, "sem lista".toByteArray(), status = "503 Service Unavailable")
+            return
+        }
+        reply(client, "application/json; charset=utf-8", json)
     }
 
     private suspend fun logo(client: Socket, key: String?) {

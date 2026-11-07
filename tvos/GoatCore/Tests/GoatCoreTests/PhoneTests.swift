@@ -145,6 +145,17 @@ extension CoreTests {
         json[array]?.array?.compactMap { $0[field]?.string } ?? []
     }
 
+    static func phoneNow() throws {
+        let json = try JSON.parse(PhoneChannelList.nowJSON(current: "k1", now: EpgEntry(title: "Notícias \"às 8\"", startMs: 1000, endMs: 2000), next: nil))
+        try expect(json["current"], "k1")
+        try expect(json["now"]?["title"], "Notícias \"às 8\"")
+        try expect(json["now"]?["start"]?.int, 1000)
+        try expect(json["now"]?["end"]?.int, 2000)
+        try expect(json["next"], .null)
+        let empty = try JSON.parse(PhoneChannelList.nowJSON(current: nil, now: nil, next: nil))
+        try expect(empty["current"], .null)
+    }
+
     static func phoneListLeavesOutHiddenAndLocked() throws {
         let json = try JSON.parse(phoneList().json())
         try expect(json["playlist"]?["id"], "p1")

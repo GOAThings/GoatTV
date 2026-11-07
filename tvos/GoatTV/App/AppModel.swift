@@ -2054,6 +2054,15 @@ extension AppModel {
         return channel
     }
 
+    /// O canal a ver (o mesmo que o /channels diria) e, com guia, o programa e o seguinte, para o /now. nil sem lista;
+    /// sem canal (ou um que o telemóvel não pode ver) vai tudo a null.
+    func phoneNow() -> Data? {
+        guard phoneReady() else { return nil }
+        guard let key = current?.key, let channel = phoneChannel(key) else { return PhoneChannelList.nowJSON(current: nil, now: nil, next: nil) }
+        let (now, next) = nowNext(for: channel)
+        return PhoneChannelList.nowJSON(current: channel.key, now: now, next: next)
+    }
+
     /// O logótipo que o ecrã mostra para o canal [key], se o telemóvel o puder ver.
     func phoneLogoURL(_ key: String) -> String? {
         guard let channel = phoneChannel(key) else { return nil }

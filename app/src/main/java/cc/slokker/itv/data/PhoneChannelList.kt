@@ -87,6 +87,26 @@ internal class PhoneChannelList(
 
     companion object {
         const val MAX_BYTES = 8 * 1024 * 1024
+
+        /**
+         * O JSON do /now: o canal a ver e, com guia, o programa e o seguinte. É pequeno, para o telemóvel perguntar a
+         * cada poucos segundos sem pedir a lista inteira.
+         */
+        fun nowJson(current: String?, now: EpgEntry?, next: EpgEntry?): ByteArray {
+            fun programme(e: EpgEntry?) = e?.let {
+                JsonObject().apply {
+                    addProperty("title", it.title)
+                    addProperty("start", it.startMs)
+                    addProperty("end", it.endMs)
+                }
+            }
+            val json = JsonObject().apply {
+                addProperty("current", current)
+                add("now", programme(now))
+                add("next", programme(next))
+            }
+            return GSON.toJson(json).toByteArray()
+        }
         private const val END = "]}"
         private const val TRUNCATED_END = "],\"truncated\":true}"
 

@@ -1746,6 +1746,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return content.byKey[key]?.takeIf { PhoneChannelList.allowed(_prefs.value, content.playlist.id, it) }
     }
 
+    /**
+     * O canal a ver (o mesmo que o /channels diria) e, com guia, o programa e o seguinte, para o /now. null sem lista;
+     * sem canal (ou um que o telemóvel não pode ver) vai tudo a null.
+     */
+    internal fun phoneNow(): ByteArray? {
+        if (!phoneReady()) return null
+        val channel = _playing.value?.key?.let(::phoneChannel) ?: return PhoneChannelList.nowJson(null, null, null)
+        val now = System.currentTimeMillis()
+        val epg = guideEntries(channel).ifEmpty { cachedEpg(channel) }
+        val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
+        val next = epg.firstOrNull { it.startMs >= (current?.endMs ?: now) }
+        return PhoneChannelList.nowJson(channel.key, current, next)
+    }
+
     /** O logótipo que o ecrã mostra para o canal [key], se o telemóvel o puder ver. */
     fun phoneLogoUrl(key: String): String? = phoneChannel(key)?.let { PhoneChannelList.logoUrl(it, channelLogos.value) }
 
