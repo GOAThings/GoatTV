@@ -93,6 +93,7 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.Renderer
@@ -119,6 +120,9 @@ import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.data.StreamFormat
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import cc.slokker.itv.data.streamCandidates
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.GlassBackdrop
@@ -206,6 +210,11 @@ fun PlayerScreen(vm: AppViewModel) {
     var showGuide by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    /** Aviso "este canal está sempre a parar" (uma vez por canal; ver NetHintCard). */
+    var netHint by remember { mutableStateOf(false) }
+    val netHintFocus = remember { FocusRequester() }
+    /** As Definições abrem já na página Ligação (botão "Detalhes" do aviso). */
+    var settingsAtConnection by remember { mutableStateOf(false) }
     /** Lista de faixas aberta a partir do HUD: C.TRACK_TYPE_AUDIO ou C.TRACK_TYPE_TEXT. */
     var trackPicker by remember { mutableStateOf<Int?>(null) }
     /** EPG aberto ao lado da lista de canais (→ num canal). */
@@ -239,7 +248,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val latestSecondView by rememberUpdatedState(secondView)
     val latestMainView by rememberUpdatedState(mainView)
     val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
-    val overlayOpen = showGuide || showSearch || showSleep || trackPicker != null || showSecondPicker
+    val overlayOpen = showGuide || showSearch || showSleep || trackPicker != null || showSecondPicker || netHint
 
     val latestVm by rememberUpdatedState(vm)
     val latestPrefs by rememberUpdatedState(prefs)
@@ -293,6 +302,7 @@ fun PlayerScreen(vm: AppViewModel) {
             candidate, session.channel,
             nearLive = prefs.buffer == Prefs.Buffer.LIVE && !session.catchup,
             userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
+            transfer = vm.net,
         )
         player.prepare()
         player.play()
@@ -306,6 +316,7 @@ fun PlayerScreen(vm: AppViewModel) {
             freezeFrame = videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap()
         }
         session.channel = current
+        vm.net.reset()
         val cu = catchup
         val archive = cu?.let { catchupCandidates(data.playlist, it, data.account?.timezone) }
         session.catchup = cu != null
@@ -399,6 +410,8 @@ fun PlayerScreen(vm: AppViewModel) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 session.buffering = state == Player.STATE_BUFFERING
+                // Parou para carregar depois de já estar a dar (a página Ligação e o aviso contam estas paragens).
+                if (state == Player.STATE_BUFFERING && session.ready && !session.catchup) latestVm.net.onStop()
                 if (state == Player.STATE_ENDED) {
                     when {
                         // O programa em catch-up acabou: volta ao direto.
@@ -456,6 +469,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                if (session.wasPlaying && !session.catchup) latestVm.net.onStop()
                 when {
                     // Muito comum em live: voltar ao ponto em direto.
                     error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
@@ -531,6 +545,32 @@ fun PlayerScreen(vm: AppViewModel) {
             vm.flushLastChannel()
         }
     }
+
+    // Ligação do canal: uma medição por segundo (velocidade, buffer, paragens).
+    LaunchedEffect(player) {
+        while (true) {
+            delay(1_000)
+            vm.net.sample(player)
+        }
+    }
+
+    // Aviso de paragens: uma vez por canal, quando parou várias vezes e se percebe porquê. drop(1): o estado
+    // atual ainda pode ser o do canal anterior (a medição recomeça do zero ao mudar).
+    LaunchedEffect(current.key, prefs.netWarnings) {
+        netHint = false
+        if (!prefs.netWarnings) return@LaunchedEffect
+        vm.net.state.drop(1).first { it.needsHint() }
+        netHint = true
+        delay(NET_HINT_MS)
+        netHint = false
+    }
+
+    // Guia, Definições ou painéis por cima: o aviso sai (não fica escondido à espera).
+    LaunchedEffect(showGuide, showSettings, panel) {
+        if (showGuide || showSettings || panel != Panel.None) netHint = false
+    }
+
+    LaunchedEffect(netHint) { if (netHint) focusWithRetry(netHintFocus) }
 
     // AFR desligado nas definições: devolve já a TV ao modo normal.
     LaunchedEffect(prefs.afr) { if (!prefs.afr) frameRateMatcher?.restore() }
@@ -692,6 +732,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 reminder = null
             }
             numberEntry.isNotEmpty() -> numberEntry = ""
+            netHint -> netHint = false
             pinFor != null -> pinFor = null
             playlistMenu -> playlistMenu = false
             showSleep -> showSleep = false
@@ -1163,6 +1204,47 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             sleepWarning?.let { SleepWarning(it, Modifier.align(Alignment.Center)) }
+
+            if (prefs.netGraph && !showGuide && panel == Panel.None) {
+                NetGraph(vm.net, current.name, Modifier.align(Alignment.TopStart))
+            }
+
+            AnimatedVisibility(
+                visible = netHint,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = fadeIn() + slideInVertically { it / 3 },
+                exit = fadeOut() + slideOutVertically { it / 3 },
+            ) {
+                val s = LocalStrings.current
+                val actions = buildList {
+                    // Buffer maior (o player recomeça com ele).
+                    val bigger = when (prefs.buffer) {
+                        Prefs.Buffer.LIVE -> Prefs.Buffer.SMALL
+                        Prefs.Buffer.SMALL -> Prefs.Buffer.NORMAL
+                        Prefs.Buffer.NORMAL -> Prefs.Buffer.LARGE
+                        else -> null
+                    }
+                    if (bigger != null) add(NetHintAction(ItvIcons.Buffer, s.netBiggerBuffer) { netHint = false; vm.setPref(Prefs.Key.BUFFER, bigger) })
+                    // O outro formato (TS ⇄ HLS), quando é mesmo outro endereço (Xtream, ou .ts ⇄ .m3u8); num link sem
+                    // extensão o "outro" é o mesmo URL, que já falhou nesse formato.
+                    val playingNow = session.candidates.getOrNull(session.attempt)
+                    val other = session.candidates.indices.firstOrNull { i ->
+                        val c = session.candidates[i]
+                        i != session.attempt && c.format != playingNow?.format && c.url != playingNow?.url
+                    }
+                    if (other != null && catchup == null) {
+                        val format = session.candidates[other].format
+                        add(NetHintAction(ItvIcons.SwapPlaylist, s.netTryFormat(if (format == StreamFormat.HLS) "HLS" else "TS")) {
+                            netHint = false
+                            vm.setStreamFormat(format)
+                            start(other)
+                        })
+                    }
+                    add(NetHintAction(ItvIcons.Info, s.netDetails) { netHint = false; settingsAtConnection = true; showSettings = true })
+                    add(NetHintAction(ItvIcons.Close, s.netDontShow) { netHint = false; vm.setPref(Prefs.Key.NET_WARNINGS, false) })
+                }
+                NetHintCard(vm.net, actions, netHintFocus)
+            }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
 
             AnimatedVisibility(
@@ -1222,9 +1304,10 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInHorizontally { it / 4 },
                 exit = fadeOut() + slideOutHorizontally { it / 4 },
             ) {
-                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, onClose = {
+                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, onClose = {
                     showSettings = false
                     settingsAtEpg = false
+                    settingsAtConnection = false
                 })
             }
 
@@ -1250,6 +1333,8 @@ fun PlayerScreen(vm: AppViewModel) {
 
 private const val FREEZE_WIDTH = 1280
 private const val HUD_TIMEOUT_MS = 8_000L
+/** O aviso de paragens sai sozinho ao fim deste tempo. */
+private const val NET_HINT_MS = 30_000L
 /** Tamanho do segundo canal em imagem na imagem (16:9). */
 private val PIP_WIDTH = 352.dp
 private val PIP_HEIGHT = 198.dp
@@ -1468,11 +1553,14 @@ private fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
     return true
 }
 
-/** Carrega a stream no player, seja o ExoPlayer ou o VLC (o equivalente ao `setMediaSource`). */
-internal fun Player.loadStream(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String) {
+/**
+ * Carrega a stream no player, seja o ExoPlayer ou o VLC (o equivalente ao `setMediaSource`).
+ * [transfer]: quem conta os bytes que chegam (a página Ligação); só no ExoPlayer.
+ */
+internal fun Player.loadStream(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String, transfer: TransferListener? = null) {
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer)
-        is ExoPlayer -> setMediaSource(mediaSourceFor(candidate, channel, nearLive, userAgent))
+        is ExoPlayer -> setMediaSource(mediaSourceFor(candidate, channel, nearLive, userAgent, transfer))
     }
 }
 
@@ -1495,13 +1583,14 @@ private val DECODER_ERRORS = setOf(
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
 
 /** [nearLive]: nas streams HLS, tocar o mais perto possível do direto. */
-internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String): MediaSource {
+internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String, transfer: TransferListener? = null): MediaSource {
     // Muitos servidores redirecionam de http para https ou para outro host.
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(SafeInput.stripControl(channel?.userAgent ?: userAgent))
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(20_000)
+        .setTransferListener(transfer)
     channel?.referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
 
     val item = MediaItem.Builder()

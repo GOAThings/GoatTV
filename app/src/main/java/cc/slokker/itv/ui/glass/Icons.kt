@@ -197,6 +197,27 @@ object ItvIcons {
     }
     val Update: ImageVector by lazy { icon("Update", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 5h2v6h3l-4 4-4-4h3V7z") }
 
+    // Ligação do canal (Definições → Canal atual → Ligação, gráfico e aviso no vídeo).
+    val Wifi: ImageVector by lazy {
+        icon("Wifi", "M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z")
+    }
+    val Cable: ImageVector by lazy { icon("Cable", "M13 22h8v-7h-3v-4h-5V9h3V2H8v7h3v2H6v4H3v7h8v-7H8v-2h8v2h-3z") }
+    val Download: ImageVector by lazy { icon("Download", "M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z") }
+    val Clock: ImageVector by lazy {
+        icon("Clock", "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z")
+    }
+    val PauseCircle: ImageVector by lazy {
+        icon("PauseCircle", "M9 16h2V8H9v8zm3-14C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-4h2V8h-2v8z")
+    }
+    val Warning: ImageVector by lazy { icon("Warning", "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z") }
+    val Buffer: ImageVector by lazy {
+        icon("Buffer", "M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z")
+    }
+    val Graph: ImageVector by lazy { icon("Graph", "M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z") }
+    val Info: ImageVector by lazy {
+        icon("Info", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z")
+    }
+
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,

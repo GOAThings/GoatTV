@@ -645,7 +645,14 @@ private fun LiveDot() {
 
 /** Painel de definições à direita, por cima do vídeo. */
 @Composable
-internal fun SettingsSheet(vm: AppViewModel, player: Player, playing: Channel, onClose: () -> Unit, startAtEpg: Boolean = false) {
+internal fun SettingsSheet(
+    vm: AppViewModel,
+    player: Player,
+    playing: Channel,
+    onClose: () -> Unit,
+    startAtEpg: Boolean = false,
+    startAtConnection: Boolean = false,
+) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
     Box(
@@ -656,7 +663,7 @@ internal fun SettingsSheet(vm: AppViewModel, player: Player, playing: Channel, o
             .glass(ItvShapes.Panel)
             .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
-        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg })
+        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection)
     }
     }
 }

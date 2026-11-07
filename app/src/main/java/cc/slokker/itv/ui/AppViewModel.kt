@@ -50,6 +50,7 @@ import cc.slokker.itv.data.api.EpgCountryInfo
 import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.api.EpgMapping
+import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.data.api.EpgMappingRequest
 import cc.slokker.itv.data.api.PlaylistDto
 import cc.slokker.itv.data.api.epgErrorText
@@ -114,6 +115,9 @@ sealed interface Screen {
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val c = (app as ItvApp).container
+
+    /** A ligação do canal a tocar (página Ligação, gráfico no vídeo e aviso de paragens). */
+    val net = NetMonitor(app)
 
     private val _screen = MutableStateFlow<Screen>(Screen.Starting)
     val screen: StateFlow<Screen> = _screen.asStateFlow()

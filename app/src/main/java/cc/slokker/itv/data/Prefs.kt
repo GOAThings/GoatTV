@@ -28,6 +28,10 @@ data class Prefs(
     val audioDecoder: String = Decoder.HARDWARE,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
+    /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
+    val netGraph: Boolean = false,
+    /** Avisar quando o canal está sempre a parar, com a causa e o que experimentar. */
+    val netWarnings: Boolean = true,
     // Geral
     /** User-Agent para os servidores IPTV; vazio = o predefinido. */
     val userAgent: String = "",
@@ -112,6 +116,8 @@ data class Prefs(
         const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
         const val HDR = "hdr"
+        const val NET_GRAPH = "net_graph"
+        const val NET_WARNINGS = "net_warnings"
         const val USER_AGENT = "user_agent"
         const val AUTO_START = "auto_start"
         const val EXIT_CONFIRM = "exit_confirm"
@@ -205,6 +211,8 @@ data class Prefs(
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, setOf(Decoder.HARDWARE, Decoder.SOFTWARE)),
                 hdr = str(Key.HDR, d.hdr, setOf(Hdr.AUTO, Hdr.SDR)),
+                netGraph = bool(Key.NET_GRAPH, d.netGraph),
+                netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 userAgent = s.get(Key.USER_AGENT)?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty(),
                 autoStart = bool(Key.AUTO_START, d.autoStart),
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),

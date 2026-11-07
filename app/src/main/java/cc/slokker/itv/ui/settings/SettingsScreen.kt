@@ -10,6 +10,14 @@ import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
+import cc.slokker.itv.ui.player.NetVerdict
+import cc.slokker.itv.ui.player.NetVerdictCard
+import cc.slokker.itv.ui.player.icon
+import cc.slokker.itv.ui.player.mbps
+import cc.slokker.itv.ui.player.netLink
+import cc.slokker.itv.ui.player.netShort
+import cc.slokker.itv.ui.player.videoFormat
+import cc.slokker.itv.ui.theme.GoatPalette
 import cc.slokker.itv.ui.player.textLabel
 import cc.slokker.itv.ui.player.audioLabel
 import cc.slokker.itv.ui.player.trackOptions
@@ -171,6 +179,7 @@ private sealed interface Route {
     data object Audio : Route { override fun title(s: Strings) = s.audio }
     data object Subtitles : Route { override fun title(s: Strings) = s.subtitles }
     data object StreamInfo : Route { override fun title(s: Strings) = s.streamInfo }
+    data object Connection : Route { override fun title(s: Strings) = s.connection }
     data object General : Route { override fun title(s: Strings) = s.general }
     data object Playback : Route { override fun title(s: Strings) = s.playback }
     data object Licenses : Route { override fun title(s: Strings) = s.licenses }
@@ -296,7 +305,15 @@ private sealed class Item(val key: String) {
         val onClick: () -> Unit,
     ) : Item(key)
     class Action(key: String, val title: String, val subtitle: String? = null, val icon: ImageVector? = null, val onClick: () -> Unit) : Item(key)
-    class Info(key: String, val title: String, val value: String) : Item(key)
+    /** Só para ler. [icon]: ícone à esquerda; [valueColor]: o valor noutra cor (ex.: âmbar quando há um problema). */
+    class Info(
+        key: String,
+        val title: String,
+        val value: String,
+        val subtitle: String? = null,
+        val icon: ImageVector? = null,
+        val valueColor: Color? = null,
+    ) : Item(key)
     class Header(key: String, val text: String) : Item(key)
 }
 
@@ -307,6 +324,7 @@ private class Entry(val route: Route, var returnKey: String? = null)
  * [player] e [playing] só existem dentro do player (página "Canal atual").
  * [startAtNewPlaylist]: abre já no formulário da primeira lista (sem conta).
  * [startAtEpgFor]: abre já na escolha do guia desse canal (botão do HUD); ao escolher, fecha.
+ * [startAtConnection]: abre já na página Ligação (botão "Detalhes" do aviso de paragens).
  */
 @Composable
 fun SettingsContent(
@@ -316,6 +334,7 @@ fun SettingsContent(
     onClose: () -> Unit,
     startAtNewPlaylist: Boolean = false,
     startAtEpgFor: Channel? = null,
+    startAtConnection: Boolean = false,
 ) {
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {
@@ -323,6 +342,7 @@ fun SettingsContent(
             startAtNewPlaylist -> Route.NewPlaylistType
             vm.settingsNeedPin() -> Route.SettingsGate
             startAtEpgFor != null -> Route.EpgPick(startAtEpgFor)
+            startAtConnection -> Route.Connection
             else -> Route.Root
         }
         mutableStateOf(listOf(Entry(first)))
@@ -431,9 +451,17 @@ fun SettingsContent(
                 }
                 else -> {
                     val items = settingItems(entry.route, vm, player, playing, ::push, ::pop, ::popNested, ::replace, ::popToCurrent)
-                    // Páginas que carregam da rede: quando chegam os itens, a lista recomeça com o foco no primeiro.
-                    key(items.any { it.key == LOADING_KEY }) {
-                        ItemList(items = items, focusKey = entry.returnKey, enabled = !leaving)
+                    Column {
+                        // Ligação: o veredicto fica fixo por cima da lista (dentro dela, a lista deslizava até à
+                        // primeira linha com foco e cortava-o).
+                        if (entry.route == Route.Connection) {
+                            val net by vm.net.state.collectAsStateWithLifecycle()
+                            NetVerdictCard(net, Modifier.padding(start = 4.dp, end = 4.dp, bottom = 6.dp))
+                        }
+                        // Páginas que carregam da rede: quando chegam os itens, a lista recomeça com o foco no primeiro.
+                        key(items.any { it.key == LOADING_KEY }) {
+                            ItemList(items = items, focusKey = entry.returnKey, enabled = !leaving)
+                        }
                     }
                 }
             }
@@ -548,6 +576,8 @@ private fun settingItems(
             add(Item.Nav("subs", s.subtitles, tracks.textLabel(player)) { push(Route.Subtitles, "subs") })
             add(pref(Prefs.Key.ASPECT, s.aspect, aspectOptions, prefs.aspect))
             add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
+            val net by vm.net.state.collectAsStateWithLifecycle()
+            add(Item.Nav("net", s.connection, s.netShort(net.verdict)) { push(Route.Connection, "net") })
             // Por defeito o guia é o da lista; com conta, pode trocar-se o deste canal por um do IPTV-EPG.org.
             if (vm.epgPickerAvailable) {
                 val mapping = epgMappings[ch.key]
@@ -770,6 +800,65 @@ private fun settingItems(
         Route.Audio -> trackItems(tracks, C.TRACK_TYPE_AUDIO, player, allowOff = false)
         Route.Subtitles -> trackItems(tracks, C.TRACK_TYPE_TEXT, player, allowOff = true)
         Route.StreamInfo -> streamInfo(player, format)
+
+        Route.Connection -> buildList {
+            val net by vm.net.state.collectAsStateWithLifecycle()
+            val problem = net.verdict == NetVerdict.SLOW || net.verdict == NetVerdict.GAPS || net.verdict == NetVerdict.SLOW_REPLY
+            val warn = GoatPalette.Warning
+            if (net.verdict != NetVerdict.UNSUPPORTED) {
+                add(Item.Header("hnow", s.netRightNow))
+                add(
+                    Item.Info(
+                        "speed", s.netSpeed, net.gettingKbps?.let { s.netMbit(mbps(it)) } ?: "—", s.netSpeedSub, ItvIcons.Download,
+                        warn.takeIf { net.verdict == NetVerdict.SLOW },
+                    ),
+                )
+                val video = player?.videoFormat()
+                val videoInfo = video?.let { f ->
+                    listOfNotNull(
+                        f.height.takeIf { it > 0 }?.let { "${it}p" },
+                        codecName(f.sampleMimeType)?.substringBefore(" ("),
+                        f.frameRate.takeIf { it > 0 }?.let { "%.0f fps".format(it) },
+                    ).joinToString(" · ").ifEmpty { null }
+                }
+                add(Item.Info("needs", s.netNeeds, net.needsKbps?.let { s.netMbit(mbps(it)) } ?: "—", videoInfo, ItvIcons.PlayCircle))
+                add(Item.Info("ahead", s.netAhead, "${net.bufferMs / 1_000} s", s.netAheadSub, ItvIcons.Buffer))
+                add(
+                    Item.Info(
+                        "reply", s.netReply, net.replyMs?.let { "$it ms" } ?: "—", s.netReplySub, ItvIcons.Clock,
+                        warn.takeIf { net.verdict == NetVerdict.SLOW_REPLY },
+                    ),
+                )
+                add(Item.Info("stops", s.netStops, "${net.stops}", s.netStopsSub, ItvIcons.PauseCircle, warn.takeIf { net.stops > 0 }))
+            }
+            add(Item.Header("htv", s.netThisTv))
+            add(Item.Info("link", s.netNetwork, s.netLink(net.link), icon = net.link.icon()))
+            if (problem) {
+                add(Item.Header("htry", s.netTry))
+                if (net.link.wifi) add(Item.Info("cable", s.netUseCable, "", s.netUseCableSub, ItvIcons.Cable))
+                val buffers = listOf<Pair<Any?, String>>(
+                    Prefs.Buffer.LIVE to s.bufferLive,
+                    Prefs.Buffer.SMALL to s.bufferSmall,
+                    Prefs.Buffer.NORMAL to s.bufferNormal,
+                    Prefs.Buffer.LARGE to s.bufferLarge,
+                )
+                add(
+                    Item.Nav(Prefs.Key.BUFFER, s.buffer, buffers.firstOrNull { it.first == prefs.buffer }?.second, s.netBufferSub, ItvIcons.Buffer) {
+                        push(Route.Pick(s.buffer, buffers, prefs.buffer) { v -> vm.setPref(Prefs.Key.BUFFER, v); pop() }, Prefs.Key.BUFFER)
+                    },
+                )
+                val formats = listOf<Pair<Any?, String>>(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)")
+                // Só nas listas Xtream o servidor dá os dois formatos de cada canal.
+                if (content?.playlist?.type == PlaylistType.XTREAM) add(
+                    Item.Nav("format", s.streamFormat, formats.firstOrNull { it.first == format }?.second, s.netFormatSub, ItvIcons.SwapPlaylist) {
+                        push(Route.Pick(s.streamFormat, formats, format) { v -> vm.setStreamFormat(v as String?); pop() }, "format")
+                    },
+                )
+            }
+            add(Item.Header("hopt", s.netOptions))
+            add(Item.Toggle(Prefs.Key.NET_GRAPH, s.netGraph, prefs.netGraph, s.netGraphSub) { vm.setPref(Prefs.Key.NET_GRAPH, it) })
+            add(Item.Toggle(Prefs.Key.NET_WARNINGS, s.netWarnings, prefs.netWarnings, s.netWarningsSub) { vm.setPref(Prefs.Key.NET_WARNINGS, it) })
+        }
 
         Route.Playback -> listOf(
             pick(
@@ -1270,7 +1359,7 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
             val (first, last) = edges[index] ?: (false to false)
             val inset = when {
                 item is Item.Nav && item.showLogo -> 66.dp
-                item is Item.Nav && item.icon != null || item is Item.Action && item.icon != null -> 62.dp
+                item is Item.Nav && item.icon != null || item is Item.Action && item.icon != null || item is Item.Info && item.icon != null -> 62.dp
                 item is Item.Check && item.showLogo -> 58.dp
                 else -> 12.dp
             }
@@ -1362,7 +1451,9 @@ private fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
                     slidingFocus = true,
                     onClick = {},
                     title = item.title,
-                    trailing = { TrailingValue(item.value, dim) },
+                    subtitle = item.subtitle,
+                    leading = item.icon?.let { icon -> { IconTile(icon) } },
+                    trailing = { if (item.value.isNotEmpty()) TrailingValue(item.value, item.valueColor ?: dim) },
                     modifier = mod,
                 )
             }
