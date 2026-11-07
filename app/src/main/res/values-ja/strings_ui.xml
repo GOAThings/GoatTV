@@ -632,4 +632,10 @@
     <string name="net_getting">受信</string>
     <string name="net_mbit">%1$s Mbit/s</string>
     <string name="net_last_minute">Mbit/s · 直近 1 分</string>
+    <!-- Player: cápsula de reconexão e cartão de nova versão. -->
+    <string name="reconnect_attempt">%1$s · %2$d 回目</string>
+    <string name="update_ready_label">アップデートの準備ができました</string>
+    <string name="update_whats_new">%1$s の新機能</string>
+    <string name="update_hold_ok">OK を長押しでインストール</string>
+    <string name="update_hides_in">%1$d 秒後に消えます</string>
 </resources>

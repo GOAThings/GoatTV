@@ -131,6 +131,12 @@ import cc.slokker.itv.ui.glass.blurInto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.animation.core.tween
+import cc.slokker.itv.data.AppRelease
+import cc.slokker.itv.ui.UpdateState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.mutableFloatStateOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
@@ -250,6 +256,20 @@ fun PlayerScreen(vm: AppViewModel) {
     val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
     val overlayOpen = showGuide || showSearch || showSleep || trackPicker != null || showSecondPicker || netHint
 
+    // Versão nova (ver UpdateCard): aparece com o vídeo livre, ou enquanto descarrega/instala.
+    val updateNotice by vm.updateNotice.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
+    val updateBusy = update is UpdateState.Downloading || update is UpdateState.Installing
+    val showUpdate = updateNotice != null && (update is UpdateState.Available || updateBusy) && (
+        updateBusy || panel == Panel.None && !showSettings && !overlayOpen && pinFor == null && reminder == null &&
+            sleepWarning == null && catchup == null && !(infoVisible && infoFull)
+        )
+    var updateHold by remember { mutableFloatStateOf(0f) }
+    var updateHidesIn by remember { mutableIntStateOf(UPDATE_CARD_SECONDS) }
+    /** O OK que pode ser o "manter": quando se carregou (uptimeMillis; 0 = não está) e 1 se já passou a manter. */
+    val holdFrom = remember { longArrayOf(0L, 0L) }
+    val holdJob = remember { arrayOfNulls<Job>(1) }
+
     val latestVm by rememberUpdatedState(vm)
     val latestPrefs by rememberUpdatedState(prefs)
     val latestData by rememberUpdatedState(data)
@@ -308,6 +328,34 @@ fun PlayerScreen(vm: AppViewModel) {
         player.play()
     }
 
+    /** Caiu a meio: volta a ligar daqui a [delayMs] (a cápsula no canto conta os segundos e as tentativas). */
+    fun reconnectIn(delayMs: Long) {
+        session.retryJob?.cancel()
+        session.reconnects++
+        session.retryDelayMs = delayMs
+        session.nextTryAt = SystemClock.elapsedRealtime() + delayMs
+        session.retryJob = scope.launch {
+            delay(delayMs)
+            session.nextTryAt = 0L
+            start(session.attempt)
+        }
+    }
+
+    // O cartão de versão nova desaparece sozinho (não conta enquanto se mantém OK, nem a descarregar).
+    LaunchedEffect(showUpdate, updateBusy, updateNotice) {
+        if (!showUpdate || updateBusy) return@LaunchedEffect
+        updateHidesIn = UPDATE_CARD_SECONDS
+        while (updateHidesIn > 0) {
+            delay(1_000)
+            if (holdFrom[0] == 0L) updateHidesIn--
+        }
+        vm.dismissUpdateNotice()
+    }
+    // Falhou a descarregar: o erro aparece nas Definições → Atualizar; o cartão sai.
+    LaunchedEffect(update) {
+        if (update is UpdateState.Failed) vm.dismissUpdateNotice()
+    }
+
     // Novo canal: congela a última imagem e recomeça pelas tentativas na ordem do formato preferido.
     // Chaves estáveis: a lista atualizada por trás (mesmo servidor e canal) não reinicia o stream.
     // Em catch-up o mesmo: cada recuo/avanço é um pedido novo ao servidor a partir dessa posição.
@@ -331,6 +379,8 @@ fun PlayerScreen(vm: AppViewModel) {
         session.wasPlaying = false
         session.audioChosen = false
         session.retryJob?.cancel()
+        session.reconnects = 0
+        session.nextTryAt = 0L
         start(0)
         when {
             cu != null -> {
@@ -419,19 +469,15 @@ fun PlayerScreen(vm: AppViewModel) {
                         // Um canal em direto não acaba: "acabou" quer dizer que o servidor fechou a ligação
                         // (comum em streams .ts). Sem isto o vídeo parava em silêncio e a TV entrava em
                         // proteção de ecrã. Volta a ligar como depois de um erro.
-                        session.wasPlaying -> {
-                            session.retryJob?.cancel()
-                            session.retryJob = scope.launch {
-                                delay(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
-                                start(session.attempt)
-                            }
-                        }
+                        session.wasPlaying -> reconnectIn(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
                     }
                 }
                 if (state == Player.STATE_READY && !session.ready) {
                     session.ready = true
                     session.wasPlaying = true
                     session.retries = 0
+                    session.reconnects = 0
+                    session.nextTryAt = 0L
                     val candidate = session.candidates.getOrNull(session.attempt)
                     if (session.attempt > 0 && candidate != null) latestVm.onFormatWorked(candidate.format)
                 }
@@ -489,12 +535,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                     }
                     // Caiu a meio: volta a ligar, de N em N segundos, enquanto se estiver no canal.
-                    session.wasPlaying && latestPrefs.reconnectSeconds > 0 -> {
-                        session.retryJob = scope.launch {
-                            delay(latestPrefs.reconnectSeconds * 1_000L)
-                            start(session.attempt)
-                        }
-                    }
+                    session.wasPlaying && latestPrefs.reconnectSeconds > 0 -> reconnectIn(latestPrefs.reconnectSeconds * 1_000L)
                     else -> {
                         freezeFrame = null
                         session.error = ErrorInfo(I18n.s.cantOpenChannel.removeSuffix("."))
@@ -795,6 +836,39 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         return@onPreviewKeyEvent true
                     }
+                    // Cartão de versão nova: manter OK carregado instala; um toque continua a ser o OK de sempre.
+                    // Conta-se o tempo aqui, sem depender das repetições da tecla (cada comando manda as suas).
+                    if (showUpdate && !updateBusy && ok) {
+                        if (e.type == KeyEventType.KeyDown) {
+                            if (e.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
+                            holdFrom[0] = SystemClock.uptimeMillis()
+                            holdJob[0]?.cancel()
+                            holdJob[0] = scope.launch {
+                                delay(UPDATE_TAP_MS)
+                                holdFrom[1] = 1L
+                                while (true) {
+                                    updateHold = ((SystemClock.uptimeMillis() - holdFrom[0]).toFloat() / UPDATE_HOLD_MS).coerceAtMost(1f)
+                                    if (updateHold >= 1f) {
+                                        vm.installUpdate()
+                                        break
+                                    }
+                                    withFrameMillis { }
+                                }
+                            }
+                            return@onPreviewKeyEvent false
+                        }
+                        if (e.type == KeyEventType.KeyUp) {
+                            holdJob[0]?.cancel()
+                            val held = holdFrom[1] == 1L
+                            holdFrom[0] = 0L
+                            holdFrom[1] = 0L
+                            updateHold = 0f
+                            if (held) {
+                                okPressed[0] = false
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                    }
                     // Apanhar o Voltar aqui: senão a 1.ª pressão só tira o foco do painel.
                     if (e.key.nativeKeyCode == AndroidKeyEvent.KEYCODE_BACK && !showSettings) {
                         if (e.type == KeyEventType.KeyUp) goBack()
@@ -1010,11 +1084,16 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
-            if (!session.ready && session.error == null && !showGuide && numberEntry.isEmpty()) {
+            // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã.
+            if ((session.reconnects > 0 || !session.ready) && session.error == null && !showGuide && numberEntry.isEmpty()) {
                 // Com o segundo canal no canto direito, o aviso passa para a esquerda.
                 TuningPill(
-                    if (session.wasPlaying) LocalStrings.current.reconnecting else LocalStrings.current.tuning,
-                    Modifier.align(if (second != null) Alignment.TopStart else Alignment.TopEnd),
+                    channel = current.name,
+                    reconnecting = session.wasPlaying,
+                    attempt = session.reconnects,
+                    nextTryAt = session.nextTryAt,
+                    waitMs = session.retryDelayMs,
+                    modifier = Modifier.align(if (second != null) Alignment.TopStart else Alignment.TopEnd),
                 )
             }
 
@@ -1247,6 +1326,18 @@ fun PlayerScreen(vm: AppViewModel) {
             }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
 
+            var lastNotice by remember { mutableStateOf<AppRelease?>(null) }
+            updateNotice?.let { lastNotice = it }
+            val hold by animateFloatAsState(updateHold, tween(if (updateHold == 0f) 250 else 80), label = "updateHold")
+            AnimatedVisibility(
+                visible = showUpdate,
+                modifier = Modifier.align(Alignment.BottomEnd),
+                enter = fadeIn() + slideInHorizontally { it / 4 },
+                exit = fadeOut() + slideOutHorizontally { it / 4 },
+            ) {
+                lastNotice?.let { UpdateCard(it, update, hold, updateHidesIn) }
+            }
+
             AnimatedVisibility(
                 visible = panel != Panel.None,
                 modifier = Modifier.align(Alignment.CenterStart),
@@ -1344,6 +1435,11 @@ private const val SEEK_COMMIT_MS = 900L
 private const val NUMBER_COMMIT_MS = 1_500L
 private const val SLEEP_WARNING_MS = 60_000L
 private const val REMINDER_CARD_MS = 45_000L
+/** O cartão de versão nova: quanto fica no ecrã e quanto tempo se mantém OK para instalar. */
+private const val UPDATE_CARD_SECONDS = 12
+private const val UPDATE_HOLD_MS = 1_500L
+/** Até aqui é um toque no OK (abre a info, como sempre); a partir daqui conta como "manter". */
+private const val UPDATE_TAP_MS = 250L
 
 private fun isOkKey(code: Int) = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER || code == AndroidKeyEvent.KEYCODE_INFO
@@ -1389,6 +1485,13 @@ private class PlaybackSession {
 
     /** Linha de estado no cartão de erro (a analisar / próxima tentativa). */
     var errorStatus by mutableStateOf<String?>(null)
+
+    /** Caiu depois de estar a dar: a tentativa de voltar a ligar (1, 2…; 0 = não caiu). */
+    var reconnects by mutableIntStateOf(0)
+
+    /** Quando é a próxima tentativa (elapsedRealtime; 0 = a tentar agora) e quanto se esperou por ela. */
+    var nextTryAt by mutableLongStateOf(0L)
+    var retryDelayMs = 0L
 }
 
 /** O player das definições: o ExoPlayer, ou o [VlcPlayer] (Definições → Reprodução → Player). */

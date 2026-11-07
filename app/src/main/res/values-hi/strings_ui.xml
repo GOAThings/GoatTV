@@ -634,4 +634,10 @@
     <string name="net_getting">मिल रहे हैं</string>
     <string name="net_mbit">%1$s Mbit/s</string>
     <string name="net_last_minute">Mbit/s · पिछला मिनट</string>
+    <!-- Player: cápsula de reconexão e cartão de nova versão. -->
+    <string name="reconnect_attempt">%1$s · प्रयास %2$d</string>
+    <string name="update_ready_label">अपडेट तैयार है</string>
+    <string name="update_whats_new">%1$s में नया क्या है</string>
+    <string name="update_hold_ok">इंस्टॉल करने के लिए OK दबाए रखें</string>
+    <string name="update_hides_in">%1$d से. में छिप जाएगा</string>
 </resources>

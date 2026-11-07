@@ -636,4 +636,10 @@
     <string name="net_getting">Recibe</string>
     <string name="net_mbit">%1$s Mbit/s</string>
     <string name="net_last_minute">Mbit/s · último minuto</string>
+    <!-- Player: cápsula de reconexão e cartão de nova versão. -->
+    <string name="reconnect_attempt">%1$s · intento %2$d</string>
+    <string name="update_ready_label">Actualización lista</string>
+    <string name="update_whats_new">Novedades de la %1$s</string>
+    <string name="update_hold_ok">Mantén OK para instalar</string>
+    <string name="update_hides_in">Se oculta en %1$d s</string>
 </resources>

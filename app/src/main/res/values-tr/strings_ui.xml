@@ -634,4 +634,10 @@
     <string name="net_getting">Alıyor</string>
     <string name="net_mbit">%1$s Mbit/sn</string>
     <string name="net_last_minute">Mbit/sn · son dakika</string>
+    <!-- Player: cápsula de reconexão e cartão de nova versão. -->
+    <string name="reconnect_attempt">%1$s · deneme %2$d</string>
+    <string name="update_ready_label">Güncelleme hazır</string>
+    <string name="update_whats_new">%1$s sürümündeki yenilikler</string>
+    <string name="update_hold_ok">Yüklemek için OK\'a basılı tutun</string>
+    <string name="update_hides_in">%1$d sn içinde kapanır</string>
 </resources>

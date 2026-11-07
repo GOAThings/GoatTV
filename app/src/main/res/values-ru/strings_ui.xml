@@ -638,4 +638,10 @@
     <string name="net_getting">Получает</string>
     <string name="net_mbit">%1$s Мбит/с</string>
     <string name="net_last_minute">Мбит/с · последняя минута</string>
+    <!-- Player: cápsula de reconexão e cartão de nova versão. -->
+    <string name="reconnect_attempt">%1$s · попытка %2$d</string>
+    <string name="update_ready_label">Обновление готово</string>
+    <string name="update_whats_new">Что нового в %1$s</string>
+    <string name="update_hold_ok">Удерживайте OK для установки</string>
+    <string name="update_hides_in">Скроется через %1$d с</string>
 </resources>

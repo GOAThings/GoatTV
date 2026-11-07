@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -175,6 +176,17 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val phone = remember {
         val forced = BuildConfig.DEBUG && activity?.intent?.getBooleanExtra("phone_ui", false) == true
         forced || activity?.packageManager?.hasSystemFeature(PackageManager.FEATURE_LEANBACK) == false
+    }
+
+    // Versão nova: na TV é um cartão no player (mantém-se OK para instalar); no telemóvel fica o aviso curto.
+    val updateNotice by vm.updateNotice.collectAsStateWithLifecycle()
+    if (phone) {
+        LaunchedEffect(updateNotice) {
+            updateNotice?.let {
+                vm.showToast(strings.updateAvailable(it.version))
+                vm.dismissUpdateNotice()
+            }
+        }
     }
 
     // Ao voltar à app, apanha listas/favoritos alterados no site ou noutra TV.

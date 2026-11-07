@@ -1,6 +1,14 @@
 package cc.slokker.itv.ui.player
 
 import cc.slokker.itv.ui.theme.ItvShapes
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
+import android.os.SystemClock
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
@@ -44,7 +52,6 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.ui.common.ErrorPanel
 import cc.slokker.itv.ui.common.KeyHint
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -69,7 +76,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -395,31 +401,88 @@ private val HudScrim = Brush.verticalGradient(
 )
 
 
-/** Cápsula "A sintonizar…" com um ponto a pulsar. */
+/**
+ * No canto: a sintonizar um canal, ou a voltar a ligar depois de ele cair ([reconnecting]). A ligar, o anel roda; à
+ * espera da próxima tentativa ([nextTryAt], elapsedRealtime), enche-se durante [waitMs] com os segundos no meio.
+ */
 @Composable
-internal fun TuningPill(text: String, modifier: Modifier = Modifier) {
-    val pulse by rememberInfiniteTransition(label = "tuning").animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
-        label = "pulse",
-    )
+internal fun TuningPill(
+    channel: String,
+    reconnecting: Boolean,
+    attempt: Int,
+    nextTryAt: Long,
+    waitMs: Long,
+    modifier: Modifier = Modifier,
+) {
+    val s = LocalStrings.current
+    val leftMs by produceState(0L, nextTryAt) {
+        while (nextTryAt > 0) {
+            value = (nextTryAt - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+            if (value == 0L) break
+            withFrameMillis { }
+        }
+        value = 0L
+    }
     Row(
         modifier
             .padding(horizontal = 48.dp, vertical = 27.dp)
-            .glass(ItvShapes.Control)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .glass(CircleShape)
+            .padding(start = 7.dp, end = 16.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .alpha(pulse)
-                .clip(CircleShape)
-                .background(LocalAccent.current.start),
-        )
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            if (leftMs > 0 && waitMs > 0) {
+                ProgressRing(1f - leftMs.toFloat() / waitMs, Modifier.fillMaxSize())
+                Text(
+                    ((leftMs + 999) / 1_000).toString(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold).tabular,
+                )
+            } else {
+                SpinnerRing(Modifier.fillMaxSize())
+            }
+        }
         Spacer(Modifier.width(10.dp))
-        Text(text, style = MaterialTheme.typography.labelLarge)
+        Column {
+            Text(if (reconnecting) s.reconnecting else s.tuning, style = MaterialTheme.typography.labelLarge)
+            Text(
+                if (attempt > 0) s.reconnectAttempt(channel, attempt) else channel,
+                style = MaterialTheme.typography.bodySmall.tabular,
+                color = ItvColors.TextDim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 220.dp),
+            )
+        }
+    }
+}
+
+/** Anel que se enche até [fraction] (0..1), a começar em cima. */
+@Composable
+internal fun ProgressRing(fraction: Float, modifier: Modifier = Modifier, stroke: Dp = 2.5.dp, color: Color = Color.White) {
+    Canvas(modifier) {
+        val w = stroke.toPx()
+        val inset = w / 2
+        val arcSize = Size(size.width - w, size.height - w)
+        drawArc(Color.White.copy(alpha = 0.18f), 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(w))
+        drawArc(color, -90f, 360f * fraction.coerceIn(0f, 1f), false, Offset(inset, inset), arcSize, style = Stroke(w, cap = StrokeCap.Round))
+    }
+}
+
+/** Anel a rodar: a ligar, sem se saber quanto falta. */
+@Composable
+private fun SpinnerRing(modifier: Modifier = Modifier) {
+    val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        label = "turn",
+    )
+    Canvas(modifier) {
+        val w = 2.5.dp.toPx()
+        val inset = w / 2
+        val arcSize = Size(size.width - w, size.height - w)
+        drawArc(Color.White.copy(alpha = 0.18f), 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(w))
+        drawArc(Color.White, turn - 90f, 100f, false, Offset(inset, inset), arcSize, style = Stroke(w, cap = StrokeCap.Round))
     }
 }
 

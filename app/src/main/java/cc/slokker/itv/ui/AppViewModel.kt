@@ -240,6 +240,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    /** Versão nova encontrada sozinha, por avisar: na TV um cartão no player, no telemóvel um aviso curto. */
+    private val _updateNotice = MutableStateFlow<AppRelease?>(null)
+    val updateNotice: StateFlow<AppRelease?> = _updateNotice.asStateFlow()
     private var lastUpdateCheck = 0L
 
     private val _report = MutableStateFlow<ReportState>(ReportState.Idle)
@@ -2031,7 +2035,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _update.value = try {
                 val latest = c.updater.latest()
                 if (latest != null && Updater.isNewer(latest.version, c.updater.currentVersion)) {
-                    if (!manual) showToast(I18n.s.updateAvailable(latest.version))
+                    if (!manual) _updateNotice.value = latest
                     UpdateState.Available(latest)
                 } else {
                     UpdateState.UpToDate
@@ -2082,6 +2086,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 ReportState.Failed(I18n.s.reportFailed(e.message ?: e.javaClass.simpleName))
             }
         }
+    }
+
+    fun dismissUpdateNotice() {
+        _updateNotice.value = null
     }
 
     /** Descarrega e instala a versão nova (o Android pede confirmação). */
