@@ -23,48 +23,53 @@ func phoneDayLabel(_ s: Strings, _ ms: Int64) -> String {
 
 // MARK: Ecrã do canal
 
-/// Por baixo do vídeo: o canal, o programa a dar (com quanto falta) e o seguinte, com lembrete.
+/// Por baixo do vídeo: os botões do canal a dar e o programa seguinte, com o lembrete.
 struct NowStrip: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
+    let onGuide: () -> Void
+    let onOption: (PlayerOption) -> Void
     /// Volta ao ecrã inicial (o canal continua no mini-leitor).
     let onMinimize: () -> Void
 
     var body: some View {
         let s = model.strings
-        let now = nowMillis()
         let pair = model.nowNext(for: channel)
         let favorite = model.isFavorite(channel)
+        let live = model.catchup == nil
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 14) {
-                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 52, height: 34))
-                    .frame(width: 64, height: 44)
-                    .background(cardFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("\(channel.num) · \(channel.name)".uppercased()).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textDim).lineLimit(1)
-                    Text(pair.now?.title ?? channel.name).font(.system(size: 20, weight: .heavy)).lineLimit(1)
+            HStack(spacing: 4) {
+                // Numa fila que desliza: direto (ou voltar a ele), guia, favorito, áudio, legendas e temporizador.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Button { model.exitCatchup() } label: {
+                            HStack(spacing: 6) {
+                                Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
+                                Text(live ? s.r("player_live") : s.r("player_go_live")).font(.footnote.weight(.semibold))
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(live ? Color.clear : cardFill, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(live)
+                        pill("calendar", s.r("tab_guide"), action: onGuide)
+                        pill(favorite ? "star.fill" : "star", s.r("favorite"), tint: favorite ? Theme.hex(0xF5C04A) : Theme.text) { model.toggleFavorite(channel) }
+                        ForEach(PlayerOption.allCases) { option in
+                            // Com o temporizador ligado, o botão diz quanto falta.
+                            let sleeping = option == .sleep ? model.sleepAt : nil
+                            pill(option.symbol, sleeping.map { "\(Int($0.timeIntervalSinceNow / 60) + 1) min" } ?? s.r(option.key),
+                                 tint: sleeping != nil ? Theme.sky : Theme.text) { onOption(option) }
+                        }
+                    }
+                    .padding(.leading, 14).padding(.trailing, 8)
                 }
-                Spacer(minLength: 0)
-                Button { model.toggleFavorite(channel) } label: {
-                    Image(systemName: favorite ? "star.fill" : "star").font(.system(size: 20))
-                        .foregroundStyle(favorite ? Theme.hex(0xF5C04A) : Theme.textFaint).frame(width: 40, height: 40)
-                }
-                .buttonStyle(.plain)
                 Button(action: onMinimize) {
-                    Image(systemName: "chevron.down").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textFaint).frame(width: 36, height: 40)
+                    Image(systemName: "chevron.down").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textFaint).frame(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
+                .padding(.trailing, 6)
             }
-            if let current = pair.now {
-                ProgressBarLine(value: Double(current.progress(now: now)), tint: AnyShapeStyle(Theme.accent(model.prefs.accent)), height: 3)
-                    .padding(.top, 12)
-                HStack {
-                    Text("\(hhmm(current.start)) – \(hhmm(current.end))")
-                    Spacer()
-                    Text(s.r("minutes_left", "\(max(0, (current.endMs - now + 59_999) / 60_000))"))
-                }
-                .font(.caption).foregroundStyle(Theme.textDim).padding(.top, 6)
-            }
+            // O que está a dar já se vê no vídeo e na lista: aqui fica o seguinte, com o lembrete.
             if let next = pair.next {
                 let reminded = model.hasReminder(channel, next)
                 Button { model.toggleReminder(channel, next) } label: {
@@ -78,12 +83,24 @@ struct NowStrip: View {
                     .background(cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 10)
+                .padding(.horizontal, 14).padding(.top, 8)
             }
         }
         .foregroundStyle(Theme.text)
-        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 4)
+        .padding(.top, 10).padding(.bottom, 4)
         .task(id: channel.key) { model.requestShortEpg(channel) }
+    }
+
+    private func pill(_ symbol: String, _ title: String, tint: Color = Theme.text, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(tint)
+                Text(title).font(.footnote.weight(.semibold)).lineLimit(1)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(cardFill, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

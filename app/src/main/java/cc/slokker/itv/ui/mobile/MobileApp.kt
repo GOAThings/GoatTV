@@ -29,6 +29,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,6 +65,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.media3.common.C
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,6 +100,7 @@ import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.BuildConfig
 import cc.slokker.itv.data.EpgEntry
+import cc.slokker.itv.ui.player.HudLogo
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.Channel
@@ -209,6 +218,7 @@ fun MobileMain(vm: AppViewModel) {
     val pip = main?.inPip == true
     val landscape = video && (pip || (big && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE))
     val mini = video && !big && !landscape
+    val pipAction = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null
     // Nas Definições o canal está fechado: não há nada para levar para a janela pequena.
     val pipOnLeave = prefs.pipEnabled && video
     DisposableEffect(main, pipOnLeave) {
@@ -223,7 +233,9 @@ fun MobileMain(vm: AppViewModel) {
     }
     var epgFor by remember { mutableStateOf<Channel?>(null) }
     var epgPick by remember { mutableStateOf<Pair<Channel, Boolean>?>(null) }
-    var showingOptions by remember { mutableStateOf(false) }
+    // Áudio, legendas ou temporizador, cada um no seu botão.
+    var options by remember { mutableStateOf<PlayerOption?>(null) }
+    val showingOptions = options != null
     val view = LocalView.current
     var hapticKey by remember { mutableStateOf(current.key) }
     LaunchedEffect(current.key) {
@@ -256,7 +268,7 @@ fun MobileMain(vm: AppViewModel) {
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
     BackHandler(landscape || showingOptions || epgFor != null || tab != Tab.Tv || homeGroup != null || !home) {
         when {
-            showingOptions -> showingOptions = false
+            showingOptions -> options = null
             landscape -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             epgFor != null -> epgFor = null
             tab != Tab.Tv -> tab = Tab.Tv
@@ -281,9 +293,19 @@ fun MobileMain(vm: AppViewModel) {
                 Box(
                     if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
                 ) {
-                    VideoArea(vm, current, playback, landscape, pip, onPip = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null, onGuide = if (landscape) null else ({ epgFor = current }), onOptions = { showingOptions = true }, onFullscreen = {
-                        activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    })
+                    // O guia e a lista de canais estão por baixo do vídeo: em ecrã inteiro, volta-se ao alto para os ver.
+                    VideoArea(
+                        vm, current, playback, landscape, pip, onPip = pipAction,
+                        onGuide = {
+                            if (landscape) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                            epgFor = current
+                        },
+                        onChannels = { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT },
+                        onOption = { options = it },
+                        onFullscreen = {
+                            activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        },
+                    )
                 }
             }
             if (!landscape) {
@@ -291,7 +313,8 @@ fun MobileMain(vm: AppViewModel) {
                     when (tab) {
                         Tab.Tv -> when {
                             !home -> Column(Modifier.fillMaxSize()) {
-                                NowStrip(vm, current)
+                                PlayerActions(vm, current, onGuide = { epgFor = current }, onPip = pipAction, onOption = { options = it })
+                                NextUp(vm, current)
                                 ChannelsTab(vm, current) { epgFor = it }
                             }
                             homeGroup != null -> homeGroup?.let { id ->
@@ -355,7 +378,7 @@ fun MobileMain(vm: AppViewModel) {
             }
         }
     }
-    if (showingOptions && !pip) PlayerOptionsSheet(vm, playback) { showingOptions = false }
+    options?.let { if (!pip) PlayerOptionsSheet(vm, playback, it) { options = null } }
     homePinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { homePinFor = null }, rejected = vm::pinRejected) { pin ->
             vm.unlockGroup(id, pin).also { if (it) { homeGroup = id; homePinFor = null } }
@@ -399,7 +422,10 @@ private fun FullscreenBars(fullscreen: Boolean) {
 }
 
 @Composable
-private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, pip: Boolean, onPip: (() -> Unit)?, onGuide: (() -> Unit)?, onOptions: () -> Unit, onFullscreen: () -> Unit) {
+private fun VideoArea(
+    vm: AppViewModel, channel: Channel, playback: MobilePlayback, fullscreen: Boolean, pip: Boolean, onPip: (() -> Unit)?,
+    onGuide: () -> Unit, onChannels: () -> Unit, onOption: (PlayerOption) -> Unit, onFullscreen: () -> Unit,
+) {
     val s = LocalStrings.current
     val view = LocalView.current
     var controls by remember { mutableStateOf(true) }
@@ -499,19 +525,24 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             }
         }
         if (controls && !pip) {
-            Row(
-                Modifier.align(Alignment.TopStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(channel.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (fullscreen) Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
-                ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) {
-                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    vm.toggleFavorite(channel)
-                    touched++
+            // O vídeo escurece um pouco, para os botões se verem mesmo num vídeo claro.
+            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.28f)))
+            // Em ecrã inteiro, em cima: sair dele, a hora e a janela pequena.
+            if (fullscreen) {
+                Row(
+                    Modifier.align(Alignment.TopStart).fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)))
+                        .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ControlButton(ItvIcons.FullscreenExit, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = onFullscreen)
+                    Spacer(Modifier.weight(1f))
+                    Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp))
+                    onPip?.let { ControlButton(ItvIcons.Pip, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = it) }
                 }
             }
-            Box(Modifier.align(Alignment.Center)) {
+            Box(Modifier.align(if (fullscreen) Alignment.Center else BiasAlignment(0f, -0.3f))) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
                     val cu = catchup
@@ -521,11 +552,11 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                     if (canSeek) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
                     // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
                     if (!playback.failed && (!playback.ready || playback.freeze != null)) {
-                        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
                             Spinner()
                         }
                     } else {
-                        ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(56.dp)) {
+                        ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(60.dp).clip(CircleShape).background(HudButton)) {
                             if (playback.playing) playback.player.pause() else playback.player.play()
                             touched++
                         }
@@ -542,16 +573,48 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                     )
                 }
             }
+            // Em baixo, como o HUD da TV: logótipo, canal, programa, horas, o seguinte e a barra larga.
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))))
-                    .padding(horizontal = 6.dp),
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, ItvColors.Background.copy(alpha = 0.6f), ItvColors.Background.copy(alpha = 0.92f))))
+                    .then(if (fullscreen) Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)) else Modifier)
+                    .padding(start = if (fullscreen) 24.dp else 12.dp, end = if (fullscreen) 24.dp else 8.dp, top = if (fullscreen) 60.dp else 34.dp, bottom = if (fullscreen) 14.dp else 2.dp),
             ) {
-                // Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
                 tick
                 val now = System.currentTimeMillis()
                 val cu = catchup
                 val entry = if (cu == null) liveEntry(now) else null
+                val programme = cu?.let { EpgEntry(it.title, it.startMs, it.endMs) } ?: entry
+                val next = if (cu == null) vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs >= (entry?.endMs ?: now) } else null
+                Row(verticalAlignment = Alignment.Bottom) {
+                    HudLogo(channel, Modifier.size(if (fullscreen) 92.dp else 56.dp, if (fullscreen) 52.dp else 32.dp))
+                    Spacer(Modifier.width(if (fullscreen) 16.dp else 10.dp))
+                    Column(Modifier.weight(1f)) {
+                        if (fullscreen) {
+                            Text(
+                                "${channel.num}  ${channel.name}" + if (vm.isFavorite(channel)) "  ★" else "",
+                                color = ItvColors.TextDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            programme?.title ?: channel.name, color = Color.White, fontSize = if (fullscreen) 22.sp else 16.sp, fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        if (programme != null) {
+                            val left = if (cu == null) " · " + s.minutesLeft(((programme.endMs - now) / 60_000 + 1).toInt()) else ""
+                            Text("${formatTime(programme.startMs)} — ${formatTime(programme.endMs)}$left", color = ItvColors.TextDim, fontSize = if (fullscreen) 13.sp else 12.sp, maxLines = 1)
+                        }
+                    }
+                    if (fullscreen && next != null) {
+                        Spacer(Modifier.width(20.dp))
+                        Column(Modifier.widthIn(max = 220.dp), horizontalAlignment = Alignment.End) {
+                            Text(s.next(formatTime(next.startMs)), color = ItvColors.TextDim, fontSize = 11.sp)
+                            Text(next.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (!fullscreen) ControlButton(ItvIcons.Fullscreen, Modifier.size(38.dp).clip(CircleShape).background(HudButton), onClick = onFullscreen)
+                }
+                // Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
                 val duration = cu?.durationMs ?: entry?.let { it.endMs - it.startMs }
                 if (duration != null && duration > 0) {
                     val position = when {
@@ -560,8 +623,9 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                         else -> now - entry!!.startMs
                     }
                     val fraction = scrub ?: (position.toFloat() / duration).coerceIn(0f, 1f)
-                    Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // No catch-up conta onde vai; em direto, as horas já estão por cima.
+                        if (cu != null) Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
                         PlayerBar(
                             fraction, seekable = cu != null || vm.canCatchup(channel, entry!!),
                             onChange = { scrub = it; touched++ },
@@ -573,23 +637,53 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
                                 seekDelta = 0
                                 goTo(target, position)
                             },
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            modifier = Modifier.weight(1f),
                         )
-                        Text(durationText(duration), color = Color.White, fontSize = 11.sp)
+                        if (cu != null) Text(durationText(duration), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    LiveButton(catchup == null) { vm.exitCatchup() }
-                    Spacer(Modifier.weight(1f))
-                    onGuide?.let { ControlButton(ItvIcons.Calendar) { it(); touched++ } }
-                    ControlButton(ItvIcons.More) { onOptions(); touched++ }
-                    onPip?.let { ControlButton(ItvIcons.Pip, onClick = it) }
-                    ControlButton(ItvIcons.Fullscreen, onClick = onFullscreen)
+                if (fullscreen) {
+                    Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Num ecrã estreito (ou com textos compridos) as pílulas deslizam; os botões da direita ficam.
+                        Row(
+                            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            LiveButton(catchup == null) { vm.exitCatchup() }
+                            HudPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
+                            HudPill(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline, s.favorite) {
+                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                vm.toggleFavorite(channel)
+                                touched++
+                            }
+                            HudPill(ItvIcons.Channels, s.searchChannels, onClick = onChannels)
+                        }
+                        // O que estava no "mais": cada um no seu botão.
+                        PlayerOption.entries.forEach { option ->
+                            ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(HudButton)) { onOption(option); touched++ }
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+/** Um botão com texto por cima do vídeo (ecrã inteiro). */
+@Composable
+private fun HudPill(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(CircleShape).background(HudButton).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+private val HudButton = Color.White.copy(alpha = 0.14f)
 
 /** O canal está a abrir. */
 @Composable
@@ -620,7 +714,7 @@ private fun LiveButton(live: Boolean, onClick: () -> Unit) {
 /** A barra de progresso do leitor, para arrastar. */
 @Composable
 private fun PlayerBar(progress: Float, seekable: Boolean, onChange: (Float) -> Unit, onEnd: () -> Unit, modifier: Modifier = Modifier) {
-    val accent = LocalAccent.current.start
+    val accent = LocalAccent.current.brush
     val change by rememberUpdatedState(onChange)
     val end by rememberUpdatedState(onEnd)
     Box(
@@ -642,11 +736,12 @@ private fun PlayerBar(progress: Float, seekable: Boolean, onChange: (Float) -> U
         ),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.28f)))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f)))
         Box(Modifier.fillMaxWidth(progress).height(4.dp).clip(CircleShape).background(accent))
-        if (seekable) {
-            Box(Modifier.fillMaxWidth(progress), contentAlignment = Alignment.CenterEnd) {
-                Box(Modifier.offset(x = 7.dp).size(14.dp).clip(CircleShape).background(Color.White))
+        // O ponto onde vai, como na barra larga da TV.
+        Box(Modifier.fillMaxWidth(progress), contentAlignment = Alignment.CenterEnd) {
+            Box(Modifier.offset(x = 7.dp).size(14.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(Color.White))
             }
         }
     }
@@ -670,15 +765,28 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
     }
 }
 
-/** Áudio, legendas e temporizador do canal a dar. */
+/** O que se escolhe no canal a dar, cada um no seu botão. */
+private enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), SLEEP(ItvIcons.Sleep) }
+
 @Composable
-private fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, onClose: () -> Unit) {
+private fun PlayerOption.label(): String {
+    val s = LocalStrings.current
+    return when (this) {
+        PlayerOption.AUDIO -> s.audio
+        PlayerOption.SUBTITLES -> s.subtitles
+        PlayerOption.SLEEP -> s.sleepTimer
+    }
+}
+
+/** O áudio, as legendas ou o temporizador do canal a dar. */
+@Composable
+private fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, option: PlayerOption, onClose: () -> Unit) {
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.75f)
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color(0xFF14161E))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .navigationBarsPadding()
@@ -686,27 +794,30 @@ private fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, onClo
                 .padding(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            listOf(s.audio to (C.TRACK_TYPE_AUDIO to false), s.subtitles to (C.TRACK_TYPE_TEXT to true)).forEach { (title, kind) ->
-                Section(title) {
-                    val options = trackOptions(tracks, kind.first, playback.player, kind.second)
-                    if (options.isEmpty()) Note(s.noTracks)
-                    options.forEach { o ->
-                        MenuRow(o.label, null, checked = o.selected) {
-                            o.select()
-                            onClose()
+            when (option) {
+                PlayerOption.AUDIO, PlayerOption.SUBTITLES -> {
+                    val text = option == PlayerOption.SUBTITLES
+                    Section(option.label()) {
+                        val options = trackOptions(tracks, if (text) C.TRACK_TYPE_TEXT else C.TRACK_TYPE_AUDIO, playback.player, text)
+                        if (options.isEmpty()) Note(s.noTracks)
+                        options.forEach { o ->
+                            MenuRow(o.label, null, checked = o.selected) {
+                                o.select()
+                                onClose()
+                            }
                         }
                     }
                 }
-            }
-            Section(sleepAt?.let { s.sleepRemaining(((it - System.currentTimeMillis()) / 60_000 + 1).toInt()) } ?: s.sleepTimer) {
-                MenuRow(s.subtitlesOff, null, checked = sleepAt == null) {
-                    vm.setSleepTimer(null)
-                    onClose()
-                }
-                listOf(15, 30, 45, 60, 90, 120).forEach { minutes ->
-                    MenuRow("$minutes min", null) {
-                        vm.setSleepTimer(minutes)
+                PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(((it - System.currentTimeMillis()) / 60_000 + 1).toInt()) } ?: s.sleepTimer) {
+                    MenuRow(s.subtitlesOff, null, checked = sleepAt == null) {
+                        vm.setSleepTimer(null)
                         onClose()
+                    }
+                    listOf(15, 30, 45, 60, 90, 120).forEach { minutes ->
+                        MenuRow("$minutes min", null) {
+                            vm.setSleepTimer(minutes)
+                            onClose()
+                        }
                     }
                 }
             }
@@ -722,56 +833,66 @@ private fun ControlButton(icon: ImageVector, modifier: Modifier = Modifier.size(
     ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(26.dp)) }
 }
 
-/** Por baixo do vídeo: o canal, o programa a dar (com quanto falta) e o seguinte, com lembrete. */
+/** Por baixo do vídeo, numa fila que desliza: direto (ou voltar a ele), guia, favorito, áudio, legendas, temporizador e a janela pequena. */
 @Composable
-private fun NowStrip(vm: AppViewModel, channel: Channel) {
+private fun PlayerActions(vm: AppViewModel, channel: Channel, onGuide: () -> Unit, onPip: (() -> Unit)?, onOption: (PlayerOption) -> Unit) {
+    val s = LocalStrings.current
+    val catchup by vm.catchup.collectAsStateWithLifecycle()
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LiveButton(catchup == null) { vm.exitCatchup() }
+        ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
+        favorites.size
+        val favorite = vm.isFavorite(channel)
+        ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
+        PlayerOption.entries.forEach { option ->
+            // Com o temporizador ligado, o botão diz quanto falta.
+            val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${((sleepAt!! - System.currentTimeMillis()) / 60_000 + 1)} min" else option.label()
+            ActionPill(option.icon, label, tint = if (option == PlayerOption.SLEEP && sleepAt != null) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
+        }
+        onPip?.let { ActionPill(ItvIcons.Pip, "PiP", onClick = it) }
+    }
+}
+
+@Composable
+private fun ActionPill(icon: ImageVector, label: String, tint: Color = ItvColors.Text, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(CircleShape).background(Card).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = ItvColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/** O programa seguinte do canal a dar, com o lembrete (o que está a dar já se vê no vídeo e na lista). */
+@Composable
+private fun NextUp(vm: AppViewModel, channel: Channel) {
     val s = LocalStrings.current
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg } }
     val reminders by vm.reminders.collectAsStateWithLifecycle()
-    val favorites by vm.favorites.collectAsStateWithLifecycle()
     val current = entries.firstOrNull { it.startMs <= now && it.endMs > now }
-    val next = entries.firstOrNull { it.startMs >= (current?.endMs ?: now) }
-    Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(64.dp, 44.dp).clip(RoundedCornerShape(10.dp)).background(Card), contentAlignment = Alignment.Center) { ChannelLogo(channel, 36.dp) }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text("${channel.num} · ${channel.name}".uppercase(), color = ItvColors.TextDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(current?.title ?: channel.name, color = ItvColors.Text, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            favorites.size
-            val favorite = vm.isFavorite(channel)
-            Icon(
-                if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorites,
-                tint = if (favorite) FavoriteGold else ItvColors.TextFaint,
-                modifier = Modifier.size(40.dp).clip(CircleShape).clickable { vm.toggleFavorite(channel) }.padding(8.dp),
-            )
-        }
-        if (current != null) {
-            Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f))) {
-                Box(Modifier.fillMaxWidth(current.progress(now)).fillMaxHeight().background(accent.brush))
-            }
-            Row(Modifier.padding(top = 6.dp)) {
-                Text("${formatTime(current.startMs)} – ${formatTime(current.endMs)}", color = ItvColors.TextDim, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text(s.minutesLeft(((current.endMs - now) / 60_000 + 1).toInt()), color = ItvColors.TextDim, fontSize = 12.sp)
-            }
-        }
-        if (next != null) {
-            reminders.size
-            val reminded = vm.hasReminder(channel, next)
-            Row(
-                Modifier.padding(top = 10.dp).fillMaxWidth().clip(ListShape).background(Card).clickable { vm.toggleReminder(channel, next) }.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(s.next(formatTime(next.startMs)), color = ItvColors.TextFaint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(10.dp))
-                Text(next.title, color = ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                Icon(ItvIcons.Bell, s.setReminder, tint = if (reminded) accent.start else ItvColors.TextFaint, modifier = Modifier.padding(start = 8.dp).size(18.dp))
-            }
-        }
+    val next = entries.firstOrNull { it.startMs >= (current?.endMs ?: now) } ?: return
+    reminders.size
+    val reminded = vm.hasReminder(channel, next)
+    Row(
+        Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 4.dp).fillMaxWidth().clip(ListShape).background(Card)
+            .clickable { vm.toggleReminder(channel, next) }.padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(s.next(formatTime(next.startMs)), color = ItvColors.TextFaint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(10.dp))
+        Text(next.title, color = ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Icon(ItvIcons.Bell, s.setReminder, tint = if (reminded) accent.start else ItvColors.TextFaint, modifier = Modifier.padding(start = 8.dp).size(18.dp))
     }
 }
 

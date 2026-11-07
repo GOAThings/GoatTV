@@ -239,6 +239,8 @@ struct PhoneMain: View {
     @State private var homeGroup: String?
     @State private var homePinFor: ChannelGroup?
     @State private var homePin = ""
+    /// Áudio, legendas ou temporizador, cada um no seu botão (por baixo do vídeo).
+    @State private var playerOption: PlayerOption?
 
     /// Abriu-se um canal: sai do ecrã inicial.
     private func played() {
@@ -275,7 +277,9 @@ struct PhoneMain: View {
                     case .tv:
                         if !home {
                             VStack(spacing: 0) {
-                                if let current = model.current { NowStrip(channel: current) { home = true } }
+                                if let current = model.current {
+                                    NowStrip(channel: current, onGuide: { epgFor = current }, onOption: { playerOption = $0 }) { home = true }
+                                }
                                 ChannelsTab(epgFor: $epgFor)
                             }
                         } else if let id = homeGroup {
@@ -332,6 +336,7 @@ struct PhoneMain: View {
         }
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0).environment(\.played, played) }
+        .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0) }
         .environment(\.played, played)
         .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { homePinFor != nil }, set: { if !$0 { homePinFor = nil } })) {
             SecureField("PIN", text: $homePin).keyboardType(.numberPad)
@@ -415,7 +420,7 @@ private struct VideoPane: View {
     @Environment(AppModel.self) private var model
     let fullscreen: Bool
     let onGuide: () -> Void
-    @State private var showingOptions = false
+    @State private var option: PlayerOption?
     @State private var seekDelta: Int64 = 0
     @State private var seekBase: Int64 = 0
     @State private var seekTask: Task<Void, Never>?
@@ -498,78 +503,137 @@ private struct VideoPane: View {
                 pickingSecond = false
             } onClose: { pickingSecond = false }
         }
-        .sheet(isPresented: $showingOptions) {
-            PlayerOptionsSheet(player: model.second != nil && focusSecond ? model.secondPlayer : model.player)
+        .sheet(item: $option) {
+            PlayerOptionsSheet(player: model.second != nil && focusSecond ? model.secondPlayer : model.player, option: $0)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             PhoneOrientation.deviceMoved()
         }
     }
 
+    /// Como o HUD da TV: em baixo o logótipo, o canal, o programa, as horas, o seguinte e a barra larga; ao meio
+    /// pausa e ±30 s. Em ecrã inteiro também a hora e os botões; ao alto, os botões ficam por baixo do vídeo.
     private var overlay: some View {
-        VStack {
-            HStack {
-                Text(model.current?.name ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
-                Spacer()
-                if fullscreen { Text(Date(), style: .time).font(.footnote) }
-                if let c = model.current {
-                    iconButton(model.isFavorite(c) ? "star.fill" : "star") {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        model.toggleFavorite(c)
-                        touched += 1
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .background(Color.black.opacity(0.45))
-            Spacer()
-            HStack(spacing: 28) {
-                // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
-                let canSeek = barState?.seekable == true
-                if canSeek { seekButton("gobackward.30", -seekStep) }
-                // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
-                if model.player.frozen || model.player.state == .opening || (model.player.state == .playing && !model.player.hasPicture) {
-                    ProgressView().tint(.white).frame(width: 44, height: 44)
-                } else {
-                    iconButton(model.player.paused ? "play.fill" : "pause.fill") { model.player.togglePause(); touched += 1 }
-                }
-                if canSeek {
-                    seekButton("goforward.30", seekStep)
-                        .disabled(model.catchup == nil)
-                        .opacity(model.catchup == nil ? 0.35 : 1)
-                }
-            }
-            // Por cima dos botões, sem os mexer.
-            .overlay(alignment: .top) {
-                if seekDelta != 0 {
-                    Text(seekLabel).font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 5)
-                        .background(Color.black.opacity(0.55), in: Capsule())
-                        .fixedSize()
-                        .offset(y: -32)
-                }
-            }
-            Spacer()
+        ZStack {
+            // O vídeo escurece um pouco, para os botões se verem mesmo num vídeo claro.
+            Color.black.opacity(0.28).allowsHitTesting(false)
             VStack(spacing: 0) {
-                TimelineView(.periodic(from: .now, by: 1)) { _ in progressRow }
-                HStack(spacing: 6) {
-                    liveButton
-                    Spacer()
-                    iconButton("calendar") { onGuide(); touched += 1 }
-                    iconButton("ellipsis") { showingOptions = true; touched += 1 }
-                    if model.second == nil {
-                        iconButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
-                    } else {
-                        iconButton("rectangle.2.swap") { pickingSecond = true; touched += 1 }
-                        iconButton("xmark") { model.closeSecond(); touched += 1 }
+                HStack(spacing: 10) {
+                    if fullscreen {
+                        hudButton("arrow.down.right.and.arrow.up.left", action: rotate)
                     }
-                    iconButton(fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", action: rotate)
+                    Spacer()
+                    if fullscreen { Text(Date(), style: .time).font(.subheadline.weight(.semibold)) }
+                    // Dois canais lado a lado.
+                    if model.second == nil {
+                        hudButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
+                    } else {
+                        hudButton("rectangle.2.swap") { pickingSecond = true; touched += 1 }
+                        hudButton("xmark") { model.closeSecond(); touched += 1 }
+                    }
                 }
+                .padding(.horizontal, fullscreen ? 20 : 10).padding(.top, fullscreen ? 10 : 8)
+                Spacer()
+                HStack(spacing: 28) {
+                    // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
+                    let canSeek = barState?.seekable == true
+                    if canSeek { seekButton("gobackward.30", -seekStep) }
+                    // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
+                    if model.player.frozen || model.player.state == .opening || (model.player.state == .playing && !model.player.hasPicture) {
+                        ProgressView().tint(.white).frame(width: 60, height: 60)
+                    } else {
+                        Button { model.player.togglePause(); touched += 1 } label: {
+                            Image(systemName: model.player.paused ? "play.fill" : "pause.fill").font(.title2)
+                                .frame(width: 60, height: 60)
+                                .background(Color.white.opacity(0.14), in: Circle())
+                        }
+                    }
+                    if canSeek {
+                        seekButton("goforward.30", seekStep)
+                            .disabled(model.catchup == nil)
+                            .opacity(model.catchup == nil ? 0.35 : 1)
+                    }
+                }
+                // Por cima dos botões, sem os mexer.
+                .overlay(alignment: .top) {
+                    if seekDelta != 0 {
+                        Text(seekLabel).font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 12).padding(.vertical, 5)
+                            .background(Color.black.opacity(0.55), in: Capsule())
+                            .fixedSize()
+                            .offset(y: -32)
+                    }
+                }
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { _ in hud }
+                    .padding(.horizontal, fullscreen ? 24 : 12)
+                    .padding(.top, fullscreen ? 50 : 26)
+                    .padding(.bottom, fullscreen ? 12 : 2)
+                    .background(LinearGradient(colors: [.clear, Theme.background.opacity(0.6), Theme.background.opacity(0.92)], startPoint: .top, endPoint: .bottom))
             }
-            .padding(.horizontal, 6)
-            .background(LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom))
         }
         .foregroundStyle(.white)
+    }
+
+    /// O programa a dar (ou o do catch-up), o seguinte e a barra; em ecrã inteiro também os botões.
+    @ViewBuilder private var hud: some View {
+        if let channel = model.current {
+            let s = model.strings
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            let pair = model.nowNext(for: channel)
+            let programme: EpgEntry? = model.catchup.map { EpgEntry(title: $0.title, startMs: $0.startMs, endMs: $0.endMs) } ?? pair.now
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .bottom, spacing: fullscreen ? 16 : 10) {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: fullscreen ? CGSize(width: 92, height: 52) : CGSize(width: 56, height: 32))
+                        .shadow(color: .black.opacity(0.6), radius: 6)
+                    VStack(alignment: .leading, spacing: 1) {
+                        if fullscreen {
+                            Text("\(channel.num)  \(channel.name)" + (model.isFavorite(channel) ? "  ★" : ""))
+                                .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim).lineLimit(1)
+                        }
+                        Text(programme?.title ?? channel.name).font(.system(size: fullscreen ? 22 : 16, weight: .heavy)).lineLimit(1)
+                        if let programme {
+                            let left = model.catchup == nil ? " · " + s.r("minutes_left", "\(max(0, (programme.endMs - now + 59_999) / 60_000))") : ""
+                            Text("\(hhmm(programme.start)) — \(hhmm(programme.end))" + left)
+                                .font(.system(size: fullscreen ? 13 : 12)).foregroundStyle(Theme.textDim).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if fullscreen, model.catchup == nil, let next = pair.next {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(s.r("next", hhmm(next.start))).font(.caption2).foregroundStyle(Theme.textDim)
+                            Text(next.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        }
+                        .frame(maxWidth: 220, alignment: .trailing)
+                    }
+                    if !fullscreen {
+                        hudButton("arrow.up.left.and.arrow.down.right", action: rotate)
+                    }
+                }
+                progressRow
+                if fullscreen {
+                    HStack(spacing: 8) {
+                        // Num ecrã estreito (ou com textos compridos) as pílulas deslizam; os botões da direita ficam.
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                liveButton
+                                hudPill("calendar", s.r("tab_guide")) { onGuide(); touched += 1 }
+                                hudPill(model.isFavorite(channel) ? "star.fill" : "star", s.r("favorite")) {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    model.toggleFavorite(channel)
+                                    touched += 1
+                                }
+                                hudPill("list.bullet", s.r("search_channels"), action: rotate)
+                            }
+                        }
+                        ForEach(PlayerOption.allCases) { o in
+                            hudButton(o.symbol) { option = o; touched += 1 }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
     }
 
     /// Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
@@ -584,7 +648,8 @@ private struct VideoPane: View {
         if let bar = barState {
             let fraction = scrub ?? min(max(Double(bar.position) / Double(bar.duration), 0), 1)
             HStack(spacing: 8) {
-                Text(durationText(Int64(fraction * Double(bar.duration))))
+                // No catch-up conta onde vai; em direto, as horas já estão por cima.
+                if model.catchup != nil { Text(durationText(Int64(fraction * Double(bar.duration)))) }
                 PlayerBar(progress: fraction, seekable: bar.seekable) { value in
                     scrub = value
                     touched += 1
@@ -592,10 +657,9 @@ private struct VideoPane: View {
                     scrub = nil
                     goTo(Int64(value * Double(bar.duration)), livePosition: bar.position)
                 }
-                Text(durationText(bar.duration))
+                if model.catchup != nil { Text(durationText(bar.duration)) }
             }
             .font(.caption2.monospacedDigit())
-            .padding(.horizontal, 8)
         }
     }
 
@@ -607,7 +671,7 @@ private struct VideoPane: View {
         } label: {
             HStack(spacing: 6) {
                 Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
-                Text(live ? model.strings.t("LIVE", "DIRETO") : model.strings.t("Go live", "Ir para o direto"))
+                Text(live ? model.strings.r("player_live") : model.strings.r("player_go_live"))
                     .font(.footnote.weight(.semibold))
             }
             .padding(.horizontal, 12).padding(.vertical, 7)
@@ -680,13 +744,29 @@ private struct VideoPane: View {
         PhoneOrientation.force(fullscreen ? .portrait : .landscape)
     }
 
-    private func iconButton(_ name: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: name).font(.title3).frame(width: 44, height: 44) }
+    private func hudButton(_ name: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: name).font(.system(size: 16, weight: .semibold)).frame(width: 40, height: 40)
+                .background(Color.white.opacity(0.14), in: Circle())
+        }
+    }
+
+    /// Um botão com texto por cima do vídeo (ecrã inteiro).
+    private func hudPill(_ symbol: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+                Text(title).font(.footnote.weight(.semibold)).lineLimit(1)
+            }
+            .padding(.horizontal, 13).padding(.vertical, 8)
+            .background(Color.white.opacity(0.14), in: Capsule())
+        }
     }
 }
 
 /// A barra de progresso do leitor, para arrastar.
 private struct PlayerBar: View {
+    @Environment(AppModel.self) private var model
     let progress: Double
     let seekable: Bool
     let onChange: (Double) -> Void
@@ -697,11 +777,12 @@ private struct PlayerBar: View {
             let width = geo.size.width
             let fraction = { (x: CGFloat) in Double(min(max(x / max(width, 1), 0), 1)) }
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.28)).frame(height: 4)
-                Capsule().fill(Theme.sky).frame(width: width * progress, height: 4)
-                if seekable {
-                    Circle().fill(Color.white).frame(width: 14, height: 14).offset(x: width * progress - 7)
-                }
+                Capsule().fill(Color.white.opacity(0.22)).frame(height: 4)
+                Capsule().fill(Theme.accent(model.prefs.accent)).frame(width: width * progress, height: 4)
+                // O ponto onde vai, como na barra larga da TV.
+                Circle().fill(Color.white).frame(width: 10, height: 10)
+                    .background(Circle().fill(Color.white.opacity(0.25)).frame(width: 18, height: 18))
+                    .offset(x: width * progress - 5)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
@@ -713,38 +794,59 @@ private struct PlayerBar: View {
     }
 }
 
-/// Áudio, legendas e temporizador do canal a dar.
-private struct PlayerOptionsSheet: View {
+/// O que se escolhe no canal a dar, cada um no seu botão.
+enum PlayerOption: String, CaseIterable, Identifiable {
+    case audio, subtitles, sleep
+
+    var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .audio: "music.note"
+        case .subtitles: "captions.bubble"
+        case .sleep: "moon.fill"
+        }
+    }
+    var key: String {
+        switch self {
+        case .audio: "audio"
+        case .subtitles: "subtitles"
+        case .sleep: "sleep_timer"
+        }
+    }
+}
+
+/// O áudio, as legendas ou o temporizador do canal a dar.
+struct PlayerOptionsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let player: PlayerEngine
+    let option: PlayerOption
 
     var body: some View {
         let s = model.strings
         NavigationStack {
             List {
-                Section(s.r("audio")) {
+                switch option {
+                case .audio:
                     let tracks = player.audioTracks
                     if tracks.isEmpty { Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint) }
                     ForEach(tracks, id: \.id) { track in
                         row(track.name, track.id == player.currentAudio) { player.selectAudio(track.id) }
                     }
-                }
-                Section(s.r("subtitles")) {
+                case .subtitles:
                     let tracks = player.subtitleTracks
                     if tracks.isEmpty { Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint) }
                     ForEach(tracks, id: \.id) { track in
                         row(track.id < 0 ? s.r("subtitles_off") : track.name, track.id == player.currentSubtitle) { player.selectSubtitle(track.id) }
                     }
-                }
-                Section(model.sleepAt.map { s.r("sleep_remaining", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.r("sleep_timer")) {
+                case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }
                     ForEach([15, 30, 45, 60, 90, 120], id: \.self) { minutes in
                         row("\(minutes) min", false) { model.setSleepTimer(minutes) }
                     }
                 }
             }
-            .navigationTitle(model.current?.name ?? "")
+            .navigationTitle(option == .sleep ? model.sleepAt.map { s.r("sleep_remaining", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.r("sleep_timer") : s.r(option.key))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { dismiss() } } }
         }
