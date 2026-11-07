@@ -18,9 +18,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-/** Um canal para o ecrã inicial, com o programa que está a dar e o seguinte (se se souberem). */
-class HomeItem(val channel: Channel, val playlistId: String, val now: EpgEntry?, val next: EpgEntry?)
+/** Um canal para o ecrã inicial, com o programa que está a dar e os seguintes ([upcoming], se se souberem). */
+class HomeItem(val channel: Channel, val playlistId: String, val now: EpgEntry?, val upcoming: List<EpgEntry>)
 
 /**
  * Ecrã inicial da Android TV:
@@ -68,7 +71,8 @@ class HomeScreen(private val context: Context) {
 
     /**
      * O "A seguir": a descrição é o programa que está a dar, com a hora de início e de fim; a descrição longa é o
-     * título do programa seguinte (o GoatLauncher mostra-os no cartão do canal; começa quando o atual acaba).
+     * título do programa seguinte (começa quando o atual acaba) e, uma linha cada, os depois desse como "21:30 Título".
+     * O GoatLauncher mostra-os no cartão do canal e no painel ao lado do destaque.
      */
     @SuppressLint("RestrictedApi")
     private fun publishWatchNext(item: HomeItem) {
@@ -79,7 +83,7 @@ class HomeScreen(private val context: Context) {
             .setLive(true)
             .setTitle(item.channel.name)
             .setDescription(item.now?.title ?: "")
-            .setLongDescription(item.next?.title ?: "")
+            .setLongDescription(scheduleText(item.upcoming))
             .setStartTimeUtcMillis(item.now?.startMs ?: 0)
             .setEndTimeUtcMillis(item.now?.endMs ?: 0)
             .setPosterArtUri(posterOf(item.channel))
@@ -95,6 +99,13 @@ class HomeScreen(private val context: Context) {
             val id = helper.publishWatchNextProgram(program)
             prefs.edit { putLong(KEY_WATCH_NEXT, id) }
         }
+    }
+
+    private fun scheduleText(upcoming: List<EpgEntry>): String {
+        val first = upcoming.firstOrNull() ?: return ""
+        val clock = SimpleDateFormat("HH:mm", Locale.ROOT)
+        return (listOf(first.title) + upcoming.drop(1).map { "${clock.format(Date(it.startMs))} ${it.title}" })
+            .joinToString("\n") { it.replace('\n', ' ') }
     }
 
     private fun publishRow(items: List<HomeItem>) {

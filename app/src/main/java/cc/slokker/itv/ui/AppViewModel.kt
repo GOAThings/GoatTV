@@ -1789,7 +1789,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (logo != null) ch.copy(logo = logo) else ch,
                 content.playlist.id,
                 guide.getOrNull(current),
-                guide.getOrNull(current + 1)?.takeIf { current >= 0 },
+                if (current >= 0) guide.drop(current + 1).take(HOME_UPCOMING) else emptyList(),
             )
         }
         viewModelScope.launch { if (items.isEmpty() && locksChanged) c.home.clear() else c.home.update(items) }
@@ -2359,6 +2359,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val RECENTS_KEY = "recent_channels"
         /** Canais na linha da GoatTV no ecrã inicial. */
         const val HOME_ITEMS = 10
+        /** Os programas seguintes que vão para o "A seguir" (o GoatLauncher mostra até três, mesmo depois de o atual acabar). */
+        const val HOME_UPCOMING = 4
         const val MAX_RECENTS = 20
         const val MAX_SEARCH = 40
         /** Tempo num canal para contar como visto (anterior e Recentes). */
