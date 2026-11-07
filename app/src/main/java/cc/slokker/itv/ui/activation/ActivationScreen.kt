@@ -70,6 +70,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import retrofit2.HttpException
 import java.io.IOException
+import cc.slokker.itv.ui.theme.tabular
+import androidx.tv.material3.LocalTextStyle
 
 @Stable
 private class ActivationState {
@@ -152,7 +154,7 @@ fun ActivationScreen(
                 error != null -> Text(error, color = ItvColors.Error, fontSize = 13.sp, textAlign = TextAlign.Center)
                 state.code != null -> {
                     val remaining = ((state.expiresAt - now) / 1000).coerceAtLeast(0)
-                    Text(s.activateExpires(remaining / 60, remaining % 60), color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center)
+                    Text(s.activateExpires(remaining / 60, remaining % 60), color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center, style = LocalTextStyle.current.tabular)
                 }
                 else -> Text(s.activateRequesting, color = ItvColors.TextFaint, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
@@ -213,7 +215,7 @@ fun ActivationScreen(
                     state.code != null -> Text(
                         s.activateExpires(remaining / 60, remaining % 60),
                         color = ItvColors.TextFaint,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyLarge.tabular,
                     )
                     else -> Text(s.activateRequesting, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodyLarge)
                 }

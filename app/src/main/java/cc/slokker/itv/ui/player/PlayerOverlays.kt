@@ -89,6 +89,7 @@ import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.theme.ItvColors
+import cc.slokker.itv.ui.theme.tabular
 
 /**
  * Barra "a ver agora" em baixo, sem cartão de vidro: o vídeo escurece em baixo e por cima ficam o logótipo, o programa
@@ -165,7 +166,7 @@ internal fun NowPlayingBar(
 @Composable
 internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow))
+        Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow).tabular)
         Spacer(Modifier.width(8.dp))
         Text(
             if (isFavorite) "${channel.name}  ★" else channel.name,
@@ -179,7 +180,7 @@ internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle
 /** "14:15 — 15:45", uma barra curta ([bar]) e quanto falta. */
 @Composable
 internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier, bar: Boolean = true) {
-    val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow)
+    val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow).tabular
     val left = ((current.endMs - now) / 60_000 + 1).toInt()
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text("${formatTime(current.startMs)} — ${formatTime(current.endMs)}", style = style)

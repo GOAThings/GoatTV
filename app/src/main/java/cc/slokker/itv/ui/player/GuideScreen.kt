@@ -103,6 +103,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.scale
 import java.util.Calendar
+import cc.slokker.itv.ui.theme.tabular
 
 /** Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui). */
 /** A informação do programa escolhido, entre os grupos e a grelha. */
@@ -322,7 +323,7 @@ internal fun TvGuide(
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GroupTabs(tabs, group, onHeader, Modifier.weight(1f))
-                Text(formatTime(now), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, shadow = TextShadow))
+                Text(formatTime(now), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, shadow = TextShadow).tabular)
             }
             Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
                 val shown = hero
@@ -551,7 +552,7 @@ private fun TimeRuler(windowStart: Long, timelineWidth: Dp, now: Long, s: String
                 if (showNow && (step * i + 24.dp - nowX).value.let { kotlin.math.abs(it) } < 60f) continue
                 Text(
                     formatTime(windowStart + i * HALF_HOUR),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelLarge.tabular,
                     color = ItvColors.TextDim,
                     modifier = Modifier.offset(x = step * i + 6.dp).align(Alignment.CenterStart),
                 )
@@ -561,7 +562,7 @@ private fun TimeRuler(windowStart: Long, timelineWidth: Dp, now: Long, s: String
                 val x = timelineWidth * ((now - windowStart).toFloat() / WINDOW_MS)
                 Text(
                     formatTime(now),
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold).tabular,
                     color = Color(0xFF0B0B0B),
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -607,7 +608,7 @@ private fun GuideRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (showNumbers) {
-                Text(channel.num.toString(), Modifier.width(34.dp), color = ItvColors.TextDim, style = MaterialTheme.typography.labelMedium)
+                Text(channel.num.toString(), Modifier.width(34.dp), color = ItvColors.TextDim, style = MaterialTheme.typography.labelMedium.tabular)
             }
             if (showLogos) {
                 ChannelLogo(channel, 28.dp)
@@ -698,7 +699,7 @@ private fun GuideTimeline(
     val measurer = rememberTextMeasurer(cacheSize = TEXT_CACHE)
     val title = MaterialTheme.typography.bodyMedium
     val titleSelected = title.copy(fontWeight = FontWeight.SemiBold)
-    val time = MaterialTheme.typography.labelSmall
+    val time = MaterialTheme.typography.labelSmall.tabular
     val bell = rememberVectorPainter(ItvIcons.Bell)
     val history = rememberVectorPainter(ItvIcons.History)
     val accent = LocalAccent.current.brush

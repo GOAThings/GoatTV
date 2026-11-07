@@ -96,6 +96,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.theme.tabular
 
 /** Painel de vidro encostado à esquerda; canais e grupos trocam no mesmo sítio. */
 @Composable
@@ -378,7 +379,7 @@ private fun ChannelList(
                             if (prefs.showNumbers) {
                                 Text(
                                     ch.num.toString(),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelMedium.tabular,
                                     color = LocalContentColor.current.copy(alpha = 0.75f),
                                     modifier = Modifier.width(32.dp),
                                 )

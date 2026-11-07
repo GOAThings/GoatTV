@@ -51,6 +51,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.theme.GoatPalette
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.ui.theme.tabular
 
 private val NetOk = Color(0xFF4CC38A)
 
@@ -150,8 +151,8 @@ internal fun NetVerdictCard(st: NetState, modifier: Modifier = Modifier) {
                     Box(Modifier.offset(x = maxWidth * 0.75f - 1.dp).width(2.dp).fillMaxHeight().background(Color.White))
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                    Text(s.netBarGetting(mbps(getting)), style = MaterialTheme.typography.labelSmall, color = ItvColors.TextDim, modifier = Modifier.weight(1f))
-                    Text(s.netBarNeeds(mbps(needs)), style = MaterialTheme.typography.labelSmall, color = ItvColors.TextDim)
+                    Text(s.netBarGetting(mbps(getting)), style = MaterialTheme.typography.labelSmall.tabular, color = ItvColors.TextDim, modifier = Modifier.weight(1f))
+                    Text(s.netBarNeeds(mbps(needs)), style = MaterialTheme.typography.labelSmall.tabular, color = ItvColors.TextDim)
                     Spacer(Modifier.fillMaxWidth(0.22f))
                 }
             }
@@ -231,7 +232,7 @@ private fun NetGraphCard(st: NetState, channel: String, modifier: Modifier = Mod
 private fun GraphStat(label: String, value: String, color: Color, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 10.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = ItvColors.TextFaint, maxLines = 1)
-        Text(value, style = MaterialTheme.typography.titleSmall, color = color, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleSmall.tabular, color = color, maxLines = 1)
     }
 }
 

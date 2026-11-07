@@ -59,6 +59,7 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import cc.slokker.itv.ui.theme.tabular
 
 /**
  * Logo da app, como no banner: "TV" grande no gradiente da marca e "GOAT" por cima, mais pequeno,
@@ -204,7 +205,7 @@ fun NowNext(epg: List<EpgEntry>, now: Long, modifier: Modifier = Modifier, compa
                     Spacer(Modifier.width(10.dp))
                     Text(current.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(10.dp))
-                    Text("${formatTime(current.startMs)} – ${formatTime(current.endMs)}", color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall)
+                    Text("${formatTime(current.startMs)} – ${formatTime(current.endMs)}", color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall.tabular)
                 }
                 Spacer(Modifier.height(6.dp))
                 ProgressBar(current.progress(now), Modifier.fillMaxWidth())
@@ -229,9 +230,9 @@ fun NowNext(epg: List<EpgEntry>, now: Long, modifier: Modifier = Modifier, compa
             )
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatTime(current.startMs), color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall)
+                Text(formatTime(current.startMs), color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall.tabular)
                 ProgressBar(current.progress(now), Modifier.weight(1f).padding(horizontal = 8.dp))
-                Text(formatTime(current.endMs), color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall)
+                Text(formatTime(current.endMs), color = ItvColors.TextDim, style = MaterialTheme.typography.labelSmall.tabular)
             }
         }
         if (next != null) {

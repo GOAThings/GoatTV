@@ -149,6 +149,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import cc.slokker.itv.data.Catchup
+import cc.slokker.itv.ui.theme.tabular
+import androidx.tv.material3.LocalTextStyle
 
 private val Card = Color.White.copy(alpha = 0.08f)
 private val CardShape = RoundedCornerShape(18.dp)
@@ -538,7 +540,7 @@ private fun VideoArea(
                 ) {
                     ControlButton(ItvIcons.FullscreenExit, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = onFullscreen)
                     Spacer(Modifier.weight(1f))
-                    Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp))
+                    Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp), style = LocalTextStyle.current.tabular)
                     onPip?.let { ControlButton(ItvIcons.Pip, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = it) }
                 }
             }
@@ -625,7 +627,7 @@ private fun VideoArea(
                     val fraction = scrub ?: (position.toFloat() / duration).coerceIn(0f, 1f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // No catch-up conta onde vai; em direto, as horas já estão por cima.
-                        if (cu != null) Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
+                        if (cu != null) Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
                         PlayerBar(
                             fraction, seekable = cu != null || vm.canCatchup(channel, entry!!),
                             onChange = { scrub = it; touched++ },
@@ -639,7 +641,7 @@ private fun VideoArea(
                             },
                             modifier = Modifier.weight(1f),
                         )
-                        if (cu != null) Text(durationText(duration), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
+                        if (cu != null) Text(durationText(duration), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp), style = LocalTextStyle.current.tabular)
                     }
                 }
                 if (fullscreen) {
@@ -1064,7 +1066,7 @@ private fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean)
                         }.padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(formatTime(e.startMs), color = ItvColors.TextFaint, fontSize = 14.sp, modifier = Modifier.width(60.dp))
+                        Text(formatTime(e.startMs), color = ItvColors.TextFaint, fontSize = 14.sp, modifier = Modifier.width(60.dp), style = LocalTextStyle.current.tabular)
                         Text(e.title, color = if (e.endMs <= now) ItvColors.TextFaint else if (future) ItvColors.TextDim else ItvColors.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         when {
                             catchup -> Icon(ItvIcons.Replay, s.watchCatchup, tint = ItvColors.TextDim, modifier = Modifier.size(18.dp))

@@ -69,6 +69,7 @@ import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import cc.slokker.itv.ui.theme.tabular
 
 /** Pesquisa de canais e programas, encostada à esquerda (como os painéis). */
 @Composable
@@ -236,9 +237,9 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
         }
         Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(formatDuration(shown), style = MaterialTheme.typography.labelLarge, color = if (pendingSeekMs != null) LocalAccent.current.start else ItvColors.Text)
+            Text(formatDuration(shown), style = MaterialTheme.typography.labelLarge.tabular, color = if (pendingSeekMs != null) LocalAccent.current.start else ItvColors.Text)
             ProgressBar((shown.toFloat() / catchup.durationMs.coerceAtLeast(1)).coerceIn(0f, 1f), Modifier.weight(1f).padding(horizontal = 14.dp))
-            Text(formatDuration(catchup.durationMs), style = MaterialTheme.typography.labelLarge, color = ItvColors.TextDim)
+            Text(formatDuration(catchup.durationMs), style = MaterialTheme.typography.labelLarge.tabular, color = ItvColors.TextDim)
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -337,7 +338,7 @@ internal fun SleepWarning(secondsLeft: Int, modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(ItvIcons.Sleep, contentDescription = null, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(14.dp))
-            Text(s.sleepSoon(secondsLeft), style = MaterialTheme.typography.titleLarge)
+            Text(s.sleepSoon(secondsLeft), style = MaterialTheme.typography.titleLarge.tabular)
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {

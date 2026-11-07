@@ -105,6 +105,10 @@ private fun weight(w: Int) = Font(
 
 val ItvFont = FontFamily(weight(400), weight(500), weight(600), weight(700), weight(800))
 
+/** Algarismos todos da mesma largura ("tnum"): para horas, contagens e números de canal, que mudam ou ficam em
+ * coluna. Na Adwaita Sans o "1" é mais estreito e o texto à volta mexia-se a cada atualização. */
+val TextStyle.tabular: TextStyle get() = copy(fontFeatureSettings = "tnum")
+
 private fun TextStyle.apple(size: Int? = null, w: Int? = null, tracking: Float? = null) = copy(
     fontFamily = ItvFont,
     fontSize = size?.sp ?: fontSize,

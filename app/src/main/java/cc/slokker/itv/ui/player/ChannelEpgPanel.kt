@@ -49,6 +49,7 @@ import cc.slokker.itv.ui.glass.SectionLabel
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
+import cc.slokker.itv.ui.theme.tabular
 
 /**
  * EPG de um canal, ao lado da lista de canais (→ na lista): os programas por ordem, com o atual em foco.
@@ -154,7 +155,7 @@ internal fun ChannelEpgPanel(
                     selected = live,
                     leading = {
                         // Da cor do texto da linha (escura na placa branca do foco), um pouco apagada.
-                        Text(formatTime(e.startMs), Modifier.width(56.dp), color = LocalContentColor.current.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge)
+                        Text(formatTime(e.startMs), Modifier.width(56.dp), color = LocalContentColor.current.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge.tabular)
                     },
                     trailing = icon?.let { ic -> { Icon(ic, contentDescription = null, modifier = Modifier.size(16.dp)) } },
                     title = e.title,

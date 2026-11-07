@@ -152,6 +152,7 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlin.math.abs
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.theme.tabular
 
 /** Definições em ecrã próprio (quando não há player, ex.: a lista não carregou). */
 @Composable
@@ -1632,7 +1633,7 @@ private fun TrailingValue(value: String, color: Color) {
     Text(
         value,
         Modifier.widthIn(max = 180.dp).rowText(),
-        style = MaterialTheme.typography.bodySmall,
+        style = MaterialTheme.typography.bodySmall.tabular,
         color = color,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
