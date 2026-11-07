@@ -19,8 +19,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Um canal para o ecrã inicial, com o programa que está a dar (se se souber). */
-class HomeItem(val channel: Channel, val playlistId: String, val nowTitle: String?)
+/** Um canal para o ecrã inicial, com o programa que está a dar e o seguinte (se se souberem). */
+class HomeItem(val channel: Channel, val playlistId: String, val now: EpgEntry?, val next: EpgEntry?)
 
 /**
  * Ecrã inicial da Android TV:
@@ -66,6 +66,10 @@ class HomeScreen(private val context: Context) {
         }
     }
 
+    /**
+     * O "A seguir": a descrição é o programa que está a dar, com a hora de início e de fim; a descrição longa é o
+     * título do programa seguinte (o GoatLauncher mostra-os no cartão do canal; começa quando o atual acaba).
+     */
     @SuppressLint("RestrictedApi")
     private fun publishWatchNext(item: HomeItem) {
         val program = WatchNextProgram.Builder()
@@ -74,7 +78,10 @@ class HomeScreen(private val context: Context) {
             .setLastEngagementTimeUtcMillis(System.currentTimeMillis())
             .setLive(true)
             .setTitle(item.channel.name)
-            .setDescription(item.nowTitle ?: "")
+            .setDescription(item.now?.title ?: "")
+            .setLongDescription(item.next?.title ?: "")
+            .setStartTimeUtcMillis(item.now?.startMs ?: 0)
+            .setEndTimeUtcMillis(item.now?.endMs ?: 0)
             .setPosterArtUri(posterOf(item.channel))
             .setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
             .setIntentUri(linkOf(item))
@@ -100,7 +107,7 @@ class HomeScreen(private val context: Context) {
                 .setLive(true)
                 .setWeight(items.size - i) // o mais recente primeiro
                 .setTitle(item.channel.name)
-                .setDescription(item.nowTitle ?: "")
+                .setDescription(item.now?.title ?: "")
                 .setPosterArtUri(posterOf(item.channel))
                 .setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
                 .setIntentUri(linkOf(item))

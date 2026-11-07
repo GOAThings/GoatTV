@@ -1763,6 +1763,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O logótipo que o ecrã mostra para o canal [key], se o telemóvel o puder ver. */
     fun phoneLogoUrl(key: String): String? = phoneChannel(key)?.let { PhoneChannelList.logoUrl(it, channelLogos.value) }
 
+    /** A app foi para trás (ex.: voltou-se ao launcher): o "A seguir" fica com o programa que está a dar agora. */
+    fun refreshHome() = publishHome()
+
     /** O telemóvel escolheu [channel]: como escolhê-lo na lista de canais (o último canal grava-se na mesma). */
     fun playFromPhone(channel: Channel) = play(channel, groupFor(channel))
 
@@ -1776,7 +1779,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val now = System.currentTimeMillis()
             // O launcher mostra o mesmo logótipo que a app.
             val logo = channelLogos.value[ch.key]
-            HomeItem(if (logo != null) ch.copy(logo = logo) else ch, content.playlist.id, guideEntries(ch).firstOrNull { it.startMs <= now && it.endMs > now }?.title)
+            val guide = guideEntries(ch)
+            val current = guide.indexOfFirst { it.startMs <= now && it.endMs > now }
+            HomeItem(
+                if (logo != null) ch.copy(logo = logo) else ch,
+                content.playlist.id,
+                guide.getOrNull(current),
+                guide.getOrNull(current + 1)?.takeIf { current >= 0 },
+            )
         }
         viewModelScope.launch { if (items.isEmpty() && locksChanged) c.home.clear() else c.home.update(items) }
     }

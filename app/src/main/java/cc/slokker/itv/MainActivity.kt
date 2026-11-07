@@ -105,6 +105,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         PhoneChannels.resumed = false
+        vm.refreshHome()
     }
 
     override fun onDestroy() {
