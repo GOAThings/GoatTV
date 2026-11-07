@@ -638,4 +638,6 @@
     <string name="update_whats_new">%1$s 新功能</string>
     <string name="update_hold_ok">长按 OK 安装</string>
     <string name="update_hides_in">%1$d 秒后隐藏</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">安装：设置 → 更新</string>
 </resources>

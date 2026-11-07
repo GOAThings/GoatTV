@@ -638,4 +638,6 @@
     <string name="update_whats_new">%1$s의 새로운 기능</string>
     <string name="update_hold_ok">설치하려면 OK를 길게 누르세요</string>
     <string name="update_hides_in">%1$d초 후 사라짐</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">설치하려면: 설정 → 업데이트</string>
 </resources>

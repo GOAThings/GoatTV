@@ -48,6 +48,12 @@ final class PlayerEngine: NSObject {
     /// Tentativas falhadas de abrir o canal (no máximo [maxStartRetries], como no Android).
     private(set) var retries = 0
     static let maxStartRetries = 3
+    /// Caiu depois de estar a dar: a tentativa de voltar a ligar (1, 2…; 0 = não caiu). Volta a 0 quando dá ou se muda
+    /// de canal (a cápsula no canto mostra-a, como no Android).
+    private(set) var reconnects = 0
+    /// Quando é a próxima tentativa de voltar a ligar (nil = a tentar agora) e quanto se espera por ela.
+    private(set) var nextTryAt: Date?
+    private(set) var retryDelay: TimeInterval = 0
     /// O código HTTP da última falha, quando se sabe (leitor da Apple).
     private(set) var lastHTTPStatus: Int?
 
@@ -184,6 +190,8 @@ final class PlayerEngine: NSObject {
         paused = false
         wasPlaying = false
         retries = 0
+        reconnects = 0
+        nextTryAt = nil
         surroundChosen = false
         lastHTTPStatus = nil
         guard freezeFrame, wasShowing else {
@@ -228,6 +236,7 @@ final class PlayerEngine: NSObject {
     /// Volta a tentar já (OK no erro).
     func retryNow() {
         retry?.cancel()
+        nextTryAt = nil
         index = 0
         start()
     }
@@ -256,6 +265,8 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
+        reconnects = 0
+        nextTryAt = nil
         hideFreeze()
         stopBackends()
         hasPicture = false
@@ -343,7 +354,8 @@ final class PlayerEngine: NSObject {
                 return
             }
             state = .opening
-            scheduleRetry()
+            reconnects += 1
+            scheduleRetry(reconnecting: true)
             return
         }
         state = .failed
@@ -354,10 +366,18 @@ final class PlayerEngine: NSObject {
         if again { scheduleRetry() }
     }
 
-    private func scheduleRetry() {
+    /// A próxima tentativa daqui a [reconnectSeconds]. A voltar a ligar ([reconnecting]), a cápsula conta os segundos.
+    private func scheduleRetry(reconnecting: Bool = false) {
+        retry?.cancel()
+        let delay = Double(max(1, reconnectSeconds))
+        if reconnecting {
+            retryDelay = delay
+            nextTryAt = Date().addingTimeInterval(delay)
+        }
         retry = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Double(max(1, self?.reconnectSeconds ?? 5))))
+            try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self else { return }
+            self.nextTryAt = nil
             self.index = 0
             self.start()
         }
@@ -377,6 +397,8 @@ final class PlayerEngine: NSObject {
         state = .playing
         wasPlaying = true
         retries = 0
+        reconnects = 0
+        nextTryAt = nil
         lastHTTPStatus = nil
         // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o vídeo aparecer.
         if backend == .apple {

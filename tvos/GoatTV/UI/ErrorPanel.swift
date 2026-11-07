@@ -227,29 +227,3 @@ struct StatusLine: View {
         .onAppear { pulse = true }
     }
 }
-
-/// Cápsula "A sintonizar…" / "A voltar a ligar…" no canto, com um ponto a pulsar.
-struct TuningPill: View {
-    @Environment(AppModel.self) private var model
-    let text: String
-    @State private var pulse = false
-
-    init(text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Circle()
-                .fill(Theme.accent(model.prefs.accent))
-                .frame(width: 14, height: 14)
-                .opacity(pulse ? 1 : 0.3)
-                .animation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulse)
-            Text(text).font(.system(size: 25, weight: .semibold))
-        }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 16)
-        .glass(radius: 30)
-        .onAppear { pulse = true }
-    }
-}

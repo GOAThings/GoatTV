@@ -16,6 +16,25 @@ public enum AppUpdate {
         return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
     }
 
+    /// As notas da release (o texto em Markdown do GitHub), ou "" se não as tiver.
+    public static func notes(fromLatest json: JSON) -> String {
+        json["body"]?.text ?? ""
+    }
+
+    /// As novidades das notas da versão (como o releaseHighlights do Android): os primeiros pontos de lista, sem
+    /// negrito. Notas sem lista dão as primeiras linhas que não são títulos ("Android TV:").
+    public static func highlights(_ notes: String, max: Int = 3) -> [String] {
+        let lines = notes.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let bullets = lines.filter { $0.hasPrefix("- ") || $0.hasPrefix("* ") }.map { String($0.dropFirst(2)) }
+        let picked = bullets.isEmpty ? lines.filter { !$0.hasSuffix(":") && !$0.hasPrefix("#") } : bullets
+        return Array(picked
+            .map { $0.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(max))
+    }
+
     public static func isNewer(_ remote: String, than current: String) -> Bool {
         func parts(_ v: String) -> [Int] {
             (v.hasPrefix("v") ? String(v.dropFirst()) : v).split(whereSeparator: { $0 == "." || $0 == "-" }).map { Int($0) ?? 0 }

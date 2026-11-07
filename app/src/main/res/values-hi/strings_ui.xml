@@ -640,4 +640,6 @@
     <string name="update_whats_new">%1$s में नया क्या है</string>
     <string name="update_hold_ok">इंस्टॉल करने के लिए OK दबाए रखें</string>
     <string name="update_hides_in">%1$d से. में छिप जाएगा</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">इंस्टॉल करने के लिए: सेटिंग → अपडेट</string>
 </resources>

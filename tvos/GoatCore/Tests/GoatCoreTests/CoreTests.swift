@@ -456,6 +456,15 @@ enum CoreTests {
         try expect(AppUpdate.version(fromLatest: withIpa), "0.8.7")
         let apkOnly = try JSON.parse(Data(#"{"tag_name":"v0.8.7","assets":[{"name":"goattv.apk"}]}"#.utf8))
         try expect(AppUpdate.version(fromLatest: apkOnly), nil)
+        try expect(AppUpdate.notes(fromLatest: apkOnly), "")
+        // As novidades do cartão de versão nova (as mesmas do ReleaseHighlightsTest do Android).
+        let notes = "Android TV:\n- New **Connection** page.\n- Fixed-width digits.\n\nHome screen:\n- Schedule.\n- Fourth."
+        try expect(AppUpdate.highlights(notes), ["New Connection page.", "Fixed-width digits.", "Schedule."])
+        try expect(AppUpdate.highlights("Version 0.9.21"), ["Version 0.9.21"])
+        try expect(AppUpdate.highlights("  \n"), [])
+        try expect(AppUpdate.highlights("Apple TV:\r\n* One\r\n* Two"), ["One", "Two"])
+        let withNotes = try JSON.parse(Data(#"{"tag_name":"v0.9.21","body":"- A\n- B"}"#.utf8))
+        try expect(AppUpdate.highlights(AppUpdate.notes(fromLatest: withNotes)), ["A", "B"])
     }
 
     /// O hash do índice de canais é o mesmo do Android (ChannelIndexTest) para a mesma lista.

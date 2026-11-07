@@ -648,4 +648,6 @@
     <string name="update_whats_new">الجديد في %1$s</string>
     <string name="update_hold_ok">اضغط مطولًا على OK للتثبيت</string>
     <string name="update_hides_in">يختفي خلال %1$d ث</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">للتثبيت: الإعدادات ← التحديث</string>
 </resources>

@@ -58,6 +58,8 @@ struct PlayerScreen: View {
     // Lembretes e temporizador
     @State private var reminder: AppModel.Reminder?
     @State private var sleepWarning: Int?
+    // Versão nova (ver UpdateCard)
+    @State private var updateHidesIn = updateCardSeconds
     // Segundo canal
     @State private var split = false
     @State private var swapped = false
@@ -284,6 +286,22 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
+            // Versão nova: um cartão no canto, só com o vídeo livre (como no Android); sem foco, não mexe nas teclas.
+            if showUpdate, let notice = model.updateNotice {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        UpdateCard(notice: notice, hidesIn: updateHidesIn)
+                    }
+                }
+                .padding(.trailing, 64)
+                .padding(.bottom, 56)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .transition(.offset(x: 170).combined(with: .opacity))
+            }
+
             if let sleepWarning {
                 SleepWarning(seconds: sleepWarning)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -312,6 +330,7 @@ struct PlayerScreen: View {
         .onChange(of: focusSecond) { _, _ in applyAudio() }
         .onChange(of: model.second?.channel.key) { _, _ in applyAudio() }
         .animation(.easeOut(duration: 0.18), value: reminder)
+        .animation(.easeOut(duration: 0.25), value: showUpdate)
         .defaultFocus($focus, .surface)
         .onAppear {
             focus = .surface
@@ -387,6 +406,17 @@ struct PlayerScreen: View {
                 sleepWarning = left <= 60 ? Int(left.rounded(.up)) : nil
                 try? await Task.sleep(for: .seconds(left <= 61 ? 1 : min(left - 60, 30)))
             }
+        }
+        // O cartão de versão nova desaparece sozinho; se algo o tapar, volta a contar quando reaparecer.
+        .task(id: showUpdate ? model.updateNotice?.version : nil) {
+            guard showUpdate else { return }
+            updateHidesIn = updateCardSeconds
+            while updateHidesIn > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                updateHidesIn -= 1
+            }
+            model.dismissUpdateNotice()
         }
         .task(id: exitToken) {
             guard exitArmed else { return }
@@ -564,18 +594,29 @@ struct PlayerScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
         } else if model.player.state == .opening, !tvGuide {
+            // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã. Com o segundo canal
+            // no canto direito, a cápsula passa para a esquerda.
+            let player = model.player
             VStack {
                 HStack {
-                    Spacer()
-                    TuningPill(text: model.player.wasPlaying ? s.r("reconnecting") : s.r("tuning"))
+                    if model.second == nil { Spacer() }
+                    TuningPill(channel: model.current?.name ?? "", reconnecting: player.wasPlaying, attempt: player.reconnects,
+                               nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay)
+                    if model.second != nil { Spacer() }
                 }
                 Spacer()
             }
             .padding(.top, 48)
-            .padding(.trailing, 64)
+            .padding(.horizontal, 64)
             .ignoresSafeArea()
             .allowsHitTesting(false)
         }
+    }
+
+    /// O cartão de versão nova só aparece com nada aberto por cima do vídeo.
+    private var showUpdate: Bool {
+        model.updateNotice != nil && panel == .none && !hud && !tvGuide && reminder == nil && sleepWarning == nil &&
+            model.catchup == nil
     }
 
     // MARK: Barra com botões (OK)

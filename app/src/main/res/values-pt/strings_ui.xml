@@ -656,4 +656,6 @@
     <string name="update_whats_new">Novidades da %1$s</string>
     <string name="update_hold_ok">Mantém OK para instalar</string>
     <string name="update_hides_in">Desaparece em %1$d s</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">Para instalar: Definições → Atualizar</string>
 </resources>

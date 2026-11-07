@@ -640,4 +640,6 @@
     <string name="update_whats_new">%1$s sürümündeki yenilikler</string>
     <string name="update_hold_ok">Yüklemek için OK\'a basılı tutun</string>
     <string name="update_hides_in">%1$d sn içinde kapanır</string>
+    <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
+    <string name="update_install_settings">Yüklemek için: Ayarlar → Güncelle</string>
 </resources>
