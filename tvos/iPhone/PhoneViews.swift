@@ -470,7 +470,11 @@ private struct VideoPane: View {
             } else if !controls, model.player.frozen || (model.player.state == .playing && !model.player.hasPicture) {
                 ProgressView().tint(.white)
             } else if !controls, model.player.state != .playing, let current = model.current {
-                Text(current.name).font(.subheadline).foregroundStyle(Theme.textDim)
+                // A abrir: que está a carregar, e o quê.
+                VStack(spacing: 10) {
+                    ProgressView().tint(.white)
+                    Text(model.strings.loading(current.name)).font(.subheadline).foregroundStyle(Theme.textDim)
+                }
             }
             if controls { overlay }
         }

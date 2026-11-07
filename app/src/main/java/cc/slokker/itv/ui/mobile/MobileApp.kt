@@ -492,7 +492,11 @@ private fun VideoArea(vm: AppViewModel, channel: Channel, playback: MobilePlayba
             playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
             controls && !pip -> {}
             playback.freeze != null -> Spinner(Modifier.align(Alignment.Center))
-            !playback.ready -> Text(channel.name, color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
+            // A abrir: que está a carregar, e o quê.
+            !playback.ready -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spinner()
+                Text(s.loadingPlaylist(channel.name), color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+            }
         }
         if (controls && !pip) {
             Row(

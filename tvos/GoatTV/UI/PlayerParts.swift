@@ -94,15 +94,40 @@ struct VideoSurface: UIViewRepresentable {
     let view: UIView
 
     func makeUIView(context: Context) -> UIView {
-        let container = UIView()
+        let container = VideoContainer()
         container.backgroundColor = .black
-        view.frame = container.bounds
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        container.addSubview(view)
+        container.video = view
+        container.attach()
         return container
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {
+        (uiView as? VideoContainer)?.attach()
+    }
+}
+
+/// Segura a vista do vídeo, que é sempre a mesma (o ecrã grande e o mini-leitor do telemóvel passam-na de um para o
+/// outro). Só lhe dá tamanho quando já tem: a 0×0, enquanto mudava de sítio, o VLC deixava de desenhar.
+final class VideoContainer: UIView {
+    weak var video: UIView?
+
+    func attach() {
+        guard let video, video.superview !== self else { return }
+        video.autoresizingMask = []
+        addSubview(video)
+        setNeedsLayout()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil { attach() }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let video, video.superview === self, bounds.width > 0, bounds.height > 0 else { return }
+        video.frame = bounds
+    }
 }
 
 /// Botão sem aspeto nenhum (o ecrã do vídeo).
