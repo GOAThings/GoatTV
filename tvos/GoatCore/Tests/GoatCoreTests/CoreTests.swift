@@ -53,6 +53,27 @@ enum CoreTests {
         ("phoneListCap", phoneListCap),
         ("phoneKeys", phoneKeys),
         ("phoneNow", phoneNow),
+        ("tsScannerFindsPcrsAcrossChunksAndResyncs", tsScannerFindsPcrsAcrossChunksAndResyncs),
+        ("tsScannerRejectsNonTs", tsScannerRejectsNonTs),
+        ("tsScannerUndecidedWithFewBytes", tsScannerUndecidedWithFewBytes),
+        ("ringReadsBackWhatWasWritten", ringReadsBackWhatWasWritten),
+        ("ringWaitsAtTheLiveEdgeAndWakesUpWithNewData", ringWaitsAtTheLiveEdgeAndWakesUpWithNewData),
+        ("ringWrapsAroundAndReportsOverrun", ringWrapsAroundAndReportsOverrun),
+        ("ringIndexFollowsThePcrClock", ringIndexFollowsThePcrClock),
+        ("ringPcrJumpUsesWallClock", ringPcrJumpUsesWallClock),
+        ("ringSegmentsDoNotMixAndReportBoundary", ringSegmentsDoNotMixAndReportBoundary),
+        ("ringFinishedStreamEndsOrThrowsAfterTheData", ringFinishedStreamEndsOrThrowsAfterTheData),
+        ("ringFailureBeforeAnyDataIsThrownRightAway", ringFailureBeforeAnyDataIsThrownRightAway),
+        ("ringKeepsAtMostMaxAge", ringKeepsAtMostMaxAge),
+        ("ringDropsThePreviousProgramme", ringDropsThePreviousProgramme),
+        ("ringShorterMaxAgeTrimsRightAway", ringShorterMaxAgeTrimsRightAway),
+        ("ringShrinksToTheChannelBitrateAfterAMinute", ringShrinksToTheChannelBitrateAfterAMinute),
+        ("ringCloseWakesReadersAndDeletesTheFile", ringCloseWakesReadersAndDeletesTheFile),
+        ("ringServerServesFromAnOffsetAndWaitsAtTheLiveEdge", ringServerServesFromAnOffsetAndWaitsAtTheLiveEdge),
+        ("ringServerEndsAtTheSegmentBoundary", ringServerEndsAtTheSegmentBoundary),
+        ("ringServerRefusesOtherPaths", ringServerRefusesOtherPaths),
+        ("ringServerAnswers502WhenTheStreamNeverCame", ringServerAnswers502WhenTheStreamNeverCame),
+        ("ringServerStopCutsAWaitingResponse", ringServerStopCutsAWaitingResponse),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.
@@ -380,6 +401,9 @@ enum CoreTests {
         try expect(p.channelOrder["p:g"], ["b", "a"])
         try expect(p.epgRefreshHours, 12)
         try expect(p.pinHash?.count, 64)
+        // Pausar o direto: ligado por defeito, como no Android.
+        try expect(p.timeshift, true)
+        try expect(Prefs(settings: .object(["timeshift": false])).timeshift, false)
     }
 
     static func library() throws {

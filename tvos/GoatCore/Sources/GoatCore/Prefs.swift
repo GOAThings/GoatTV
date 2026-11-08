@@ -34,6 +34,8 @@ public struct Prefs: Equatable, Sendable {
     public var audioPassthrough = true
     /// Manter a imagem ao mudar de canal.
     public var freezeFrame = true
+    /// Pausar o direto: o programa a ver guardado na cache, para pausar e recuar (ver Timeshift).
+    public var timeshift = true
     /// Faixa surround por defeito.
     public var surroundDefault = false
     /// Escala da interface, em % (80–120).
@@ -149,6 +151,7 @@ public struct Prefs: Equatable, Sendable {
         buffer = str("buffer", d.buffer, [Buffer.live, Buffer.small, Buffer.normal, Buffer.large])
         audioPassthrough = bool("audio_passthrough", d.audioPassthrough)
         freezeFrame = bool("freeze_frame", d.freezeFrame)
+        timeshift = bool("timeshift", d.timeshift)
         surroundDefault = bool("surround_default", d.surroundDefault)
         uiScale = clamp(int("ui_scale", d.uiScale), 80, 120)
         engine = str("engine", d.engine, ["exo", "vlc"])
