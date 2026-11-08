@@ -1843,7 +1843,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = _content.value ?: return false
         if (content.playlist.type != PlaylistType.XTREAM || channel.archiveDays <= 0) return false
         val now = System.currentTimeMillis()
-        return entry.startMs < now - CATCHUP_MIN_AGE_MS && entry.startMs > now - channel.archiveDays * 86_400_000L
+        return entry.startMs < now - Catchup.MIN_AGE_MS && entry.startMs > now - channel.archiveDays * 86_400_000L
     }
 
     /** Vê [entry] em catch-up, desde o início (ou desde [positionMs]). */
@@ -1856,7 +1856,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Avança/recua no catch-up para [positionMs]; passar do direto volta ao direto. */
     fun seekCatchup(positionMs: Long) {
         val current = _catchup.value ?: return
-        val liveEdge = System.currentTimeMillis() - current.startMs - CATCHUP_MIN_AGE_MS
+        val liveEdge = System.currentTimeMillis() - current.startMs - Catchup.MIN_AGE_MS
         _catchup.value = when {
             positionMs >= liveEdge -> null
             positionMs >= current.durationMs -> null
@@ -2409,8 +2409,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val MAX_SEARCH = 40
         /** Tempo num canal para contar como visto (anterior e Recentes). */
         const val WATCHED_MS = 5_000L
-        /** O servidor precisa de uns minutos para ter um programa em arquivo. */
-        const val CATCHUP_MIN_AGE_MS = 2 * 60_000L
         const val REMINDER_AHEAD_MS = 60_000L
         const val REMINDER_GRACE_MS = 10 * 60_000L
         /** Um país pedido pela primeira vez tem programas no servidor em ≤ 1 min. */

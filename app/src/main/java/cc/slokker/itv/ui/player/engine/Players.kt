@@ -16,6 +16,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -38,6 +39,7 @@ import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.BuildConfig
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
@@ -246,13 +248,30 @@ internal fun Tracks.cannotDecode(): Boolean {
 }
 
 /** Erros de descodificação: o canal abre, mas este player não sabe descodificar o que lá vem. */
-internal val DECODER_ERRORS = setOf(
+private val DECODER_ERRORS = setOf(
     PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
     PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
     PlaybackException.ERROR_CODE_DECODING_FAILED,
     PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
     PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
 )
+
+/** Erro de descodificação (o mesmo conjunto na TV, no telemóvel e no segundo canal). */
+internal fun isDecoderError(code: Int): Boolean = code in DECODER_ERRORS
+
+/** A proporção da imagem (com os píxeis não quadrados), ou null enquanto não se sabe o tamanho. */
+internal fun VideoSize.aspectOrNull(): Float? = if (width > 0 && height > 0) width * pixelWidthHeightRatio / height else null
+
+/** Como a imagem enche o ecrã ([AspectRatioFrameLayout]), conforme a definição Proporção ([Prefs.aspect]). */
+internal fun resizeModeFor(aspect: String): Int = when (aspect) {
+    Prefs.Aspect.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    Prefs.Aspect.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+}
+
+/** Tamanho da última imagem guardada ao mudar de canal (fica no ecrã até o canal novo mostrar a sua). */
+internal const val FREEZE_WIDTH = 1280
+internal const val FREEZE_HEIGHT = 720
 
 /** O formato do vídeo a tocar (só o ExoPlayer o dá; com o VLC não há AFR nem a cadência do vidro). */
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat

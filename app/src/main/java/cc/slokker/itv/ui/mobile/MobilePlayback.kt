@@ -21,7 +21,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistContent
@@ -40,7 +39,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.player.engine.FREEZE_HEIGHT
+import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
+import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.buildPlayer
+import cc.slokker.itv.ui.player.engine.isDecoderError
+import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.engine.cannotDecode
 import cc.slokker.itv.ui.player.engine.loadStream
 
@@ -147,19 +151,13 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     }
 
     LaunchedEffect(playback.view, prefs.aspect) {
-        playback.view?.setResizeMode(
-            when (prefs.aspect) {
-                Prefs.Aspect.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                Prefs.Aspect.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-            },
-        )
+        playback.view?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
     LaunchedEffect(player, playback.view) {
         val view = playback.view ?: return@LaunchedEffect
         player.setVideoSurfaceView(view.surfaceView)
-        player.videoSize.takeIf { it.width > 0 && it.height > 0 }?.let { view.setAspectRatio(it.width * it.pixelWidthHeightRatio / it.height) }
+        player.videoSize.aspectOrNull()?.let { view.setAspectRatio(it) }
     }
 
     DisposableEffect(player) {
@@ -213,7 +211,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {
-                if (size.width > 0 && size.height > 0) playback.view?.setAspectRatio(size.width * size.pixelWidthHeightRatio / size.height)
+                size.aspectOrNull()?.let { playback.view?.setAspectRatio(it) }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -226,7 +224,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
                         player.seekToDefaultPosition()
                         player.prepare()
                     }
-                    player !is VlcPlayer && error.errorCode in 4000..4999 -> vlcFor = latestChannel.key
+                    player !is VlcPlayer && isDecoderError(error.errorCode) -> vlcFor = latestChannel.key
                     !playback.ready && attempt[0] + 1 < candidates[0].size -> start(attempt[0] + 1)
                     else -> {
                         playback.failed = !playback.ready
@@ -279,6 +277,3 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     }
     return playback
 }
-
-private const val FREEZE_WIDTH = 1280
-private const val FREEZE_HEIGHT = 720

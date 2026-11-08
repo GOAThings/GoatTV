@@ -125,6 +125,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VlcPlayer
 import cc.slokker.itv.ui.player.behindLabel
 import cc.slokker.itv.ui.player.rememberStreamState
@@ -457,13 +458,13 @@ private fun VideoArea(
     }
     // No VLC, o tempo deixa de bater certo depois de saltar dentro do stream: reabre-se nessa posição.
     fun seeksInStream(cu: Catchup, target: Long) =
-        target >= playback.archiveStart - cu.startMs && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable
+        target >= cu.positionAt(playback.archiveStart, 0) && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable
     // Onde um salto vai mesmo parar: os últimos minutos ainda não estão no arquivo do servidor, e o servidor só abre
     // em minutos certos (a avançar vai para o seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto).
     fun landing(target: Long, position: Long): Long {
         val cu = vm.catchup.value
         if (cu == null) {
-            val wanted = target.coerceAtMost(position - CATCHUP_MIN_AGE_MS - SEEK_MS).coerceAtLeast(0)
+            val wanted = target.coerceAtMost(position - Catchup.MIN_AGE_MS - SEEK_MS).coerceAtLeast(0)
             val start = liveEntry(System.currentTimeMillis())?.startMs ?: return wanted
             return (wanted - (start + wanted) % 60_000).coerceAtLeast(0)
         }
@@ -484,7 +485,7 @@ private fun VideoArea(
             return
         }
         if (seeksInStream(cu, target)) {
-            playback.player.seekTo(target - (playback.archiveStart - cu.startMs))
+            playback.player.seekTo(target - cu.positionAt(playback.archiveStart, 0))
         } else {
             vm.seekCatchup(landing(target, position))
         }
@@ -588,7 +589,7 @@ private fun VideoArea(
                     val live = if (cu == null) liveEntry(System.currentTimeMillis()) else null
                     val canSeek = cu != null || (cu == null && ts.available) || (live != null && vm.canCatchup(channel, live))
                     fun position(): Long {
-                        if (cu != null) return playback.archiveStart - cu.startMs + playback.player.currentPosition
+                        if (cu != null) return cu.positionAt(playback.archiveStart, playback.player.currentPosition)
                         val now = System.currentTimeMillis()
                         return now - (if (ts.available) ts.behindMs else 0L) - liveBase(now)
                     }
@@ -614,11 +615,11 @@ private fun VideoArea(
                 // Por cima dos botões, sem os mexer.
                 if (seekDelta != 0L) {
                     val target = seekBase + seekDelta
-                    val goesLive = catchup?.let { target >= (System.currentTimeMillis() - it.startMs - CATCHUP_MIN_AGE_MS).coerceAtMost(it.durationMs) } == true
+                    val goesLive = catchup?.let { target >= (System.currentTimeMillis() - it.startMs - Catchup.MIN_AGE_MS).coerceAtMost(it.durationMs) } == true
                     val behind = tsBehind(target)
                     Text(
                         when {
-                            behind != null -> if (behind <= TS_LIVE_SNAP_MS) s.playerGoLive else behindLabel(behind)
+                            behind != null -> if (behind <= Timeshift.LIVE_SNAP_MS) s.playerGoLive else behindLabel(behind)
                             goesLive -> s.playerGoLive
                             else -> "→ ${durationText(landing(target, seekBase))}"
                         },
@@ -672,7 +673,7 @@ private fun VideoArea(
                 val duration = cu?.durationMs ?: entry?.let { it.endMs - it.startMs }
                 if (duration != null && duration > 0) {
                     val position = when {
-                        cu != null && playback.ready -> playback.archiveStart - cu.startMs + playback.player.currentPosition
+                        cu != null && playback.ready -> cu.positionAt(playback.archiveStart, playback.player.currentPosition)
                         cu != null -> cu.positionMs
                         // Na pausa do direto, o ponto fica onde está o que se vê.
                         else -> now - entry!!.startMs - (if (ts.available) ts.behindMs else 0L)
@@ -1620,10 +1621,7 @@ private val MINI_SPACE = 70.dp
 internal val LocalBarSpace = compositionLocalOf { BAR_SPACE }
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
-/** Pausa do direto: a menos disto do direto, um salto volta ao direto (como no Timeshift). */
-private const val TS_LIVE_SNAP_MS = 3_000L
 private const val SEEK_DEBOUNCE_MS = 700L
-private const val CATCHUP_MIN_AGE_MS = 2 * 60_000L
 private const val ZAP_DRAG_PX = 120f
 
 /** Erro ao carregar uma lista, com botões de toque. */

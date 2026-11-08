@@ -497,42 +497,42 @@ internal class Timeshift(context: Context) {
         }
     }
 
-    private companion object {
-        const val TAG = "Timeshift"
+    internal companion object {
+        private const val TAG = "Timeshift"
 
         /**
          * Com guia, o programa todo até 4 h; sem guia, 30 min. Nunca mais de 4 GB nem de metade do espaço livre
          * (o anel acerta o tamanho pelo débito, ver TimeshiftRing): um canal pesado guarda menos tempo.
          */
-        const val MAX_AGE_MS = 4 * 60 * 60_000L
-        const val NO_EPG_AGE_MS = 30 * 60_000L
-        const val MAX_BYTES = 4_096L * 1024 * 1024
-        const val PROGRAMME_MARGIN_MS = 60_000L
+        private const val MAX_AGE_MS = 4 * 60 * 60_000L
+        private const val NO_EPG_AGE_MS = 30 * 60_000L
+        private const val MAX_BYTES = 4_096L * 1024 * 1024
+        private const val PROGRAMME_MARGIN_MS = 60_000L
 
         /** O que fica sempre livre no disco, para o sistema e as outras apps. */
-        const val RESERVE_BYTES = 512L * 1024 * 1024
-        const val BUFFER_BYTES = 64 * 1024
+        private const val RESERVE_BYTES = 512L * 1024 * 1024
+        private const val BUFFER_BYTES = 64 * 1024
 
         /** Para voltar ao direto, começa-se este tanto antes do fim. */
-        const val LIVE_START_MS = 5_000L
+        private const val LIVE_START_MS = 5_000L
 
-        /** Pedir para ficar a menos disto do direto é voltar ao direto. */
+        /** Pedir para ficar a menos disto do direto é voltar ao direto (também no telemóvel, ao saltar). */
         const val LIVE_SNAP_MS = 3_000L
 
         /** O ponto da pausa saiu do anel: continua-se este tanto depois do mais antigo (para não voltar a sair já). */
-        const val OVERRUN_MARGIN_MS = 15_000L
+        private const val OVERRUN_MARGIN_MS = 15_000L
 
         /** Atrás do direto, chegar a menos disto do atraso normal é estar outra vez no direto. */
-        const val LIVE_SLACK_MS = 3_000L
+        private const val LIVE_SLACK_MS = 3_000L
 
-        const val HLS_MIN_WINDOW_MS = 20_000L
-        const val HLS_LIVE_SLACK_MS = 6_000L
-        const val WAIT_MS = 250L
-        const val KIND_POLL_MS = 20L
-        const val PREVIOUS_WAIT_MS = 3_000L
-        const val CLOSE_GRACE_MS = 800L
+        private const val HLS_MIN_WINDOW_MS = 20_000L
+        private const val HLS_LIVE_SLACK_MS = 6_000L
+        private const val WAIT_MS = 250L
+        private const val KIND_POLL_MS = 20L
+        private const val PREVIOUS_WAIT_MS = 3_000L
+        private const val CLOSE_GRACE_MS = 800L
 
         /** Como o ExoPlayer (DefaultLoadErrorHandlingPolicy): mais 3 tentativas antes de dar erro. */
-        const val OPEN_RETRIES = 3
+        private const val OPEN_RETRIES = 3
     }
 }

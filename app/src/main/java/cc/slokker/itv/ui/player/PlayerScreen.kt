@@ -83,7 +83,6 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import android.util.Log
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistType
@@ -108,7 +107,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import cc.slokker.itv.ui.player.engine.DECODER_ERRORS
+import cc.slokker.itv.ui.player.engine.FREEZE_HEIGHT
+import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
+import cc.slokker.itv.ui.player.engine.aspectOrNull
+import cc.slokker.itv.ui.player.engine.isDecoderError
+import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
 import cc.slokker.itv.ui.player.engine.buildPlayer
 import cc.slokker.itv.ui.player.engine.cannotDecode
@@ -301,7 +304,7 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     /** Posição atual no programa em catch-up (ms desde o início dele). */
-    fun catchupNow(): Long = catchupBase - (latestCatchup?.startMs ?: 0L) + player.currentPosition
+    fun catchupNow(): Long = latestCatchup?.positionAt(catchupBase, player.currentPosition) ?: 0L
 
     fun openChannels() {
         panelGroup = selectedGroup
@@ -476,12 +479,12 @@ fun PlayerScreen(vm: AppViewModel) {
         p2?.clearVideoSurface()
         mainView?.let { v ->
             player.setVideoSurfaceView(v.surfaceView)
-            player.videoSize.takeIf { it.width > 0 && it.height > 0 }?.let { v.setAspectRatio(it.width * it.pixelWidthHeightRatio / it.height) }
+            player.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
         }
         if (p2 != null) {
             secondView?.let { v ->
                 p2.setVideoSurfaceView(v.surfaceView)
-                p2.videoSize.takeIf { it.width > 0 && it.height > 0 }?.let { v.setAspectRatio(it.width * it.pixelWidthHeightRatio / it.height) }
+                p2.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
             }
         }
     }
@@ -502,13 +505,7 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     LaunchedEffect(prefs.aspect, videoView) {
-        videoView?.setResizeMode(
-            when (prefs.aspect) {
-                Prefs.Aspect.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                Prefs.Aspect.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-            },
-        )
+        videoView?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
     DisposableEffect(player) {
@@ -547,9 +544,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (videoSize.width > 0 && videoSize.height > 0) {
-                    latestMainView?.setAspectRatio(videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height)
-                }
+                videoSize.aspectOrNull()?.let { latestMainView?.setAspectRatio(it) }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -582,7 +577,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         player.prepare()
                     }
                     // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
-                    player !is VlcPlayer && error.errorCode in DECODER_ERRORS -> playWithVlc()
+                    player !is VlcPlayer && isDecoderError(error.errorCode) -> playWithVlc()
                     // Ainda não começou: tenta o outro formato (ts ⇄ m3u8) uma vez.
                     !session.ready && session.attempt + 1 < session.candidates.size -> start(session.attempt + 1)
                     // Catch-up caiu a meio: pede de novo a partir de onde ia.
@@ -1547,7 +1542,6 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 }
 
-private const val FREEZE_WIDTH = 1280
 private const val HUD_TIMEOUT_MS = 8_000L
 /** O aviso de paragens sai sozinho ao fim deste tempo. */
 private const val NET_HINT_MS = 30_000L
@@ -1579,7 +1573,6 @@ private fun digitOf(code: Int): Char? = when (code) {
     else -> null
 }
 private const val MAX_START_RETRIES = 3
-private const val FREEZE_HEIGHT = 720
 private const val BACKDROP_WIDTH = 128
 private const val BACKDROP_HEIGHT = 72
 private const val DEFAULT_BACKDROP_FPS = 30f

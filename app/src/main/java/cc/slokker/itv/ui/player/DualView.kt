@@ -65,6 +65,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.buildPlayer
 import cc.slokker.itv.ui.player.engine.loadStream
 
@@ -137,9 +138,7 @@ internal fun rememberSecondPlayback(
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (videoSize.width > 0 && videoSize.height > 0) {
-                    latestOnVideoSize(videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height)
-                }
+                videoSize.aspectOrNull()?.let { latestOnVideoSize(it) }
             }
 
             override fun onPlayerError(error: PlaybackException) {

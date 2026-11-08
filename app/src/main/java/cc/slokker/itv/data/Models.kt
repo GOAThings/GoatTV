@@ -231,6 +231,17 @@ data class Catchup(
     val positionMs: Long = 0L,
 ) {
     val durationMs: Long get() = endMs - startMs
+
+    /**
+     * Onde vai o vídeo, em ms desde [startMs]: o servidor abriu-o em [archiveStartMs] (ao minuto, ver
+     * catchupCandidates) e o player já vai em [playerMs] desde aí.
+     */
+    fun positionAt(archiveStartMs: Long, playerMs: Long): Long = archiveStartMs - startMs + playerMs
+
+    companion object {
+        /** O servidor precisa de uns minutos para ter um programa em arquivo. */
+        const val MIN_AGE_MS = 2 * 60_000L
+    }
 }
 
 object StreamFormat {
