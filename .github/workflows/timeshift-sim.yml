@@ -2,9 +2,13 @@ name: Apple TV timeshift
 
 # Pausar o direto no simulador do Apple TV: um canal .ts ao vivo (gerado com o ffmpeg e dado ao ritmo real por
 # tvos/UITests/Live/live-ts.py), pausa, recua, continua e volta ao direto (GoatTVUITests.testTimeshift). Confirma
-# também que o "fornecedor" nunca vê mais do que uma ligação. Só à mão.
+# também que o "fornecedor" nunca vê mais do que uma ligação. À mão, ou nos ramos timeshift-* (um workflow novo só se
+# pode lançar à mão depois de estar no main).
 on:
   workflow_dispatch:
+  push:
+    branches: ["timeshift-*"]
+    paths: ["tvos/**", ".github/workflows/timeshift-sim.yml"]
 
 jobs:
   simulator:
