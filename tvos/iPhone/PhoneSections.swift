@@ -36,16 +36,23 @@ struct NowStrip: View {
         let s = model.strings
         let pair = model.nowNext(for: channel)
         let favorite = model.isFavorite(channel)
-        let live = model.catchup == nil
+        // Atrás do direto (catch-up ou a pausa do direto): o botão volta a ele.
+        let ts = model.player.timeshift
+        let live = model.catchup == nil && !ts.shifted
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 // Numa fila que desliza: direto (ou voltar a ele), guia, favorito, áudio, legendas e temporizador.
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        Button { model.exitCatchup() } label: {
+                        Button {
+                            if model.catchup != nil { model.exitCatchup() } else { model.player.timeshiftGoLive() }
+                        } label: {
                             HStack(spacing: 6) {
                                 Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
                                 Text(live ? s.r("player_live") : s.r("player_go_live")).font(.footnote.weight(.semibold))
+                                if !live, model.catchup == nil {
+                                    Text(behindLabel(ts.behindMs)).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.textDim)
+                                }
                             }
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(live ? Color.clear : cardFill, in: Capsule())

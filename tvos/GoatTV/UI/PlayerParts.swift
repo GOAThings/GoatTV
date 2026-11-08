@@ -89,6 +89,15 @@ func hhmm(_ date: Date) -> String {
     date.formatted(date: .omitted, time: .shortened)
 }
 
+/// "−1:05": quanto a pausa do direto vai atrás do direto (a cápsula no canto, a barra, o botão do direto no iPhone).
+func behindLabel(_ ms: Int64) -> String {
+    let total = max(0, ms / 1000)
+    let h = total / 3600
+    let m = (total % 3600) / 60
+    let sec = total % 60
+    return "−" + (h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec))
+}
+
 /// O vídeo do VLC dentro do SwiftUI.
 struct VideoSurface: UIViewRepresentable {
     let view: UIView

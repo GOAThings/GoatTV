@@ -17,6 +17,7 @@ import UIKit
 /// Tenta as formas de abrir o canal por ordem (ts ⇄ m3u8; num HLS, primeiro o da Apple e depois o VLC) e, se a
 /// stream cair, volta a ligar ao fim de uns segundos. Com "Igualar a frame rate", a TV muda para a cadência e o
 /// HDR do canal (Definições do Apple TV → Vídeo e áudio → Igualar conteúdo).
+/// Em direto, com "Pausar o direto", um .ts é gravado num anel em disco e o VLC lê-o de lá (ver Timeshift).
 @MainActor
 @Observable
 final class PlayerEngine: NSObject {
@@ -104,6 +105,21 @@ final class PlayerEngine: NSObject {
         didSet { if aspect != oldValue { applyAspect() } }
     }
 
+    // MARK: Pausar o direto
+
+    /// O anel do canal a dar (ou a janela do HLS): pausar, recuar e voltar ao direto (ver Timeshift).
+    let timeshift = Timeshift()
+    /// A pausa do direto vale para este leitor: o principal, com a definição ligada (o segundo canal não).
+    @ObservationIgnored var timeshiftEnabled = false
+    /// Quando começou o programa do guia que dá a uma hora (ms desde 1970), ou nil sem guia: só se guarda o programa
+    /// que se está a ver.
+    @ObservationIgnored var programmeStart: ((Int64) -> Int64?)?
+    /// O que se está a abrir é o direto (não o catch-up): pode ir pelo anel.
+    @ObservationIgnored private var pausable = false
+    @ObservationIgnored private var timeshiftTicker: Task<Void, Never>?
+    /// À espera de que a ligação do gravador anterior feche, antes de o leitor abrir a sua.
+    @ObservationIgnored private var openTask: Task<Void, Never>?
+
     // MARK: Vistas e motores
 
     /// A vista onde o vídeo aparece (a mesma durante toda a app; lá dentro, a do motor em uso).
@@ -162,6 +178,18 @@ final class PlayerEngine: NSObject {
         avPlayer.allowsExternalPlayback = false
         vlc.delegate = self
         vlc.drawable = vlcView
+        // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
+        timeshift.onReconnect = { [weak self] attempt, at, wait in
+            guard let self else { return }
+            self.reconnects = attempt
+            self.retryDelay = wait
+            self.nextTryAt = at
+        }
+        timeshift.onConnected = { [weak self] in
+            self?.reconnects = 0
+            self?.nextTryAt = nil
+        }
+        timeshift.onNotTs = { [weak self] in self?.openDirect() }
     }
 
     /// Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
@@ -173,8 +201,11 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+    /// [pausable]: é o direto (não o catch-up), e pode ir pelo anel da pausa do direto.
+    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, pausable: Bool = false,
+              linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         self.linkResolver = linkResolver
+        self.pausable = pausable
         retry?.cancel()
         pendingStart?.cancel()
         positionValid = false
@@ -276,6 +307,10 @@ final class PlayerEngine: NSObject {
 
     private func stopBackends() {
         criteriaTask?.cancel()
+        openTask?.cancel()
+        timeshiftTicker?.cancel()
+        // O anel apaga-se e a ligação do gravador fecha (outro canal, catch-up, erro, segundo plano).
+        timeshift.clear()
         observers.removeAll()
         for n in notifications { NotificationCenter.default.removeObserver(n) }
         notifications.removeAll()
@@ -316,8 +351,25 @@ final class PlayerEngine: NSObject {
         movingSince = nil
         state = .opening
         switch backend {
-        case .vlc: startVLC(url)
-        case .apple: startApple(url)
+        case .vlc:
+            // Pausar o direto: a ligação é do gravador, o VLC lê do anel. Sem ele, o VLC liga-se ao servidor.
+            if pausable, timeshiftEnabled, !attempt.candidate.isHLS,
+               let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
+                startVLC(local, ring: true)
+                startTimeshiftTicker()
+            } else {
+                whenConnectionFree { [weak self] in self?.startVLC(url) }
+            }
+        case .apple:
+            whenConnectionFree { [weak self] in
+                guard let self else { return }
+                self.startApple(url)
+                // HLS: a janela do próprio leitor da Apple, sem disco.
+                if self.pausable, self.timeshiftEnabled {
+                    self.timeshift.openHls()
+                    self.startTimeshiftTicker()
+                }
+            }
         }
         // Se não começar a dar, tenta a forma seguinte (o leitor da Apple tem o VLC a seguir: espera-se menos).
         let patience = backend == .apple ? 8 : 15
@@ -344,6 +396,8 @@ final class PlayerEngine: NSObject {
         DebugLog.add("Player: failed (\(backend), was playing: \(wasPlaying), HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
         watchdog?.cancel()
         if lastHTTPStatus == nil, backend == .apple { lastHTTPStatus = appleHTTPStatus }
+        // Pelo anel, quem falou com o servidor foi o gravador.
+        if lastHTTPStatus == nil, backend == .vlc, let status = timeshift.httpStatus, !(200..<300).contains(status) { lastHTTPStatus = status }
         stopBackends()
         if wasPlaying {
             if onDropped?() == true { return }
@@ -429,12 +483,17 @@ final class PlayerEngine: NSObject {
 
     // MARK: VLC
 
-    private func startVLC(_ url: URL) {
+    /// [ring]: [url] é o anel local da pausa do direto (TS de certeza; no fim, quem reabre é o motor, não o VLC).
+    private func startVLC(_ url: URL, ring: Bool = false) {
         let media = VLCMedia(url: url)
-        media.addOption(":http-user-agent=\(userAgent)")
-        if let referrer, !referrer.isEmpty { media.addOption(":http-referrer=\(referrer)") }
         media.addOption(":network-caching=\(cachingMs)")
-        media.addOption(":http-reconnect")
+        if ring {
+            media.addOption(":demux=ts")
+        } else {
+            media.addOption(":http-user-agent=\(userAgent)")
+            if let referrer, !referrer.isEmpty { media.addOption(":http-referrer=\(referrer)") }
+            media.addOption(":http-reconnect")
+        }
         if softwareDecoder { media.addOption(":codec=avcodec") }
         vlc.media = media
         if deinterlace == "off" {
@@ -454,10 +513,13 @@ final class PlayerEngine: NSObject {
             becamePlaying()
         case .error:
             DebugLog.add("Player: VLC error")
+            if continueRing() { return }
             next()
         case .ended:
-            // Uma stream em direto que "acaba" caiu: volta a ligar.
+            // Uma stream em direto que "acaba" caiu: volta a ligar. Pelo anel pode ser só o fim de uma ligação (há outra
+            // a seguir) ou o ponto já ter sido reescrito: continua no sítio certo.
             DebugLog.add("Player: VLC stream ended")
+            if continueRing() { return }
             if state == .playing { fail() } else { next() }
         default:
             break
@@ -487,6 +549,7 @@ final class PlayerEngine: NSObject {
         movingSince = since
         guard picturesShown > 0 || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
         hasPicture = true
+        timeshift.seeking = false
         vlc.audio?.isMuted = muted
         hideFreeze()
     }
@@ -663,6 +726,11 @@ extension PlayerEngine {
 
     func togglePause() {
         guard state == .playing else { return }
+        // Pausa do direto: se o ponto da pausa já saiu do anel, continua do mais antigo que há.
+        if paused, backend == .vlc, let entry = timeshift.resumeEntry(positionMs: positionValid ? positionMs : 0) {
+            reopenRing(entry, live: false)
+            return
+        }
         switch backend {
         case .vlc: if paused { vlc.play() } else { vlc.pause() }
         case .apple: if paused { avPlayer.play() } else { avPlayer.pause() }
@@ -866,6 +934,123 @@ extension PlayerEngine {
             vlc.videoCropGeometry = nil
             vlc.videoAspectRatio = nil
         }
+    }
+}
+
+// MARK: Pausar o direto
+
+extension PlayerEngine {
+    /// Vai para [behindMs] atrás do direto (e continua a dar); a menos de 3 s, volta ao direto.
+    func timeshiftSeek(behindMs: Int64) {
+        guard state == .playing, timeshift.available else { return }
+        if behindMs <= Timeshift.liveSnapMs { return timeshiftGoLive() }
+        if timeshift.usesRing {
+            if let entry = timeshift.entry(behind: behindMs) { reopenRing(entry, live: false) }
+        } else if timeshift.hls, backend == .apple {
+            seekApple(to: timeshift.hlsPosition(behind: behindMs))
+        }
+    }
+
+    /// Volta ao direto.
+    func timeshiftGoLive() {
+        guard state == .playing else { return }
+        if timeshift.usesRing {
+            if let entry = timeshift.liveEntry() {
+                reopenRing(entry, live: true)
+            } else if paused {
+                togglePause()
+            }
+        } else if timeshift.hls, backend == .apple {
+            seekApple(to: timeshift.hlsLivePosition())
+        }
+    }
+
+    /// O VLC volta a ler o anel a partir de [entry] (recuar, avançar, voltar ao direto, continuar depois do fim de
+    /// uma ligação). O canal continua "a dar": sem a cápsula de sintonizar, nem a imagem congelada.
+    fileprivate func reopenRing(_ entry: TimeshiftRing.Entry, live: Bool) {
+        guard backend == .vlc, let url = timeshift.prepare(at: entry, live: live) else { return }
+        DebugLog.add("Player: timeshift jump (\(live ? "live" : "behind"))")
+        watchdog?.cancel()
+        vlc.stop()
+        paused = false
+        positionValid = false
+        hasPicture = false
+        movingSince = nil
+        startVLC(url, ring: true)
+        // Se o VLC não voltar a dar, é como se o canal tivesse caído (volta a ligar, no direto).
+        watchdog = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled, let self, self.state == .playing, !self.positionValid else { return }
+            DebugLog.add("Player: no picture after a timeshift jump")
+            self.fail()
+        }
+    }
+
+    /// O VLC chegou ao fim do que lia no anel: se há onde continuar, continua (e devolve true).
+    fileprivate func continueRing() -> Bool {
+        guard backend == .vlc, timeshift.usesRing, let next = timeshift.entryAfterEnd() else { return false }
+        reopenRing(next.entry, live: next.live)
+        return true
+    }
+
+    /// O stream afinal não é TS: o gravador já largou a ligação; o VLC abre-o diretamente, sem a pausa do direto.
+    fileprivate func openDirect() {
+        guard backend == .vlc, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) else { return }
+        timeshiftTicker?.cancel()
+        timeshift.clear()
+        vlc.stop()
+        whenConnectionFree { [weak self] in self?.startVLC(url) }
+    }
+
+    /// Uma ligação de cada vez: se a do gravador da pausa do direto ainda está a fechar, espera por ela (até 3 s).
+    fileprivate func whenConnectionFree(_ work: @escaping () -> Void) {
+        guard timeshift.closing else { return work() }
+        let attempt = index
+        openTask = Task { [weak self] in
+            await self?.timeshift.waitClosed()
+            guard !Task.isCancelled, let self, self.index == attempt else { return }
+            work()
+        }
+    }
+
+    fileprivate func startTimeshiftTicker() {
+        timeshiftTicker?.cancel()
+        timeshiftTicker = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.updateTimeshift()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    /// O estado da pausa do direto, de meio em meio segundo.
+    private func updateTimeshift() {
+        if timeshift.usesRing {
+            guard backend == .vlc else { return timeshift.unavailable() }
+            let position: Int64? = state == .playing && positionValid ? positionMs : nil
+            timeshift.update(positionMs: position, paused: paused, settled: state == .playing && hasPicture && !timeshift.seeking,
+                             programmeStart: programmeStart ?? { _ in nil })
+        } else if timeshift.hls, backend == .apple, let item = avPlayer.currentItem,
+                  let range = item.seekableTimeRanges.last?.timeRangeValue {
+            let oldest = CMTimeGetSeconds(range.start)
+            let live = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
+            let at = CMTimeGetSeconds(avPlayer.currentTime())
+            guard oldest.isFinite, live.isFinite, at.isFinite, state == .playing else { return timeshift.unavailable() }
+            timeshift.updateHls(live: Int64(live * 1000), oldest: Int64(oldest * 1000), position: Int64(at * 1000), paused: paused,
+                                settled: avPlayer.timeControlStatus == .playing && !timeshift.seeking)
+        } else {
+            timeshift.unavailable()
+        }
+    }
+
+    /// HLS: salta no AVPlayer para [ms] (o tempo dele) e continua a dar.
+    private func seekApple(to ms: Int64) {
+        paused = false
+        avPlayer.seek(to: CMTime(value: max(0, ms), timescale: 1000)) { [weak self] _ in
+            Task { @MainActor in self?.timeshift.seeking = false }
+        }
+        avPlayer.play()
     }
 }
 

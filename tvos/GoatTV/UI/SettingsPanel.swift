@@ -710,6 +710,9 @@ struct SettingsPanel: View {
                 .toggle("freeze_frame", s.r("freeze_frame"), prefs.freezeFrame, subtitle: s.r("freeze_frame_sub")) {
                     model.setPref("freeze_frame", .bool($0))
                 },
+                .toggle("timeshift", s.r("timeshift"), prefs.timeshift, subtitle: s.r("timeshift_sub")) {
+                    model.setPref("timeshift", .bool($0))
+                },
                 .header("audio", s.t("Audio", "Áudio")),
                 .toggle("audio_passthrough", s.t("Audio passthrough", "Passthrough de áudio"), prefs.audioPassthrough,
                         subtitle: s.t("Dolby and DTS go straight to the receiver or TV", "Dolby e DTS seguem para o recetor ou a TV")) {

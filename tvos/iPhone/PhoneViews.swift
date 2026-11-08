@@ -557,10 +557,13 @@ private struct VideoPane: View {
                 .padding(.horizontal, fullscreen ? 20 : 10).padding(.top, fullscreen ? 10 : 8)
                 Spacer()
                 HStack(spacing: 28) {
-                    // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
-                    let canSeek = barState?.seekable == true
+                    // Em direto, recua-se no disco (a pausa do direto) ou para o catch-up do programa a dar; à frente do
+                    // direto não há nada.
+                    let ts = model.player.timeshift
+                    let canSeek = barState?.seekable == true || (model.catchup == nil && ts.available)
                     if canSeek { seekButton("gobackward.30", -seekStep) }
-                    // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
+                    // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões. Na pausa
+                    // do direto, continuar é do sítio onde parou (o disco continuou a gravar).
                     if model.player.frozen || model.player.state == .opening || (model.player.state == .playing && !model.player.hasPicture) {
                         ProgressView().tint(.white).frame(width: 60, height: 60)
                     } else {
@@ -571,9 +574,10 @@ private struct VideoPane: View {
                         }
                     }
                     if canSeek {
+                        let forward = model.catchup != nil || ts.shifted
                         seekButton("goforward.30", seekStep)
-                            .disabled(model.catchup == nil)
-                            .opacity(model.catchup == nil ? 0.35 : 1)
+                            .disabled(!forward)
+                            .opacity(forward ? 1 : 0.35)
                     }
                 }
                 // Por cima dos botões, sem os mexer.
@@ -658,20 +662,50 @@ private struct VideoPane: View {
         }
     }
 
-    /// Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
+    /// Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar com a pausa do direto
+    /// ou com catch-up; na pausa do direto, o ponto fica onde está o que se vê.
     private var barState: (position: Int64, duration: Int64, seekable: Bool)? {
         if let catchup = model.catchup { return (model.catchupPosition, catchup.durationMs, true) }
         guard let channel = model.current, let entry = model.nowNext(for: channel).now, entry.endMs > entry.startMs else { return nil }
         let now = Int64(Date().timeIntervalSince1970 * 1000)
-        return (now - entry.startMs, entry.endMs - entry.startMs, model.canCatchup(channel, entry))
+        let ts = model.player.timeshift
+        return (now - entry.startMs - (ts.available ? ts.behindMs : 0), entry.endMs - entry.startMs, ts.available || model.canCatchup(channel, entry))
+    }
+
+    /// Em direto, as posições contam-se desde o início do programa a dar (ou desde agora, sem guia).
+    private func liveBase(_ now: Int64) -> Int64 {
+        model.current.flatMap { model.nowNext(for: $0).now?.startMs } ?? now
+    }
+
+    /// Onde vai agora: no catch-up, no programa; em direto, desde o início do programa a dar (atrás do direto, na
+    /// pausa do direto).
+    private var currentPosition: Int64 {
+        if model.catchup != nil { return model.catchupPosition }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let ts = model.player.timeshift
+        return now - (ts.available ? ts.behindMs : 0) - liveBase(now)
+    }
+
+    /// Em direto: quanto [target] fica atrás do direto, se for a pausa do direto (no disco) a lá chegar; senão nil
+    /// (catch-up, ou sem pausa do direto).
+    private func tsBehind(_ target: Int64) -> Int64? {
+        let ts = model.player.timeshift
+        guard model.catchup == nil, ts.available, let channel = model.current else { return nil }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let behind = now - liveBase(now) - target
+        // Mais atrás do que o disco guarda: o catch-up do programa, se houver.
+        if behind <= ts.windowMs { return max(0, behind) }
+        guard let entry = model.nowNext(for: channel).now, model.canCatchup(channel, entry) else { return ts.windowMs }
+        return nil
     }
 
     @ViewBuilder private var progressRow: some View {
         if let bar = barState {
             let fraction = scrub ?? min(max(Double(bar.position) / Double(bar.duration), 0), 1)
             HStack(spacing: 8) {
-                // No catch-up conta onde vai; em direto, as horas já estão por cima.
+                // No catch-up conta onde vai; em direto, as horas já estão por cima (atrás do direto, quanto).
                 if model.catchup != nil { Text(durationText(Int64(fraction * Double(bar.duration)))) }
+                if model.catchup == nil, model.player.timeshift.shifted, scrub == nil { Text(behindLabel(model.player.timeshift.behindMs)) }
                 PlayerBar(progress: fraction, seekable: bar.seekable) { value in
                     scrub = value
                     touched += 1
@@ -685,16 +719,20 @@ private struct VideoPane: View {
         }
     }
 
-    /// O botão do direto: em direto só avisa; em catch-up, volta.
+    /// O botão do direto: em direto só avisa; em catch-up ou na pausa do direto, volta (e diz quanto vai atrás).
     private var liveButton: some View {
-        let live = model.catchup == nil
+        let ts = model.player.timeshift
+        let live = model.catchup == nil && !ts.shifted
         return Button {
-            model.exitCatchup()
+            if model.catchup != nil { model.exitCatchup() } else { model.player.timeshiftGoLive() }
         } label: {
             HStack(spacing: 6) {
                 Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
                 Text(live ? model.strings.r("player_live") : model.strings.r("player_go_live"))
                     .font(.footnote.weight(.semibold))
+                if !live, model.catchup == nil {
+                    Text(behindLabel(ts.behindMs)).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.7))
+                }
             }
             .padding(.horizontal, 12).padding(.vertical, 7)
             .background(live ? Color.clear : Color.white.opacity(0.16), in: Capsule())
@@ -715,6 +753,10 @@ private struct VideoPane: View {
         seekTask?.cancel()
         seekDelta = 0
         touched += 1
+        if let behind = tsBehind(target) {
+            model.player.timeshiftSeek(behindMs: behind)
+            return
+        }
         if model.catchup != nil {
             model.seekCatchup(target)
         } else if target < livePosition - 5_000, let channel = model.current, let entry = model.nowNext(for: channel).now {
@@ -736,6 +778,9 @@ private struct VideoPane: View {
             if model.catchupGoesLive(target) { return model.strings.t("Go live", "Ir para o direto") }
             return "→ " + durationText(model.catchupLanding(target))
         }
+        if let behind = tsBehind(target) {
+            return behind <= Timeshift.liveSnapMs ? model.strings.r("player_go_live") : behindLabel(behind)
+        }
         guard let channel = model.current, let entry = model.nowNext(for: channel).now else { return "" }
         return "→ " + durationText(liveLanding(target, livePosition: seekBase, entry: entry))
     }
@@ -748,7 +793,7 @@ private struct VideoPane: View {
 
     /// Vários toques seguidos somam-se, e só depois se pede a posição nova: cada pedido reabre o stream.
     private func seek(_ delta: Int64) {
-        if seekDelta == 0 { seekBase = barState?.position ?? 0 }
+        if seekDelta == 0 { seekBase = currentPosition }
         seekDelta += delta
         touched += 1
         seekTask?.cancel()
@@ -1527,6 +1572,7 @@ private struct MenuTab: View {
             section(s.t("Connection", "Ligação")) {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)
                 pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
+                toggle(s.r("timeshift"), "timeshift", p.timeshift)
             }
             section(s.t("Advanced", "Avançado")) {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)

@@ -163,6 +163,8 @@ final class AppModel {
         }
         loadReminders()
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
+        // Pausar o direto: guarda-se só o programa que se está a ver.
+        player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
@@ -558,6 +560,8 @@ final class AppModel {
         }
         secondPlayer.controlsDisplay = false
         player.matchFrameRate = prefs.afr
+        // Pausar o direto: só no canal principal (o segundo abre o stream como sempre).
+        player.timeshiftEnabled = prefs.timeshift
         Fonts.scale = CGFloat(Prefs.TextSize.scale(prefs.textSize)) * CGFloat(prefs.uiScale) / 100
     }
 
@@ -995,7 +999,7 @@ final class AppModel {
                                               allowedFormats: content.account?.allowedFormats ?? [])
             let stalker = loader.stalker
             let playlist = content.playlist
-            player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
+            player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer, pausable: true,
                         linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
         }
         saveLast(channel, watched: false)
@@ -1758,6 +1762,12 @@ final class AppModel {
         var list = Guide.entries(for: channel, account: accountGuide, main: mainGuide, extra: extraGuide)
         if list.isEmpty { list = shortEpg[channel.key] ?? [] }
         return Guide.shifted(list, minutes: prefs.epgOffsetMin)
+    }
+
+    /// Quando começou o programa do guia do canal a dar que dá às [wallMs] (ms desde 1970), ou nil sem guia para essa hora.
+    func programmeStart(at wallMs: Int64) -> Int64? {
+        guard let current else { return nil }
+        return programmes(for: current).first { $0.startMs <= wallMs && $0.endMs > wallMs }?.startMs
     }
 
     func nowNext(for channel: Channel) -> (now: EpgEntry?, next: EpgEntry?) {

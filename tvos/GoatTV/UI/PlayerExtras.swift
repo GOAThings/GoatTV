@@ -142,14 +142,67 @@ struct CatchupBar: View {
     }
 }
 
-/// Cápsula "CATCH-UP" no canto, sempre visível enquanto não se está em direto.
+/// Barra da pausa do direto, com o aspeto da do catch-up: quanto vai atrás do direto, o que está guardado e as
+/// teclas (← → recuar/avançar, OK pausa, Voltar direto). [pendingBehindMs]: o salto por confirmar.
+struct TimeshiftBar: View {
+    @Environment(AppModel.self) private var model
+    let channel: String
+    let behindMs: Int64
+    let windowMs: Int64
+    let pendingBehindMs: Int64?
+    let paused: Bool
+    let atLive: Bool
+
+    var body: some View {
+        let s = model.strings
+        let behind = pendingBehindMs ?? behindMs
+        let live = atLive && pendingBehindMs == nil
+        let now = Date()
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 22) {
+                Text(live ? s.r("player_live").uppercased() : behindLabel(behind))
+                    .font(.system(size: 21, weight: .heavy).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent(model.prefs.accent)))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(channel).font(.system(size: 36, weight: .semibold)).lineLimit(1)
+                    Text(s.r("timeshift_saved", "\(max(1, (windowMs + 59_999) / 60_000))"))
+                        .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
+                }
+                Spacer()
+                if paused { Image(systemName: "pause.fill").font(.system(size: 40)) }
+            }
+            HStack(spacing: 22) {
+                // A hora a que passou o que se vê, e a de agora (o direto).
+                Text(hhmm(now.addingTimeInterval(-Double(behind) / 1000))).font(.system(size: 25, weight: .medium).monospacedDigit())
+                    .foregroundStyle(pendingBehindMs != nil ? Theme.sky : Theme.text)
+                ProgressLine(value: windowMs <= 0 ? 1 : min(1, max(0, 1 - Double(behind) / Double(windowMs))), height: 6)
+                Text(hhmm(now)).font(.system(size: 25).monospacedDigit()).foregroundStyle(Theme.textDim)
+            }
+            HStack(spacing: 40) {
+                KeyHint(key: "← →", label: s.r("timeshift_seek"))
+                KeyHint(key: "OK", label: paused ? s.t("Resume", "Continuar") : s.t("Pause", "Pausa"))
+                if !live { KeyHint(key: "MENU", label: s.t("Back to live", "Voltar ao direto")) }
+            }
+        }
+        .padding(.horizontal, 44)
+        .padding(.vertical, 32)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(radius: 34)
+    }
+}
+
+/// Cápsula "CATCH-UP" no canto, sempre visível enquanto não se está em direto (na pausa do direto: quanto vai atrás).
 struct CatchupPill: View {
     let paused: Bool
+    var label = "CATCH-UP"
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: paused ? "pause.fill" : "clock.arrow.circlepath").font(.system(size: 24))
-            Text("CATCH-UP").font(.system(size: 22, weight: .bold))
+            Text(label).font(.system(size: 22, weight: .bold).monospacedDigit())
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)

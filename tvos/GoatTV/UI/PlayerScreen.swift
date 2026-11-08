@@ -55,6 +55,9 @@ struct PlayerScreen: View {
     @State private var seekToken = 0
     @State private var catchupBar = false
     @State private var catchupBarToken = 0
+    // Pausar o direto: o salto por confirmar, em ms atrás do direto (← → somam-se, como no catch-up).
+    @State private var tsPending: Int64?
+    @State private var tsSeekToken = 0
     // Lembretes e temporizador
     @State private var reminder: AppModel.Reminder?
     @State private var sleepWarning: Int?
@@ -174,6 +177,31 @@ struct PlayerScreen: View {
                 .padding(.vertical, 48)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+            }
+
+            if tsActive, !tvGuide {
+                let shifted = tsShifted
+                let bar = (shifted && catchupBar) || model.player.paused || tsPending != nil
+                VStack {
+                    HStack {
+                        Spacer()
+                        // Atrás do direto, a cápsula no canto diz quanto (como a do catch-up).
+                        if shifted, model.player.state == .playing {
+                            CatchupPill(paused: model.player.paused, label: behindLabel(tsPending ?? timeshift.behindMs))
+                        }
+                    }
+                    Spacer()
+                    if bar {
+                        TimeshiftBar(channel: model.current?.name ?? "", behindMs: timeshift.behindMs, windowMs: timeshift.windowMs,
+                                     pendingBehindMs: tsPending, paused: model.player.paused, atLive: timeshift.atLive)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 64)
+                .padding(.vertical, 48)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.18), value: bar)
             }
 
             if zapCard, !hud, panel == .none, let channel = model.current {
@@ -341,6 +369,7 @@ struct PlayerScreen: View {
             if empty { showGroups() }
         }
         .onChange(of: model.zapCount) { _, _ in
+            tsPending = nil
             guard panel == .none, !hud, model.prefs.infoSeconds > 0 else { return }
             zapCard = true
             zapToken += 1
@@ -383,6 +412,15 @@ struct PlayerScreen: View {
             guard catchupBar else { return }
             try? await Task.sleep(for: .seconds(5))
             if !Task.isCancelled { catchupBar = false }
+        }
+        // Na pausa do direto o mesmo, mas o salto é no disco (o VLC recomeça nesse ponto do anel).
+        .task(id: tsSeekToken) {
+            guard let target = tsPending else { return }
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            tsPending = nil
+            model.player.timeshiftSeek(behindMs: target)
+            showCatchupBar()
         }
         // ← → no catch-up: junta os saltos e só pede ao servidor quando se pára de carregar.
         .task(id: seekToken) {
@@ -460,24 +498,61 @@ struct PlayerScreen: View {
         if model.catchup != nil {
             model.player.togglePause()
             showCatchupBar()
+        } else if tsShifted {
+            tsToggle()
         } else {
             openHud()
         }
     }
 
+    /// Play/Pausa: no catch-up e na pausa do direto pausa; senão abre a barra com os botões.
     private func playPause() {
         if model.catchup != nil {
             model.player.togglePause()
             showCatchupBar()
+        } else if tsActive {
+            tsToggle()
         } else {
             openHud()
         }
     }
 
-    /// O Voltar com tudo fechado (como no Android): sai do catch-up; abre o guia; ou, à segunda, sai da app.
-    /// nil deixa o Voltar para o sistema, que sai para o ecrã inicial.
+    // MARK: Pausar o direto
+
+    private var timeshift: Timeshift { model.player.timeshift }
+
+    /// A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal).
+    private var tsActive: Bool { model.catchup == nil && model.second == nil && timeshift.available }
+
+    /// Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up (← → recuar/avançar,
+    /// OK pausa, ↑ ↓ só mostram a barra, Voltar direto).
+    private var tsShifted: Bool { tsActive && (model.player.paused || !timeshift.atLive || tsPending != nil) }
+
+    private func tsToggle() {
+        model.player.togglePause()
+        if hud { closeHud() }
+        showCatchupBar()
+    }
+
+    /// Recua (negativo) ou avança [deltaMs]; o salto só se faz quando se pára de carregar.
+    private func tsSeek(_ deltaMs: Int64) {
+        let from = tsPending ?? timeshift.behindMs
+        tsPending = min(max(0, from - deltaMs), timeshift.windowMs)
+        tsSeekToken += 1
+        showCatchupBar()
+    }
+
+    private func tsGoLive() {
+        tsPending = nil
+        model.player.timeshiftGoLive()
+        catchupBar = false
+    }
+
+    /// O Voltar com tudo fechado (como no Android): sai do catch-up ou volta ao direto; abre o guia; ou, à segunda,
+    /// sai da app. nil deixa o Voltar para o sistema, que sai para o ecrã inicial.
     private var backAction: (() -> Void)? {
         if model.catchup != nil { return { model.exitCatchup() } }
+        if tsShifted { return { tsGoLive() } }
         if model.second != nil {
             return {
                 model.closeSecond()
@@ -555,6 +630,15 @@ struct PlayerScreen: View {
             showCatchupBar()
             return
         }
+        // Na pausa do direto (em pausa ou atrás dele): ← → recuam/avançam 10 s, ↑ ↓ só mostram a barra.
+        if tsShifted {
+            switch direction {
+            case .left: tsSeek(-Self.timeshiftStepMs)
+            case .right: tsSeek(Self.timeshiftStepMs)
+            default: showCatchupBar()
+            }
+            return
+        }
         // Dois canais: ← → passam o foco (e o som) de um para o outro; ↑ ↓ mudam o canal com foco.
         if model.second != nil {
             switch direction {
@@ -593,9 +677,10 @@ struct PlayerScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
-        } else if model.player.state == .opening, !tvGuide {
+        } else if model.player.state == .opening || (model.player.reconnects > 0 && !tsShifted), !tvGuide {
             // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã. Com o segundo canal
-            // no canto direito, a cápsula passa para a esquerda.
+            // no canto direito, a cápsula passa para a esquerda. Na pausa do direto quem volta a ligar é o gravador,
+            // com o vídeo a dar do disco: a cápsula não tapa a da pausa.
             let player = model.player
             VStack {
                 HStack {
@@ -616,8 +701,11 @@ struct PlayerScreen: View {
     /// O cartão de versão nova só aparece com nada aberto por cima do vídeo.
     private var showUpdate: Bool {
         model.updateNotice != nil && panel == .none && !hud && !tvGuide && reminder == nil && sleepWarning == nil &&
-            model.catchup == nil
+            model.catchup == nil && !(timeshift.available && (model.player.paused || !timeshift.atLive))
     }
+
+    /// Pausa do direto: cada ← → recua/avança isto.
+    private static let timeshiftStepMs: Int64 = 10_000
 
     // MARK: Barra com botões (OK)
 
@@ -662,6 +750,10 @@ struct PlayerScreen: View {
                     default: next = Prefs.Aspect.fit
                     }
                     model.setPref("aspect", .string(next))
+                }
+                // Pausar o direto (também com Play/Pausa no comando).
+                if tsActive {
+                    chip("pauselive", "pause.fill", s.r("pause_live")) { tsToggle() }
                 }
                 chip("search", "magnifyingglass", s.t("Search", "Pesquisar")) {
                     hud = false
