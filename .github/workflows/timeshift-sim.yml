@@ -1,8 +1,9 @@
 name: Apple TV timeshift
 
 # Pausar o direto no simulador do Apple TV: um canal .ts ao vivo (gerado com o ffmpeg e dado ao ritmo real por
-# tvos/UITests/Live/live-ts.py), pausa, recua, continua e volta ao direto (GoatTVUITests.testTimeshift). Confirma
-# também que o "fornecedor" nunca vê mais do que uma ligação. À mão, ou nos ramos timeshift-* (um workflow novo só se
+# tvos/UITests/Live/live-ts.py), pausa, recua, continua e volta ao direto (GoatTVUITests.testTimeshift); depois um HLS
+# ao vivo (a janela do leitor da Apple) e um MP4 (não é TS: o VLC abre-o diretamente). Confirma também que o
+# "fornecedor" do .ts nunca vê mais do que uma ligação. À mão, ou nos ramos timeshift-* (um workflow novo só se
 # pode lançar à mão depois de estar no main).
 on:
   workflow_dispatch:
@@ -35,8 +36,14 @@ jobs:
           mkdir -p build/live
           ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=960x540:rate=25 -f lavfi -i sine=frequency=440:sample_rate=48000 \
             -t 120 -c:v libx264 -preset veryfast -g 50 -pix_fmt yuv420p -c:a aac -b:a 128k -f mpegts build/live/loop.ts
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=960x540:rate=25 -f lavfi -i sine=frequency=880:sample_rate=48000 \
+            -t 30 -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -movflags +faststart build/live/clip.mp4
+          mkdir -p build/live/hls
+          # O HLS ao vivo: o mesmo .ts em ciclo, ao ritmo real, numa janela de 10 bocados de 4 s.
+          nohup ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i build/live/loop.ts -c copy -f hls -hls_time 4 \
+            -hls_list_size 10 -hls_flags delete_segments build/live/hls/live.m3u8 > build/live/hls.log 2>&1 &
           ls -la build/live
-          printf '#EXTM3U\n#EXTINF:-1 tvg-id="live" group-title="Live",Live TS\nhttp://127.0.0.1:8766/live.ts\n' > build/live/live.m3u
+          printf '#EXTM3U\n#EXTINF:-1 tvg-id="live" group-title="Live",Live TS\nhttp://127.0.0.1:8766/live.ts\n#EXTINF:-1 tvg-id="hls" group-title="Live",Live HLS\nhttp://127.0.0.1:8765/hls/live.m3u8\n#EXTINF:-1 tvg-id="mp4" group-title="Live",Clip MP4\nhttp://127.0.0.1:8765/clip.mp4\n' > build/live/live.m3u
           (cd build/live && nohup python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 &)
           nohup python3 UITests/Live/live-ts.py build/live/loop.ts 8766 build/live 120 > build/live/server.log 2>&1 &
       - name: Teste no simulador
@@ -55,7 +62,9 @@ jobs:
       - name: Registo da app e ligações ao fornecedor
         if: always()
         run: |
-          grep -E "Timeshift|Player" build/app.log | tail -80 || true
+          grep -E "Timeshift|Player" build/app.log | tail -120 || true
+          # O MP4 passou pelo gravador, que viu que não era TS e o entregou ao VLC.
+          grep -q "not a TS stream" build/app.log
           echo "--- servidor"
           cat build/live/server.log || true
           echo "--- máximo de ligações ao mesmo tempo: $(cat build/live/max-connections.txt)"

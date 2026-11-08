@@ -112,6 +112,24 @@ final class GoatTVUITests: XCTestCase {
         press(.menu, wait: 8); shot("ts-back-live")
         XCTAssertNil(behind(), "ainda atrás do direto depois de Voltar")
         XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "a barra ficou no ecrã no direto")
+
+        // ↓ o canal HLS ao vivo: a janela do próprio leitor da Apple (sem disco).
+        press(.down, wait: 25); shot("hls-live")
+        XCTAssertNil(behind(), "HLS: atrás do direto sem se ter pausado")
+        press(.playPause, wait: 10); shot("hls-paused")
+        XCTAssertTrue(app.otherElements["timeshiftBar"].exists, "HLS: sem a barra da pausa do direto")
+        let hlsPaused = behind() ?? -1
+        XCTAssertTrue((4...16).contains(hlsPaused), "HLS: 10 s em pausa, mas vai \(hlsPaused) s atrás")
+        press(.left, wait: 8); shot("hls-rewound")
+        let hlsRewound = behind() ?? -1
+        XCTAssertTrue(hlsRewound >= hlsPaused + 5, "HLS: recuou de \(hlsPaused) s para \(hlsRewound) s")
+        press(.menu, wait: 8); shot("hls-back-live")
+        XCTAssertNil(behind(), "HLS: ainda atrás do direto depois de Voltar")
+
+        // ↓ um MP4: não é TS, o VLC abre-o diretamente (sem pausa do direto), depois de o gravador largar a ligação.
+        press(.down, wait: 20); shot("mp4-direct")
+        XCTAssertNil(behind(), "MP4: atrás do direto")
+        XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "MP4: com a barra da pausa do direto")
     }
 
     /// Quanto a cápsula da pausa do direto diz que vai atrás ("−0:18" → 18), ou nil sem ela.

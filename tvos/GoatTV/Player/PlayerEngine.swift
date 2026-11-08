@@ -996,9 +996,10 @@ extension PlayerEngine {
     /// O stream afinal não é TS: o gravador já largou a ligação; o VLC abre-o diretamente, sem a pausa do direto.
     fileprivate func openDirect() {
         guard backend == .vlc, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) else { return }
+        // O VLC larga primeiro o anel (o fim da resposta local já não lhe interessa); depois fecha-se o resto.
+        vlc.stop()
         timeshiftTicker?.cancel()
         timeshift.clear()
-        vlc.stop()
         whenConnectionFree { [weak self] in self?.startVLC(url) }
     }
 
@@ -1031,8 +1032,9 @@ extension PlayerEngine {
             let position: Int64? = state == .playing && positionValid ? positionMs : nil
             timeshift.update(positionMs: position, paused: paused, settled: state == .playing && hasPicture && !timeshift.seeking,
                              programmeStart: programmeStart ?? { _ in nil })
-        } else if timeshift.hls, backend == .apple, let item = avPlayer.currentItem,
+        } else if timeshift.hls, backend == .apple, let item = avPlayer.currentItem, item.duration.isIndefinite,
                   let range = item.seekableTimeRanges.last?.timeRangeValue {
+            // Só um HLS em direto (sem duração): um filme em HLS já se pausa e anda como sempre.
             let oldest = CMTimeGetSeconds(range.start)
             let live = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
             let at = CMTimeGetSeconds(avPlayer.currentTime())
