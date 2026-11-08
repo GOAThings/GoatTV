@@ -221,7 +221,7 @@ internal fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
  * Carrega a stream no player, seja o ExoPlayer ou o VLC (o equivalente ao `setMediaSource`).
  * [transfer]: quem conta os bytes que chegam (a página Ligação); só no ExoPlayer.
  * [timeshift]: abrir pelo anel do "pausar o direto" (só no ExoPlayer); [reconnectMs] é de quanto em quanto
- * tempo o gravador dele volta a ligar se a ligação cair.
+ * tempo o gravador dele volta a ligar se a ligação cair. [gate]: as ligações desta tentativa (ver [StreamGate.next]).
  */
 internal fun Player.loadStream(
     candidate: StreamCandidate,
@@ -231,11 +231,14 @@ internal fun Player.loadStream(
     transfer: TransferListener? = null,
     timeshift: Timeshift? = null,
     reconnectMs: Long = 0L,
+    gate: StreamGate? = null,
 ) {
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer)
         is ExoPlayer -> {
-            val http = httpFactory(channel, userAgent, transfer)
+            val direct = httpFactory(channel, userAgent, transfer)
+            // Uma ligação de cada vez: a desta tentativa só abre depois de fechar a anterior (ver StreamGate).
+            val http = gate?.factory(direct, exclusive = !candidate.isHls) ?: direct
             setMediaSource(timeshift?.open(candidate, http, tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http))
         }
     }
