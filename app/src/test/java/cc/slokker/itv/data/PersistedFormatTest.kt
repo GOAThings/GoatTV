@@ -73,6 +73,23 @@ class PersistedFormatTest {
     }
 
     @Test
+    fun `local config that can't be read is kept aside, not overwritten`() = runBlocking {
+        File(dir, "local").mkdirs()
+        val broken = "{\"playlists\": [{\"id\": \"local1\", \"type\": \"m3u\"" // cortado a meio
+        File(dir, "local/config.json").writeText(broken)
+        val store = LocalStore(context, gson)
+
+        val config = store.load()
+        assertTrue(config.playlists.orEmpty().isEmpty())
+        store.save(config.copy(settings = JsonObject().apply { addProperty("accent", "gold") }))
+
+        val aside = File(dir, "local").listFiles()!!.filter { it.name.startsWith("config.json.bad") }
+        assertEquals(1, aside.size)
+        assertEquals(broken, aside.single().readText())
+        assertEquals("gold", JsonParser.parseString(File(dir, "local/config.json").readText()).asJsonObject.getAsJsonObject("settings").get("accent").asString)
+    }
+
+    @Test
     fun `local config that does not exist starts empty`() = runBlocking {
         val config = LocalStore(context, gson).load()
         assertTrue(config.playlists.orEmpty().isEmpty())

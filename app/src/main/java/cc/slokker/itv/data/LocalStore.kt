@@ -1,6 +1,7 @@
 package cc.slokker.itv.data
 
 import android.content.Context
+import android.util.Log
 import cc.slokker.itv.data.api.ConfigResponse
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -20,9 +21,18 @@ class LocalStore(context: Context, private val gson: Gson) {
 
     suspend fun load(): ConfigResponse = withContext(Dispatchers.IO) {
         mutex.withLock {
-            // Ficheiro estragado: começa vazio (as listas voltam a adicionar-se).
-            runCatching { file.takeIf { it.exists() }?.reader()?.use { gson.fromJson(it, ConfigResponse::class.java) } }.getOrNull()
-                ?: ConfigResponse(user = null, device = null, playlists = emptyList(), favorites = null, settings = null)
+            val empty = ConfigResponse(user = null, device = null, playlists = emptyList(), favorites = null, settings = null)
+            if (!file.exists()) return@withLock empty
+            val config = runCatching { file.reader().use { gson.fromJson(it, ConfigResponse::class.java) } }
+                .onFailure { Log.w(TAG, "${file.name} ilegível", it) }
+                .getOrNull()
+            if (config == null) {
+                // Ficheiro estragado (ou de um formato que esta versão não lê): começa vazio, mas o ficheiro fica de
+                // lado com outro nome, para a próxima gravação não apagar as listas de vez (dá para as recuperar).
+                val aside = File(file.parentFile, "${file.name}.bad-${System.currentTimeMillis()}")
+                if (file.renameTo(aside)) Log.w(TAG, "${file.name} guardado como ${aside.name}") else Log.w(TAG, "Não deu para pôr ${file.name} de lado")
+            }
+            config ?: empty
         }
     }
 
@@ -37,5 +47,9 @@ class LocalStore(context: Context, private val gson: Gson) {
                 tmp.renameTo(file)
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "GoatTV"
     }
 }
