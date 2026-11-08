@@ -371,13 +371,18 @@ fun PlayerScreen(vm: AppViewModel) {
         player.play()
     }
 
+    /** Uma só espera de cada vez: dois erros seguidos não deixam duas reaberturas pendentes. */
+    fun retryLater(block: suspend () -> Unit) {
+        session.retryJob?.cancel()
+        session.retryJob = scope.launch { block() }
+    }
+
     /** Caiu a meio: volta a ligar daqui a [delayMs] (a cápsula no canto conta os segundos e as tentativas). */
     fun reconnectIn(delayMs: Long) {
-        session.retryJob?.cancel()
         session.reconnects++
         session.retryDelayMs = delayMs
         session.nextTryAt = SystemClock.elapsedRealtime() + delayMs
-        session.retryJob = scope.launch {
+        retryLater {
             delay(delayMs)
             session.nextTryAt = 0L
             start(session.attempt)
@@ -611,7 +616,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     // Catch-up caiu a meio: pede de novo a partir de onde ia.
                     session.wasPlaying && session.catchup -> {
                         val position = catchupNow()
-                        session.retryJob = scope.launch {
+                        retryLater {
                             delay(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
                             latestVm.seekCatchup(position)
                         }
@@ -626,7 +631,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         // Não arrancou: mostra o erro e tenta mais umas vezes (sem martelar o servidor).
                         val retry = latestPrefs.reconnectSeconds > 0 && session.retries < MAX_START_RETRIES
                         if (retry) session.retries++
-                        session.retryJob = scope.launch {
+                        retryLater {
                             // Pergunta ao servidor se a conta está mesmo ocupada antes de o dizer.
                             val connections = if (error.errorCode in 2000..2999) latestVm.xtreamConnections() else null
                             val format = session.candidates.getOrNull(session.attempt)?.format
@@ -664,6 +669,10 @@ fun PlayerScreen(vm: AppViewModel) {
         onStopOrDispose {
             // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
             vm.closeSecond()
+            // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça acima.
+            session.retryJob?.cancel()
+            session.linkJob?.cancel()
+            session.nextTryAt = 0L
             player.stop()
             // O anel apaga-se: ao voltar, o canal recomeça no direto.
             timeshift.clear()

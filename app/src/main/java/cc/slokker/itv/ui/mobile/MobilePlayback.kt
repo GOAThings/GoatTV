@@ -268,6 +268,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     LifecycleStartEffect(player) {
         if (latestActive && player.playbackState == Player.STATE_IDLE && candidates[0].isNotEmpty()) start(attempt[0])
         onStopOrDispose {
+            // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça acima.
+            retry[0]?.cancel()
+            link[0]?.cancel()
+            playback.nextTryAt = 0L
             player.stop()
             playback.timeshift.clear()
             vm.flushLastChannel()
