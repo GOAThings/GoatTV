@@ -51,6 +51,7 @@
     <string name="start_over">Смотреть сначала</string>
     <string name="channel_gone">Этого канала больше нет в плейлисте</string>
     <string name="close">Закрыть</string>
+    <string name="cancel">Отмена</string>
     <string name="second_channel">Второй канал</string>
     <string name="second_pick_playlist">Выберите плейлист</string>
     <string name="second_pick_group">Выберите группу</string>

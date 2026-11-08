@@ -51,6 +51,7 @@
     <string name="start_over">最初から見る</string>
     <string name="channel_gone">そのチャンネルはプレイリストにありません</string>
     <string name="close">閉じる</string>
+    <string name="cancel">キャンセル</string>
     <string name="second_channel">2つ目のチャンネル</string>
     <string name="second_pick_playlist">プレイリストを選択</string>
     <string name="second_pick_group">グループを選択</string>

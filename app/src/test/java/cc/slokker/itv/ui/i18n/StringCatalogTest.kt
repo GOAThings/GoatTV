@@ -85,7 +85,7 @@ class StringCatalogTest {
             SWIFT_KEY_SWITCH.findAll(text).forEach { block -> SWIFT_CASE_KEY.findAll(block.value).forEach { asked += it.groupValues[1] } }
         }
         assertTrue("Nenhum r(\"…\") encontrado no Swift: a expressão deixou de os apanhar?", asked.size > 50)
-        val missing = (asked - base.strings.keys - KNOWN_SWIFT_MISSING).sorted() + (askedPlurals - base.plurals.keys).sorted().map { "plural $it" }
+        val missing = (asked - base.strings.keys).sorted() + (askedPlurals - base.plurals.keys).sorted().map { "plural $it" }
         assertEquals("Chaves pedidas pelo Swift que não existem em values/strings_ui.xml", emptyList<String>(), missing)
     }
 
@@ -184,8 +184,6 @@ class StringCatalogTest {
                     ),
                     "values-pt-rPT" to setOf("welcome_local_phone", "welcome_local_phone_sub"),
                 )
-        /** O iPhone pede "cancel", que o Android não tem (mostra a palavra "cancel" em todas as línguas). */
-        val KNOWN_SWIFT_MISSING = setOf("cancel")
 
         const val FILE = "strings_ui.xml"
         val STRING = Regex("<string name=\"([a-z0-9_]+)\"[^>]*>(.*?)</string>", RegexOption.DOT_MATCHES_ALL)

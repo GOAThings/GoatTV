@@ -51,6 +51,7 @@
     <string name="start_over">Reprendre au début</string>
     <string name="channel_gone">Cette chaîne n\'est plus dans la playlist</string>
     <string name="close">Fermer</string>
+    <string name="cancel">Annuler</string>
     <string name="second_channel">Deuxième chaîne</string>
     <string name="second_pick_playlist">Choisissez une playlist</string>
     <string name="second_pick_group">Choisissez un groupe</string>

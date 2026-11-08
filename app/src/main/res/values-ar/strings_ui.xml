@@ -51,6 +51,7 @@
     <string name="start_over">من البداية</string>
     <string name="channel_gone">لم تعد هذه القناة موجودة في قائمة التشغيل</string>
     <string name="close">إغلاق</string>
+    <string name="cancel">إلغاء</string>
     <string name="second_channel">قناة ثانية</string>
     <string name="second_pick_playlist">اختر قائمة تشغيل</string>
     <string name="second_pick_group">اختر مجموعة</string>

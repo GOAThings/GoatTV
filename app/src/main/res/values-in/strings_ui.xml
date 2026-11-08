@@ -51,6 +51,7 @@
     <string name="start_over">Tonton dari awal</string>
     <string name="channel_gone">Saluran itu sudah tidak ada di playlist</string>
     <string name="close">Tutup</string>
+    <string name="cancel">Batal</string>
     <string name="second_channel">Saluran kedua</string>
     <string name="second_pick_playlist">Pilih playlist</string>
     <string name="second_pick_group">Pilih grup</string>

@@ -58,6 +58,8 @@
     <string name="start_over">Start over</string>
     <string name="channel_gone">That channel is no longer in the playlist</string>
     <string name="close">Close</string>
+    <!-- iPhone: o botão Cancelar das janelas (o Android não o usa). -->
+    <string name="cancel">Cancel</string>
     <string name="second_channel">Second channel</string>
     <string name="second_pick_playlist">Pick a playlist</string>
     <string name="second_pick_group">Pick a group</string>

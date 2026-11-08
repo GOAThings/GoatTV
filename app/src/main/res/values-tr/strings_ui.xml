@@ -51,6 +51,7 @@
     <string name="start_over">Baştan başlat</string>
     <string name="channel_gone">Bu kanal artık oynatma listesinde yok</string>
     <string name="close">Kapat</string>
+    <string name="cancel">İptal</string>
     <string name="second_channel">İkinci kanal</string>
     <string name="second_pick_playlist">Bir oynatma listesi seçin</string>
     <string name="second_pick_group">Bir grup seçin</string>

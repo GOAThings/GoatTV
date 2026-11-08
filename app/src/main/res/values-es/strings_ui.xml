@@ -51,6 +51,7 @@
     <string name="start_over">Desde el principio</string>
     <string name="channel_gone">Ese canal ya no está en la lista</string>
     <string name="close">Cerrar</string>
+    <string name="cancel">Cancelar</string>
     <string name="second_channel">Segundo canal</string>
     <string name="second_pick_playlist">Elige una lista</string>
     <string name="second_pick_group">Elige un grupo</string>

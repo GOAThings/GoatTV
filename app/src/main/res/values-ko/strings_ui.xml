@@ -51,6 +51,7 @@
     <string name="start_over">처음부터</string>
     <string name="channel_gone">이 채널은 더 이상 재생목록에 없어요</string>
     <string name="close">닫기</string>
+    <string name="cancel">취소</string>
     <string name="second_channel">두 번째 채널</string>
     <string name="second_pick_playlist">재생목록 선택</string>
     <string name="second_pick_group">그룹 선택</string>
