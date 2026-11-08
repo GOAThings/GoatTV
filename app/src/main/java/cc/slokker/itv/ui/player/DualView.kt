@@ -35,24 +35,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.streamCandidates
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ChannelLogo
 import cc.slokker.itv.ui.common.explainPlaylistError
@@ -62,12 +58,13 @@ import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.player.engine.ChannelPlayback
+import cc.slokker.itv.ui.player.engine.PlaybackPolicy
+import cc.slokker.itv.ui.player.engine.PlaybackRequest
+import cc.slokker.itv.ui.player.engine.SecondPlaybackHost
 import cc.slokker.itv.ui.player.engine.aspectOrNull
-import cc.slokker.itv.ui.player.engine.buildPlayer
-import cc.slokker.itv.ui.player.engine.loadStream
+import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 
 /** Como se mostram os dois canais. */
 internal enum class DualLayout { PIP, SPLIT }
@@ -79,16 +76,9 @@ internal fun setAudible(player: Player, audible: Boolean) {
         .build()
 }
 
-/** O segundo player e o estado dele (a sintonizar / erro), para as etiquetas no ecrã. */
-@Stable
-internal class SecondPlayback(val player: Player) {
-    var ready by mutableStateOf(false)
-    var failed by mutableStateOf(false)
-}
-
 /**
- * Cria o segundo player enquanto houver segundo canal, e liga-o ao canal escolhido (com as mesmas tentativas
- * ts ⇄ m3u8 do principal e a voltar a ligar sozinho se falhar). Sem passthrough: o som dele é sempre PCM.
+ * O segundo canal: o mesmo [ChannelPlayback] do principal, com a política do segundo (sem pausa do direto nem
+ * VLC, áudio PCM, a voltar a tentar sozinho de 3 em 3 s). Só há player enquanto houver segundo canal (null sem ele).
  */
 @Composable
 internal fun rememberSecondPlayback(
@@ -97,81 +87,29 @@ internal fun rememberSecondPlayback(
     prefs: Prefs,
     streamFormat: String?,
     onVideoSize: (Float) -> Unit,
-): SecondPlayback? {
-    val context = LocalContext.current
-    val active = second != null
-    val playback = remember(active, prefs.engine, prefs.buffer, prefs.decoder, prefs.audioDecoder) {
-        if (active) SecondPlayback(buildPlayer(context, prefs.copy(audioPassthrough = false))) else null
-    }
-    DisposableEffect(playback) { onDispose { playback?.player?.release() } }
+): ChannelPlayback? {
+    val latestPrefs by rememberUpdatedState(prefs)
+    val host = remember { SecondPlaybackHost(vm) { latestPrefs } }
+    val playback = rememberChannelPlayback(PlaybackPolicy.SECOND, host, prefs, channelKey = null, enabled = second != null)
+    val player = playback.player
     val latestOnVideoSize by rememberUpdatedState(onVideoSize)
-    val scope = rememberCoroutineScope()
 
-    DisposableEffect(playback, second?.channel?.key, second?.content?.playlist) {
-        val p = playback
-        val sv = second
-        if (p == null || sv == null || vm.streamsDisabled) return@DisposableEffect onDispose { }
-        val candidates = streamCandidates(sv.content.playlist, sv.channel, streamFormat, sv.content.account?.allowedFormats.orEmpty())
-        var attempt = 0
-        var retryJob: Job? = null
-        fun start() {
-            val candidate = candidates.getOrNull(attempt) ?: return
-            p.ready = false
-            p.player.loadStream(candidate, sv.channel, nearLive = prefs.buffer == Prefs.Buffer.LIVE, userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT })
-            p.player.prepare()
-            p.player.play()
-        }
+    DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) {
-                    p.ready = true
-                    p.failed = false
-                }
-                // O servidor fechou a ligação do segundo canal (o direto não "acaba"): volta a ligar.
-                if (state == Player.STATE_ENDED && p.ready) {
-                    retryJob?.cancel()
-                    retryJob = scope.launch {
-                        delay(prefs.reconnectSeconds.coerceAtLeast(3) * 1_000L)
-                        start()
-                    }
-                }
-            }
-
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 videoSize.aspectOrNull()?.let { latestOnVideoSize(it) }
             }
-
-            override fun onPlayerError(error: PlaybackException) {
-                when {
-                    error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
-                        p.player.seekToDefaultPosition()
-                        p.player.prepare()
-                    }
-                    !p.ready && attempt + 1 < candidates.size -> {
-                        attempt++
-                        start()
-                    }
-                    else -> {
-                        p.failed = true
-                        retryJob?.cancel()
-                        retryJob = scope.launch {
-                            delay(prefs.reconnectSeconds.coerceAtLeast(3) * 1_000L)
-                            attempt = 0
-                            start()
-                        }
-                    }
-                }
-            }
         }
-        p.player.addListener(listener)
-        p.failed = false
-        start()
-        onDispose {
-            retryJob?.cancel()
-            p.player.removeListener(listener)
-        }
+        player?.addListener(listener)
+        onDispose { player?.removeListener(listener) }
     }
-    return playback
+
+    LaunchedEffect(player, second?.channel?.key, second?.content?.playlist) {
+        val sv = second ?: return@LaunchedEffect
+        if (player == null) return@LaunchedEffect
+        playback.tune(PlaybackRequest.of(sv.content, sv.channel, null, streamFormat, stalkerLinks = null))
+    }
+    return playback.takeIf { player != null }
 }
 
 /** Passos da escolha do segundo canal: lista → grupo → canal. Voltar recua um passo. */
@@ -334,7 +272,7 @@ internal fun SecondChannelPicker(
 internal fun DualDecorations(
     second: AppViewModel.SecondView,
     mainChannel: Channel,
-    playback: SecondPlayback?,
+    playback: ChannelPlayback?,
     swapped: Boolean,
     focusSecond: Boolean,
     split: Boolean,
@@ -345,8 +283,9 @@ internal fun DualDecorations(
     val accent = LocalAccent.current
     val secondModifier = if (swapped) bigModifier else smallModifier
     val mainModifier = if (swapped) smallModifier else bigModifier
+    // Sem sinal: não arrancou, ou caiu e ainda não voltou; a sintonizar: a abrir.
     val secondStatus = when {
-        playback?.failed == true -> s.noSignal
+        playback != null && !playback.ready && (playback.failure != null || playback.reconnects > 0) -> s.noSignal
         playback?.ready != true -> s.tuning
         else -> null
     }
