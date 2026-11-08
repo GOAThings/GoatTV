@@ -504,7 +504,9 @@ private fun settingItems(
     // Volta a verificar sempre que a página é mostrada (a pessoa pode ter ido dar a permissão).
     val canDrawOverlays = remember(route) { Settings.canDrawOverlays(context) }
     var confirmLogout by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    // Um "carregar outra vez para confirmar" por ação e por página: armar um não pode confirmar o outro.
+    var confirmEpgReset by remember(route) { mutableStateOf(false) }
+    var confirmDelete by remember(route) { mutableStateOf(false) }
     val displayHdr = remember { HdrType.supportedByDisplay(context) }
     val scope = rememberCoroutineScope()
 
@@ -1166,12 +1168,12 @@ private fun settingItems(
                 add(Item.Nav("epgcountry", s.epgCountryGuide, subtitle = s.epgCountryGuideSub) { push(Route.EpgCountries, "epgcountry") })
                 if (epgMappings.isNotEmpty()) {
                     add(
-                        Item.Action("epgreset", if (confirmDelete) s.pressAgainToConfirm else s.epgResetAll, s.epgResetAllSub) {
-                            if (confirmDelete) {
+                        Item.Action("epgreset", if (confirmEpgReset) s.pressAgainToConfirm else s.epgResetAll, s.epgResetAllSub) {
+                            if (confirmEpgReset) {
                                 vm.resetEpgMappings()
-                                confirmDelete = false
+                                confirmEpgReset = false
                             } else {
-                                confirmDelete = true
+                                confirmEpgReset = true
                             }
                         },
                     )
