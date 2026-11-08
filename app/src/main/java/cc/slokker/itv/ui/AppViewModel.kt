@@ -1131,13 +1131,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = _content.value ?: return emptyList()
         val list = when (categoryId) {
             // Os canais de grupos bloqueados não aparecem em "Todos" nem nos favoritos; os escondidos em lado nenhum.
-            SpecialCategory.ALL -> content.channels.filterNot { isGroupLocked(it.categoryId) || isGroupHidden(it.categoryId) || isChannelHidden(it) }
-            SpecialCategory.FAVORITES ->
-                _favorites.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }
-                    .filterNot { isGroupLocked(it.categoryId) || isGroupHidden(it.categoryId) || isChannelHidden(it) }
+            SpecialCategory.ALL -> content.channels.filter(::isVisible)
+            SpecialCategory.FAVORITES -> _favorites.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
             // Pela ordem em que foram vistos (não se ordenam).
-            SpecialCategory.RECENT -> return _recents.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }
-                .filterNot { isGroupLocked(it.categoryId) || isGroupHidden(it.categoryId) || isChannelHidden(it) }
+            SpecialCategory.RECENT -> return _recents.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
             // Um grupo com ordem escolhida fica por essa ordem (mesmo com "Ordenar por nome").
             else -> {
                 val ordered = orderedChannels(categoryId, includeHidden = false)
@@ -1147,6 +1144,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         return if (_prefs.value.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
     }
+
+    /**
+     * O canal da lista aberta pode aparecer e abrir-se aqui: nem o grupo bloqueado (e por desbloquear nesta sessão),
+     * nem o grupo ou o canal escondidos. A mesma regra em "Todos", favoritos, recentes, pesquisa e números.
+     */
+    private fun isVisible(channel: Channel): Boolean =
+        !isGroupLocked(channel.categoryId) && !isGroupHidden(channel.categoryId) && !isChannelHidden(channel)
 
     // ---- Canais: esconder e reordenar (por grupo) --------------------------------------------
 
@@ -1767,9 +1771,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return if (channelsOf(selected).any { it.uid == channel.uid }) selected else channel.categoryId
     }
 
-    /** Canal com o número [n] (teclas numéricas do comando). Os de grupos bloqueados não contam. */
-    fun channelByNumber(n: Int): Channel? =
-        _content.value?.channels?.firstOrNull { it.num == n && !isGroupLocked(it.categoryId) && !isChannelHidden(it) }
+    /** Canal com o número [n] (teclas numéricas do comando). Os bloqueados e os escondidos (canal ou grupo) não contam. */
+    fun channelByNumber(n: Int): Channel? = _content.value?.channels?.firstOrNull { it.num == n && isVisible(it) }
 
     fun playNumber(n: Int): Boolean {
         val channel = channelByNumber(n) ?: return false
@@ -1791,7 +1794,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = _content.value ?: return emptyList()
         val q = searchKey(query)
         if (q.length < 2) return emptyList()
-        val visible = content.channels.filterNot { isGroupLocked(it.categoryId) || isGroupHidden(it.categoryId) || isChannelHidden(it) }
+        val visible = content.channels.filter(::isVisible)
         val channels = visible.asSequence().filter { q in searchKey(it.name) }.take(MAX_SEARCH).map { SearchHit(it) }.toList()
         val now = System.currentTimeMillis()
         val until = now + 12 * 3600_000L
@@ -1959,7 +1962,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val list = when (groupId) {
             SpecialCategory.FAVORITES -> _favorites.value[id].orEmpty().mapNotNull { content.byKey[it] }.filter(::visible)
             SpecialCategory.ALL -> content.channels.filter(::visible)
-            else -> content.byCategory[groupId].orEmpty().filterNot { p.isChannelHidden(id, it.key) }
+            else -> content.byCategory[groupId].orEmpty().filter(::visible)
         }
         return if (p.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
     }
