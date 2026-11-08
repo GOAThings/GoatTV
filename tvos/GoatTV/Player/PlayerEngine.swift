@@ -117,6 +117,12 @@ final class PlayerEngine: NSObject {
     /// O que se está a abrir é o direto (não o catch-up): pode ir pelo anel.
     @ObservationIgnored private var pausable = false
     @ObservationIgnored private var timeshiftTicker: Task<Void, Never>?
+    /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ms), contado no relógio enquanto está a dar com
+    /// imagem: o tempo do próprio VLC segue o PCR do emissor, que pode saltar (codificador reiniciado, canais feitos de
+    /// ficheiros em ciclo), e vai à frente do que se vê quando lê do disco mais depressa do que em direto.
+    @ObservationIgnored private var ringPlayedMs: Int64 = 0
+    /// Desde quando (relógio do sistema, ms) está a dar sem parar; nil em pausa, a carregar ou ainda sem imagem.
+    @ObservationIgnored private var ringPlayingSince: Int64?
     /// À espera de que a ligação do gravador anterior feche, antes de o leitor abrir a sua.
     @ObservationIgnored private var openTask: Task<Void, Never>?
 
@@ -550,6 +556,7 @@ final class PlayerEngine: NSObject {
         guard picturesShown > 0 || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
         hasPicture = true
         timeshift.seeking = false
+        ringClock()
         vlc.audio?.isMuted = muted
         hideFreeze()
     }
@@ -727,7 +734,7 @@ extension PlayerEngine {
     func togglePause() {
         guard state == .playing else { return }
         // Pausa do direto: se o ponto da pausa já saiu do anel, continua do mais antigo que há.
-        if paused, backend == .vlc, let entry = timeshift.resumeEntry() {
+        if paused, backend == .vlc, let entry = timeshift.resumeEntry(positionMs: ringPosition) {
             reopenRing(entry, live: false)
             return
         }
@@ -736,6 +743,7 @@ extension PlayerEngine {
         case .apple: if paused { avPlayer.play() } else { avPlayer.pause() }
         }
         paused.toggle()
+        ringClock()
     }
 
     /// Altura do vídeo ("1080p"), quando já se sabe.
@@ -972,6 +980,8 @@ extension PlayerEngine {
         DebugLog.add("Player: timeshift jump (\(live ? "live" : "behind"))")
         watchdog?.cancel()
         vlc.stop()
+        ringPlayedMs = 0
+        ringPlayingSince = nil
         paused = false
         positionValid = false
         hasPicture = false
@@ -1029,8 +1039,8 @@ extension PlayerEngine {
     private func updateTimeshift() {
         if timeshift.usesRing {
             guard backend == .vlc else { return timeshift.unavailable() }
-            let position: Int64? = state == .playing && positionValid ? positionMs : nil
-            timeshift.update(positionMs: position, paused: paused, settled: state == .playing && hasPicture && !timeshift.seeking,
+            ringClock()
+            timeshift.update(positionMs: ringPosition, paused: paused, settled: state == .playing && hasPicture && !timeshift.seeking,
                              programmeStart: programmeStart ?? { _ in nil })
         } else if timeshift.hls, backend == .apple, let item = avPlayer.currentItem, item.duration.isIndefinite,
                   let range = item.seekableTimeRanges.last?.timeRangeValue {
@@ -1039,12 +1049,31 @@ extension PlayerEngine {
             let live = CMTimeGetSeconds(CMTimeRangeGetEnd(range))
             let at = CMTimeGetSeconds(avPlayer.currentTime())
             guard oldest.isFinite, live.isFinite, at.isFinite, state == .playing else { return timeshift.unavailable() }
-            timeshift.updateHls(live: Int64(live * 1000), oldest: Int64(oldest * 1000), position: Int64(at * 1000), paused: paused,
+            timeshift.updateHls(end: Int64(live * 1000), oldest: Int64(oldest * 1000), position: Int64(at * 1000), paused: paused,
                                 settled: avPlayer.timeControlStatus == .playing && !timeshift.seeking)
         } else {
             timeshift.unavailable()
         }
     }
+
+    /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ver [ringPlayedMs]).
+    private var ringPosition: Int64 {
+        ringPlayedMs + (ringPlayingSince.map { Self.uptimeMs() - $0 } ?? 0)
+    }
+
+    /// Acerta o relógio do anel com o estado do VLC: conta só a dar, com imagem e sem pausa.
+    private func ringClock() {
+        let running = backend == .vlc && state == .playing && hasPicture && !paused && vlc.isPlaying
+        let now = Self.uptimeMs()
+        if running {
+            if ringPlayingSince == nil { ringPlayingSince = now }
+        } else if let since = ringPlayingSince {
+            ringPlayedMs += now - since
+            ringPlayingSince = nil
+        }
+    }
+
+    private static func uptimeMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
 
     /// HLS: salta no AVPlayer para [ms] (o tempo dele) e continua a dar.
     private func seekApple(to ms: Int64) {

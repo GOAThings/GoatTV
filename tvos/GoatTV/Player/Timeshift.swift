@@ -50,17 +50,15 @@ final class Timeshift {
     /// o [baselineMs], o "zero" do direto.
     @ObservationIgnored private var following = true
     @ObservationIgnored private var baselineMs: Int64 = 0
-    /// Onde vai o VLC desde que começou a ler (ms de vídeo), pelo tempo dele; se esse tempo saltar (o relógio do
-    /// emissor recomeçou ou deu a volta), conta o tempo real que passou, como o anel faz com o PCR.
-    @ObservationIgnored private var playheadMs: Int64 = 0
-    @ObservationIgnored private var lastVlcMs: Int64?
-    @ObservationIgnored private var lastTickAt: Int64 = 0
     @ObservationIgnored private var session: Session?
     @ObservationIgnored private var lastRecorder: TimeshiftRecorder?
     @ObservationIgnored private var generation = 0
     /// HLS no leitor da Apple: o direto e o mais antigo da janela dele, na última atualização (ms do AVPlayer).
     @ObservationIgnored private(set) var hls = false
     @ObservationIgnored private var hlsLive: Int64 = 0
+    /// O último fim da janela do HLS que se viu, e quando (ver [updateHls]).
+    @ObservationIgnored private var hlsSeenEnd: Int64?
+    @ObservationIgnored private var hlsSeenAt: Int64 = 0
 
     /// Um canal aberto pelo anel.
     private final class Session {
@@ -161,8 +159,7 @@ final class Timeshift {
         seeking = false
         following = true
         baselineMs = 0
-        playheadMs = 0
-        lastVlcMs = nil
+        hlsSeenEnd = nil
         unavailable()
     }
 
@@ -203,15 +200,16 @@ final class Timeshift {
 
     // MARK: Estado
 
-    /// Atualiza o estado com o VLC a ler do anel; chamar de meio em meio segundo. [positionMs]: o tempo do VLC
-    /// (desde onde começou a ler; nil se ainda não se sabe). [settled]: a dar normalmente (não a abrir nem a saltar).
+    /// Atualiza o estado com o VLC a ler do anel; chamar de meio em meio segundo. [positionMs]: quanto vídeo o VLC já
+    /// mostrou desde que começou a ler (ver PlayerEngine.ringPlayedMs). [settled]: a dar normalmente (não a abrir nem
+    /// a saltar).
     /// [programmeStart]: quando começou o programa do guia que dá a uma hora (ms desde 1970), ou nil sem guia.
     func update(positionMs: Int64?, paused: Bool, settled: Bool, programmeStart: (Int64) -> Int64?) {
         guard let s = session else { return }
         let ring = s.ring
         guard ring.isTs == true, !s.recorder.notTs else { return unavailable() }
         var live = ring.liveMediaMs
-        let at = s.startMediaMs + playhead(positionMs, paused: paused)
+        let at = s.startMediaMs + (positionMs ?? 0)
         // O programa no ponto que se vê (não no direto: em pausa no fim do jogo, o jogo fica até se passar dele).
         // Folga de um minuto antes do início, que as horas do guia raramente são certas.
         let wall = nowMs()
@@ -223,31 +221,22 @@ final class Timeshift {
         if !available { available = true }
     }
 
-    /// O mesmo para o HLS no leitor da Apple: [live] e [oldest] são as pontas da janela que se pode ver, [position]
+    /// O mesmo para o HLS no leitor da Apple: [end] e [oldest] são as pontas da janela que se pode ver, [position]
     /// onde vai (tudo em ms do AVPlayer).
-    func updateHls(live: Int64, oldest: Int64, position: Int64, paused: Bool, settled: Bool) {
+    func updateHls(end: Int64, oldest: Int64, position: Int64, paused: Bool, settled: Bool) {
         guard hls else { return }
+        // O fim da janela só anda quando o AVPlayer relê a lista (aos saltos, um bocado de cada vez; em pausa às vezes
+        // nem isso): o direto anda com o tempo real desde a última vez que o fim mudou.
+        let now = Self.clock()
+        if end != hlsSeenEnd {
+            hlsSeenEnd = end
+            hlsSeenAt = now
+        }
+        let live = end + (now - hlsSeenAt)
         hlsLive = live
         track(live: live, oldest: oldest, position: position, paused: paused, settled: settled, slack: Self.hlsLiveSlackMs)
         let ok = live - oldest >= Self.hlsMinWindowMs
         if available != ok { available = ok }
-    }
-
-    /// O ponto do VLC (ms desde onde começou a ler) a partir do tempo que ele dá ([vlcMs], nil se ainda não se sabe).
-    private func playhead(_ vlcMs: Int64?, paused: Bool) -> Int64 {
-        let now = Self.clock()
-        defer { lastTickAt = now }
-        guard let vlcMs else { return playheadMs }
-        if let last = lastVlcMs {
-            let step = vlcMs - last
-            let wall = now - lastTickAt
-            playheadMs += (-Self.vlcJumpMs...(wall + Self.vlcJumpMs)).contains(step) ? step : (paused ? 0 : wall)
-        } else {
-            // A primeira leitura depois de abrir: o VLC começa no primeiro keyframe, uns instantes depois do ponto.
-            playheadMs = min(max(0, vlcMs), Self.vlcStartMs)
-        }
-        lastVlcMs = vlcMs
-        return playheadMs
     }
 
     private func track(live: Int64, oldest: Int64, position: Int64, paused: Bool, settled: Bool, slack: Int64) {
@@ -293,8 +282,8 @@ final class Timeshift {
 
     /// Ao continuar depois da pausa: se o ponto da pausa já saiu do anel, o mais antigo que há (com folga); nil se
     /// ainda lá está (continua-se onde se estava).
-    func resumeEntry() -> TimeshiftRing.Entry? {
-        guard let s = session, let oldest = s.ring.oldest, s.startMediaMs + playheadMs < oldest.mediaMs else { return nil }
+    func resumeEntry(positionMs: Int64) -> TimeshiftRing.Entry? {
+        guard let s = session, let oldest = s.ring.oldest, s.startMediaMs + positionMs < oldest.mediaMs else { return nil }
         return s.ring.entry(atOrBefore: oldest.mediaMs + Self.overrunMarginMs)
     }
 
@@ -319,8 +308,6 @@ final class Timeshift {
         // O fim da leitura anterior já não conta.
         _ = s.server.takeEnding()
         s.startMediaMs = entry.mediaMs
-        playheadMs = 0
-        lastVlcMs = nil
         seeking = true
         following = live
         return s.server.url(at: entry.offset)
@@ -364,11 +351,6 @@ final class Timeshift {
     /// No HLS o fim da janela anda aos saltos (um bocado de cada vez, 6–10 s): a folga é maior.
     static let hlsLiveSlackMs: Int64 = 10_000
     static let previousWaitMs = 3_000
-    /// O tempo do VLC entre duas leituras (meio segundo) acerta-se uns segundos ao pausar, continuar ou encher o
-    /// buffer; mais do que isto para trás ou para a frente do tempo real é um salto do relógio do emissor.
-    static let vlcJumpMs: Int64 = 10_000
-    /// Na primeira leitura depois de abrir, o VLC vai no máximo isto à frente do ponto (o primeiro keyframe).
-    static let vlcStartMs: Int64 = 3_000
 }
 
 /// A ligação ao servidor do canal: lê o stream e escreve-o no anel. Se cair depois de já ter dado, volta a ligar de
