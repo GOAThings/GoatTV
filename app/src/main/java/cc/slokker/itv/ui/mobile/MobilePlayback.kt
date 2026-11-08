@@ -19,6 +19,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.data.PlaylistType
@@ -202,6 +203,11 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
             override fun onRenderedFirstFrame() {
                 playback.freeze = null
+            }
+
+            // Legendas do ExoPlayer: como na TV, desenha-as a SubtitleView por cima do vídeo (o VLC desenha as suas).
+            override fun onCues(cueGroup: CueGroup) {
+                playback.view?.subtitleView?.setCues(cueGroup.cues)
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {
