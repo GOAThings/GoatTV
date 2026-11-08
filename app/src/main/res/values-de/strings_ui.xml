@@ -95,6 +95,9 @@
     <string name="minutes">%1$s Min.</string>
     <string name="seek_minute">1 Min. zurück/vor</string>
     <string name="pause">Pause</string>
+    <string name="pause_live">Pause</string>
+    <string name="timeshift_seek">10 s zurück/vor</string>
+    <string name="timeshift_saved">%1$d Min. gespeichert</string>
     <string name="resume">fortsetzen</string>
     <string name="back_key_name">Zurück</string>
     <string name="back_to_live">zurück zu live</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Bild beim Umschalten halten</string>
     <string name="freeze_frame_sub">Kein schwarzer Bildschirm zwischen den Sendern</string>
+    <string name="timeshift">Live-TV pausieren</string>
+    <string name="timeshift_sub">Speichert die letzten Minuten des Senders auf diesem Gerät, zum Pausieren und Zurückspulen</string>
     <string name="reconnect">Neu verbinden, wenn der Stream abbricht</string>
     <string name="no">Nein</string>
     <string name="after_seconds">Nach %1$s s</string>

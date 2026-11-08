@@ -95,6 +95,9 @@
     <string name="minutes">%1$s분</string>
     <string name="seek_minute">1분 뒤로/앞으로</string>
     <string name="pause">일시정지</string>
+    <string name="pause_live">일시정지</string>
+    <string name="timeshift_seek">10초 뒤로/앞으로</string>
+    <string name="timeshift_saved">%1$d분 저장됨</string>
     <string name="resume">재개</string>
     <string name="back_key_name">뒤로</string>
     <string name="back_to_live">실시간으로 돌아가기</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">소프트웨어</string>
     <string name="freeze_frame">전환할 때 화면 유지</string>
     <string name="freeze_frame_sub">채널 사이에 검은 화면 없음</string>
+    <string name="timeshift">실시간 방송 일시정지</string>
+    <string name="timeshift_sub">채널의 최근 몇 분을 이 기기에 저장해 일시정지하고 되감을 수 있습니다</string>
     <string name="reconnect">스트림이 실패하면 다시 연결</string>
     <string name="no">아니요</string>
     <string name="after_seconds">%1$s초 후</string>

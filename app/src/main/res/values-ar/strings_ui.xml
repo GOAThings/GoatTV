@@ -95,6 +95,9 @@
     <string name="minutes">%1$s د</string>
     <string name="seek_minute">رجوع/تقديم دقيقة</string>
     <string name="pause">إيقاف مؤقت</string>
+    <string name="pause_live">إيقاف مؤقت</string>
+    <string name="timeshift_seek">رجوع/تقدم 10 ث</string>
+    <string name="timeshift_saved">تم حفظ %1$d دقيقة</string>
     <string name="resume">استئناف</string>
     <string name="back_key_name">رجوع</string>
     <string name="back_to_live">العودة إلى البث المباشر</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">البرمجيات</string>
     <string name="freeze_frame">الإبقاء على الصورة عند التبديل</string>
     <string name="freeze_frame_sub">بلا شاشة سوداء بين القنوات</string>
+    <string name="timeshift">إيقاف البث المباشر مؤقتًا</string>
+    <string name="timeshift_sub">يحتفظ بآخر دقائق القناة على هذا الجهاز للإيقاف المؤقت والرجوع</string>
     <string name="reconnect">إعادة الاتصال إذا فشل البث</string>
     <string name="no">لا</string>
     <string name="after_seconds">بعد %1$s ث</string>

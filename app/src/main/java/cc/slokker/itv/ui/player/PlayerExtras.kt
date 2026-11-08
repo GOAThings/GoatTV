@@ -187,9 +187,9 @@ internal fun NumberEntryBadge(number: String, channel: Channel?, modifier: Modif
     }
 }
 
-/** Cápsula "CATCH-UP" no canto, sempre visível enquanto não se está em direto. */
+/** Cápsula "CATCH-UP" no canto, sempre visível enquanto não se está em direto (na pausa do direto: quanto vai atrás). */
 @Composable
-internal fun CatchupPill(paused: Boolean, modifier: Modifier = Modifier) {
+internal fun CatchupPill(paused: Boolean, modifier: Modifier = Modifier, label: String = LocalStrings.current.catchupLabel) {
     Row(
         modifier
             .padding(horizontal = 48.dp, vertical = 27.dp)
@@ -199,7 +199,7 @@ internal fun CatchupPill(paused: Boolean, modifier: Modifier = Modifier) {
     ) {
         Icon(if (paused) ItvIcons.Pause else ItvIcons.History, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(LocalStrings.current.catchupLabel, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
     }
 }
 
@@ -249,6 +249,65 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
         }
     }
 }
+
+/**
+ * Barra da pausa do direto, com o aspeto da do catch-up: quanto vai atrás do direto, o que está guardado e as
+ * teclas (← → recuar/avançar, OK pausa, Voltar direto). [pendingBehindMs]: o salto por confirmar.
+ */
+@Composable
+internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendingBehindMs: Long?, paused: Boolean, atLive: Boolean, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
+    val behind = pendingBehindMs ?: behindMs
+    val live = atLive && pendingBehindMs == null
+    val now = System.currentTimeMillis()
+    Column(
+        modifier
+            .padding(start = 48.dp, end = 48.dp, bottom = 27.dp)
+            .fillMaxWidth()
+            .glass(ItvShapes.Panel)
+            .padding(horizontal = 28.dp, vertical = 20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .clip(ItvShapes.Small)
+                    .background(LocalAccent.current.brush)
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    if (live) s.playerLive.uppercase() else "−" + formatDuration(behind),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold).tabular,
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(channel, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(s.timeshiftSaved(((windowMs + 59_999) / 60_000).toInt().coerceAtLeast(1)), color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (paused) Icon(ItvIcons.Pause, contentDescription = null, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // A hora a que passou o que se vê, e a de agora (o direto).
+            Text(formatTime(now - behind), style = MaterialTheme.typography.labelLarge.tabular, color = if (pendingBehindMs != null) LocalAccent.current.start else ItvColors.Text)
+            ProgressBar(
+                if (windowMs <= 0) 1f else (1f - behind.toFloat() / windowMs).coerceIn(0f, 1f),
+                Modifier.weight(1f).padding(horizontal = 14.dp),
+            )
+            Text(formatTime(now), style = MaterialTheme.typography.labelLarge.tabular, color = ItvColors.TextDim)
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            KeyHint("← →", s.timeshiftSeek)
+            KeyHint("OK", if (paused) s.resume else s.pause)
+            if (!live) KeyHint(s.backKeyName, s.backToLive)
+        }
+    }
+}
+
+/** "−1:05": quanto a pausa do direto vai atrás (para a cápsula no canto). */
+internal fun behindLabel(ms: Long) = "−" + formatDuration(ms)
 
 private fun formatDuration(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)

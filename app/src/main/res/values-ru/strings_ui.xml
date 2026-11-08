@@ -95,6 +95,9 @@
     <string name="minutes">%1$s мин</string>
     <string name="seek_minute">назад/вперёд на 1 мин</string>
     <string name="pause">пауза</string>
+    <string name="pause_live">Пауза</string>
+    <string name="timeshift_seek">назад/вперёд 10 с</string>
+    <string name="timeshift_saved">Сохранено %1$d мин</string>
     <string name="resume">продолжить</string>
     <string name="back_key_name">Назад</string>
     <string name="back_to_live">вернуться в эфир</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Программный</string>
     <string name="freeze_frame">Сохранять картинку при переключении</string>
     <string name="freeze_frame_sub">Без чёрного экрана между каналами</string>
+    <string name="timeshift">Пауза прямого эфира</string>
+    <string name="timeshift_sub">Хранит последние минуты канала на этом устройстве, чтобы ставить на паузу и перематывать назад</string>
     <string name="reconnect">Переподключаться при сбое потока</string>
     <string name="no">Нет</string>
     <string name="after_seconds">Через %1$s с</string>

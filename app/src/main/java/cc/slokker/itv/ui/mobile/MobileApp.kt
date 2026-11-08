@@ -126,6 +126,7 @@ import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.player.VlcPlayer
+import cc.slokker.itv.ui.player.behindLabel
 import cc.slokker.itv.ui.player.rememberStreamState
 import cc.slokker.itv.ui.player.trackOptions
 import cc.slokker.itv.ui.theme.ItvColors
@@ -316,7 +317,7 @@ fun MobileMain(vm: AppViewModel) {
                     when (tab) {
                         Tab.Tv -> when {
                             !home -> Column(Modifier.fillMaxSize()) {
-                                PlayerActions(vm, current, onGuide = { epgFor = current }, onPip = pipAction, onOption = { options = it })
+                                PlayerActions(vm, current, playback, onGuide = { epgFor = current }, onPip = pipAction, onOption = { options = it })
                                 NextUp(vm, current)
                                 ChannelsTab(vm, current) { epgFor = it }
                             }
@@ -442,6 +443,18 @@ private fun VideoArea(
     var tick by remember { mutableStateOf(0) }
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val liveEntry = { now: Long -> vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    val ts = playback.timeshift
+    // Em direto, as posições contam-se desde o início do programa a dar (ou desde agora, sem guia).
+    fun liveBase(now: Long) = liveEntry(now)?.startMs ?: now
+    /** Em direto: quanto [target] fica atrás do direto, se for a pausa do direto (no disco) a lá chegar; senão null (catch-up). */
+    fun tsBehind(target: Long): Long? {
+        if (vm.catchup.value != null || !ts.available) return null
+        val now = System.currentTimeMillis()
+        val behind = now - liveBase(now) - target
+        val entry = liveEntry(now)
+        // Mais atrás do que o disco guarda: o catch-up do programa, se houver.
+        return if (behind <= ts.windowMs || entry == null || !vm.canCatchup(channel, entry)) behind.coerceIn(0L, ts.windowMs) else null
+    }
     // No VLC, o tempo deixa de bater certo depois de saltar dentro do stream: reabre-se nessa posição.
     fun seeksInStream(cu: Catchup, target: Long) =
         target >= playback.archiveStart - cu.startMs && playback.player !is VlcPlayer && playback.player.isCurrentMediaItemSeekable
@@ -461,6 +474,10 @@ private fun VideoArea(
     }
     fun goTo(target: Long, position: Long) {
         val cu = vm.catchup.value
+        tsBehind(target)?.let {
+            ts.seekBehind(playback.player, it)
+            return
+        }
         if (cu == null) {
             val entry = liveEntry(System.currentTimeMillis())
             if (entry != null && target < position - 5_000) vm.playCatchup(channel, entry, landing(target, position))
@@ -565,8 +582,12 @@ private fun VideoArea(
                     // Em direto, recua-se para o catch-up do programa a dar; à frente do direto não há nada.
                     val cu = catchup
                     val live = if (cu == null) liveEntry(System.currentTimeMillis()) else null
-                    val canSeek = cu != null || (live != null && vm.canCatchup(channel, live))
-                    fun position() = if (cu != null) playback.archiveStart - cu.startMs + playback.player.currentPosition else System.currentTimeMillis() - (live?.startMs ?: 0L)
+                    val canSeek = cu != null || (cu == null && ts.available) || (live != null && vm.canCatchup(channel, live))
+                    fun position(): Long {
+                        if (cu != null) return playback.archiveStart - cu.startMs + playback.player.currentPosition
+                        val now = System.currentTimeMillis()
+                        return now - (if (ts.available) ts.behindMs else 0L) - liveBase(now)
+                    }
                     if (canSeek) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
                     // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
                     if (!playback.failed && (!playback.ready || playback.freeze != null)) {
@@ -575,18 +596,29 @@ private fun VideoArea(
                         }
                     } else {
                         ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(60.dp).clip(CircleShape).background(HudButton)) {
-                            if (playback.playing) playback.player.pause() else playback.player.play()
+                            when {
+                                playback.playing -> playback.player.pause()
+                                // Pausa do direto: continua de onde parou (o disco continuou a gravar).
+                                cu == null -> ts.resume(playback.player)
+                                else -> playback.player.play()
+                            }
                             touched++
                         }
                     }
-                    if (canSeek) SeekButton(forward = true, enabled = cu != null) { seek(SEEK_MS, position()) }
+                    if (canSeek) SeekButton(forward = true, enabled = cu != null || ts.shifted) { seek(SEEK_MS, position()) }
                 }
                 // Por cima dos botões, sem os mexer.
                 if (seekDelta != 0L) {
                     val target = seekBase + seekDelta
                     val goesLive = catchup?.let { target >= (System.currentTimeMillis() - it.startMs - CATCHUP_MIN_AGE_MS).coerceAtMost(it.durationMs) } == true
+                    val behind = tsBehind(target)
                     Text(
-                        if (goesLive) s.playerGoLive else "→ ${durationText(landing(target, seekBase))}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        when {
+                            behind != null -> if (behind <= TS_LIVE_SNAP_MS) s.playerGoLive else behindLabel(behind)
+                            goesLive -> s.playerGoLive
+                            else -> "→ ${durationText(landing(target, seekBase))}"
+                        },
+                        color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopCenter).offset(y = (-30).dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
@@ -638,14 +670,18 @@ private fun VideoArea(
                     val position = when {
                         cu != null && playback.ready -> playback.archiveStart - cu.startMs + playback.player.currentPosition
                         cu != null -> cu.positionMs
-                        else -> now - entry!!.startMs
+                        // Na pausa do direto, o ponto fica onde está o que se vê.
+                        else -> now - entry!!.startMs - (if (ts.available) ts.behindMs else 0L)
                     }
                     val fraction = scrub ?: (position.toFloat() / duration).coerceIn(0f, 1f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // No catch-up conta onde vai; em direto, as horas já estão por cima.
                         if (cu != null) Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
+                        if (cu == null && ts.shifted && scrub == null) {
+                            Text(behindLabel(ts.behindMs), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
+                        }
                         PlayerBar(
-                            fraction, seekable = cu != null || vm.canCatchup(channel, entry!!),
+                            fraction, seekable = cu != null || ts.available || vm.canCatchup(channel, entry!!),
                             onChange = { scrub = it; touched++ },
                             onEnd = {
                                 val target = ((scrub ?: fraction) * duration).toLong()
@@ -668,7 +704,7 @@ private fun VideoArea(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            LiveButton(catchup == null) { vm.exitCatchup() }
+                            LiveButton(catchup == null && !ts.shifted, behind = behindLabel(ts.behindMs).takeIf { catchup == null }) { if (catchup != null) vm.exitCatchup() else ts.goLive(playback.player) }
                             HudPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
                             HudPill(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline, s.favorite) {
                                 view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -715,9 +751,9 @@ private fun Spinner(modifier: Modifier = Modifier) {
     }
 }
 
-/** O botão do direto: em direto só avisa; em catch-up, volta. */
+/** O botão do direto: em direto só avisa; em catch-up ou na pausa do direto, volta ([behind]: quanto vai atrás). */
 @Composable
-private fun LiveButton(live: Boolean, onClick: () -> Unit) {
+private fun LiveButton(live: Boolean, behind: String? = null, onClick: () -> Unit) {
     val s = LocalStrings.current
     Row(
         Modifier.clip(CircleShape).background(if (live) Color.Transparent else Color.White.copy(alpha = 0.16f)).clickable(enabled = !live, onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
@@ -726,6 +762,9 @@ private fun LiveButton(live: Boolean, onClick: () -> Unit) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(if (live) Color(0xFFE53935) else Color.White.copy(alpha = 0.6f)))
         Spacer(Modifier.width(6.dp))
         Text(if (live) s.playerLive else s.playerGoLive, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        if (!live && behind != null) {
+            Text("  $behind", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, style = LocalTextStyle.current.tabular)
+        }
     }
 }
 
@@ -853,7 +892,7 @@ private fun ControlButton(icon: ImageVector, modifier: Modifier = Modifier.size(
 
 /** Por baixo do vídeo, numa fila que desliza: direto (ou voltar a ele), guia, favorito, áudio, legendas, temporizador e a janela pequena. */
 @Composable
-private fun PlayerActions(vm: AppViewModel, channel: Channel, onGuide: () -> Unit, onPip: (() -> Unit)?, onOption: (PlayerOption) -> Unit) {
+private fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobilePlayback, onGuide: () -> Unit, onPip: (() -> Unit)?, onOption: (PlayerOption) -> Unit) {
     val s = LocalStrings.current
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
@@ -863,7 +902,9 @@ private fun PlayerActions(vm: AppViewModel, channel: Channel, onGuide: () -> Uni
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiveButton(catchup == null) { vm.exitCatchup() }
+        // Atrás do direto (catch-up ou a pausa do direto): o botão volta a ele.
+        val ts = playback.timeshift
+        LiveButton(catchup == null && !ts.shifted, behind = behindLabel(ts.behindMs).takeIf { catchup == null }) { if (catchup != null) vm.exitCatchup() else ts.goLive(playback.player) }
         ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
         favorites.size
         val favorite = vm.isFavorite(channel)
@@ -1268,6 +1309,7 @@ fun MobileMenu(vm: AppViewModel) {
                 Section(s.settingsConnection) {
                     prefRow(Prefs.Key.BUFFER, s.buffer, buffers, prefs.buffer)
                     prefRow(Prefs.Key.RECONNECT_SECONDS, s.reconnect, listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) }, prefs.reconnectSeconds)
+                    ToggleRow(s.timeshift, prefs.timeshift) { vm.setPref(Prefs.Key.TIMESHIFT, it) }
                 }
                 Section(s.settingsAdvanced) {
                     PickRow(s.streamFormat, formats, format, open) { vm.setStreamFormat(it as String?) }
@@ -1574,6 +1616,8 @@ private val MINI_SPACE = 70.dp
 internal val LocalBarSpace = compositionLocalOf { BAR_SPACE }
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
+/** Pausa do direto: a menos disto do direto, um salto volta ao direto (como no Timeshift). */
+private const val TS_LIVE_SNAP_MS = 3_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val CATCHUP_MIN_AGE_MS = 2 * 60_000L
 private const val ZAP_DRAG_PX = 120f

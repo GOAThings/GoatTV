@@ -95,6 +95,9 @@
     <string name="minutes">%1$s मिनट</string>
     <string name="seek_minute">1 मिनट पीछे/आगे</string>
     <string name="pause">रोकें</string>
+    <string name="pause_live">रोकें</string>
+    <string name="timeshift_seek">10 सेकंड पीछे/आगे</string>
+    <string name="timeshift_saved">%1$d मिनट सहेजे गए</string>
     <string name="resume">फिर चलाएँ</string>
     <string name="back_key_name">वापस</string>
     <string name="back_to_live">लाइव पर लौटें</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">सॉफ़्टवेयर</string>
     <string name="freeze_frame">चैनल बदलते समय तस्वीर बनाए रखें</string>
     <string name="freeze_frame_sub">चैनलों के बीच काली स्क्रीन नहीं</string>
+    <string name="timeshift">लाइव टीवी रोकें</string>
+    <string name="timeshift_sub">चैनल के आखिरी कुछ मिनट इस डिवाइस पर रखता है, ताकि रोक सकें और पीछे जा सकें</string>
     <string name="reconnect">स्ट्रीम फ़ेल होने पर फिर से कनेक्ट करें</string>
     <string name="no">नहीं</string>
     <string name="after_seconds">%1$s सेकंड बाद</string>

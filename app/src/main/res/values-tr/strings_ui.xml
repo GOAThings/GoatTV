@@ -95,6 +95,9 @@
     <string name="minutes">%1$s dk</string>
     <string name="seek_minute">1 dk geri/ileri</string>
     <string name="pause">duraklat</string>
+    <string name="pause_live">Duraklat</string>
+    <string name="timeshift_seek">10 sn geri/ileri</string>
+    <string name="timeshift_saved">%1$d dk kaydedildi</string>
     <string name="resume">devam et</string>
     <string name="back_key_name">Geri</string>
     <string name="back_to_live">canlı yayına dön</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Yazılım</string>
     <string name="freeze_frame">Kanal değiştirirken görüntüyü koru</string>
     <string name="freeze_frame_sub">Kanallar arasında siyah ekran yok</string>
+    <string name="timeshift">Canlı yayını duraklat</string>
+    <string name="timeshift_sub">Kanalın son dakikalarını bu cihazda tutar; duraklatıp geri sarabilirsiniz</string>
     <string name="reconnect">Yayın kesilirse yeniden bağlan</string>
     <string name="no">Hayır</string>
     <string name="after_seconds">%1$s sn sonra</string>

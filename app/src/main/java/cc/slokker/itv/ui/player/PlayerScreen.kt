@@ -91,6 +91,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
@@ -184,6 +185,8 @@ fun PlayerScreen(vm: AppViewModel) {
     }
     val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
     val session = remember { PlaybackSession() }
+    /** Pausar o direto (ver Timeshift): o anel em disco do canal a dar. */
+    val timeshift = remember { Timeshift(context) }
     val backdrop = remember { GlassBackdrop() }
     var videoView by remember { mutableStateOf<VideoView?>(null) }
     var freezeFrame by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -238,6 +241,8 @@ fun PlayerScreen(vm: AppViewModel) {
     var paused by remember { mutableStateOf(false) }
     var catchupBarToken by remember { mutableIntStateOf(0) }
     var catchupBarVisible by remember { mutableStateOf(false) }
+    /** Pausa do direto: o salto por confirmar, em ms atrás do direto (← → somam-se, como no catch-up). */
+    var tsPending by remember { mutableStateOf<Long?>(null) }
     // Segundo canal (imagem na imagem / dividido).
     val second by vm.second.collectAsStateWithLifecycle()
     var dualLayout by remember { mutableStateOf(DualLayout.PIP) }
@@ -262,7 +267,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val updateBusy = update is UpdateState.Downloading || update is UpdateState.Installing
     val showUpdate = updateNotice != null && (update is UpdateState.Available || updateBusy) && (
         updateBusy || panel == Panel.None && !showSettings && !overlayOpen && pinFor == null && reminder == null &&
-            sleepWarning == null && catchup == null && !(infoVisible && infoFull)
+            sleepWarning == null && catchup == null && !(timeshift.available && (paused || !timeshift.atLive)) && !(infoVisible && infoFull)
         )
     var updateHold by remember { mutableFloatStateOf(0f) }
     var updateHidesIn by remember { mutableIntStateOf(UPDATE_CARD_SECONDS) }
@@ -288,6 +293,39 @@ fun PlayerScreen(vm: AppViewModel) {
     fun showCatchupBar() {
         catchupBarVisible = true
         catchupBarToken++
+    }
+
+    /** A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal). */
+    fun tsActive() = catchup == null && second == null && timeshift.available
+
+    /** Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up. */
+    fun tsShifted() = tsActive() && (paused || !timeshift.atLive || tsPending != null)
+
+    fun tsToggle() {
+        if (paused) {
+            paused = false
+            timeshift.resume(player)
+        } else {
+            paused = true
+            player.pause()
+        }
+        infoVisible = false
+        showCatchupBar()
+    }
+
+    /** Recua (negativo) ou avança [deltaMs]; o salto só se faz quando se pára de carregar. */
+    fun tsSeek(deltaMs: Long) {
+        val from = tsPending ?: timeshift.behindMs
+        tsPending = (from - deltaMs).coerceIn(0L, timeshift.windowMs)
+        infoVisible = false
+        showCatchupBar()
+    }
+
+    fun tsGoLive() {
+        paused = false
+        tsPending = null
+        timeshift.goLive(player)
+        catchupBarVisible = false
     }
 
     /** Posição atual no programa em catch-up (ms desde o início dele). */
@@ -318,11 +356,16 @@ fun PlayerScreen(vm: AppViewModel) {
         session.error = null
         session.errorStatus = null
         session.ready = false
+        // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes.
+        val shift = latestPrefs.timeshift && !session.catchup && player is ExoPlayer
+        if (!shift) timeshift.clear()
         player.loadStream(
             candidate, session.channel,
             nearLive = prefs.buffer == Prefs.Buffer.LIVE && !session.catchup,
             userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
             transfer = vm.net,
+            timeshift = timeshift.takeIf { shift },
+            reconnectMs = latestPrefs.reconnectSeconds * 1_000L,
         )
         player.prepare()
         player.play()
@@ -374,6 +417,7 @@ fun PlayerScreen(vm: AppViewModel) {
         catchupBase = archive?.startMs ?: 0L
         catchupPosition = cu?.positionMs ?: 0L
         pendingSeek = null
+        tsPending = null
         paused = false
         session.retries = 0
         session.wasPlaying = false
@@ -412,6 +456,40 @@ fun PlayerScreen(vm: AppViewModel) {
         val target = pendingSeek ?: return@LaunchedEffect
         delay(SEEK_COMMIT_MS)
         vm.seekCatchup(target)
+    }
+
+    // Na pausa do direto o mesmo, mas o salto é no disco (recomeça o player nesse ponto do anel).
+    LaunchedEffect(tsPending) {
+        val target = tsPending ?: return@LaunchedEffect
+        delay(SEEK_COMMIT_MS)
+        paused = false
+        timeshift.seekBehind(player, target)
+        tsPending = null
+    }
+
+    // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
+    DisposableEffect(timeshift) {
+        timeshift.onReconnect = { attempt, at, wait ->
+            session.reconnects = attempt
+            session.retryDelayMs = wait
+            session.nextTryAt = at
+        }
+        timeshift.onConnected = {
+            session.reconnects = 0
+            session.nextTryAt = 0L
+        }
+        onDispose {
+            timeshift.onReconnect = null
+            timeshift.onConnected = null
+            timeshift.clear()
+        }
+    }
+
+    LaunchedEffect(player) {
+        while (true) {
+            timeshift.update(player)
+            delay(TIMESHIFT_TICK_MS)
+        }
     }
 
     // Cada player na sua imagem. Ao trocar, primeiro larga-se a imagem antiga (dois players não podem partilhar uma).
@@ -461,11 +539,15 @@ fun PlayerScreen(vm: AppViewModel) {
             override fun onPlaybackStateChanged(state: Int) {
                 session.buffering = state == Player.STATE_BUFFERING
                 // Parou para carregar depois de já estar a dar (a página Ligação e o aviso contam estas paragens).
-                if (state == Player.STATE_BUFFERING && session.ready && !session.catchup) latestVm.net.onStop()
+                // (Não conta a espera depois de saltar na pausa do direto.)
+                if (state == Player.STATE_BUFFERING && session.ready && !session.catchup && !timeshift.seeking) latestVm.net.onStop()
+                if (state == Player.STATE_READY) timeshift.seeking = false
                 if (state == Player.STATE_ENDED) {
                     when {
                         // O programa em catch-up acabou: volta ao direto.
                         session.catchup -> latestVm.exitCatchup()
+                        // Pausa do direto: acabou uma ligação (há outra a seguir) ou o ponto saiu do anel; continua.
+                        timeshift.handleEnded(player) -> Unit
                         // Um canal em direto não acaba: "acabou" quer dizer que o servidor fechou a ligação
                         // (comum em streams .ts). Sem isto o vídeo parava em silêncio e a TV entrava em
                         // proteção de ecrã. Volta a ligar como depois de um erro.
@@ -572,6 +654,7 @@ fun PlayerScreen(vm: AppViewModel) {
             player.removeListener(listener)
             session.retryJob?.cancel()
             player.release()
+            timeshift.clear()
         }
     }
 
@@ -582,6 +665,10 @@ fun PlayerScreen(vm: AppViewModel) {
             // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
             vm.closeSecond()
             player.stop()
+            // O anel apaga-se: ao voltar, o canal recomeça no direto.
+            timeshift.clear()
+            paused = false
+            tsPending = null
             frameRateMatcher?.restore()
             vm.flushLastChannel()
         }
@@ -591,7 +678,7 @@ fun PlayerScreen(vm: AppViewModel) {
     LaunchedEffect(player) {
         while (true) {
             delay(1_000)
-            vm.net.sample(player)
+            vm.net.sample(player, timeshift.recordedMs)
         }
     }
 
@@ -633,7 +720,8 @@ fun PlayerScreen(vm: AppViewModel) {
     // O guia não usa vidro (o vídeo fica pequeno, no canto).
     val glassVisible = !showGuide && (
         panel != Panel.None || showSettings || infoVisible || session.error != null || !session.ready ||
-            showSearch || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || sleepWarning != null || numberEntry.isNotEmpty()
+            showSearch || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || sleepWarning != null || numberEntry.isNotEmpty() ||
+            tsShifted()
         )
     LaunchedEffect(glassVisible, videoView) {
         val view = videoView ?: return@LaunchedEffect
@@ -796,6 +884,7 @@ fun PlayerScreen(vm: AppViewModel) {
             panel != Panel.None -> panel = Panel.None
             infoVisible && session.error == null -> infoVisible = false
             catchup != null -> vm.exitCatchup()
+            tsShifted() -> tsGoLive()
             second != null -> vm.closeSecond()
             prefs.backAction == Prefs.BackAction.GUIDE && now - lastBack >= 2_500 -> {
                 showGuide = true
@@ -930,6 +1019,9 @@ fun PlayerScreen(vm: AppViewModel) {
                             if (catchup != null) {
                                 vm.exitCatchup(); return@onKeyEvent true
                             }
+                            if (tsShifted()) {
+                                tsGoLive(); return@onKeyEvent true
+                            }
                         }
                     }
                     // Catch-up: ← → recuam/avançam 1 minuto, OK pausa.
@@ -960,6 +1052,39 @@ fun PlayerScreen(vm: AppViewModel) {
                                 }
                                 showCatchupBar()
                                 return@onKeyEvent true
+                            }
+                        }
+                    }
+                    // Pausar o direto: Play/Pausa pausa, ⏪ ⏩ recuam/avançam. Em pausa ou atrás do direto, as teclas
+                    // são as do catch-up (← → recuar/avançar, OK pausa, ↑ ↓ só mostram a barra, Voltar direto).
+                    if (tsActive()) {
+                        val shifted = tsShifted()
+                        when (code) {
+                            AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, AndroidKeyEvent.KEYCODE_MEDIA_PLAY, AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                val already = (code == AndroidKeyEvent.KEYCODE_MEDIA_PLAY && !paused) || (code == AndroidKeyEvent.KEYCODE_MEDIA_PAUSE && paused)
+                                if (already) showCatchupBar() else tsToggle()
+                                return@onKeyEvent true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> {
+                                tsSeek(-TIMESHIFT_STEP_MS); return@onKeyEvent true
+                            }
+                            AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                                if (shifted) tsSeek(TIMESHIFT_STEP_MS)
+                                return@onKeyEvent true
+                            }
+                        }
+                        if (shifted) {
+                            when (code) {
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                    tsSeek(if (code == AndroidKeyEvent.KEYCODE_DPAD_LEFT) -TIMESHIFT_STEP_MS else TIMESHIFT_STEP_MS)
+                                    return@onKeyEvent true
+                                }
+                                AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    showCatchupBar(); return@onKeyEvent true
+                                }
+                                AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                    tsToggle(); return@onKeyEvent true
+                                }
                             }
                         }
                     }
@@ -1085,7 +1210,8 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã.
-            if ((session.reconnects > 0 || !session.ready) && session.error == null && !showGuide && numberEntry.isEmpty()) {
+            // Na pausa do direto, a gravar por trás, a cápsula de voltar a ligar não tapa a da pausa.
+            if ((session.reconnects > 0 && !tsShifted() || !session.ready) && session.error == null && !showGuide && numberEntry.isEmpty()) {
                 // Com o segundo canal no canto direito, o aviso passa para a esquerda.
                 TuningPill(
                     channel = current.name,
@@ -1156,6 +1282,8 @@ fun PlayerScreen(vm: AppViewModel) {
                                 vm.setPref(Prefs.Key.ASPECT, next)
                             },
                         )
+                        // Pausar o direto (também com Play/Pausa no comando, para quem o tem).
+                        if (tsActive()) GlassChipButton(ItvIcons.Pause, s.pauseLive, { tsToggle() })
                         if (second == null) {
                             GlassChipButton(ItvIcons.Pip, s.secondChannel, {
                                 infoVisible = false
@@ -1216,6 +1344,22 @@ fun PlayerScreen(vm: AppViewModel) {
                         CatchupBar(cu, catchupPosition, pendingSeek, paused)
                     }
                     if (session.ready || session.error != null) CatchupPill(paused, Modifier.align(Alignment.TopEnd))
+                }
+            }
+
+            if (tsActive() && !showGuide) {
+                val shifted = tsShifted()
+                AnimatedVisibility(
+                    visible = (shifted && catchupBarVisible) || paused || tsPending != null,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = fadeIn() + slideInVertically { it / 3 },
+                    exit = fadeOut() + slideOutVertically { it / 3 },
+                ) {
+                    TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, tsPending, paused, timeshift.atLive)
+                }
+                // Atrás do direto, a cápsula no canto diz quanto (como a do catch-up).
+                if (shifted && session.ready && session.error == null) {
+                    CatchupPill(paused, Modifier.align(Alignment.TopEnd), label = behindLabel(tsPending ?: timeshift.behindMs))
                 }
             }
 
@@ -1432,6 +1576,9 @@ private val PIP_HEIGHT = 198.dp
 private const val CATCHUP_BAR_MS = 5_000L
 private const val SEEK_STEP_MS = 60_000L
 private const val SEEK_COMMIT_MS = 900L
+/** Pausa do direto: cada ← → (ou ⏪ ⏩) recua/avança isto. */
+private const val TIMESHIFT_STEP_MS = 10_000L
+private const val TIMESHIFT_TICK_MS = 500L
 private const val NUMBER_COMMIT_MS = 1_500L
 private const val SLEEP_WARNING_MS = 60_000L
 private const val REMINDER_CARD_MS = 45_000L
@@ -1659,11 +1806,24 @@ private fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
 /**
  * Carrega a stream no player, seja o ExoPlayer ou o VLC (o equivalente ao `setMediaSource`).
  * [transfer]: quem conta os bytes que chegam (a página Ligação); só no ExoPlayer.
+ * [timeshift]: abrir pelo anel do "pausar o direto" (só no ExoPlayer); [reconnectMs] é de quanto em quanto
+ * tempo o gravador dele volta a ligar se a ligação cair.
  */
-internal fun Player.loadStream(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String, transfer: TransferListener? = null) {
+internal fun Player.loadStream(
+    candidate: StreamCandidate,
+    channel: Channel?,
+    nearLive: Boolean,
+    userAgent: String,
+    transfer: TransferListener? = null,
+    timeshift: Timeshift? = null,
+    reconnectMs: Long = 0L,
+) {
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer)
-        is ExoPlayer -> setMediaSource(mediaSourceFor(candidate, channel, nearLive, userAgent, transfer))
+        is ExoPlayer -> {
+            val http = httpFactory(channel, userAgent, transfer)
+            setMediaSource(timeshift?.open(candidate, http, tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http))
+        }
     }
 }
 
@@ -1685,8 +1845,8 @@ private val DECODER_ERRORS = setOf(
 /** O formato do vídeo a tocar (só o ExoPlayer o dá; com o VLC não há AFR nem a cadência do vidro). */
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
 
-/** [nearLive]: nas streams HLS, tocar o mais perto possível do direto. */
-internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearLive: Boolean, userAgent: String, transfer: TransferListener? = null): MediaSource {
+/** A ligação HTTP ao servidor do canal. */
+private fun httpFactory(channel: Channel?, userAgent: String, transfer: TransferListener?): DefaultHttpDataSource.Factory {
     // Muitos servidores redirecionam de http para https ou para outro host.
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(SafeInput.stripControl(channel?.userAgent ?: userAgent))
@@ -1695,7 +1855,17 @@ internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearL
         .setReadTimeoutMs(20_000)
         .setTransferListener(transfer)
     channel?.referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
+    return http
+}
 
+/** Extratores para streams progressivas (.ts e o resto). */
+private fun tsExtractors() = DefaultExtractorsFactory().setTsExtractorFlags(
+    DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+        DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
+)
+
+/** [nearLive]: nas streams HLS, tocar o mais perto possível do direto. */
+private fun mediaSourceFor(candidate: StreamCandidate, nearLive: Boolean, http: DataSource.Factory): MediaSource {
     val item = MediaItem.Builder()
         .setUri(candidate.url)
         .apply {
@@ -1707,10 +1877,6 @@ internal fun mediaSourceFor(candidate: StreamCandidate, channel: Channel?, nearL
     return if (candidate.isHls) {
         HlsMediaSource.Factory(http).createMediaSource(item)
     } else {
-        val extractors = DefaultExtractorsFactory().setTsExtractorFlags(
-            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
-                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
-        )
-        ProgressiveMediaSource.Factory(http, extractors).createMediaSource(item)
+        ProgressiveMediaSource.Factory(http, tsExtractors()).createMediaSource(item)
     }
 }

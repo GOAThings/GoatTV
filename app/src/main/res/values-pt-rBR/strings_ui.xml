@@ -95,6 +95,9 @@
     <string name="minutes">%1$s min</string>
     <string name="seek_minute">voltar/avançar 1 min</string>
     <string name="pause">pausar</string>
+    <string name="pause_live">Pausar</string>
+    <string name="timeshift_seek">voltar/avançar 10 s</string>
+    <string name="timeshift_saved">%1$d min salvos</string>
     <string name="resume">continuar</string>
     <string name="back_key_name">Voltar</string>
     <string name="back_to_live">voltar ao vivo</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Manter a imagem ao trocar</string>
     <string name="freeze_frame_sub">Sem tela preta entre canais</string>
+    <string name="timeshift">Pausar a TV ao vivo</string>
+    <string name="timeshift_sub">Guarda os últimos minutos do canal neste aparelho, para pausar e voltar</string>
     <string name="reconnect">Reconectar se o stream falhar</string>
     <string name="no">Não</string>
     <string name="after_seconds">Após %1$s s</string>

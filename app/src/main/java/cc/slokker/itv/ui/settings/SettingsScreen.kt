@@ -891,6 +891,9 @@ private fun settingItems(
             Item.Toggle(Prefs.Key.FREEZE_FRAME, s.freezeFrame, prefs.freezeFrame, s.freezeFrameSub) {
                 vm.setPref(Prefs.Key.FREEZE_FRAME, it)
             },
+            Item.Toggle(Prefs.Key.TIMESHIFT, s.timeshift, prefs.timeshift, s.timeshiftSub) {
+                vm.setPref(Prefs.Key.TIMESHIFT, it)
+            },
             pref(
                 Prefs.Key.RECONNECT_SECONDS, s.reconnect,
                 listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) },

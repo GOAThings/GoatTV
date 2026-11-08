@@ -72,6 +72,7 @@ class NetMonitor(context: Context) : TransferListener {
     private var lastAt = 0L
     private var lastBuffer = 0L
     private var lastPlaying = false
+    private var lastRecorded = -1L
     private var link = NetLink()
     private var linkAt = 0L
 
@@ -103,6 +104,7 @@ class NetMonitor(context: Context) : TransferListener {
         stopTimes.clear()
         synchronized(replies) { replies.clear() }
         lastAt = 0L
+        lastRecorded = -1L
         _state.value = NetState(link = link)
     }
 
@@ -111,8 +113,12 @@ class NetMonitor(context: Context) : TransferListener {
         stopTimes.addLast(SystemClock.elapsedRealtime())
     }
 
-    /** Uma medição; chamar de segundo a segundo enquanto o canal está aberto. */
-    fun sample(player: Player) {
+    /**
+     * Uma medição; chamar de segundo a segundo enquanto o canal está aberto.
+     * [recordedMs]: com a pausa do direto, o tempo de vídeo já gravado (ver Timeshift.recordedMs). Aí quem lê do
+     * servidor é o gravador, sempre, e o buffer do player enche-se do disco: o vídeo que chegou conta-se pelo gravador.
+     */
+    fun sample(player: Player, recordedMs: Long? = null) {
         val now = SystemClock.elapsedRealtime()
         if (now - linkAt > LINK_EVERY_MS) {
             link = readLink()
@@ -129,14 +135,19 @@ class NetMonitor(context: Context) : TransferListener {
             val wall = now - lastAt
             // Vídeo que chegou: o que o buffer cresceu mais o que se viu entretanto (as posições de um canal em
             // direto mudam de referência; a diferença do buffer não).
-            val media = (buffer - lastBuffer + if (lastPlaying) wall else 0L).coerceAtLeast(0L)
-            samples.addLast(Sample(total - lastBytes, wall, media, buffer, player.isLoading))
+            val media = if (recordedMs != null && lastRecorded >= 0) {
+                (recordedMs - lastRecorded).coerceAtLeast(0L)
+            } else {
+                (buffer - lastBuffer + if (lastPlaying) wall else 0L).coerceAtLeast(0L)
+            }
+            samples.addLast(Sample(total - lastBytes, wall, media, buffer, recordedMs != null || player.isLoading))
             while (samples.size > HISTORY) samples.removeFirst()
         }
         lastBytes = total
         lastAt = now
         lastBuffer = buffer
         lastPlaying = playing
+        lastRecorded = recordedMs ?: -1L
         while (stopTimes.isNotEmpty() && now - stopTimes.first() > STOPS_WINDOW_MS) stopTimes.removeFirst()
         _state.value = evaluate(player, buffer)
     }

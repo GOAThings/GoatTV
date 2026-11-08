@@ -19,6 +19,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Channel
@@ -29,6 +30,7 @@ import cc.slokker.itv.data.catchupCandidates
 import cc.slokker.itv.data.streamCandidates
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.IPTV_USER_AGENT
+import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.player.VlcPlayer
 import cc.slokker.itv.ui.player.buildPlayer
@@ -43,7 +45,7 @@ import kotlinx.coroutines.launch
 
 /** O que a interface do telemóvel precisa de saber do leitor. */
 @Stable
-internal class MobilePlayback(val player: Player) {
+internal class MobilePlayback(val player: Player, val timeshift: Timeshift) {
     var ready by mutableStateOf(false)
     var failed by mutableStateOf(false)
     var playing by mutableStateOf(false)
@@ -73,7 +75,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     var vlcFor by remember { mutableStateOf<String?>(null) }
     val engine = if (vlcFor == channel.key) Prefs.Engine.VLC else prefs.engine
     val playback = remember(engine, prefs.buffer, prefs.decoder, prefs.audioDecoder) {
-        MobilePlayback(buildPlayer(context, prefs.copy(engine = engine)))
+        MobilePlayback(buildPlayer(context, prefs.copy(engine = engine)), Timeshift(context))
     }
     val player = playback.player
     val candidates = remember { arrayOf(emptyList<StreamCandidate>()) }
@@ -105,10 +107,15 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         attempt[0] = index
         playback.ready = false
         playback.failed = false
+        // Pausar o direto, como na TV: pelo anel só no ExoPlayer e em direto; sem ele, o anel fecha antes de abrir.
+        val shift = latestPrefs.timeshift && vm.catchup.value == null && player is ExoPlayer
+        if (!shift) playback.timeshift.clear()
         player.loadStream(
             candidate, latestChannel,
             nearLive = latestPrefs.buffer == Prefs.Buffer.LIVE && vm.catchup.value == null,
             userAgent = latestPrefs.userAgent.ifBlank { IPTV_USER_AGENT },
+            timeshift = playback.timeshift.takeIf { shift },
+            reconnectMs = latestPrefs.reconnectSeconds * 1_000L,
         )
         player.prepare()
         player.play()
@@ -122,6 +129,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         if (!active) {
             playback.freeze = null
             player.stop()
+            playback.timeshift.clear()
             return@LaunchedEffect
         }
         if (latestPrefs.freezeFrame && playback.ready) {
@@ -170,6 +178,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
+                    playback.timeshift.seeking = false
                     playback.ready = true
                     playback.failed = false
                     playback.wasPlaying = true
@@ -178,7 +187,12 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
                 }
                 // Um canal em direto não acaba: o servidor fechou a ligação.
                 if (state == Player.STATE_ENDED) {
-                    if (vm.catchup.value != null) vm.exitCatchup() else reconnect()
+                    // Na pausa do direto pode ser só o fim de uma ligação (há outra a seguir): continua.
+                    when {
+                        vm.catchup.value != null -> vm.exitCatchup()
+                        playback.timeshift.handleEnded(player) -> Unit
+                        else -> reconnect()
+                    }
                 }
             }
 
@@ -215,10 +229,30 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
             }
         }
         player.addListener(listener)
+        // O gravador da pausa do direto volta a ligar sozinho: a pílula conta as tentativas.
+        playback.timeshift.onReconnect = { n, at, wait ->
+            playback.reconnects = n
+            playback.retryDelayMs = wait
+            playback.nextTryAt = at
+        }
+        playback.timeshift.onConnected = {
+            playback.reconnects = 0
+            playback.nextTryAt = 0L
+        }
         onDispose {
             player.removeListener(listener)
             retry[0]?.cancel()
             player.release()
+            playback.timeshift.onReconnect = null
+            playback.timeshift.onConnected = null
+            playback.timeshift.clear()
+        }
+    }
+
+    LaunchedEffect(player) {
+        while (true) {
+            playback.timeshift.update(player)
+            delay(500)
         }
     }
 
@@ -227,6 +261,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         if (latestActive && player.playbackState == Player.STATE_IDLE && candidates[0].isNotEmpty()) start(attempt[0])
         onStopOrDispose {
             player.stop()
+            playback.timeshift.clear()
             vm.flushLastChannel()
         }
     }

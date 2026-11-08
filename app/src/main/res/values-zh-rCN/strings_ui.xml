@@ -95,6 +95,9 @@
     <string name="minutes">%1$s 分钟</string>
     <string name="seek_minute">后退/前进 1 分钟</string>
     <string name="pause">暂停</string>
+    <string name="pause_live">暂停</string>
+    <string name="timeshift_seek">后退/前进 10 秒</string>
+    <string name="timeshift_saved">已保存 %1$d 分钟</string>
     <string name="resume">继续</string>
     <string name="back_key_name">返回</string>
     <string name="back_to_live">回到直播</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">软件</string>
     <string name="freeze_frame">切换时保留画面</string>
     <string name="freeze_frame_sub">切换频道时不黑屏</string>
+    <string name="timeshift">暂停直播</string>
+    <string name="timeshift_sub">在本设备上保存频道最近几分钟，以便暂停和回退</string>
     <string name="reconnect">视频流中断时重新连接</string>
     <string name="no">否</string>
     <string name="after_seconds">%1$s 秒后</string>

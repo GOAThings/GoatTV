@@ -95,6 +95,9 @@
     <string name="minutes">%1$s 分</string>
     <string name="seek_minute">1分戻る/進む</string>
     <string name="pause">一時停止</string>
+    <string name="pause_live">一時停止</string>
+    <string name="timeshift_seek">10秒戻る/進む</string>
+    <string name="timeshift_saved">%1$d分保存済み</string>
     <string name="resume">再開</string>
     <string name="back_key_name">戻る</string>
     <string name="back_to_live">ライブに戻る</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">ソフトウェア</string>
     <string name="freeze_frame">切り替え時に映像を残す</string>
     <string name="freeze_frame_sub">チャンネル間で黒い画面になりません</string>
+    <string name="timeshift">ライブを一時停止</string>
+    <string name="timeshift_sub">チャンネルの直近の数分をこの端末に保存し、一時停止や巻き戻しができます</string>
     <string name="reconnect">ストリームが途切れたら再接続</string>
     <string name="no">しない</string>
     <string name="after_seconds">%1$s 秒後</string>

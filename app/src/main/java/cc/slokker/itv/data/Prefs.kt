@@ -32,6 +32,8 @@ data class Prefs(
     val netGraph: Boolean = false,
     /** Avisar quando o canal está sempre a parar, com a causa e o que experimentar. */
     val netWarnings: Boolean = true,
+    /** Pausar o direto: os últimos minutos do canal guardados na cache, para pausar e recuar (só no ExoPlayer). */
+    val timeshift: Boolean = true,
     // Geral
     /** User-Agent para os servidores IPTV; vazio = o predefinido. */
     val userAgent: String = "",
@@ -118,6 +120,7 @@ data class Prefs(
         const val HDR = "hdr"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
+        const val TIMESHIFT = "timeshift"
         const val USER_AGENT = "user_agent"
         const val AUTO_START = "auto_start"
         const val EXIT_CONFIRM = "exit_confirm"
@@ -213,6 +216,7 @@ data class Prefs(
                 hdr = str(Key.HDR, d.hdr, setOf(Hdr.AUTO, Hdr.SDR)),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
+                timeshift = bool(Key.TIMESHIFT, d.timeshift),
                 userAgent = s.get(Key.USER_AGENT)?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty(),
                 autoStart = bool(Key.AUTO_START, d.autoStart),
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),

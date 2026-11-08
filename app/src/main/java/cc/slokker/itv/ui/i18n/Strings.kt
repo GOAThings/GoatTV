@@ -177,6 +177,9 @@ class Strings(context: Context) {
     val catchupLabel get() = "CATCH-UP"
     val seekMinute get() = s(R.string.seek_minute)
     val pause get() = s(R.string.pause)
+    val pauseLive get() = s(R.string.pause_live)
+    val timeshiftSeek get() = s(R.string.timeshift_seek)
+    fun timeshiftSaved(min: Int) = s(R.string.timeshift_saved, min)
     val resume get() = s(R.string.resume)
     val backKeyName get() = s(R.string.back_key_name)
     val backToLive get() = s(R.string.back_to_live)
@@ -660,6 +663,8 @@ class Strings(context: Context) {
     val decoderSw get() = s(R.string.decoder_sw)
     val freezeFrame get() = s(R.string.freeze_frame)
     val freezeFrameSub get() = s(R.string.freeze_frame_sub)
+    val timeshift get() = s(R.string.timeshift)
+    val timeshiftSub get() = s(R.string.timeshift_sub)
     val reconnect get() = s(R.string.reconnect)
     val no get() = s(R.string.no)
     fun afterSeconds(n: Int) = s(R.string.after_seconds, n)

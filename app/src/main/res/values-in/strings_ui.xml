@@ -95,6 +95,9 @@
     <string name="minutes">%1$s mnt</string>
     <string name="seek_minute">mundur/maju 1 mnt</string>
     <string name="pause">jeda</string>
+    <string name="pause_live">Jeda</string>
+    <string name="timeshift_seek">mundur/maju 10 dtk</string>
+    <string name="timeshift_saved">%1$d mnt tersimpan</string>
     <string name="resume">lanjutkan</string>
     <string name="back_key_name">Kembali</string>
     <string name="back_to_live">kembali ke siaran langsung</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Pertahankan gambar saat ganti saluran</string>
     <string name="freeze_frame_sub">Tanpa layar hitam di antara saluran</string>
+    <string name="timeshift">Jeda siaran langsung</string>
+    <string name="timeshift_sub">Menyimpan menit-menit terakhir saluran di perangkat ini, untuk dijeda dan diputar mundur</string>
     <string name="reconnect">Hubungkan ulang jika stream gagal</string>
     <string name="no">Tidak</string>
     <string name="after_seconds">Setelah %1$s dtk</string>

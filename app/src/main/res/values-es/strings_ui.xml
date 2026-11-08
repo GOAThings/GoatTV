@@ -95,6 +95,9 @@
     <string name="minutes">%1$s min</string>
     <string name="seek_minute">atrás/adelante 1 min</string>
     <string name="pause">pausa</string>
+    <string name="pause_live">Pausar</string>
+    <string name="timeshift_seek">atrás/adelante 10 s</string>
+    <string name="timeshift_saved">%1$d min guardados</string>
     <string name="resume">reanudar</string>
     <string name="back_key_name">Atrás</string>
     <string name="back_to_live">volver al directo</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Mantener la imagen al cambiar</string>
     <string name="freeze_frame_sub">Sin pantalla negra entre canales</string>
+    <string name="timeshift">Pausar el directo</string>
+    <string name="timeshift_sub">Guarda los últimos minutos del canal en este dispositivo, para pausar y retroceder</string>
     <string name="reconnect">Reconectar si el stream falla</string>
     <string name="no">No</string>
     <string name="after_seconds">Tras %1$s s</string>

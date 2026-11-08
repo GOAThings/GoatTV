@@ -95,6 +95,9 @@
     <string name="minutes">%1$s min</string>
     <string name="seek_minute">indietro/avanti 1 min</string>
     <string name="pause">pausa</string>
+    <string name="pause_live">Pausa</string>
+    <string name="timeshift_seek">indietro/avanti 10 s</string>
+    <string name="timeshift_saved">%1$d min salvati</string>
     <string name="resume">riprendi</string>
     <string name="back_key_name">Indietro</string>
     <string name="back_to_live">torna alla diretta</string>
@@ -319,6 +322,8 @@
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Mantieni l\'immagine al cambio</string>
     <string name="freeze_frame_sub">Nessuno schermo nero tra i canali</string>
+    <string name="timeshift">Metti in pausa la diretta</string>
+    <string name="timeshift_sub">Conserva gli ultimi minuti del canale su questo dispositivo, per mettere in pausa e tornare indietro</string>
     <string name="reconnect">Riconnetti se lo stream si interrompe</string>
     <string name="no">No</string>
     <string name="after_seconds">Dopo %1$s s</string>
