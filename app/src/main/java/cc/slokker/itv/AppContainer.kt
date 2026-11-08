@@ -111,11 +111,18 @@ class AppContainer(context: Context) {
         }
     }
 
-    /** User-Agent para os servidores IPTV (o das definições, ou o predefinido). */
-    @Volatile
     /** Testes no emulador: abre a lista a sério, mas sem iniciar o vídeo nem a abertura. */
+    @Volatile
     var noVideo = false
 
+    /**
+     * Nenhum player abre streams (TV, segundo canal e telemóvel): no modo de teste e sem vídeo. O modo de teste só
+     * trava o OkHttp, e os streams vão pelo DefaultHttpDataSource do ExoPlayer ou pelo VLC.
+     */
+    val streamsDisabled: Boolean get() = testMode || noVideo
+
+    /** User-Agent para os servidores IPTV (o das definições, ou o predefinido). Escrito na thread principal, lido nas do OkHttp. */
+    @Volatile
     var userAgent: String = IPTV_USER_AGENT
 
     /** Cliente para servidores IPTV (listas, EPG, logos). */

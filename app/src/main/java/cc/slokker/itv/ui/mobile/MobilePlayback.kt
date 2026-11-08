@@ -92,7 +92,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val latestPlaylist by rememberUpdatedState(data.playlist)
 
     fun start(index: Int) {
-        if (vm.noVideo) return
+        if (vm.streamsDisabled) return
         link[0]?.cancel()
         // Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
         if (latestPlaylist.type == PlaylistType.STALKER && index == 0 && !linkFresh[0]) {

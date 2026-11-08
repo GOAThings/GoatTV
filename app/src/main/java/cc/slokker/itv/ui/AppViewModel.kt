@@ -2296,8 +2296,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { if (local) c.local.save(updated) else c.cache.saveConfig(updated) }
     }
 
-    /** Modo de teste: sem streams nem escritas na conta (ver AppContainer.testMode). */
-    val testMode: Boolean get() = c.testMode
+    /** Modo de teste ou sem vídeo: os players não abrem streams (ver AppContainer.streamsDisabled). */
+    val streamsDisabled: Boolean get() = c.streamsDisabled
     val noVideo: Boolean get() = c.noVideo
 
     /** Grava `settings` ou `favorites` (o objeto inteiro) no perfil GoatTV da conta (sem conta, só no LocalStore). */

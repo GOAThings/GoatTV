@@ -337,7 +337,7 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     fun start(candidateIndex: Int) {
-        if (vm.testMode) return
+        if (vm.streamsDisabled) return
         session.linkJob?.cancel()
         // Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
         if (latestData.playlist.type == PlaylistType.STALKER && candidateIndex == 0 && !session.linkFresh) {

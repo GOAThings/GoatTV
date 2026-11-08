@@ -107,7 +107,7 @@ internal fun rememberSecondPlayback(
     DisposableEffect(playback, second?.channel?.key, second?.content?.playlist) {
         val p = playback
         val sv = second
-        if (p == null || sv == null || vm.testMode) return@DisposableEffect onDispose { }
+        if (p == null || sv == null || vm.streamsDisabled) return@DisposableEffect onDispose { }
         val candidates = streamCandidates(sv.content.playlist, sv.channel, streamFormat, sv.content.account?.allowedFormats.orEmpty())
         var attempt = 0
         var retryJob: Job? = null
