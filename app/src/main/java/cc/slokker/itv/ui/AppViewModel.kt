@@ -56,7 +56,6 @@ import cc.slokker.itv.data.api.PlaylistDto
 import cc.slokker.itv.data.api.epgErrorText
 import cc.slokker.itv.data.api.parseServerError
 import cc.slokker.itv.data.api.unescaped
-import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -1335,22 +1334,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Muda uma definição da conta: String, Boolean, Int, lista de Strings, ou null para repor o padrão. */
     fun setPref(key: String, value: Any?) {
-        when (value) {
-            null -> settings.remove(key)
-            is String -> settings.addProperty(key, value)
-            is Boolean -> settings.addProperty(key, value)
-            is Int -> settings.addProperty(key, value)
-            is Collection<*> -> settings.add(key, JsonArray().apply { value.forEach { add(it.toString()) } })
-            is Map<*, *> -> settings.add(
-                key,
-                JsonObject().apply {
-                    value.forEach { (k, v) ->
-                        if (v is Collection<*>) add(k.toString(), JsonArray().apply { v.forEach { add(it.toString()) } }) else addProperty(k.toString(), v.toString())
-                    }
-                },
-            )
-            else -> error("Tipo não suportado: ${value::class}")
-        }
+        Prefs.put(settings, key, value)
         _prefs.value = Prefs.from(settings)
         applyLanguage()
         saveSettings()

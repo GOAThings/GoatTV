@@ -1,6 +1,7 @@
 package cc.slokker.itv.data
 
 import cc.slokker.itv.ui.i18n.Strings
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import java.security.MessageDigest
 
@@ -256,6 +257,29 @@ data class Prefs(
                 pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },
                 lockedGroups = stringSet(s, Key.LOCKED_GROUPS),
             )
+        }
+
+        /**
+         * Escreve [value] na chave [key] de [settings], na forma que [from] lê (e que o site e a Apple TV esperam):
+         * String, Boolean, Int, lista de Strings, mapa de Strings ou de listas de Strings, ou null para repor o padrão.
+         */
+        fun put(settings: JsonObject, key: String, value: Any?) {
+            when (value) {
+                null -> settings.remove(key)
+                is String -> settings.addProperty(key, value)
+                is Boolean -> settings.addProperty(key, value)
+                is Int -> settings.addProperty(key, value)
+                is Collection<*> -> settings.add(key, JsonArray().apply { value.forEach { add(it.toString()) } })
+                is Map<*, *> -> settings.add(
+                    key,
+                    JsonObject().apply {
+                        value.forEach { (k, v) ->
+                            if (v is Collection<*>) add(k.toString(), JsonArray().apply { v.forEach { add(it.toString()) } }) else addProperty(k.toString(), v.toString())
+                        }
+                    },
+                )
+                else -> error("Tipo não suportado: ${value::class}")
+            }
         }
 
         private fun stringListMap(s: JsonObject, key: String): Map<String, List<String>> =
