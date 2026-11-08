@@ -62,6 +62,7 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,6 +70,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import android.util.Log
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -460,26 +462,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * locais (ficam no LocalStore, para voltar a elas se se terminar a sessão).
      */
     private suspend fun leaveLocal() {
-        loadJob?.cancel()
-        refreshJob?.cancel()
-        saveLastJob?.cancel()
-        pendingLast = null
+        cancelBackgroundJobs()
         pendingLocalProfile = lastConfig?.copy(settings = settings.deepCopy(), favorites = c.gson.toJsonTree(_favorites.value))
             ?: c.local.load()
-        _local.value = false
         c.session.setLocal(false)
-        c.home.clear()
-        clearEpgMappings()
-        _second.value = null
-        _content.value = null
-        _playing.value = null
-        _playlists.value = emptyList()
-        _favorites.value = emptyMap()
-        _recents.value = emptyMap()
-        settings = JsonObject()
-        syncedSettings = JsonObject()
-        settingsRev = null
-        lastConfig = null
+        resetState(Reset.PROFILE)
     }
 
     private fun startLoading(resume: Boolean) {
@@ -951,11 +938,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         syncConfig()
         // Era a última: mostra o aviso de conta sem listas (com o botão para adicionar).
         if (_playlists.value.isEmpty()) {
-            loadJob?.cancel()
-            refreshJob?.cancel()
-            _second.value = null
-            _content.value = null
-            _playing.value = null
+            resetState(Reset.PLAYLISTS)
             startLoading(resume = false)
         }
         return null
@@ -1053,12 +1036,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { c.cache.removePlaylist(playlist.id) }
         when {
             remaining.isEmpty() -> {
-                loadJob?.cancel()
-                refreshJob?.cancel()
-                _second.value = null
-                _content.value = null
-                _playing.value = null
-                viewModelScope.launch { c.home.clear() }
+                resetState(Reset.PLAYLISTS)
                 _screen.value = Screen.Welcome
             }
             playlist.id == _content.value?.playlist?.id -> switchPlaylist(remaining.first())
@@ -2205,34 +2183,86 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun resetToActivation() {
         sessionGeneration++
         c.token = null
-        configEtag = null
-        loadJob?.cancel()
-        saveLastJob?.cancel()
-        refreshJob?.cancel()
-        indexJob?.cancel()
-        c.epg.closeGuides()
-        c.session.clear()
-        c.cache.clear() // tem credenciais das listas
-        c.home.clear()
-        clearEpgMappings()
-        userId = null
-        _email.value = null
-        _playlists.value = emptyList()
+        resetState(Reset.SESSION)
+        _screen.value = Screen.Welcome
+        // Pode correr dentro do loadJob (renewToken → 404), que o resetState acabou de cancelar: o disco limpa-se na mesma.
+        withContext(NonCancellable) {
+            c.session.clear()
+            c.cache.clear() // tem credenciais das listas
+        }
+    }
+
+    /** Até onde vai o [resetState]. */
+    private enum class Reset {
+        /** Apagou-se a última lista: a sessão e o perfil (definições, favoritos) continuam. */
+        PLAYLISTS,
+
+        /**
+         * Sem conta → conta: o perfil desta TV fica no LocalStore (e em pendingLocalProfile). As preferências ficam
+         * até chegarem as da conta, para o aspeto e a língua não mudarem a meio da ligação.
+         */
+        PROFILE,
+
+        /** Terminou a sessão: tudo, e as preferências voltam ao padrão. */
+        SESSION,
+    }
+
+    /**
+     * Esquece o que está aberto e, conforme [scope], o perfil e a sessão. É o único sítio que o faz: um campo novo
+     * com dados de uma lista, do perfil ou da conta junta-se aqui, na secção certa.
+     */
+    private fun resetState(scope: Reset) {
+        // O que está aberto: canal, lista, segundo canal (as listas dele têm credenciais), guias e logótipos.
+        cancelBackgroundJobs()
+        pendingLast = null
+        _second.value = null
+        secondContents.clear()
         _content.value = null
+        _playing.value = null
+        _catchup.value = null
+        zapList = emptyList()
+        previous = null
+        _selectedCategory.value = SpecialCategory.ALL
+        c.epg.closeGuides()
+        clearEpgMappings()
+        countryGuide = null
+        _countryLogos.value = null
+        viewModelScope.launch { c.home.clear() }
+        if (scope == Reset.PLAYLISTS) return
+
+        // O perfil: listas, favoritos, recentes, definições (e a cópia do servidor), desbloqueios e verificações.
+        _local.value = false
+        _playlists.value = emptyList()
         _favorites.value = emptyMap()
+        _recents.value = emptyMap()
         settings = JsonObject()
         syncedSettings = JsonObject()
         settingsRev = null
-        _streamFormat.value = null
-        _prefs.value = Prefs()
+        configEtag = null
         lastConfig = null
-        pendingLast = null
+        _streamFormat.value = null
+        indexHashes.clear()
         _unlocked.value = emptySet()
-        _playing.value = null
-        _second.value = null
-        _local.value = false
-        _selectedCategory.value = SpecialCategory.ALL
-        _screen.value = Screen.Welcome
+        settingsUnlocked = false
+        playlistsChecked.clear()
+        guidesChecked.clear()
+        extraGuidesChecked.clear()
+        lastAttempt.clear()
+        if (scope == Reset.PROFILE) return
+
+        // A sessão.
+        userId = null
+        _email.value = null
+        _deviceName.value = null
+        pendingLocalProfile = null
+        _prefs.value = Prefs()
+    }
+
+    private fun cancelBackgroundJobs() {
+        loadJob?.cancel()
+        refreshJob?.cancel()
+        saveLastJob?.cancel()
+        indexJob?.cancel()
     }
 
     // ---- Avisos e gravação na conta --------------------------------------------------------
