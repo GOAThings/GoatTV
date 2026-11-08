@@ -154,6 +154,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.ui.theme.tabular
 import androidx.tv.material3.LocalTextStyle
+import cc.slokker.itv.ui.player.engine.titleCard
+import cc.slokker.itv.ui.player.engine.status
 
 private val Card = Color.White.copy(alpha = 0.08f)
 private val CardShape = RoundedCornerShape(18.dp)
@@ -540,7 +542,12 @@ private fun VideoArea(
         )
         playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
         when {
-            playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
+            // Não arrancou: porquê (como na TV) e a próxima tentativa; o Play tenta outra vez.
+            playback.failure != null -> Column(Modifier.align(Alignment.Center).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                val failure = playback.failure!!
+                Text(failure.titleCard(s).title, color = ItvColors.Text, fontSize = 14.sp, textAlign = TextAlign.Center)
+                failure.status(s)?.let { Text(it, color = ItvColors.TextDim, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp)) }
+            }
             controls && !pip -> {}
             playback.freeze != null -> Spinner(Modifier.align(Alignment.Center))
             // A abrir: que está a carregar, e o quê (a voltar a ligar diz-o a pílula, mais abaixo).
@@ -595,13 +602,15 @@ private fun VideoArea(
                     }
                     if (canSeek) SeekButton(forward = false) { seek(-SEEK_MS, position()) }
                     // A abrir, a pausa não faz nada: fica o indicador no lugar dela, sem mexer nos outros botões.
-                    if (!playback.failed && (!playback.ready || playback.freeze != null)) {
+                    if (playback.failure == null && (!playback.ready || playback.freeze != null)) {
                         Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
                             Spinner()
                         }
                     } else {
                         ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(60.dp).clip(CircleShape).background(HudButton)) {
                             when {
+                                // Não arrancou: tenta outra vez desde o primeiro formato (o OK da TV).
+                                playback.failure != null -> playback.core.retry()
                                 playback.playing -> playback.player.pause()
                                 // Pausa do direto: continua de onde parou (o disco continuou a gravar).
                                 cu == null -> ts.resume(playback.player)
