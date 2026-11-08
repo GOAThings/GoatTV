@@ -128,7 +128,7 @@ internal fun rememberChannelPlayback(
     channelKey: String?,
     enabled: Boolean = true,
     net: NetMonitor? = null,
-    captureFreeze: () -> ImageBitmap? = { null },
+    captureFreeze: suspend () -> ImageBitmap? = { null },
 ): ChannelPlayback {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

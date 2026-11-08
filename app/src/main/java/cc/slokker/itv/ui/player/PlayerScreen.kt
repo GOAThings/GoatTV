@@ -14,16 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import cc.slokker.itv.data.Reminder
-import cc.slokker.itv.data.catchupCandidates
-import cc.slokker.itv.ui.common.isAccountBusy
 import cc.slokker.itv.ui.glass.GlassChipButton
 import cc.slokker.itv.ui.glass.capsuleBar
 import cc.slokker.itv.ui.glass.ItvIcons
 import androidx.media3.common.Tracks
 import androidx.media3.common.C
 import cc.slokker.itv.ui.i18n.I18n
-import cc.slokker.itv.ui.common.ErrorInfo
-import cc.slokker.itv.ui.common.explainPlaybackError
 import cc.slokker.itv.ui.i18n.LocalStrings
 import android.app.Activity
 import android.os.SystemClock
@@ -62,7 +58,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.createBitmap
 import androidx.compose.ui.input.key.KeyEventType
@@ -76,22 +71,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import android.util.Log
-import androidx.media3.exoplayer.ExoPlayer
-import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Channel
-import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.StreamFormat
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
-import cc.slokker.itv.data.streamCandidates
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.GlassBackdrop
 import cc.slokker.itv.ui.glass.LocalGlassBackdrop
@@ -110,14 +99,17 @@ import kotlinx.coroutines.withContext
 import cc.slokker.itv.ui.player.engine.FREEZE_HEIGHT
 import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
 import cc.slokker.itv.ui.player.engine.aspectOrNull
-import cc.slokker.itv.ui.player.engine.isDecoderError
 import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
-import cc.slokker.itv.ui.player.engine.buildPlayer
 import cc.slokker.itv.ui.player.engine.cannotDecode
-import cc.slokker.itv.ui.player.engine.loadStream
 import cc.slokker.itv.ui.player.engine.selectSurroundTrack
 import cc.slokker.itv.ui.player.engine.videoFormat
+import cc.slokker.itv.ui.player.engine.titleCard
+import cc.slokker.itv.ui.player.engine.status
+import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
+import cc.slokker.itv.ui.player.engine.PlaybackRequest
+import cc.slokker.itv.ui.player.engine.PlaybackPolicy
+import cc.slokker.itv.ui.player.engine.AppPlaybackHost
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -143,28 +135,21 @@ fun PlayerScreen(vm: AppViewModel) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // Canal em que o ExoPlayer não consegue descodificar o áudio ou o vídeo (ex.: áudio MP2): toca com o VLC.
-    // Só nesse canal; ao mudar de canal volta ao player das definições.
-    var vlcForChannel by remember { mutableStateOf<String?>(null) }
-    val engine = if (vlcForChannel == current.key) Prefs.Engine.VLC else prefs.engine
-    // Player, buffer e descodificador só se mudam criando um player novo.
-    val player = remember(engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough, prefs.hdr) {
-        buildPlayer(context, prefs.copy(engine = engine))
-    }
-    val latestKey by rememberUpdatedState(current.key)
-
-    fun playWithVlc() {
-        if (player is VlcPlayer || vlcForChannel == latestKey) return
-        vlcForChannel = latestKey
-        vm.showToast(I18n.s.usingVlc)
-    }
-    val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
-    val session = remember { PlaybackSession() }
-    /** Pausar o direto (ver Timeshift): o anel em disco do canal a dar. */
-    val timeshift = remember { Timeshift(context) }
-    val backdrop = remember { GlassBackdrop() }
+    val latestVm by rememberUpdatedState(vm)
+    val latestPrefs by rememberUpdatedState(prefs)
+    val latestData by rememberUpdatedState(data)
     var videoView by remember { mutableStateOf<VideoView?>(null) }
-    var freezeFrame by remember { mutableStateOf<ImageBitmap?>(null) }
+    // A reprodução (tentativas, voltar a ligar, VLC, pausa do direto, ligação): a mesma do telemóvel e do segundo
+    // canal. O player recria-se quando mudam as definições dele, ou quando este canal passa para o VLC.
+    val host = remember { AppPlaybackHost(vm, { latestPrefs }, { latestData }) }
+    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net) {
+        if (latestPrefs.freezeFrame) videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
+    }
+    val player = checkNotNull(playback.player)
+    val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
+    /** Pausar o direto (ver Timeshift): o anel em disco do canal a dar. */
+    val timeshift = checkNotNull(playback.timeshift)
+    val backdrop = remember { GlassBackdrop() }
 
     var panel by remember { mutableStateOf(if (vm.consumeOpenPanelOnStart()) Panel.Channels else Panel.None) }
     var panelGroup by remember { mutableStateOf(selectedGroup) }
@@ -209,8 +194,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var reminder by remember { mutableStateOf<Reminder?>(null) }
     /** Segundos até o temporizador parar a app (null = sem aviso). */
     var sleepWarning by remember { mutableStateOf<Int?>(null) }
-    // Catch-up: início realmente pedido ao servidor, posição, recuo/avanço por confirmar, pausa.
-    var catchupBase by remember { mutableLongStateOf(0L) }
+    // Catch-up: posição, recuo/avanço por confirmar, pausa.
     var catchupPosition by remember { mutableLongStateOf(0L) }
     var pendingSeek by remember { mutableStateOf<Long?>(null) }
     var paused by remember { mutableStateOf(false) }
@@ -249,11 +233,6 @@ fun PlayerScreen(vm: AppViewModel) {
     /** O OK que pode ser o "manter": quando se carregou (uptimeMillis; 0 = não está) e 1 se já passou a manter. */
     val holdFrom = remember { longArrayOf(0L, 0L) }
     val holdJob = remember { arrayOfNulls<Job>(1) }
-
-    val latestVm by rememberUpdatedState(vm)
-    val latestPrefs by rememberUpdatedState(prefs)
-    val latestData by rememberUpdatedState(data)
-    val latestCatchup by rememberUpdatedState(catchup)
 
     SideEffect { if (panel != Panel.None) lastPanel = panel }
 
@@ -303,65 +282,9 @@ fun PlayerScreen(vm: AppViewModel) {
         catchupBarVisible = false
     }
 
-    /** Posição atual no programa em catch-up (ms desde o início dele). */
-    fun catchupNow(): Long = latestCatchup?.positionAt(catchupBase, player.currentPosition) ?: 0L
-
     fun openChannels() {
         panelGroup = selectedGroup
         panel = Panel.Channels
-    }
-
-    fun start(candidateIndex: Int) {
-        if (vm.streamsDisabled) return
-        session.linkJob?.cancel()
-        // Stalker: cada tentativa pede um link novo ao portal (os antigos caducam).
-        if (latestData.playlist.type == PlaylistType.STALKER && candidateIndex == 0 && !session.linkFresh) {
-            val channel = session.channel ?: return
-            session.ready = false
-            session.linkJob = scope.launch {
-                session.candidates = latestVm.stalkerCandidates(latestData.playlist, channel)
-                session.linkFresh = true
-                start(0)
-            }
-            return
-        }
-        session.linkFresh = false
-        val candidate = session.candidates.getOrNull(candidateIndex) ?: return
-        session.attempt = candidateIndex
-        session.error = null
-        session.errorStatus = null
-        session.ready = false
-        // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes.
-        val shift = latestPrefs.timeshift && !session.catchup && player is ExoPlayer
-        if (!shift) timeshift.clear()
-        player.loadStream(
-            candidate, session.channel,
-            nearLive = prefs.buffer == Prefs.Buffer.LIVE && !session.catchup,
-            userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
-            transfer = vm.net,
-            timeshift = timeshift.takeIf { shift },
-            reconnectMs = latestPrefs.reconnectSeconds * 1_000L,
-        )
-        player.prepare()
-        player.play()
-    }
-
-    /** Uma só espera de cada vez: dois erros seguidos não deixam duas reaberturas pendentes. */
-    fun retryLater(block: suspend () -> Unit) {
-        session.retryJob?.cancel()
-        session.retryJob = scope.launch { block() }
-    }
-
-    /** Caiu a meio: volta a ligar daqui a [delayMs] (a cápsula no canto conta os segundos e as tentativas). */
-    fun reconnectIn(delayMs: Long) {
-        session.reconnects++
-        session.retryDelayMs = delayMs
-        session.nextTryAt = SystemClock.elapsedRealtime() + delayMs
-        retryLater {
-            delay(delayMs)
-            session.nextTryAt = 0L
-            start(session.attempt)
-        }
     }
 
     // O cartão de versão nova desaparece sozinho (não conta enquanto se mantém OK, nem a descarregar).
@@ -383,29 +306,12 @@ fun PlayerScreen(vm: AppViewModel) {
     // Chaves estáveis: a lista atualizada por trás (mesmo servidor e canal) não reinicia o stream.
     // Em catch-up o mesmo: cada recuo/avanço é um pedido novo ao servidor a partir dessa posição.
     LaunchedEffect(current.key, data.playlist, player, catchup) {
-        if (prefs.freezeFrame && session.channel != null && session.ready) {
-            freezeFrame = videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap()
-        }
-        session.channel = current
-        vm.net.reset()
         val cu = catchup
-        val archive = cu?.let { catchupCandidates(data.playlist, it, data.account?.timezone) }
-        session.catchup = cu != null
-        session.candidates = archive?.candidates ?: streamCandidates(
-            data.playlist, current, streamFormat, data.account?.allowedFormats.orEmpty(),
-        )
-        catchupBase = archive?.startMs ?: 0L
         catchupPosition = cu?.positionMs ?: 0L
         pendingSeek = null
         tsPending = null
         paused = false
-        session.retries = 0
-        session.wasPlaying = false
-        session.audioChosen = false
-        session.retryJob?.cancel()
-        session.reconnects = 0
-        session.nextTryAt = 0L
-        start(0)
+        playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
         when {
             cu != null -> {
                 infoVisible = false
@@ -419,7 +325,7 @@ fun PlayerScreen(vm: AppViewModel) {
     // Posição no catch-up (para a barra).
     LaunchedEffect(catchup, player) {
         while (catchup != null) {
-            if (session.ready) catchupPosition = catchupNow()
+            if (playback.ready) playback.programmePositionMs()?.let { catchupPosition = it }
             delay(500)
         }
     }
@@ -445,31 +351,6 @@ fun PlayerScreen(vm: AppViewModel) {
         paused = false
         timeshift.seekBehind(player, target)
         tsPending = null
-    }
-
-    // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
-    DisposableEffect(timeshift) {
-        timeshift.onReconnect = { attempt, at, wait ->
-            session.reconnects = attempt
-            session.retryDelayMs = wait
-            session.nextTryAt = at
-        }
-        timeshift.onConnected = {
-            session.reconnects = 0
-            session.nextTryAt = 0L
-        }
-        onDispose {
-            timeshift.onReconnect = null
-            timeshift.onConnected = null
-            timeshift.clear()
-        }
-    }
-
-    LaunchedEffect(player) {
-        while (true) {
-            timeshift.update(player) { wall -> session.channel?.let { latestVm.programmeStartAt(it, wall) } }
-            delay(TIMESHIFT_TICK_MS)
-        }
     }
 
     // Cada player na sua imagem. Ao trocar, primeiro larga-se a imagem antiga (dois players não podem partilhar uma).
@@ -508,153 +389,49 @@ fun PlayerScreen(vm: AppViewModel) {
         videoView?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
+    // O que é só da TV (o resto dos eventos trata-o o ChannelPlayback): proporção, AFR, áudio surround, legendas.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                session.buffering = state == Player.STATE_BUFFERING
-                // Parou para carregar depois de já estar a dar (a página Ligação e o aviso contam estas paragens).
-                // (Não conta a espera depois de saltar na pausa do direto.)
-                if (state == Player.STATE_BUFFERING && session.ready && !session.catchup && !timeshift.seeking) latestVm.net.onStop()
-                if (state == Player.STATE_READY) timeshift.seeking = false
-                if (state == Player.STATE_ENDED) {
-                    when {
-                        // O programa em catch-up acabou: volta ao direto.
-                        session.catchup -> latestVm.exitCatchup()
-                        // Pausa do direto: acabou uma ligação (há outra a seguir) ou o ponto saiu do anel; continua.
-                        timeshift.handleEnded(player) -> Unit
-                        // Um canal em direto não acaba: "acabou" quer dizer que o servidor fechou a ligação
-                        // (comum em streams .ts). Sem isto o vídeo parava em silêncio e a TV entrava em
-                        // proteção de ecrã. Volta a ligar como depois de um erro.
-                        session.wasPlaying -> reconnectIn(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
-                    }
-                }
-                if (state == Player.STATE_READY && !session.ready) {
-                    session.ready = true
-                    session.wasPlaying = true
-                    session.retries = 0
-                    session.reconnects = 0
-                    session.nextTryAt = 0L
-                    val candidate = session.candidates.getOrNull(session.attempt)
-                    if (session.attempt > 0 && candidate != null) latestVm.onFormatWorked(candidate.format)
-                }
-            }
-
-            override fun onRenderedFirstFrame() {
-                freezeFrame = null
-            }
-
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 videoSize.aspectOrNull()?.let { latestMainView?.setAspectRatio(it) }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
-                if (player !is VlcPlayer && tracks.cannotDecode()) {
-                    playWithVlc()
-                    return
-                }
+                // A passar para o VLC (o ChannelPlayback trata disso): neste player não há nada a escolher.
+                if (player !is VlcPlayer && tracks.cannotDecode()) return
                 // AFR: a TV acompanha a cadência do canal.
                 if (latestPrefs.afr) player.videoFormat()?.let { f -> frameRateMatcher?.match(f.frameRate, HdrType.of(f)) }
                 // Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
-                if (latestPrefs.surroundDefault && !session.audioChosen) {
-                    session.audioChosen = selectSurroundTrack(player, tracks)
+                if (latestPrefs.surroundDefault && !playback.audioChosen) {
+                    playback.audioChosen = selectSurroundTrack(player, tracks)
                 }
-            }
-
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                session.playing = isPlaying
             }
 
             override fun onCues(cueGroup: CueGroup) {
                 latestMainView?.subtitleView?.setCues(cueGroup.cues)
             }
-
-            override fun onPlayerError(error: PlaybackException) {
-                if (session.wasPlaying && !session.catchup) latestVm.net.onStop()
-                when {
-                    // Muito comum em live: voltar ao ponto em direto.
-                    error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
-                        player.seekToDefaultPosition()
-                        player.prepare()
-                    }
-                    // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
-                    player !is VlcPlayer && isDecoderError(error.errorCode) -> playWithVlc()
-                    // Ainda não começou: tenta o outro formato (ts ⇄ m3u8) uma vez.
-                    !session.ready && session.attempt + 1 < session.candidates.size -> start(session.attempt + 1)
-                    // Catch-up caiu a meio: pede de novo a partir de onde ia.
-                    session.wasPlaying && session.catchup -> {
-                        val position = catchupNow()
-                        retryLater {
-                            delay(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
-                            latestVm.seekCatchup(position)
-                        }
-                    }
-                    // Caiu a meio: volta a ligar, de N em N segundos, enquanto se estiver no canal.
-                    session.wasPlaying && latestPrefs.reconnectSeconds > 0 -> reconnectIn(latestPrefs.reconnectSeconds * 1_000L)
-                    else -> {
-                        freezeFrame = null
-                        session.error = ErrorInfo(I18n.s.cantOpenChannel.removeSuffix("."))
-                        session.errorStatus = I18n.s.analysingError
-                        showInfo()
-                        // Não arrancou: mostra o erro e tenta mais umas vezes (sem martelar o servidor).
-                        val retry = latestPrefs.reconnectSeconds > 0 && session.retries < MAX_START_RETRIES
-                        if (retry) session.retries++
-                        retryLater {
-                            // Pergunta ao servidor se a conta está mesmo ocupada antes de o dizer.
-                            val connections = if (error.errorCode in 2000..2999) latestVm.xtreamConnections() else null
-                            val format = session.candidates.getOrNull(session.attempt)?.format
-                            session.error = if (session.catchup && !isAccountBusy(latestData, connections)) {
-                                I18n.s.errCatchup.copy(detail = I18n.s.technical(error.errorCodeName))
-                            } else {
-                                explainPlaybackError(I18n.s, error, latestData, connections, latestPrefs, format)
-                            }
-                            session.errorStatus = if (retry) {
-                                I18n.s.retryIn(session.retries, MAX_START_RETRIES, latestPrefs.reconnectSeconds)
-                            } else {
-                                null
-                            }
-                            if (retry) {
-                                delay(latestPrefs.reconnectSeconds * 1_000L)
-                                start(0)
-                            }
-                        }
-                    }
-                }
-            }
         }
         player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            session.retryJob?.cancel()
-            player.release()
-            timeshift.clear()
-        }
+        onDispose { player.removeListener(listener) }
     }
 
-    // Box em segundo plano / ecrã desligado: parar o stream (e libertar a ligação Xtream).
-    LifecycleStartEffect(player) {
-        if (player.playbackState == Player.STATE_IDLE && session.candidates.isNotEmpty()) start(session.attempt)
+    // Não arrancou: a informação do canal aparece com o erro.
+    LaunchedEffect(playback.failure?.analysing) {
+        if (playback.failure?.analysing == true) showInfo()
+    }
+
+    // Box em segundo plano / ecrã desligado: parar o stream (e libertar a ligação Xtream). Ao recriar o player
+    // (definições, VLC) o canal só volta a abrir pelo efeito acima, uma vez.
+    LifecycleStartEffect(playback) {
+        playback.onStart()
         onStopOrDispose {
             // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
             vm.closeSecond()
-            // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça acima.
-            session.retryJob?.cancel()
-            session.linkJob?.cancel()
-            session.nextTryAt = 0L
-            player.stop()
-            // O anel apaga-se: ao voltar, o canal recomeça no direto.
-            timeshift.clear()
+            playback.stop()
             paused = false
             tsPending = null
             frameRateMatcher?.restore()
             vm.flushLastChannel()
-        }
-    }
-
-    // Ligação do canal: uma medição por segundo (velocidade, buffer, paragens).
-    LaunchedEffect(player) {
-        while (true) {
-            delay(1_000)
-            vm.net.sample(player, timeshift.recordedMs)
         }
     }
 
@@ -695,7 +472,7 @@ fun PlayerScreen(vm: AppViewModel) {
     // Fundo do vidro: miniatura desfocada do vídeo, renovada enquanto houver painéis à vista.
     // O guia não usa vidro (o vídeo fica pequeno, no canto).
     val glassVisible = !showGuide && (
-        panel != Panel.None || showSettings || infoVisible || session.error != null || !session.ready ||
+        panel != Panel.None || showSettings || infoVisible || playback.failure != null || !playback.ready ||
             showSearch || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || sleepWarning != null || numberEntry.isNotEmpty() ||
             tsShifted()
         )
@@ -736,8 +513,8 @@ fun PlayerScreen(vm: AppViewModel) {
 
     // A informação esconde-se 4 s depois de o canal arrancar (fica enquanto sintoniza ou há erro).
     // A barra completa (OK) tem botões: fica enquanto se mexe no comando.
-    LaunchedEffect(infoToken, session.ready, session.error, infoFull) {
-        if (session.ready && session.error == null) {
+    LaunchedEffect(infoToken, playback.ready, playback.failure, infoFull) {
+        if (playback.ready && playback.failure == null) {
             if (infoFull) {
                 lastInput[0] = SystemClock.uptimeMillis()
                 while (SystemClock.uptimeMillis() - lastInput[0] < HUD_TIMEOUT_MS) delay(500)
@@ -858,7 +635,7 @@ fun PlayerScreen(vm: AppViewModel) {
             // Voltar fecha o painel lateral (canais ou grupos) e volta ao vídeo. Antes os grupos voltavam
             // aos canais e os canais aos grupos: vindo de um grupo, o painel nunca chegava a fechar.
             panel != Panel.None -> panel = Panel.None
-            infoVisible && session.error == null -> infoVisible = false
+            infoVisible && playback.failure == null -> infoVisible = false
             catchup != null -> vm.exitCatchup()
             tsShifted() -> tsGoLive()
             second != null -> vm.closeSecond()
@@ -953,10 +730,7 @@ fun PlayerScreen(vm: AppViewModel) {
                             numberEntry = ""
                             if (n != null && !vm.playNumber(n)) vm.showToast(I18n.s.noChannelNumber(n))
                         } else {
-                            if (session.error != null) {
-                                session.retries = 0
-                                start(0)
-                            }
+                            if (playback.failure != null) playback.retry()
                             showInfo(full = true)
                         }
                         return@onKeyEvent true
@@ -1019,9 +793,8 @@ fun PlayerScreen(vm: AppViewModel) {
                             }
                             AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
                             AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, AndroidKeyEvent.KEYCODE_MEDIA_PLAY, AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                if (session.error != null) {
-                                    session.retries = 0
-                                    start(0)
+                                if (playback.failure != null) {
+                                    playback.retry()
                                 } else {
                                     paused = !paused
                                     if (paused) player.pause() else player.play()
@@ -1135,12 +908,12 @@ fun PlayerScreen(vm: AppViewModel) {
                             videoView = view
                         }
                     },
-                    update = { it.keepScreenOn = session.playing || session.buffering },
+                    update = { it.keepScreenOn = playback.playing || playback.buffering },
                     modifier = Modifier.fillMaxSize(),
                 )
 
                 // Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto).
-                freezeFrame?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
             }
 
             // Segundo canal: a imagem pequena (por cima da grande) ou a metade direita.
@@ -1187,19 +960,24 @@ fun PlayerScreen(vm: AppViewModel) {
 
             // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã.
             // Na pausa do direto, a gravar por trás, a cápsula de voltar a ligar não tapa a da pausa.
-            if ((session.reconnects > 0 && !tsShifted() || !session.ready) && session.error == null && !showGuide && numberEntry.isEmpty()) {
+            if ((playback.reconnects > 0 && !tsShifted() || !playback.ready) && playback.failure == null && !showGuide && numberEntry.isEmpty()) {
                 // Com o segundo canal no canto direito, o aviso passa para a esquerda.
                 TuningPill(
                     channel = current.name,
-                    reconnecting = session.wasPlaying,
-                    attempt = session.reconnects,
-                    nextTryAt = session.nextTryAt,
-                    waitMs = session.retryDelayMs,
+                    reconnecting = playback.wasPlaying,
+                    attempt = playback.reconnects,
+                    nextTryAt = playback.nextTryAt,
+                    waitMs = playback.retryDelayMs,
                     modifier = Modifier.align(if (second != null) Alignment.TopStart else Alignment.TopEnd),
                 )
             }
 
-            if (!showGuide) session.error?.let { ErrorCard(it, session.errorStatus, Modifier.align(Alignment.Center)) }
+            if (!showGuide) {
+                playback.failure?.let { f ->
+                    val s = LocalStrings.current
+                    ErrorCard(f.titleCard(s), f.status(s), Modifier.align(Alignment.Center))
+                }
+            }
 
             val infoAllowed = infoVisible && panel == Panel.None && !showSettings && !overlayOpen && catchup == null
             AnimatedVisibility(
@@ -1219,7 +997,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 val s = LocalStrings.current
                 val favorites by vm.favorites.collectAsStateWithLifecycle()
                 val isFavorite = current.key in favorites[data.playlist.id].orEmpty()
-                val container = session.candidates.getOrNull(session.attempt)?.format
+                val container = playback.currentCandidate?.format
                 NowPlayingBar(current, data, vm, badges = qualityBadges(stream, container)) { live ->
                     // ← → andam entre os botões (sem abrir a lista nem saltar de canal).
                     val focusManager = LocalFocusManager.current
@@ -1319,7 +1097,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     ) {
                         CatchupBar(cu, catchupPosition, pendingSeek, paused)
                     }
-                    if (session.ready || session.error != null) CatchupPill(paused, Modifier.align(Alignment.TopEnd))
+                    if (playback.ready || playback.failure != null) CatchupPill(paused, Modifier.align(Alignment.TopEnd))
                 }
             }
 
@@ -1334,7 +1112,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, tsPending, paused, timeshift.atLive)
                 }
                 // Atrás do direto, a cápsula no canto diz quanto (como a do catch-up).
-                if (shifted && session.ready && session.error == null) {
+                if (shifted && playback.ready && playback.failure == null) {
                     CatchupPill(paused, Modifier.align(Alignment.TopEnd), label = behindLabel(tsPending ?: timeshift.behindMs))
                 }
             }
@@ -1426,17 +1204,18 @@ fun PlayerScreen(vm: AppViewModel) {
                     if (bigger != null) add(NetHintAction(ItvIcons.Buffer, s.netBiggerBuffer) { netHint = false; vm.setPref(Prefs.Key.BUFFER, bigger) })
                     // O outro formato (TS ⇄ HLS), quando é mesmo outro endereço (Xtream, ou .ts ⇄ .m3u8); num link sem
                     // extensão o "outro" é o mesmo URL, que já falhou nesse formato.
-                    val playingNow = session.candidates.getOrNull(session.attempt)
-                    val other = session.candidates.indices.firstOrNull { i ->
-                        val c = session.candidates[i]
-                        i != session.attempt && c.format != playingNow?.format && c.url != playingNow?.url
+                    val candidates = playback.candidates
+                    val playingNow = playback.currentCandidate
+                    val other = candidates.indices.firstOrNull { i ->
+                        val c = candidates[i]
+                        i != playback.attempt && c.format != playingNow?.format && c.url != playingNow?.url
                     }
                     if (other != null && catchup == null) {
-                        val format = session.candidates[other].format
+                        val format = candidates[other].format
                         add(NetHintAction(ItvIcons.SwapPlaylist, s.netTryFormat(if (format == StreamFormat.HLS) "HLS" else "TS")) {
                             netHint = false
                             vm.setStreamFormat(format)
-                            start(other)
+                            playback.switchTo(other)
                         })
                     }
                     add(NetHintAction(ItvIcons.Info, s.netDetails) { netHint = false; settingsAtConnection = true; showSettings = true })
@@ -1572,44 +1351,9 @@ private fun digitOf(code: Int): Char? = when (code) {
     in AndroidKeyEvent.KEYCODE_NUMPAD_0..AndroidKeyEvent.KEYCODE_NUMPAD_9 -> '0' + (code - AndroidKeyEvent.KEYCODE_NUMPAD_0)
     else -> null
 }
-private const val MAX_START_RETRIES = 3
 private const val BACKDROP_WIDTH = 128
 private const val BACKDROP_HEIGHT = 72
 private const val DEFAULT_BACKDROP_FPS = 30f
 
 /** Quanto tempo depois da última tecla o fundo do vidro volta a acompanhar o vídeo. */
 private const val BACKDROP_PAUSE_MS = 400L
-
-/** Estado da reprodução do canal atual (tentativas, erro, etc.). */
-private class PlaybackSession {
-    var channel: Channel? = null
-    var candidates: List<StreamCandidate> = emptyList()
-    var attempt = 0
-    var retries = 0
-    var retryJob: Job? = null
-    var linkJob: Job? = null
-    var linkFresh = false
-
-    /** Já se escolheu a faixa de áudio deste canal (surround por defeito). */
-    var audioChosen = false
-
-    /** Já tocou neste canal (uma falha agora é uma quebra, não um canal em baixo). */
-    var wasPlaying = false
-    var ready by mutableStateOf(false)
-    var buffering by mutableStateOf(false)
-    var playing by mutableStateOf(false)
-    var error by mutableStateOf<ErrorInfo?>(null)
-
-    /** A tocar um programa em catch-up (não em direto). */
-    var catchup = false
-
-    /** Linha de estado no cartão de erro (a analisar / próxima tentativa). */
-    var errorStatus by mutableStateOf<String?>(null)
-
-    /** Caiu depois de estar a dar: a tentativa de voltar a ligar (1, 2…; 0 = não caiu). */
-    var reconnects by mutableIntStateOf(0)
-
-    /** Quando é a próxima tentativa (elapsedRealtime; 0 = a tentar agora) e quanto se esperou por ela. */
-    var nextTryAt by mutableLongStateOf(0L)
-    var retryDelayMs = 0L
-}

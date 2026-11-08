@@ -76,7 +76,7 @@ internal class ChannelPlayback(
     var freeze by mutableStateOf<ImageBitmap?>(null)
 
     /** Tira a imagem para [freeze] (null = definição desligada ou sem imagem). */
-    var freezeCapture: (() -> ImageBitmap?)? = null
+    var freezeCapture: (suspend () -> ImageBitmap?)? = null
 
     /** Canal que o ExoPlayer não descodifica: toca com o VLC (só nesse; ao mudar de canal volta o das definições). */
     var vlcFor by mutableStateOf<String?>(null)
@@ -175,9 +175,9 @@ internal class ChannelPlayback(
 
     /**
      * Novo canal (ou outro ponto do catch-up, ou um player novo): guarda a última imagem e recomeça pelas
-     * tentativas na ordem do formato preferido.
+     * tentativas na ordem do formato preferido. Num efeito: espera pela imagem antes de abrir.
      */
-    fun tune(request: PlaybackRequest) {
+    suspend fun tune(request: PlaybackRequest) {
         if (ready) freezeCapture?.invoke()?.let { freeze = it }
         this.request = request
         candidates = request.candidates

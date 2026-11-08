@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -101,6 +102,8 @@ class ChannelPlaybackTest {
 
     private fun live(vararg c: StreamCandidate = arrayOf(ts, hls)) = PlaybackRequest(channel, null, 0L, c.toList())
 
+    private fun ChannelPlayback.tuneNow(r: PlaybackRequest) = runBlocking { tune(r) }
+
     private fun error(code: Int) = PlaybackException("teste", null, code)
     private val ioError get() = error(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
 
@@ -110,7 +113,7 @@ class ChannelPlaybackTest {
     @Test
     fun abrePeloPrimeiroFormato() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         assertEquals(listOf("open ${ts.url}"), engine.log)
         assertFalse(p.ready)
         p.onState(engine, Player.STATE_READY)
@@ -122,14 +125,14 @@ class ChannelPlaybackTest {
     @Test
     fun semStreamsNaoAbreNada() {
         host.streamsDisabled = true
-        playback().tune(live())
+        playback().tuneNow(live())
         assertTrue(engine.log.isEmpty())
     }
 
     @Test
     fun falhaAntesDeDarTentaOOutroFormatoEDepoisMostraOErro() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, ioError)
         assertEquals(listOf(ts, hls), engine.opened)
         p.onError(engine, ioError)
@@ -148,7 +151,7 @@ class ChannelPlaybackTest {
     @Test
     fun tresTentativasEDepoisFicaOErroAteOK() {
         val p = playback()
-        p.tune(live(ts))
+        p.tuneNow(live(ts))
         repeat(3) { n ->
             p.onError(engine, ioError)
             assertEquals(n + 1, p.failure?.retry)
@@ -169,7 +172,7 @@ class ChannelPlaybackTest {
     @Test
     fun voltarALigarRecomecaSemprePeloPrimeiroFormato() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onState(engine, Player.STATE_READY)
         // Caiu a meio: pílula com a 1.ª tentativa, daqui a 5 s.
         p.onError(engine, ioError)
@@ -201,7 +204,7 @@ class ChannelPlaybackTest {
     fun oServidorFechouALigacaoVoltaALigarPeloPrimeiro() {
         host.prefs = Prefs(reconnectSeconds = 0)
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, ioError)
         p.onState(engine, Player.STATE_READY)
         assertEquals(hls, engine.opened.last())
@@ -216,7 +219,7 @@ class ChannelPlaybackTest {
     @Test
     fun acabarAntesDeDarNaoFazNada() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onState(engine, Player.STATE_ENDED)
         time.advance(60_000)
         assertEquals(1, engine.opened.size)
@@ -227,7 +230,7 @@ class ChannelPlaybackTest {
     fun voltarALigarDesligadoMostraOErroSemTentar() {
         host.prefs = Prefs(reconnectSeconds = 0)
         val p = playback()
-        p.tune(live(ts))
+        p.tuneNow(live(ts))
         p.onState(engine, Player.STATE_READY)
         p.onError(engine, ioError)
         assertEquals(0, p.failure?.retry)
@@ -238,7 +241,7 @@ class ChannelPlaybackTest {
     @Test
     fun doisErrosSeguidosSoDeixamUmaReabertura() {
         val p = playback()
-        p.tune(live(ts))
+        p.tuneNow(live(ts))
         p.onState(engine, Player.STATE_READY)
         p.onError(engine, ioError)
         p.onError(engine, ioError)
@@ -250,7 +253,7 @@ class ChannelPlaybackTest {
     @Test
     fun emSegundoPlanoNaoFicaNadaPendente() {
         val p = playback()
-        p.tune(live(ts))
+        p.tuneNow(live(ts))
         p.onState(engine, Player.STATE_READY)
         p.onError(engine, ioError)
         p.stop()
@@ -268,7 +271,7 @@ class ChannelPlaybackTest {
         val p = playback()
         val cu = Catchup(channel, "Programa", startMs = 1_000_000L, endMs = 4_600_000L, positionMs = 600_000L)
         // O servidor abriu ao minuto: 30 s antes da posição pedida.
-        p.tune(PlaybackRequest(channel, cu, archiveStartMs = 1_570_000L, candidates = listOf(ts)))
+        p.tuneNow(PlaybackRequest(channel, cu, archiveStartMs = 1_570_000L, candidates = listOf(ts)))
         assertEquals(false, engine.lastOptions?.ring)
         p.onState(engine, Player.STATE_READY)
         engine.positionMs = 95_000L
@@ -284,7 +287,7 @@ class ChannelPlaybackTest {
     fun catchUpQueAcabaVoltaAoDireto() {
         val p = playback()
         val cu = Catchup(channel, "Programa", 0L, 1_000L)
-        p.tune(PlaybackRequest(channel, cu, 0L, listOf(ts)))
+        p.tuneNow(PlaybackRequest(channel, cu, 0L, listOf(ts)))
         p.onState(engine, Player.STATE_READY)
         p.onState(engine, Player.STATE_ENDED)
         assertEquals(1, host.exits)
@@ -294,7 +297,7 @@ class ChannelPlaybackTest {
     @Test
     fun erroDeDescodificadorPassaParaOVlc() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, error(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
         assertEquals("k1", p.vlcFor)
         assertEquals(1, host.vlcToasts)
@@ -305,7 +308,7 @@ class ChannelPlaybackTest {
         val vlc = FakeEngine(isVlc = true)
         p.attach(vlc)
         p.detach(engine)
-        p.tune(live())
+        p.tuneNow(live())
         assertEquals(listOf(ts), vlc.opened)
         // No VLC, um erro destes já não muda de player: segue para o outro formato.
         p.onError(vlc, error(PlaybackException.ERROR_CODE_DECODING_FAILED))
@@ -316,7 +319,7 @@ class ChannelPlaybackTest {
     @Test
     fun faixasQueNaoSeDescodificamPassamParaOVlc() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onUndecodable(engine)
         assertEquals("k1", p.vlcFor)
     }
@@ -324,7 +327,7 @@ class ChannelPlaybackTest {
     @Test
     fun outrosErrosNaoPassamParaOVlc() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, ioError)
         assertNull(p.vlcFor)
         // O conjunto é o da TV: 4006 (recursos do descodificador recuperados) não conta.
@@ -335,7 +338,7 @@ class ChannelPlaybackTest {
     @Test
     fun eventosDeUmPlayerAntigoIgnoramSe() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         val novo = FakeEngine()
         p.attach(novo)
         p.onError(engine, ioError)
@@ -347,14 +350,14 @@ class ChannelPlaybackTest {
     @Test
     fun oFormatoQueFuncionouFicaGuardado() {
         val p = playback()
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, ioError)
         p.onState(engine, Player.STATE_READY)
         assertEquals(listOf(StreamFormat.HLS), host.learned)
         // O primeiro a funcionar não muda nada.
         val other = FakeEngine()
         val q = playback(e = other)
-        q.tune(live())
+        q.tuneNow(live())
         q.onState(other, Player.STATE_READY)
         assertEquals(listOf(StreamFormat.HLS), host.learned)
     }
@@ -362,7 +365,7 @@ class ChannelPlaybackTest {
     @Test
     fun noTelemovelOMesmoQueNaTv() {
         val p = playback(PlaybackPolicy.PHONE)
-        p.tune(live())
+        p.tuneNow(live())
         p.onError(engine, ioError)
         p.onState(engine, Player.STATE_READY)
         assertEquals(listOf(StreamFormat.HLS), host.learned)
@@ -374,7 +377,7 @@ class ChannelPlaybackTest {
     fun segundoCanalTentaSempreDe3Em3Segundos() {
         host.prefs = Prefs(reconnectSeconds = 0)
         val p = playback(PlaybackPolicy.SECOND)
-        p.tune(live(ts))
+        p.tuneNow(live(ts))
         repeat(10) {
             p.onError(engine, ioError)
             assertNotNull(p.failure)
@@ -392,7 +395,7 @@ class ChannelPlaybackTest {
     fun stalkerPedeUmLinkNovoACadaTentativaDesdeOInicio() {
         val p = playback()
         var asked = 0
-        p.tune(PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { asked++; listOf(StreamCandidate("http://portal/$asked", StreamFormat.TS)) }))
+        p.tuneNow(PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { asked++; listOf(StreamCandidate("http://portal/$asked", StreamFormat.TS)) }))
         assertEquals(listOf("open http://portal/1"), engine.log)
         p.onError(engine, ioError)
         time.advance(5_000)
@@ -402,12 +405,12 @@ class ChannelPlaybackTest {
     @Test
     fun aPausaDoDiretoSoEmDiretoNoExoPlayer() {
         val withRing = ChannelPlayback(PlaybackPolicy.TV, scope, host, now = { time.now }, wait = time::wait).also { it.attach(engine) }
-        withRing.tune(live())
+        withRing.tuneNow(live())
         // Sem Timeshift (nos testes não há disco) não há anel; a opção nunca vai ligada sem ele.
         assertEquals(false, engine.lastOptions?.ring)
         assertEquals(false, engine.lastOptions?.nearLive)
         host.prefs = Prefs(buffer = Prefs.Buffer.LIVE)
-        withRing.tune(live())
+        withRing.tuneNow(live())
         assertEquals(true, engine.lastOptions?.nearLive)
     }
 }

@@ -9,6 +9,7 @@ import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.ui.common.explainPlaybackError
 import cc.slokker.itv.ui.common.isAccountBusy
 import cc.slokker.itv.ui.i18n.I18n
+import cc.slokker.itv.ui.i18n.Strings
 
 /** O canal principal (TV e telemóvel): as definições, o catch-up e o formato da conta são os do [vm]. */
 internal class AppPlaybackHost(
@@ -49,4 +50,14 @@ internal class SecondPlaybackHost(private val vm: AppViewModel, private val late
     override fun onVlcFallback() = Unit
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo? = null
+}
+
+/** O título do cartão de erro: a explicação, ou "não foi possível abrir" enquanto se analisa. */
+internal fun PlaybackFailure.titleCard(s: Strings): ErrorInfo = explained ?: ErrorInfo(s.cantOpenChannel.removeSuffix("."))
+
+/** A linha de estado do cartão de erro: a analisar, a próxima tentativa, ou nada (OK tenta outra vez). */
+internal fun PlaybackFailure.status(s: Strings): String? = when {
+    analysing -> s.analysingError
+    retry > 0 -> s.retryIn(retry, maxRetries, retrySeconds)
+    else -> null
 }
