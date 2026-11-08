@@ -16,7 +16,7 @@ import cc.slokker.itv.ui.player.icon
 import cc.slokker.itv.ui.player.mbps
 import cc.slokker.itv.ui.player.netLink
 import cc.slokker.itv.ui.player.netShort
-import cc.slokker.itv.ui.player.videoFormat
+import cc.slokker.itv.ui.player.engine.videoFormat
 import cc.slokker.itv.ui.theme.GoatPalette
 import cc.slokker.itv.ui.player.textLabel
 import cc.slokker.itv.ui.player.audioLabel

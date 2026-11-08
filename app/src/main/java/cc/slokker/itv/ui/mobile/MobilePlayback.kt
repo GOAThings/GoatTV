@@ -34,15 +34,15 @@ import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.player.VlcPlayer
-import cc.slokker.itv.ui.player.buildPlayer
-import cc.slokker.itv.ui.player.cannotDecode
-import cc.slokker.itv.ui.player.loadStream
 import kotlinx.coroutines.Job
 import android.os.SystemClock
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.player.engine.buildPlayer
+import cc.slokker.itv.ui.player.engine.cannotDecode
+import cc.slokker.itv.ui.player.engine.loadStream
 
 /** O que a interface do telemóvel precisa de saber do leitor. */
 @Stable

@@ -65,6 +65,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.player.engine.buildPlayer
+import cc.slokker.itv.ui.player.engine.loadStream
 
 /** Como se mostram os dois canais. */
 internal enum class DualLayout { PIP, SPLIT }
