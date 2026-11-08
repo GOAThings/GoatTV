@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "playlist": {"id": "p-1", "type": "XTREAM", "name": "Fornecedor", "server": "http://xtream.example.com", "username": "u", "password": "p"},
+  "categories": [{"id": "1", "name": "Notícias"}, {"id": "Outros", "name": "Outros"}],
+  "channels": [
+    {"uid": 0, "key": "101", "num": 1, "name": "RTP 1", "logo": "http://logos.example.com/rtp1.png", "categoryId": "1", "streamId": "101", "epgId": "rtp1.pt", "archiveDays": 3},
+    {"uid": 1, "key": "102", "num": 2, "name": "Canal ç", "categoryId": "Outros", "streamId": "102", "archiveDays": 0}
+  ],
+  "account": {"maxConnections": 1, "status": "Active", "allowedFormats": ["ts", "m3u8"], "timezone": "Europe/Lisbon"},
+  "guideUrl": "http://xtream.example.com/xmltv.php?username=u&password=p",
+  "fetchedAt": 1761300000000
+}

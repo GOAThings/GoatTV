@@ -1,0 +1,11 @@
+{
+  "user": {"id": "user123", "email": "someone@example.com"},
+  "device": {"id": "dev456", "name": "Sala", "app": "goattv"},
+  "playlists": [
+    {"id": "pl1", "type": "xtream", "name": "Fornecedor", "server": "http://xtream.example.com", "username": "u", "password": "p", "url": "", "epg_url": "", "index_hash": "ea9f8cc27edc2e37f03ba70062966b66b503be16"},
+    {"id": "pl2", "type": "m3u", "name": "", "server": "", "username": "", "password": "", "url": "http://m3u.example.com/list.m3u", "epg_url": "http://m3u.example.com/epg.xml"}
+  ],
+  "favorites": {"pl1": ["101"]},
+  "settings": {"language": "pt-PT", "parental_pin_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "locked_groups": ["pl1:9"]},
+  "settings_rev": 7
+}

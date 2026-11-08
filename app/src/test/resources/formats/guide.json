@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "playlistId": "p-1",
+  "guide": {
+    "url": "http://xtream.example.com/xmltv.php?username=u&password=p",
+    "fetchedAt": 1761300000000,
+    "programmes": {"rtp1.pt": [{"title": "Telejornal", "startMs": 1761300000000, "endMs": 1761303600000}]},
+    "names": {"rtp1": "rtp1.pt"}
+  }
+}

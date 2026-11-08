@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "guide": {
+    "playlistId": "p-1",
+    "etag": "\"v5\"",
+    "fetchedAt": 1761300000000,
+    "programmes": {"101": [{"title": "Telejornal", "startMs": 1761300000000, "endMs": 1761303600000}]}
+  }
+}

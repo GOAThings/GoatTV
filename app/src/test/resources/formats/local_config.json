@@ -1,0 +1,21 @@
+{
+  "playlists": [
+    {"id": "local1a2b3c4d5e6f7a8b", "type": "xtream", "name": "Casa", "server": "http://xtream.example.com:8080", "username": "user1", "password": "pass1", "epg_url": "http://xtream.example.com/epg.xml"},
+    {"id": "local2", "type": "m3u", "name": "Lista M3U", "url": "http://m3u.example.com/list.m3u"},
+    {"id": "local3", "type": "stalker", "name": "Portal", "server": "http://portal.example.com/c", "username": "00:1A:79:12:34:56", "serial": "SN123", "deviceId": "DEV1", "deviceId2": "DEV2", "signature": "SIG"}
+  ],
+  "favorites": {"local1a2b3c4d5e6f7a8b": ["101", "102"], "local2": ["rtp1.pt"]},
+  "settings": {
+    "accent": "mint",
+    "hidden_groups": ["local1a2b3c4d5e6f7a8b:7"],
+    "group_order": {"local2": ["Notícias", "Outros"]},
+    "channel_order": {"local2:Outros": ["ub", "ua"]},
+    "channel_logos": {"local2:rtp1.pt": "https://logos.example.com/rtp1.png"},
+    "extra_epg": {"local2": "https://epg.example.com/extra.xml"},
+    "last_playlist": "local2",
+    "last_channel": "rtp1.pt",
+    "last_channel_at": 1761300000000,
+    "stream_format": "ts",
+    "recent_channels": {"local2": ["rtp1.pt"]}
+  }
+}
