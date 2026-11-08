@@ -126,7 +126,8 @@ final class GoatTVUITests: XCTestCase {
         press(.menu, wait: 8); shot("hls-back-live")
         XCTAssertNil(behind(), "HLS: ainda atrás do direto depois de Voltar")
 
-        // ↓ um MP4: não é TS, o VLC abre-o diretamente (sem pausa do direto), depois de o gravador largar a ligação.
+        // ↓ um MP4 num endereço sem extensão: não é TS, o VLC abre-o diretamente (sem pausa do direto), depois de o
+        // gravador largar a ligação.
         press(.down, wait: 20); shot("mp4-direct")
         XCTAssertNil(behind(), "MP4: atrás do direto")
         XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "MP4: com a barra da pausa do direto")

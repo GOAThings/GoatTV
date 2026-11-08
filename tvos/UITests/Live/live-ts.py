@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Um canal .ts "ao vivo" para o teste da pausa do direto (.github/workflows/timeshift-sim.yml).
 
-Uso: live-ts.py <ficheiro.ts> <porta> <pasta> <duração em s>
+Uso: live-ts.py <ficheiro.ts> <porta> <pasta> <duração em s> [s antes do fim]
 Dá o ficheiro em ciclo, ao ritmo real, a quem pedir /live.ts (como um fornecedor IPTV: começa no "direto" e nunca
-acaba). Conta as ligações ao mesmo tempo, porque o fornecedor só deixa uma: o máximo fica em <pasta>/max-connections.txt
-e cada ligação em <pasta>/server.log.
+acaba). O "direto" começa, no primeiro pedido, [s antes do fim] segundos antes do fim do ficheiro: ao dar a volta, o
+relógio do .ts salta para trás. Conta as ligações ao mesmo tempo, porque o fornecedor só deixa uma: o máximo fica em
+<pasta>/max-connections.txt e cada ligação em <pasta>/server.log.
 """
 import os, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,7 +13,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 path, port, outdir, duration = sys.argv[1], int(sys.argv[2]), sys.argv[3], float(sys.argv[4])
 data = open(path, "rb").read()
 rate = len(data) / duration
-start = time.time()
+before_end = float(sys.argv[5]) if len(sys.argv) > 5 else 0
+start = None
 lock = threading.Lock()
 state = {"active": 0, "peak": 0, "total": 0}
 
@@ -45,6 +47,9 @@ class Live(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "video/mp2t")
             self.end_headers()
             # Começa onde o "direto" vai, num início de pacote.
+            global start
+            if start is None:
+                start = time.time() - (duration - before_end if before_end else 0)
             pos = int(((time.time() - start) * rate) % len(data)) // 188 * 188
             began = time.time()
             sent = 0

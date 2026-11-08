@@ -727,7 +727,7 @@ extension PlayerEngine {
     func togglePause() {
         guard state == .playing else { return }
         // Pausa do direto: se o ponto da pausa já saiu do anel, continua do mais antigo que há.
-        if paused, backend == .vlc, let entry = timeshift.resumeEntry(positionMs: positionValid ? positionMs : 0) {
+        if paused, backend == .vlc, let entry = timeshift.resumeEntry() {
             reopenRing(entry, live: false)
             return
         }
