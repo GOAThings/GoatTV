@@ -753,7 +753,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** O guia extra da lista (se o tiver), com as mesmas regras de renovação do guia da lista. */
-    private fun openExtraGuide(content: PlaylistContent, force: Boolean = false) {
+    private fun openExtraGuide(content: PlaylistContent, force: Boolean = false, notify: Boolean = false) {
         val id = content.playlist.id
         c.epg.openExtra(
             viewModelScope, content, _prefs.value.extraEpg[id], force,
@@ -762,9 +762,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 RefreshPolicy.isDue(_prefs.value.epgRefreshHours, fetchedAt, now, id in extraGuidesChecked) &&
                     (id !in extraGuidesChecked || now - (lastAttempt["x:$id"] ?: 0L) >= RefreshPolicy.RETRY_MS)
             },
-            onDone = {
+            onDone = { ok ->
                 extraGuidesChecked += id
                 lastAttempt["x:$id"] = System.currentTimeMillis()
+                if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
             },
         )
     }
@@ -1048,12 +1049,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshEpg() {
         c.epg.clearShort()
         val content = _content.value
-        content?.let { openAccountGuide(it, force = true) }
-        if (content?.guideUrl != null) {
-            showToast(I18n.s.epgRefreshing)
-            openGuide(content, force = true, notify = true)
-        } else {
-            showToast(I18n.s.epgRefreshed)
+        when {
+            content == null -> showToast(I18n.s.epgRefreshed)
+            // O guia da lista, o da conta e o extra (o aviso diz quando o da lista chegou).
+            content.guideUrl != null -> {
+                showToast(I18n.s.epgRefreshing)
+                openGuide(content, force = true, notify = true)
+            }
+            // Sem guia da lista: o da conta e o extra, e o aviso vem do extra se houver.
+            else -> {
+                openAccountGuide(content, force = true)
+                val extra = _prefs.value.extraEpg[content.playlist.id] != null
+                showToast(if (extra) I18n.s.epgRefreshing else I18n.s.epgRefreshed)
+                openExtraGuide(content, force = true, notify = extra)
+            }
         }
     }
 
