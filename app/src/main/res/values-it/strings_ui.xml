@@ -34,6 +34,13 @@
     <string name="m3u_no_url">La playlist M3U non ha un URL.</string>
     <string name="m3u_bad_url">URL della playlist M3U non valido.</string>
     <string name="m3u_http">Il server della playlist ha risposto %1$s.</string>
+    <string name="stalker_bad_login">Il portale ha rifiutato questo indirizzo MAC.</string>
+    <string name="stalker_sub">Indirizzo del portale e indirizzo MAC autorizzato</string>
+    <string name="portal_url">URL del portale</string>
+    <string name="mac_address">Indirizzo MAC</string>
+    <string name="stalker_mac_hint">Dai questo MAC al tuo fornitore perché lo attivi, oppure inserisci quello che ti ha dato.</string>
+    <string name="missing_portal">Manca l\'URL del portale.</string>
+    <string name="invalid_mac">Inserisci un indirizzo MAC valido (00:1A:79:…).</string>
     <string name="xtream_bad_login">Nome utente o password Xtream non validi.</string>
     <string name="xtream_inactive">L\'account Xtream non è attivo (stato: %1$s).</string>
     <string name="xtream_http">Il server Xtream ha risposto %1$s.</string>
@@ -558,6 +565,13 @@
     <string name="report_sent">Inviata. Segnalazione %1$s</string>
     <string name="report_too_many">Troppe segnalazioni. Riprova più tardi.</string>
     <string name="report_failed">Impossibile inviare: %1$s</string>
+    <string name="welcome_local_phone">Playlist su questo telefono</string>
+    <string name="welcome_local_phone_sub">Senza account: aggiungi qui playlist Xtream o M3U. Tutto resta solo su questo telefono.</string>
+    <string name="connect_account_title">Collega il tuo account GOAT</string>
+    <string name="connect_account_body">Le tue playlist, i preferiti e le impostazioni, su tutti i dispositivi.</string>
+    <string name="copy_code">Copia codice</string>
+    <string name="copied">Copiato</string>
+    <string name="sign_in_to_approve">Accedi per approvare</string>
     <string name="settings_picture_sound">Immagine e suono</string>
     <string name="settings_connection">Connessione</string>
     <string name="settings_advanced">Avanzate</string>

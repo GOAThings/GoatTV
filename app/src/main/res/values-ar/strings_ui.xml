@@ -34,6 +34,13 @@
     <string name="m3u_no_url">لا تحتوي قائمة تشغيل M3U على URL.</string>
     <string name="m3u_bad_url">URL قائمة تشغيل M3U غير صالح.</string>
     <string name="m3u_http">أعاد خادم قائمة التشغيل الرمز %1$s.</string>
+    <string name="stalker_bad_login">رفضت البوابة عنوان MAC هذا.</string>
+    <string name="stalker_sub">عنوان البوابة وعنوان MAC المصرّح به</string>
+    <string name="portal_url">رابط البوابة</string>
+    <string name="mac_address">عنوان MAC</string>
+    <string name="stalker_mac_hint">أعطِ عنوان MAC هذا لمزوّد الخدمة ليفعّله، أو أدخل العنوان الذي أعطاك إياه.</string>
+    <string name="missing_portal">رابط البوابة مفقود.</string>
+    <string name="invalid_mac">أدخل عنوان MAC صالحًا (00:1A:79:…).</string>
     <string name="xtream_bad_login">اسم مستخدم أو كلمة مرور Xtream غير صحيحة.</string>
     <string name="xtream_inactive">حساب Xtream غير نشط (الحالة: %1$s).</string>
     <string name="xtream_http">أعاد خادم Xtream الرمز %1$s.</string>
@@ -564,6 +571,13 @@
     <string name="report_sent">تم الإرسال. التقرير %1$s</string>
     <string name="report_too_many">تقارير كثيرة جدًا. حاول لاحقًا.</string>
     <string name="report_failed">تعذّر الإرسال: %1$s</string>
+    <string name="welcome_local_phone">قوائم تشغيل على هذا الهاتف</string>
+    <string name="welcome_local_phone_sub">بدون حساب: أضف قوائم Xtream أو M3U هنا. يبقى كل شيء على هذا الهاتف فقط.</string>
+    <string name="connect_account_title">اربط حساب GOAT</string>
+    <string name="connect_account_body">قوائم التشغيل والمفضلة والإعدادات، على كل أجهزتك.</string>
+    <string name="copy_code">نسخ الرمز</string>
+    <string name="copied">تم النسخ</string>
+    <string name="sign_in_to_approve">سجّل الدخول للموافقة</string>
     <string name="settings_picture_sound">الصورة والصوت</string>
     <string name="settings_connection">الاتصال</string>
     <string name="settings_advanced">متقدم</string>

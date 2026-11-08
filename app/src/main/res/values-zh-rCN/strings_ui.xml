@@ -34,6 +34,13 @@
     <string name="m3u_no_url">M3U 播放列表没有 URL。</string>
     <string name="m3u_bad_url">M3U 播放列表 URL 无效。</string>
     <string name="m3u_http">播放列表服务器返回 %1$s。</string>
+    <string name="stalker_bad_login">门户拒绝了此 MAC 地址。</string>
+    <string name="stalker_sub">门户地址和已授权的 MAC 地址</string>
+    <string name="portal_url">门户 URL</string>
+    <string name="mac_address">MAC 地址</string>
+    <string name="stalker_mac_hint">把这个 MAC 地址交给服务商激活，或输入服务商给你的地址。</string>
+    <string name="missing_portal">缺少门户 URL。</string>
+    <string name="invalid_mac">请输入有效的 MAC 地址（00:1A:79:…）。</string>
     <string name="xtream_bad_login">Xtream 用户名或密码无效。</string>
     <string name="xtream_inactive">Xtream 账户未激活（状态：%1$s）。</string>
     <string name="xtream_http">Xtream 服务器返回 %1$s。</string>
@@ -554,6 +561,13 @@
     <string name="report_sent">已发送。报告 %1$s</string>
     <string name="report_too_many">报告过多，请稍后再试。</string>
     <string name="report_failed">无法发送：%1$s</string>
+    <string name="welcome_local_phone">此手机上的播放列表</string>
+    <string name="welcome_local_phone_sub">无需账户：在这里添加 Xtream 或 M3U 播放列表。所有内容只保存在此手机上。</string>
+    <string name="connect_account_title">连接你的 GOAT 账户</string>
+    <string name="connect_account_body">你的播放列表、收藏和设置，在所有设备上都一样。</string>
+    <string name="copy_code">复制代码</string>
+    <string name="copied">已复制</string>
+    <string name="sign_in_to_approve">登录以批准</string>
     <string name="settings_picture_sound">画面和声音</string>
     <string name="settings_connection">连接</string>
     <string name="settings_advanced">高级</string>

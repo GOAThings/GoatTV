@@ -34,6 +34,13 @@
     <string name="m3u_no_url">La lista M3U no tiene URL.</string>
     <string name="m3u_bad_url">URL de la lista M3U no válida.</string>
     <string name="m3u_http">El servidor de la lista respondió %1$s.</string>
+    <string name="stalker_bad_login">El portal rechazó esta dirección MAC.</string>
+    <string name="stalker_sub">Dirección del portal y dirección MAC autorizada</string>
+    <string name="portal_url">URL del portal</string>
+    <string name="mac_address">Dirección MAC</string>
+    <string name="stalker_mac_hint">Da esta MAC a tu proveedor para que la active, o escribe la que te dio.</string>
+    <string name="missing_portal">Falta la URL del portal.</string>
+    <string name="invalid_mac">Escribe una dirección MAC válida (00:1A:79:…).</string>
     <string name="xtream_bad_login">Usuario o contraseña de Xtream incorrectos.</string>
     <string name="xtream_inactive">La cuenta Xtream no está activa (estado: %1$s).</string>
     <string name="xtream_http">El servidor Xtream respondió %1$s.</string>
@@ -558,6 +565,13 @@
     <string name="report_sent">Enviado. Informe %1$s</string>
     <string name="report_too_many">Demasiados informes. Inténtalo más tarde.</string>
     <string name="report_failed">No se pudo enviar: %1$s</string>
+    <string name="welcome_local_phone">Listas en este móvil</string>
+    <string name="welcome_local_phone_sub">Sin cuenta: añade listas Xtream o M3U aquí. Todo se queda solo en este móvil.</string>
+    <string name="connect_account_title">Conecta tu cuenta GOAT</string>
+    <string name="connect_account_body">Tus listas, favoritos y ajustes, en todos tus dispositivos.</string>
+    <string name="copy_code">Copiar código</string>
+    <string name="copied">Copiado</string>
+    <string name="sign_in_to_approve">Inicia sesión para aprobar</string>
     <string name="settings_picture_sound">Imagen y sonido</string>
     <string name="settings_connection">Conexión</string>
     <string name="settings_advanced">Avanzado</string>

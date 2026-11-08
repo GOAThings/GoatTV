@@ -34,6 +34,13 @@
     <string name="m3u_no_url">M3U प्लेलिस्ट में कोई URL नहीं है।</string>
     <string name="m3u_bad_url">M3U प्लेलिस्ट का URL अमान्य है।</string>
     <string name="m3u_http">प्लेलिस्ट सर्वर ने %1$s लौटाया।</string>
+    <string name="stalker_bad_login">पोर्टल ने इस MAC पते को अस्वीकार कर दिया।</string>
+    <string name="stalker_sub">पोर्टल का पता और अधिकृत MAC पता</string>
+    <string name="portal_url">पोर्टल URL</string>
+    <string name="mac_address">MAC पता</string>
+    <string name="stalker_mac_hint">यह MAC अपने प्रोवाइडर को दें ताकि वह इसे चालू कर दे, या वह MAC डालें जो उसने आपको दिया है।</string>
+    <string name="missing_portal">पोर्टल URL नहीं भरा गया है।</string>
+    <string name="invalid_mac">सही MAC पता डालें (00:1A:79:…)।</string>
     <string name="xtream_bad_login">Xtream यूज़रनेम या पासवर्ड गलत है।</string>
     <string name="xtream_inactive">Xtream खाता सक्रिय नहीं है (स्थिति: %1$s)।</string>
     <string name="xtream_http">Xtream सर्वर ने %1$s लौटाया।</string>
@@ -556,6 +563,13 @@
     <string name="report_sent">भेज दी गई। रिपोर्ट %1$s</string>
     <string name="report_too_many">बहुत सारी रिपोर्ट। बाद में फिर कोशिश करें।</string>
     <string name="report_failed">भेजा नहीं जा सका: %1$s</string>
+    <string name="welcome_local_phone">इस फ़ोन पर प्लेलिस्ट</string>
+    <string name="welcome_local_phone_sub">बिना खाते के: यहीं Xtream या M3U प्लेलिस्ट जोड़ें। सब कुछ सिर्फ़ इसी फ़ोन पर रहता है।</string>
+    <string name="connect_account_title">अपना GOAT खाता जोड़ें</string>
+    <string name="connect_account_body">आपकी प्लेलिस्ट, पसंदीदा और सेटिंग, हर डिवाइस पर।</string>
+    <string name="copy_code">कोड कॉपी करें</string>
+    <string name="copied">कॉपी हो गया</string>
+    <string name="sign_in_to_approve">मंज़ूरी देने के लिए साइन इन करें</string>
     <string name="settings_picture_sound">चित्र और ध्वनि</string>
     <string name="settings_connection">कनेक्शन</string>
     <string name="settings_advanced">उन्नत</string>

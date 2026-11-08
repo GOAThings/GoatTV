@@ -34,6 +34,13 @@
     <string name="m3u_no_url">Playlist M3U tidak punya URL.</string>
     <string name="m3u_bad_url">URL playlist M3U tidak valid.</string>
     <string name="m3u_http">Server playlist membalas %1$s.</string>
+    <string name="stalker_bad_login">Portal menolak alamat MAC ini.</string>
+    <string name="stalker_sub">Alamat portal dan alamat MAC yang diizinkan</string>
+    <string name="portal_url">URL portal</string>
+    <string name="mac_address">Alamat MAC</string>
+    <string name="stalker_mac_hint">Berikan MAC ini ke penyedia agar diaktifkan, atau masukkan MAC yang diberikan penyedia.</string>
+    <string name="missing_portal">URL portal belum diisi.</string>
+    <string name="invalid_mac">Masukkan alamat MAC yang valid (00:1A:79:…).</string>
     <string name="xtream_bad_login">Nama pengguna atau sandi Xtream salah.</string>
     <string name="xtream_inactive">Akun Xtream tidak aktif (status: %1$s).</string>
     <string name="xtream_http">Server Xtream membalas %1$s.</string>
@@ -554,6 +561,13 @@
     <string name="report_sent">Terkirim. Laporan %1$s</string>
     <string name="report_too_many">Terlalu banyak laporan. Coba lagi nanti.</string>
     <string name="report_failed">Tidak dapat mengirim: %1$s</string>
+    <string name="welcome_local_phone">Playlist di ponsel ini</string>
+    <string name="welcome_local_phone_sub">Tanpa akun: tambahkan playlist Xtream atau M3U di sini. Semuanya hanya ada di ponsel ini.</string>
+    <string name="connect_account_title">Hubungkan akun GOAT-mu</string>
+    <string name="connect_account_body">Playlist, favorit, dan pengaturanmu di semua perangkat.</string>
+    <string name="copy_code">Salin kode</string>
+    <string name="copied">Disalin</string>
+    <string name="sign_in_to_approve">Masuk untuk menyetujui</string>
     <string name="settings_picture_sound">Gambar dan suara</string>
     <string name="settings_connection">Koneksi</string>
     <string name="settings_advanced">Lanjutan</string>

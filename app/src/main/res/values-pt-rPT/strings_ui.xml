@@ -565,6 +565,8 @@
     <string name="report_sent">Enviado. Relatório %1$s</string>
     <string name="report_too_many">Demasiados relatórios. Tenta mais tarde.</string>
     <string name="report_failed">Não deu para enviar: %1$s</string>
+    <string name="welcome_local_phone">Listas neste telemóvel</string>
+    <string name="welcome_local_phone_sub">Sem conta: adiciona listas Xtream ou M3U aqui. Tudo fica só neste telemóvel.</string>
     <string name="connect_account_title">Liga a tua conta GOAT</string>
     <string name="connect_account_body">As tuas listas, favoritos e definições, em todos os dispositivos.</string>
     <string name="copy_code">Copiar código</string>

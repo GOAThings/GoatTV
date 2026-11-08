@@ -28,13 +28,10 @@ class StringCatalogTest {
     fun `every locale has every key and no other`() {
         val problems = localeFolders.mapNotNull { folder ->
             val c = catalog(folder)
-            val known = KNOWN_MISSING[folder].orEmpty()
-            val missing = base.keys - c.keys - known
+            val missing = base.keys - c.keys
             val extra = c.keys - base.keys
-            val fixed = known - (base.keys - c.keys)
-            if (missing.isEmpty() && extra.isEmpty() && fixed.isEmpty()) null
-            else "$folder: em falta ${missing.sorted()}" + (if (extra.isNotEmpty()) ", a mais ${extra.sorted()}" else "") +
-                (if (fixed.isNotEmpty()) ", já traduzidas (tirar de KNOWN_MISSING) ${fixed.sorted()}" else "")
+            if (missing.isEmpty() && extra.isEmpty()) null
+            else "$folder: em falta ${missing.sorted()}" + (if (extra.isNotEmpty()) ", a mais ${extra.sorted()}" else "")
         }
         if (problems.isNotEmpty()) fail("Textos por traduzir:\n" + problems.joinToString("\n"))
     }
@@ -66,7 +63,7 @@ class StringCatalogTest {
     fun `both european portuguese folders are the same`() {
         val pt = catalog("values-pt")
         val ptPT = catalog("values-pt-rPT")
-        val differ = (pt.strings.keys + ptPT.strings.keys - KNOWN_MISSING["values-pt-rPT"].orEmpty()).filter { pt.strings[it] != ptPT.strings[it] }.sorted()
+        val differ = (pt.strings.keys + ptPT.strings.keys).filter { pt.strings[it] != ptPT.strings[it] }.sorted()
         assertEquals("values-pt e values-pt-rPT diferem em", emptyList<String>(), differ)
         assertEquals(pt.plurals, ptPT.plurals)
     }
@@ -169,22 +166,6 @@ class StringCatalogTest {
     }
 
     private companion object {
-        /** O que já faltava quando este teste entrou (traduz-se a seguir). Esta lista só pode encolher. */
-        val UNTRANSLATED = setOf(
-            "connect_account_body", "connect_account_title", "copied", "copy_code", "invalid_mac", "mac_address",
-            "missing_portal", "portal_url", "sign_in_to_approve", "stalker_bad_login", "stalker_mac_hint", "stalker_sub",
-            "welcome_local_phone", "welcome_local_phone_sub",
-        )
-        val KNOWN_MISSING: Map<String, Set<String>> =
-            listOf("ar", "de", "es", "fr", "hi", "in", "it", "ja", "ko", "ru", "tr", "zh-rCN").associate { "values-$it" to UNTRANSLATED } +
-                mapOf(
-                    "values-pt-rBR" to setOf(
-                        "invalid_mac", "mac_address", "missing_portal", "portal_url", "stalker_bad_login", "stalker_mac_hint",
-                        "stalker_sub", "welcome_local_phone", "welcome_local_phone_sub",
-                    ),
-                    "values-pt-rPT" to setOf("welcome_local_phone", "welcome_local_phone_sub"),
-                )
-
         const val FILE = "strings_ui.xml"
         val STRING = Regex("<string name=\"([a-z0-9_]+)\"[^>]*>(.*?)</string>", RegexOption.DOT_MATCHES_ALL)
         val PLURALS = Regex("<plurals name=\"([a-z0-9_]+)\">(.*?)</plurals>", RegexOption.DOT_MATCHES_ALL)

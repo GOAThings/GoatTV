@@ -34,6 +34,13 @@
     <string name="m3u_no_url">M3U プレイリストに URL がありません。</string>
     <string name="m3u_bad_url">M3U プレイリストの URL が無効です。</string>
     <string name="m3u_http">プレイリストのサーバーが %1$s を返しました。</string>
+    <string name="stalker_bad_login">ポータルがこの MAC アドレスを拒否しました。</string>
+    <string name="stalker_sub">ポータルのアドレスと許可された MAC アドレス</string>
+    <string name="portal_url">ポータルの URL</string>
+    <string name="mac_address">MAC アドレス</string>
+    <string name="stalker_mac_hint">この MAC をプロバイダーに伝えて有効にしてもらうか、プロバイダーから受け取った MAC を入力してください。</string>
+    <string name="missing_portal">ポータルの URL が未入力です。</string>
+    <string name="invalid_mac">有効な MAC アドレスを入力してください（00:1A:79:…）。</string>
     <string name="xtream_bad_login">Xtream のユーザー名またはパスワードが無効です。</string>
     <string name="xtream_inactive">Xtream アカウントが有効ではありません（ステータス：%1$s）。</string>
     <string name="xtream_http">Xtream サーバーが %1$s を返しました。</string>
@@ -554,6 +561,13 @@
     <string name="report_sent">送信しました。レポート %1$s</string>
     <string name="report_too_many">レポートが多すぎます。しばらくしてからお試しください。</string>
     <string name="report_failed">送信できませんでした: %1$s</string>
+    <string name="welcome_local_phone">このスマートフォンのプレイリスト</string>
+    <string name="welcome_local_phone_sub">アカウントなし：ここで Xtream または M3U のプレイリストを追加します。すべてこのスマートフォンだけに保存されます。</string>
+    <string name="connect_account_title">GOAT アカウントを接続</string>
+    <string name="connect_account_body">プレイリスト、お気に入り、設定をすべてのデバイスで。</string>
+    <string name="copy_code">コードをコピー</string>
+    <string name="copied">コピーしました</string>
+    <string name="sign_in_to_approve">サインインして承認</string>
     <string name="settings_picture_sound">画像と音声</string>
     <string name="settings_connection">接続</string>
     <string name="settings_advanced">詳細設定</string>

@@ -34,6 +34,13 @@
     <string name="m3u_no_url">M3U oynatma listesinin URL\'si yok.</string>
     <string name="m3u_bad_url">Geçersiz M3U oynatma listesi URL\'si.</string>
     <string name="m3u_http">Oynatma listesi sunucusu %1$s yanıtını verdi.</string>
+    <string name="stalker_bad_login">Portal bu MAC adresini reddetti.</string>
+    <string name="stalker_sub">Portal adresi ve yetkili MAC adresi</string>
+    <string name="portal_url">Portal URL\'si</string>
+    <string name="mac_address">MAC adresi</string>
+    <string name="stalker_mac_hint">Etkinleştirmesi için bu MAC adresini sağlayıcınıza verin ya da size verdiği adresi girin.</string>
+    <string name="missing_portal">Portal URL\'si eksik.</string>
+    <string name="invalid_mac">Geçerli bir MAC adresi girin (00:1A:79:…).</string>
     <string name="xtream_bad_login">Geçersiz Xtream kullanıcı adı veya şifresi.</string>
     <string name="xtream_inactive">Xtream hesabı etkin değil (durum: %1$s).</string>
     <string name="xtream_http">Xtream sunucusu %1$s yanıtını verdi.</string>
@@ -556,6 +563,13 @@
     <string name="report_sent">Gönderildi. Rapor %1$s</string>
     <string name="report_too_many">Çok fazla rapor. Daha sonra tekrar deneyin.</string>
     <string name="report_failed">Gönderilemedi: %1$s</string>
+    <string name="welcome_local_phone">Bu telefondaki oynatma listeleri</string>
+    <string name="welcome_local_phone_sub">Hesap olmadan: Xtream veya M3U listelerini buradan ekleyin. Her şey yalnızca bu telefonda kalır.</string>
+    <string name="connect_account_title">GOAT hesabınızı bağlayın</string>
+    <string name="connect_account_body">Oynatma listeleriniz, favorileriniz ve ayarlarınız tüm cihazlarınızda.</string>
+    <string name="copy_code">Kodu kopyala</string>
+    <string name="copied">Kopyalandı</string>
+    <string name="sign_in_to_approve">Onaylamak için giriş yapın</string>
     <string name="settings_picture_sound">Görüntü ve ses</string>
     <string name="settings_connection">Bağlantı</string>
     <string name="settings_advanced">Gelişmiş</string>

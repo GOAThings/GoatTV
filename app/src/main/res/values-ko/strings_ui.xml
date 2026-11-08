@@ -34,6 +34,13 @@
     <string name="m3u_no_url">M3U 재생목록에 URL이 없어요.</string>
     <string name="m3u_bad_url">M3U 재생목록 URL이 유효하지 않아요.</string>
     <string name="m3u_http">재생목록 서버가 %1$s을(를) 반환했어요.</string>
+    <string name="stalker_bad_login">포털에서 이 MAC 주소를 거부했어요.</string>
+    <string name="stalker_sub">포털 주소와 승인된 MAC 주소</string>
+    <string name="portal_url">포털 URL</string>
+    <string name="mac_address">MAC 주소</string>
+    <string name="stalker_mac_hint">이 MAC을 제공업체에 알려 활성화해 달라고 하거나, 제공업체에서 받은 MAC을 입력하세요.</string>
+    <string name="missing_portal">포털 URL을 입력하세요.</string>
+    <string name="invalid_mac">올바른 MAC 주소를 입력하세요 (00:1A:79:…).</string>
     <string name="xtream_bad_login">Xtream 사용자 이름 또는 비밀번호가 올바르지 않아요.</string>
     <string name="xtream_inactive">Xtream 계정이 활성 상태가 아니에요(상태: %1$s).</string>
     <string name="xtream_http">Xtream 서버가 %1$s을(를) 반환했어요.</string>
@@ -554,6 +561,13 @@
     <string name="report_sent">보냈습니다. 보고서 %1$s</string>
     <string name="report_too_many">보고서가 너무 많습니다. 나중에 다시 시도하세요.</string>
     <string name="report_failed">보낼 수 없음: %1$s</string>
+    <string name="welcome_local_phone">이 휴대폰의 재생목록</string>
+    <string name="welcome_local_phone_sub">계정 없이: 여기서 Xtream 또는 M3U 재생목록을 추가해요. 모든 것이 이 휴대폰에만 남아요.</string>
+    <string name="connect_account_title">GOAT 계정 연결</string>
+    <string name="connect_account_body">재생목록, 즐겨찾기, 설정을 모든 기기에서 똑같이.</string>
+    <string name="copy_code">코드 복사</string>
+    <string name="copied">복사됨</string>
+    <string name="sign_in_to_approve">로그인해서 승인</string>
     <string name="settings_picture_sound">화면 및 소리</string>
     <string name="settings_connection">연결</string>
     <string name="settings_advanced">고급</string>
