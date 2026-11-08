@@ -1076,7 +1076,9 @@ private fun settingItems(
             val data = content ?: return@buildList
             add(Item.Header("h", s.lockedGroupsHeader))
             data.categories.forEach { g ->
-                add(Item.Toggle("g:" + g.id, g.name, "${data.playlist.id}:${g.id}" in prefs.lockedGroups) { vm.toggleGroupLock(g.id) })
+                // "Outros" é o id do grupo dos canais sem grupo: o nome mostra-se na língua da app (como em Grupos).
+                val name = if (g.id == PlaylistContent.OTHERS) s.others else g.name
+                add(Item.Toggle("g:" + g.id, name, "${data.playlist.id}:${g.id}" in prefs.lockedGroups) { vm.toggleGroupLock(g.id) })
             }
         }
 
