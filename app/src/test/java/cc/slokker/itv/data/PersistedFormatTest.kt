@@ -179,6 +179,14 @@ class PersistedFormatTest {
         assertJsonEquals(reminders, readGz("reminders.json.gz"))
     }
 
+    @Test
+    fun `removing a playlist deletes its channels and all its guides`() = runBlocking {
+        val names = { id: String -> listOf("playlist_$id.json.gz", "epg_$id.json.gz", "epg_${id}extra.json.gz", "epg_account_$id.json.gz") }
+        (names("p1") + names("p2")).forEach { writeGz(it, "{}") }
+        CacheStore(context, gson).removePlaylist("p-1")
+        assertEquals(names("p2").sorted(), File(dir, "cache").list()!!.sorted())
+    }
+
     // ---- settings da conta (iguais no site e na Apple TV) ----
 
     /** Cada campo de [Prefs]: a chave JSON e um valor diferente do padrão, na forma que o AppViewModel grava. */

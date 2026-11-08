@@ -88,10 +88,12 @@ class CacheStore(context: Context, private val gson: Gson) {
         withContext(Dispatchers.IO) { synchronized(writeLock) { dir.deleteRecursively() } }
     }
 
-    /** Esquece os canais e o guia de uma lista apagada. */
+    /** Esquece os canais e os guias (o da lista, o extra e o da conta) de uma lista apagada. */
     suspend fun removePlaylist(playlistId: String) = withContext(Dispatchers.IO) {
         File(dir, fileFor(playlistId)).delete()
         File(dir, guideFile(playlistId)).delete()
+        File(dir, guideFile(playlistId + EXTRA_GUIDE_SUFFIX)).delete()
+        File(dir, accountGuideFile(playlistId)).delete()
     }
 
     private fun fileFor(playlistId: String) = "playlist_" + playlistId.filter { it.isLetterOrDigit() } + ".json.gz"
@@ -124,8 +126,11 @@ class CacheStore(context: Context, private val gson: Gson) {
         }
     }
 
-    private companion object {
+    companion object {
         /** Sobe quando o formato dos modelos mudar, para não ler caches antigas. */
-        const val VERSION = 1
+        private const val VERSION = 1
+
+        /** Junta-se ao id da lista no ficheiro do guia extra (epg_<id>extra.json.gz). */
+        const val EXTRA_GUIDE_SUFFIX = "extra"
     }
 }

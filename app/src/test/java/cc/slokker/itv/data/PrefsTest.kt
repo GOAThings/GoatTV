@@ -126,4 +126,28 @@ class PrefsTest {
         assertEquals(null, nextAllowed(list.filter(locked), 0, 1, locked))
         assertEquals(1, nextAllowed(list, 0, 1) { false }?.uid)
     }
+
+    @Test
+    fun `removing a playlist drops only its own prefs`() {
+        val settings = JsonParser.parseString(
+            """
+            {"hidden_groups": ["p1:7", "p2:7"], "hidden_channels": ["p1:101", "p10:101"], "locked_groups": ["p1:9"],
+             "group_order": {"p1": ["3"], "p2": ["1"]}, "extra_epg": {"p1": "https://e.example.com/x.xml"},
+             "channel_order": {"p1:1": ["a"], "p2:1": ["b"]}, "channel_logos": {"p1:101": "", "p2:101": "https://l/x.png"},
+             "accent": "mint", "unknown": {"p1": 1}}
+            """,
+        ).asJsonObject
+        assertTrue(Prefs.removePlaylist(settings, "p1"))
+        assertEquals(
+            JsonParser.parseString(
+                """
+                {"hidden_groups": ["p2:7"], "hidden_channels": ["p10:101"], "locked_groups": [],
+                 "group_order": {"p2": ["1"]}, "extra_epg": {}, "channel_order": {"p2:1": ["b"]},
+                 "channel_logos": {"p2:101": "https://l/x.png"}, "accent": "mint", "unknown": {"p1": 1}}
+                """,
+            ),
+            settings,
+        )
+        assertFalse(Prefs.removePlaylist(settings, "p1"))
+    }
 }

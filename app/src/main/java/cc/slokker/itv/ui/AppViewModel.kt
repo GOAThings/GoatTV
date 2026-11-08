@@ -936,6 +936,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return playlistError(e)
         }
         c.cache.removePlaylist(playlist.id)
+        secondContents.remove(playlist.id)
         syncConfig()
         // Era a última: mostra o aviso de conta sem listas (com o botão para adicionar).
         if (_playlists.value.isEmpty()) {
@@ -1024,7 +1025,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Sem conta: apaga uma lista desta TV (e os favoritos dela). Sem listas, volta às boas-vindas. */
+    /**
+     * Sem conta: apaga uma lista desta TV (e os favoritos, os recentes, as definições e os guias dela). Sem listas,
+     * volta às boas-vindas.
+     */
     private fun deleteLocalPlaylist(playlist: Playlist) {
         val remaining = _playlists.value.filter { it.id != playlist.id }
         _playlists.value = remaining
@@ -1033,7 +1037,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _recents.value = _recents.value - playlist.id
             settings.add(RECENTS_KEY, c.gson.toJsonTree(_recents.value))
         }
+        if (Prefs.removePlaylist(settings, playlist.id)) _prefs.value = Prefs.from(settings)
         saveSettings()
+        secondContents.remove(playlist.id)
         viewModelScope.launch { c.cache.removePlaylist(playlist.id) }
         when {
             remaining.isEmpty() -> {

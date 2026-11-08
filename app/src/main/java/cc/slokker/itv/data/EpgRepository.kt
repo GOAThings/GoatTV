@@ -163,7 +163,7 @@ class EpgRepository(
 
     /** O guia XMLTV da lista e o extra (Definições → Listas → lista → Guia extra). */
     private val main = XmltvSlot("")
-    private val extra = XmltvSlot(EXTRA_SUFFIX)
+    private val extra = XmltvSlot(CacheStore.EXTRA_GUIDE_SUFFIX)
 
     private val _version = MutableStateFlow(0)
 
@@ -253,8 +253,6 @@ class EpgRepository(
 
     private companion object {
         const val TTL_MS = 10 * 60 * 1000L
-        /** Junta-se ao id da lista no ficheiro do guia extra. */
-        const val EXTRA_SUFFIX = "extra"
         /** O servidor atualiza os programas de 12 em 12 h; pede-se no máximo de 6 em 6 h (com ETag). */
         const val ACCOUNT_REFRESH_MS = 6 * 3600_000L
     }

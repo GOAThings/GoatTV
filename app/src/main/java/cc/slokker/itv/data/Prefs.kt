@@ -282,6 +282,30 @@ data class Prefs(
             }
         }
 
+        /**
+         * Tira de [settings] o que é só da lista [playlistId] (grupos e canais escondidos, bloqueados e ordenados,
+         * logótipos escolhidos, guia extra), quando ela é apagada. Devolve true se mudou alguma coisa.
+         */
+        fun removePlaylist(settings: JsonObject, playlistId: String): Boolean {
+            val prefix = "$playlistId:"
+            var changed = false
+            for (key in listOf(Key.HIDDEN_GROUPS, Key.HIDDEN_CHANNELS, Key.LOCKED_GROUPS)) {
+                val array = settings.get(key)?.takeIf { it.isJsonArray }?.asJsonArray ?: continue
+                val kept = JsonArray().apply { array.filterNot { it.isJsonPrimitive && it.asString.startsWith(prefix) }.forEach(::add) }
+                if (kept.size() != array.size()) {
+                    settings.add(key, kept)
+                    changed = true
+                }
+            }
+            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true)) {
+                val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+                val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
+                gone.forEach { obj.remove(it) }
+                if (gone.isNotEmpty()) changed = true
+            }
+            return changed
+        }
+
         private fun stringListMap(s: JsonObject, key: String): Map<String, List<String>> =
             s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
                 ?.associate { (k, v) -> k to (if (v.isJsonArray) v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString } else emptyList()) }
