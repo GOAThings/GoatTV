@@ -241,10 +241,10 @@ final class Timeshift {
         if let last = lastVlcMs {
             let step = vlcMs - last
             let wall = now - lastTickAt
-            playheadMs += (-Self.vlcJitterMs...(wall + Self.vlcJumpMs)).contains(step) ? step : (paused ? 0 : wall)
+            playheadMs += (-Self.vlcJumpMs...(wall + Self.vlcJumpMs)).contains(step) ? step : (paused ? 0 : wall)
         } else {
             // A primeira leitura depois de abrir: o VLC começa no primeiro keyframe, uns instantes depois do ponto.
-            playheadMs = min(max(0, vlcMs), Self.vlcJumpMs)
+            playheadMs = min(max(0, vlcMs), Self.vlcStartMs)
         }
         lastVlcMs = vlcMs
         return playheadMs
@@ -364,10 +364,11 @@ final class Timeshift {
     /// No HLS o fim da janela anda aos saltos (um bocado de cada vez, 6–10 s): a folga é maior.
     static let hlsLiveSlackMs: Int64 = 10_000
     static let previousWaitMs = 3_000
-    /// O tempo do VLC entre duas leituras (meio segundo): pode recuar um pouco, ou andar até isto mais do que o tempo
-    /// real (a recuperar o atraso); fora disso é um salto.
-    static let vlcJitterMs: Int64 = 300
-    static let vlcJumpMs: Int64 = 1_500
+    /// O tempo do VLC entre duas leituras (meio segundo) acerta-se uns segundos ao pausar, continuar ou encher o
+    /// buffer; mais do que isto para trás ou para a frente do tempo real é um salto do relógio do emissor.
+    static let vlcJumpMs: Int64 = 10_000
+    /// Na primeira leitura depois de abrir, o VLC vai no máximo isto à frente do ponto (o primeiro keyframe).
+    static let vlcStartMs: Int64 = 3_000
 }
 
 /// A ligação ao servidor do canal: lê o stream e escreve-o no anel. Se cair depois de já ter dado, volta a ligar de
