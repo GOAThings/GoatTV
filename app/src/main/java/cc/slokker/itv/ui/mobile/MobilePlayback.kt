@@ -35,6 +35,9 @@ import cc.slokker.itv.ui.player.buildPlayer
 import cc.slokker.itv.ui.player.cannotDecode
 import cc.slokker.itv.ui.player.loadStream
 import kotlinx.coroutines.Job
+import android.os.SystemClock
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -49,6 +52,14 @@ internal class MobilePlayback(val player: Player) {
     var freeze by mutableStateOf<ImageBitmap?>(null)
     /** Catch-up: instante real do início do vídeo pedido ao servidor (0 em direto). */
     var archiveStart = 0L
+
+    /** Já deu neste canal: uma quebra agora é uma reconexão (a pílula no topo), não um canal em baixo. */
+    var wasPlaying = false
+
+    /** A tentativa de voltar a ligar (0 = não caiu) e quando é a próxima (elapsedRealtime; 0 = a tentar agora). */
+    var reconnects by mutableIntStateOf(0)
+    var nextTryAt by mutableLongStateOf(0L)
+    var retryDelayMs = 0L
 }
 
 /**
@@ -116,6 +127,9 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         if (latestPrefs.freezeFrame && playback.ready) {
             playback.freeze = playback.view?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap()
         }
+        playback.wasPlaying = false
+        playback.reconnects = 0
+        playback.nextTryAt = 0L
         val archive = catchup?.let { catchupCandidates(data.playlist, it, data.account?.timezone) }
         playback.archiveStart = archive?.startMs ?: 0L
         candidates[0] = archive?.candidates ?: streamCandidates(data.playlist, channel, streamFormat, data.account?.allowedFormats.orEmpty())
@@ -141,8 +155,15 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     DisposableEffect(player) {
         fun reconnect() {
             retry[0]?.cancel()
+            val wait = latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L
+            if (playback.wasPlaying) {
+                playback.reconnects++
+                playback.retryDelayMs = wait
+                playback.nextTryAt = SystemClock.elapsedRealtime() + wait
+            }
             retry[0] = scope.launch {
-                delay(latestPrefs.reconnectSeconds.coerceAtLeast(1) * 1_000L)
+                delay(wait)
+                playback.nextTryAt = 0L
                 start(attempt[0])
             }
         }
@@ -151,6 +172,9 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
                 if (state == Player.STATE_READY) {
                     playback.ready = true
                     playback.failed = false
+                    playback.wasPlaying = true
+                    playback.reconnects = 0
+                    playback.nextTryAt = 0L
                 }
                 // Um canal em direto não acaba: o servidor fechou a ligação.
                 if (state == Player.STATE_ENDED) {

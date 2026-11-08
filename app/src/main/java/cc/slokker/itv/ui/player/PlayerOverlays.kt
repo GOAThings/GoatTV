@@ -415,14 +415,7 @@ internal fun TuningPill(
     modifier: Modifier = Modifier,
 ) {
     val s = LocalStrings.current
-    val leftMs by produceState(0L, nextTryAt) {
-        while (nextTryAt > 0) {
-            value = (nextTryAt - SystemClock.elapsedRealtime()).coerceAtLeast(0)
-            if (value == 0L) break
-            withFrameMillis { }
-        }
-        value = 0L
-    }
+    val leftMs = rememberMsLeft(nextTryAt)
     Row(
         modifier
             .padding(horizontal = 48.dp, vertical = 27.dp)
@@ -430,17 +423,7 @@ internal fun TuningPill(
             .padding(start = 7.dp, end = 16.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-            if (leftMs > 0 && waitMs > 0) {
-                ProgressRing(1f - leftMs.toFloat() / waitMs, Modifier.fillMaxSize())
-                Text(
-                    ((leftMs + 999) / 1_000).toString(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold).tabular,
-                )
-            } else {
-                SpinnerRing(Modifier.fillMaxSize())
-            }
-        }
+        CountdownRing(leftMs, waitMs, Modifier.size(32.dp))
         Spacer(Modifier.width(10.dp))
         Column {
             Text(if (reconnecting) s.reconnecting else s.tuning, style = MaterialTheme.typography.labelLarge)
@@ -452,6 +435,37 @@ internal fun TuningPill(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 220.dp),
             )
+        }
+    }
+}
+
+/** Quanto falta até [at] (elapsedRealtime), a cada frame; 0 quando já passou ou [at] é 0. */
+@Composable
+internal fun rememberMsLeft(at: Long): Long {
+    val left by produceState(0L, at) {
+        while (at > 0) {
+            value = (at - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+            if (value == 0L) break
+            withFrameMillis { }
+        }
+        value = 0L
+    }
+    return left
+}
+
+/** À espera ([leftMs] de [waitMs]): o anel enche-se com os segundos no meio. A tentar (0): o anel roda. */
+@Composable
+internal fun CountdownRing(leftMs: Long, waitMs: Long, modifier: Modifier = Modifier, color: Color = Color.White) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (leftMs > 0 && waitMs > 0) {
+            ProgressRing(1f - leftMs.toFloat() / waitMs, Modifier.fillMaxSize(), color = color)
+            Text(
+                ((leftMs + 999) / 1_000).toString(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold).tabular,
+                color = Color.White,
+            )
+        } else {
+            SpinnerRing(Modifier.fillMaxSize(), color)
         }
     }
 }
@@ -470,7 +484,7 @@ internal fun ProgressRing(fraction: Float, modifier: Modifier = Modifier, stroke
 
 /** Anel a rodar: a ligar, sem se saber quanto falta. */
 @Composable
-private fun SpinnerRing(modifier: Modifier = Modifier) {
+private fun SpinnerRing(modifier: Modifier = Modifier, color: Color = Color.White) {
     val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -482,7 +496,7 @@ private fun SpinnerRing(modifier: Modifier = Modifier) {
         val inset = w / 2
         val arcSize = Size(size.width - w, size.height - w)
         drawArc(Color.White.copy(alpha = 0.18f), 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(w))
-        drawArc(Color.White, turn - 90f, 100f, false, Offset(inset, inset), arcSize, style = Stroke(w, cap = StrokeCap.Round))
+        drawArc(color, turn - 90f, 100f, false, Offset(inset, inset), arcSize, style = Stroke(w, cap = StrokeCap.Round))
     }
 }
 

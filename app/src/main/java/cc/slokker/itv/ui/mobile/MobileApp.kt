@@ -119,6 +119,7 @@ import cc.slokker.itv.ui.common.formatTime
 import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.ItvIcons
+import cc.slokker.itv.ui.player.TuningPill
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
@@ -520,10 +521,25 @@ private fun VideoArea(
             playback.failed -> Text(s.cantOpenChannel, color = ItvColors.Text, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center).padding(16.dp))
             controls && !pip -> {}
             playback.freeze != null -> Spinner(Modifier.align(Alignment.Center))
-            // A abrir: que está a carregar, e o quê.
-            !playback.ready -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            // A abrir: que está a carregar, e o quê (a voltar a ligar diz-o a pílula, mais abaixo).
+            !playback.ready && playback.reconnects == 0 -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spinner()
                 Text(s.loadingPlaylist(channel.name), color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+        // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
+        if (playback.reconnects > 0 && !pip) {
+            if (fullscreen) {
+                TuningPill(
+                    channel = channel.name,
+                    reconnecting = true,
+                    attempt = playback.reconnects,
+                    nextTryAt = playback.nextTryAt,
+                    waitMs = playback.retryDelayMs,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            } else {
+                ReconnectIsland(channel.name, playback.nextTryAt, playback.retryDelayMs, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
             }
         }
         if (controls && !pip) {

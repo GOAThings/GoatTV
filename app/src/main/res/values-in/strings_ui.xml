@@ -640,4 +640,7 @@
     <string name="update_hides_in">Hilang dalam %1$d dtk</string>
     <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
     <string name="update_install_settings">Untuk memasang: Pengaturan → Perbarui</string>
+    <!-- Telemóvel: folha de versão nova. -->
+    <string name="update_now">Perbarui</string>
+    <string name="update_later">Nanti</string>
 </resources>

@@ -656,4 +656,7 @@
     <string name="update_hides_in">Hides in %1$d s</string>
     <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
     <string name="update_install_settings">To install: Settings → Update</string>
+    <!-- Telemóvel: folha de versão nova. -->
+    <string name="update_now">Update</string>
+    <string name="update_later">Later</string>
 </resources>

@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +45,7 @@ import cc.slokker.itv.ui.common.semanticsOnlyForScreenReaders
 import cc.slokker.itv.ui.theme.outlineBrush
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import cc.slokker.itv.ui.common.Toast
+import cc.slokker.itv.ui.mobile.MobileUpdateSheet
 import cc.slokker.itv.ui.common.onBackKey
 import cc.slokker.itv.ui.loading.LoadingScreen
 import androidx.compose.animation.AnimatedVisibility
@@ -178,17 +178,6 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         forced || activity?.packageManager?.hasSystemFeature(PackageManager.FEATURE_LEANBACK) == false
     }
 
-    // Versão nova: na TV é um cartão no player (mantém-se OK para instalar); no telemóvel fica o aviso curto.
-    val updateNotice by vm.updateNotice.collectAsStateWithLifecycle()
-    if (phone) {
-        LaunchedEffect(updateNotice) {
-            updateNotice?.let {
-                vm.showToast(strings.updateAvailable(it.version))
-                vm.dismissUpdateNotice()
-            }
-        }
-    }
-
     // Ao voltar à app, apanha listas/favoritos alterados no site ou noutra TV.
     LifecycleStartEffect(vm) {
         vm.onAppStart()
@@ -298,6 +287,8 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         AnimatedVisibility(visible = !introDone, enter = EnterTransition.None, exit = fadeOut(tween(450))) {
             GoatIntro(onDone = { introDone = true })
         }
+        // Versão nova: na TV é um cartão no player (mantém-se OK para instalar); no telemóvel uma folha em baixo.
+        if (phone) MobileUpdateSheet(vm, Modifier.fillMaxSize())
         Toast(toast, vm::clearToast, Modifier.align(Alignment.TopCenter))
     }
     }

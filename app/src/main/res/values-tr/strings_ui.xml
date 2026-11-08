@@ -642,4 +642,7 @@
     <string name="update_hides_in">%1$d sn içinde kapanır</string>
     <!-- Apple TV: não se instala por dentro da app, as Definições dizem como. -->
     <string name="update_install_settings">Yüklemek için: Ayarlar → Güncelle</string>
+    <!-- Telemóvel: folha de versão nova. -->
+    <string name="update_now">Güncelle</string>
+    <string name="update_later">Daha sonra</string>
 </resources>

@@ -140,6 +140,8 @@ class Strings(context: Context) {
     val updateReadyLabel get() = s(R.string.update_ready_label)
     fun updateWhatsNew(v: String) = s(R.string.update_whats_new, v)
     val updateHoldOk get() = s(R.string.update_hold_ok)
+    val updateNow get() = s(R.string.update_now)
+    val updateLater get() = s(R.string.update_later)
     fun updateHidesIn(seconds: Int) = s(R.string.update_hides_in, seconds)
     val updateFailedTitle get() = s(R.string.update_failed_title)
     val checkUpdates get() = s(R.string.check_updates)
