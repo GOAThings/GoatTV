@@ -530,7 +530,11 @@ private fun VideoArea(
     ) {
         AndroidView(
             factory = { VideoView(it).also { v -> playback.view = v } },
-            update = { playback.view = it },
+            update = {
+                playback.view = it
+                // Como na TV: o ecrã não se apaga enquanto o canal dá (ou carrega).
+                it.keepScreenOn = playback.playing || playback.buffering
+            },
             modifier = Modifier.fillMaxSize(),
         )
         playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }

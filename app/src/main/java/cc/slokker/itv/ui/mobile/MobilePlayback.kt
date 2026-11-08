@@ -50,6 +50,7 @@ internal class MobilePlayback(val player: Player, val timeshift: Timeshift) {
     var ready by mutableStateOf(false)
     var failed by mutableStateOf(false)
     var playing by mutableStateOf(false)
+    var buffering by mutableStateOf(false)
     var view by mutableStateOf<VideoView?>(null)
     /** Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto). */
     var freeze by mutableStateOf<ImageBitmap?>(null)
@@ -178,6 +179,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         }
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
+                playback.buffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
                     playback.timeshift.seeking = false
                     playback.ready = true
