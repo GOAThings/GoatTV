@@ -2,7 +2,8 @@ import SwiftUI
 
 /*
  * Os avisos nos cantos do player, iguais aos do GoatTV Android (PlayerOverlays.TuningPill e UpdateCard): a cápsula a
- * sintonizar / a voltar a ligar e o cartão de versão nova. Só na Apple TV (o iPhone terá o seu desenho).
+ * sintonizar / a voltar a ligar e o cartão de versão nova. A cápsula serve também o iPhone deitado, em ecrã inteiro
+ * (mais pequena, ver [TuningPill.scale]); o cartão é só da Apple TV.
  */
 
 /// Quanto tempo o cartão de versão nova fica no ecrã (como no Android).
@@ -18,41 +19,58 @@ struct TuningPill: View {
     let attempt: Int
     let nextTryAt: Date?
     let waitSeconds: TimeInterval
+    /// 1 na TV; no iPhone a mesma cápsula, à escala do ecrã dele.
+    var scale: CGFloat = 1
 
     var body: some View {
         let s = model.strings
         // O nome não estica a cápsula: um nome muito comprido fica cortado (no Android, 220 dp no máximo).
         let name = channel.count > 34 ? String(channel.prefix(33)) + "…" : channel
-        HStack(spacing: 20) {
-            TimelineView(.animation) { timeline in
-                let left = nextTryAt.map { $0.timeIntervalSince(timeline.date) } ?? 0
-                ZStack {
-                    if left > 0, waitSeconds > 0 {
-                        ProgressRing(fraction: 1 - left / waitSeconds)
-                        Text("\(Int(left.rounded(.up)))")
-                            .font(.system(size: 22, weight: .bold).monospacedDigit())
-                    } else {
-                        SpinnerRing(date: timeline.date)
-                    }
-                }
-            }
-            .frame(width: 60, height: 60)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 20 * scale) {
+            CountdownRing(nextTryAt: nextTryAt, waitSeconds: waitSeconds, lineWidth: 4.5 * scale, fontSize: 22 * scale)
+                .frame(width: 60 * scale, height: 60 * scale)
+            VStack(alignment: .leading, spacing: 2 * scale) {
                 Text(reconnecting ? s.r("reconnecting") : s.r("tuning"))
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 26 * scale, weight: .semibold))
                 if attempt > 0 || !name.isEmpty {
                     Text(attempt > 0 ? s.r("reconnect_attempt", name, "\(attempt)") : name)
-                        .font(.system(size: 21).monospacedDigit())
+                        .font(.system(size: 21 * scale).monospacedDigit())
                         .foregroundStyle(Theme.textDim)
                         .lineLimit(1)
                 }
             }
             .fixedSize()
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 32)
-        .padding(.vertical, 14)
-        .glass(radius: 44)
+        .padding(.leading, 14 * scale)
+        .padding(.trailing, 32 * scale)
+        .padding(.vertical, 14 * scale)
+        .glass(radius: 44 * scale)
+    }
+}
+
+/// À espera da próxima tentativa ([nextTryAt], ao fim de [waitSeconds]): o anel enche-se com os segundos no meio. A
+/// tentar (nil ou já passou): o anel roda.
+struct CountdownRing: View {
+    let nextTryAt: Date?
+    let waitSeconds: TimeInterval
+    var lineWidth: CGFloat = 4.5
+    var fontSize: CGFloat = 22
+    var color: Color = .white
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let left = nextTryAt.map { $0.timeIntervalSince(timeline.date) } ?? 0
+            ZStack {
+                if left > 0, waitSeconds > 0 {
+                    ProgressRing(fraction: 1 - left / waitSeconds, lineWidth: lineWidth, color: AnyShapeStyle(color))
+                    Text("\(Int(left.rounded(.up)))")
+                        .font(.system(size: fontSize, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                } else {
+                    SpinnerRing(date: timeline.date, lineWidth: lineWidth, color: color)
+                }
+            }
+        }
     }
 }
 
@@ -78,6 +96,7 @@ struct ProgressRing: View {
 struct SpinnerRing: View {
     let date: Date
     var lineWidth: CGFloat = 4.5
+    var color: Color = .white
 
     var body: some View {
         let turn = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9 * 360
@@ -85,7 +104,7 @@ struct SpinnerRing: View {
             Circle().stroke(Color.white.opacity(0.18), lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: 100.0 / 360)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(turn - 90))
         }
         .padding(lineWidth / 2)

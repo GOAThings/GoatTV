@@ -31,6 +31,8 @@ targets:
       - path: GoatTV/UI/GoatLogo.swift
       - path: GoatTV/UI/ErrorPanel.swift
       - path: GoatTV/UI/PlayerParts.swift
+      # A cápsula da TV (a voltar a ligar, deitado em ecrã inteiro) e o ícone da app (ver iPhone/PhoneNotices.swift).
+      - path: GoatTV/UI/PlayerNotices.swift
       - path: GoatTV/UI/RootView.swift
     dependencies:
       - package: GoatCore

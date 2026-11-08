@@ -28,6 +28,8 @@ struct PhoneRoot: View {
     @Environment(AppModel.self) private var model
     /// A abertura (o logo animado) só passa uma vez, ao abrir a app.
     @State private var introDone = false
+    /// A IPA descarregada pela folha de versão nova, para a folha de partilha.
+    @State private var sharedIPA: DownloadedIPA?
 
     var body: some View {
         ZStack {
@@ -57,6 +59,10 @@ struct PhoneRoot: View {
                 }
                 .transition(.opacity)
             }
+            // Versão nova: uma folha em baixo (na TV é um cartão no player).
+            if introDone {
+                PhoneUpdateSheet { sharedIPA = $0 }
+            }
             if let toast = model.toast {
                 VStack {
                     Text(toast).font(.subheadline).padding(.horizontal, 18).padding(.vertical, 10)
@@ -67,6 +73,7 @@ struct PhoneRoot: View {
                 .allowsHitTesting(false)
             }
         }
+        .sheet(item: $sharedIPA) { ShareSheet(url: $0.url) }
     }
 }
 
@@ -474,14 +481,29 @@ private struct VideoPane: View {
                 Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
             } else if !controls, model.player.frozen || (model.player.state == .playing && !model.player.hasPicture) {
                 ProgressView().tint(.white)
-            } else if !controls, model.player.state != .playing, let current = model.current {
-                // A abrir: que está a carregar, e o quê.
+            } else if !controls, model.player.state != .playing, model.player.reconnects == 0, let current = model.current {
+                // A abrir: que está a carregar, e o quê (a voltar a ligar diz-o a pílula, mais abaixo).
                 VStack(spacing: 10) {
                     ProgressView().tint(.white)
                     Text(model.strings.loading(current.name)).font(.subheadline).foregroundStyle(Theme.textDim)
                 }
             }
             if controls { overlay }
+            // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
+            if model.player.reconnects > 0, let current = model.current {
+                VStack {
+                    if fullscreen {
+                        TuningPill(channel: current.name, reconnecting: true, attempt: model.player.reconnects,
+                                   nextTryAt: model.player.nextTryAt, waitSeconds: model.player.retryDelay, scale: 0.55)
+                            .padding(.top, 12)
+                    } else {
+                        ReconnectIsland(channel: current.name, nextTryAt: model.player.nextTryAt, waitSeconds: model.player.retryDelay)
+                            .padding(.top, 8)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture { controls.toggle(); touched += 1 }
@@ -1210,30 +1232,16 @@ private struct MenuTab: View {
     @State private var message = ""
     @State private var picking: Picking?
     @State private var downloadingUpdate = false
-    @State private var downloadedIPA: DownloadedFile?
-
-    struct DownloadedFile: Identifiable {
-        let url: URL
-        var id: URL { url }
-    }
+    @State private var downloadedIPA: DownloadedIPA?
 
     /// Descarrega a IPA da release e abre a folha de partilha, para a passar à app que a assina e instala.
-    /// Sem conseguir, abre a página da release no navegador.
+    /// Sem conseguir, abre a página da release no navegador (ver PhoneUpdate).
     private func downloadUpdate() {
         guard !downloadingUpdate else { return }
         downloadingUpdate = true
         Task {
-            defer { downloadingUpdate = false }
-            do {
-                let (file, response) = try await URLSession.shared.download(from: AppUpdate.iPhoneIPA)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-                let target = FileManager.default.temporaryDirectory.appendingPathComponent("GoatTV-iPhone.ipa")
-                try? FileManager.default.removeItem(at: target)
-                try FileManager.default.moveItem(at: file, to: target)
-                downloadedIPA = DownloadedFile(url: target)
-            } catch {
-                await UIApplication.shared.open(AppUpdate.releasePage)
-            }
+            downloadedIPA = await PhoneUpdate.downloadIPA()
+            downloadingUpdate = false
         }
     }
     @State private var managingGroups = false

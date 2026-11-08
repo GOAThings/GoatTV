@@ -10,6 +10,8 @@ enum Theme {
     static let textDim = Color(red: 0xEB / 255, green: 0xEB / 255, blue: 0xF5 / 255).opacity(0.85)
     static let textFaint = Color(red: 0xEB / 255, green: 0xEB / 255, blue: 0xF5 / 255).opacity(0.6)
     static let error = Color(red: 1, green: 0x69 / 255, blue: 0x61 / 255)
+    /// Âmbar dos avisos (GoatPalette.Warning no Android): a pílula "A reconectar…" do telemóvel.
+    static let warning = Color(red: 0xE5 / 255, green: 0xB4 / 255, blue: 0x54 / 255)
 
     static let accent = LinearGradient(colors: [sky, indigo], startPoint: .leading, endPoint: .trailing)
 

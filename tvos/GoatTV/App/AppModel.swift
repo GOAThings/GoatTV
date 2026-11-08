@@ -1986,8 +1986,8 @@ final class AppModel {
     private(set) var updateVersion: String?
     @ObservationIgnored private var updateCheckedAt: Date?
 
-    /// Versão nova encontrada sozinha, por avisar: na Apple TV um cartão no player (ver UpdateCard), com as
-    /// novidades das notas da versão.
+    /// Versão nova encontrada sozinha, por avisar, com as novidades das notas da versão: na Apple TV um cartão no
+    /// player (ver UpdateCard), no iPhone uma folha em baixo (ver PhoneUpdateSheet).
     struct UpdateNotice: Equatable {
         let version: String
         let highlights: [String]
@@ -2000,7 +2000,7 @@ final class AppModel {
     }
 
     /// Vê se há versão nova (no máximo de 12 em 12 h). Na Apple TV não se instala por dentro da app: avisa uma vez
-    /// por versão (um cartão no player; no iPhone um aviso curto) e as Definições dizem onde a ir buscar.
+    /// por versão (o cartão no player da TV, a folha no iPhone) e as Definições dizem onde a ir buscar.
     func checkForUpdate() {
         #if DEBUG
         if UserDefaults.standard.string(forKey: "UITestPlaylist") != nil { return }
@@ -2017,20 +2017,14 @@ final class AppModel {
                   let json = try? JSON.parse(data),
                   let version = AppUpdate.version(fromLatest: json),
                   AppUpdate.isNewer(version, than: current) else { return }
-            #if os(tvOS)
             let highlights = AppUpdate.highlights(AppUpdate.notes(fromLatest: json))
-            #endif
             guard let self else { return }
             self.updateVersion = version
             guard UserDefaults.standard.string(forKey: "update.notified") != version else { return }
             UserDefaults.standard.set(version, forKey: "update.notified")
             // Depois de a lista abrir, para o aviso não se perder no ecrã de carregar.
             try? await Task.sleep(for: .seconds(8))
-            #if os(tvOS)
             self.updateNotice = UpdateNotice(version: version, highlights: highlights)
-            #else
-            self.showToast(self.strings.r("update_available", version))
-            #endif
         }
     }
 }
