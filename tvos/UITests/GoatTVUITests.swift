@@ -81,6 +81,47 @@ final class GoatTVUITests: XCTestCase {
         press(.select, wait: 10); shot("opened-from-top-shelf")
     }
 
+    /// Pausar o direto com um canal .ts ao vivo (UITests/Live/live-ts.py): Play/Pausa pausa, ← recua 10 s, OK pausa e
+    /// continua, Voltar volta ao direto. Só no workflow timeshift-sim (TIMESHIFT_TEST=1), que serve esse canal.
+    func testTimeshift() throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["TIMESHIFT_TEST"] != "1", "Só com o canal .ts do workflow timeshift-sim")
+        app.launchArguments = ["-UITestPlaylist", "http://127.0.0.1:8765/live.m3u", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        pause(25); shot("ts-live")
+        XCTAssertNil(behind(), "atrás do direto sem se ter pausado")
+
+        // Play/Pausa: pausa; a gravação continua por trás.
+        press(.playPause, wait: 8); shot("ts-paused")
+        XCTAssertTrue(app.otherElements["timeshiftBar"].exists, "sem a barra da pausa do direto")
+        let paused = behind() ?? -1
+        XCTAssertTrue((5...14).contains(paused), "8 s em pausa, mas vai \(paused) s atrás")
+
+        // ← recua 10 s: primeiro por confirmar, depois o salto (o VLC reabre noutro ponto do anel).
+        press(.left, wait: 0.5); shot("ts-rewind-pending")
+        pause(9); shot("ts-rewound")
+        let rewound = behind() ?? -1
+        XCTAssertTrue(rewound >= paused + 6, "recuou de \(paused) s para \(rewound) s")
+
+        // OK pausa e OK continua (do mesmo ponto).
+        press(.select, wait: 4); shot("ts-paused-again")
+        press(.select, wait: 6); shot("ts-resumed")
+        let resumed = behind() ?? -1
+        XCTAssertTrue(resumed >= rewound + 1 && resumed <= rewound + 10, "depois de 4 s em pausa: \(rewound) s → \(resumed) s")
+
+        // Voltar: de volta ao direto.
+        press(.menu, wait: 8); shot("ts-back-live")
+        XCTAssertNil(behind(), "ainda atrás do direto depois de Voltar")
+        XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "a barra ficou no ecrã no direto")
+    }
+
+    /// Quanto a cápsula da pausa do direto diz que vai atrás ("−0:18" → 18), ou nil sem ela.
+    private func behind() -> Int? {
+        let pill = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "−")).firstMatch
+        guard pill.exists else { return nil }
+        let parts = pill.label.dropFirst().split(separator: ":").compactMap { Int($0) }
+        return parts.reduce(0) { $0 * 60 + $1 }
+    }
+
     // MARK: Ajudas
 
     private func pause(_ seconds: Double) {

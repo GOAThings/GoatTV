@@ -191,6 +191,8 @@ struct TimeshiftBar: View {
         .padding(.vertical, 32)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(radius: 34)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("timeshiftBar")
     }
 }
 
