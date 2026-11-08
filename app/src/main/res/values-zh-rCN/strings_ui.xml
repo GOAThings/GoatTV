@@ -323,7 +323,7 @@
     <string name="freeze_frame">切换时保留画面</string>
     <string name="freeze_frame_sub">切换频道时不黑屏</string>
     <string name="timeshift">暂停直播</string>
-    <string name="timeshift_sub">在本设备上保存频道最近几分钟，以便暂停和回退</string>
+    <string name="timeshift_sub">在本设备上保存正在观看的节目，可暂停和回退。换台或节目结束后删除</string>
     <string name="reconnect">视频流中断时重新连接</string>
     <string name="no">否</string>
     <string name="after_seconds">%1$s 秒后</string>

@@ -323,7 +323,7 @@
     <string name="freeze_frame">Manter a imagem ao trocar</string>
     <string name="freeze_frame_sub">Sem tela preta entre canais</string>
     <string name="timeshift">Pausar a TV ao vivo</string>
-    <string name="timeshift_sub">Guarda os últimos minutos do canal neste aparelho, para pausar e voltar</string>
+    <string name="timeshift_sub">Guarda o programa que você está vendo neste aparelho, para pausar e voltar. É apagado ao trocar de canal ou de programa</string>
     <string name="reconnect">Reconectar se o stream falhar</string>
     <string name="no">Não</string>
     <string name="after_seconds">Após %1$s s</string>

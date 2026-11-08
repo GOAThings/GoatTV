@@ -323,7 +323,7 @@
     <string name="freeze_frame">Bild beim Umschalten halten</string>
     <string name="freeze_frame_sub">Kein schwarzer Bildschirm zwischen den Sendern</string>
     <string name="timeshift">Live-TV pausieren</string>
-    <string name="timeshift_sub">Speichert die letzten Minuten des Senders auf diesem Gerät, zum Pausieren und Zurückspulen</string>
+    <string name="timeshift_sub">Speichert die laufende Sendung auf diesem Gerät, zum Pausieren und Zurückspulen. Wird beim Sender- oder Sendungswechsel gelöscht</string>
     <string name="reconnect">Neu verbinden, wenn der Stream abbricht</string>
     <string name="no">Nein</string>
     <string name="after_seconds">Nach %1$s s</string>

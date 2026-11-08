@@ -323,7 +323,7 @@
     <string name="freeze_frame">Kanal değiştirirken görüntüyü koru</string>
     <string name="freeze_frame_sub">Kanallar arasında siyah ekran yok</string>
     <string name="timeshift">Canlı yayını duraklat</string>
-    <string name="timeshift_sub">Kanalın son dakikalarını bu cihazda tutar; duraklatıp geri sarabilirsiniz</string>
+    <string name="timeshift_sub">İzlediğiniz programı duraklatıp geri sarmak için bu cihazda tutar. Kanal veya program değişince silinir</string>
     <string name="reconnect">Yayın kesilirse yeniden bağlan</string>
     <string name="no">Hayır</string>
     <string name="after_seconds">%1$s sn sonra</string>

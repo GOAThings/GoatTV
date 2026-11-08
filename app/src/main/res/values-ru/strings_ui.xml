@@ -323,7 +323,7 @@
     <string name="freeze_frame">Сохранять картинку при переключении</string>
     <string name="freeze_frame_sub">Без чёрного экрана между каналами</string>
     <string name="timeshift">Пауза прямого эфира</string>
-    <string name="timeshift_sub">Хранит последние минуты канала на этом устройстве, чтобы ставить на паузу и перематывать назад</string>
+    <string name="timeshift_sub">Сохраняет текущую передачу на этом устройстве, чтобы ставить на паузу и перематывать назад. Удаляется при смене канала или передачи</string>
     <string name="reconnect">Переподключаться при сбое потока</string>
     <string name="no">Нет</string>
     <string name="after_seconds">Через %1$s с</string>

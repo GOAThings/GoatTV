@@ -1852,6 +1852,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return (c.epg.guideEntries(content.playlist, channel) ?: c.epg.cached(content.playlist, channel).orEmpty()).distinctBy { it.startMs }.shifted()
     }
 
+    /** Quando começou o programa do guia de [channel] que dá às [wallMs], ou null (sem guia para essa hora). */
+    fun programmeStartAt(channel: Channel, wallMs: Long): Long? =
+        guideEntries(channel).firstOrNull { it.startMs <= wallMs && it.endMs > wallMs }?.startMs
+
     // ---- Catch-up ----------------------------------------------------------------------------
 
     /** O servidor ainda guarda [entry] de [channel]? (Xtream com `tv_archive`, dentro dos dias que guarda.) */

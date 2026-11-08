@@ -291,6 +291,33 @@ class TimeshiftRingTest {
     }
 
     @Test
+    fun dropsThePreviousProgramme() {
+        val r = ring(capacity = 8L shl 20)
+        r.beginSegment()
+        r.writeAll(stream(0, 12))
+        // O programa seguinte começou aos 7 s: antes disso já não se pode recuar.
+        r.dropBefore(7_000)
+        assertTrue("o mais antigo está em ${r.oldest!!.mediaMs} ms", r.oldest!!.mediaMs in 7_000..7_500)
+        assertTrue(r.entryAtOrBefore(2_000)!!.mediaMs >= 7_000)
+        // Só avança: um início mais antigo (guia recarregado) não traz nada de volta.
+        r.dropBefore(3_000)
+        assertTrue(r.oldest!!.mediaMs >= 7_000)
+        // Nunca passa do direto: fica pelo menos o último ponto.
+        r.dropBefore(60_000)
+        assertNotNull(r.oldest)
+    }
+
+    @Test
+    fun shorterMaxAgeTrimsRightAway() {
+        val r = ring(capacity = 8L shl 20, maxAgeMs = 60_000)
+        r.beginSegment()
+        r.writeAll(stream(0, 12))
+        assertEquals(0L, r.oldest!!.mediaMs)
+        r.setMaxAge(5_000)
+        assertTrue(r.liveMediaMs - r.oldest!!.mediaMs <= 5_000)
+    }
+
+    @Test
     fun shrinksToTheChannelBitrateAfterAMinute() {
         val r = ring(capacity = 64L shl 20, maxAgeMs = 2 * 60_000L)
         r.beginSegment()

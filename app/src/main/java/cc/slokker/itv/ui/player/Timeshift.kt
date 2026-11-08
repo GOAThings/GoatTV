@@ -43,6 +43,9 @@ import java.util.concurrent.TimeUnit
  * a escrita continua. Recuar ou avançar é recomeçar o player noutro ponto do anel (o TS ao vivo não tem índice
  * para o ExoPlayer saltar sozinho); o índice do anel diz onde fica cada instante.
  *
+ * Guarda-se só o programa que se está a ver (pelo guia): ao passar para o seguinte, o anterior sai do anel; ao
+ * mudar de canal ou sair, o anel é apagado. Sem guia, os últimos [NO_EPG_AGE_MS].
+ *
  * HLS (.m3u8): cada bocado é um pedido à parte e a lista do servidor já guarda uns segundos ou minutos; usa-se
  * essa janela do próprio ExoPlayer (sem disco), quando tem pelo menos [HLS_MIN_WINDOW_MS].
  *
@@ -85,6 +88,7 @@ internal class Timeshift(context: Context) {
      */
     private var following = true
     private var baselineMs = 0L
+    private var lastProgrammeStart: (Long) -> Long? = { null }
 
     /** A ligação caiu e o gravador volta a ligar (tentativa, quando — elapsedRealtime — e quanto espera). */
     var onReconnect: ((attempt: Int, nextTryAt: Long, waitMs: Long) -> Unit)? = null
@@ -152,13 +156,24 @@ internal class Timeshift(context: Context) {
         return bytes
     }
 
-    /** Atualiza o estado; chamar de meio em meio segundo com o canal aberto. */
-    fun update(player: Player) {
+    /**
+     * Atualiza o estado; chamar de meio em meio segundo com o canal aberto. [programmeStart]: quando começou o
+     * programa do guia que dá a uma hora (ms desde 1970), ou null sem guia para essa hora.
+     */
+    fun update(player: Player, programmeStart: (wallMs: Long) -> Long? = lastProgrammeStart) {
+        lastProgrammeStart = programmeStart
         val s = session
         if (s != null) {
             val ring = s.ring
             if (ring.isTs != true || s.notTs || player !is ExoPlayer) return unavailable()
-            val live = ring.liveMediaMs
+            var live = ring.liveMediaMs
+            // O programa no ponto que se vê (não no direto: em pausa no fim do jogo, o jogo fica até se passar dele).
+            // Folga de um minuto antes do início, que as horas do guia raramente são certas.
+            val wall = System.currentTimeMillis()
+            val start = programmeStart(wall - (live - (s.startMediaMs + player.currentPosition)))
+            ring.setMaxAge(if (start == null) NO_EPG_AGE_MS else MAX_AGE_MS)
+            if (start != null) ring.dropBefore(live - (wall - start) - PROGRAMME_MARGIN_MS)
+            live = ring.liveMediaMs
             val oldest = ring.oldest?.mediaMs ?: live
             val span = (live - oldest).coerceAtLeast(0)
             val behind = (live - (s.startMediaMs + player.currentPosition)).coerceIn(0, span)
@@ -485,9 +500,14 @@ internal class Timeshift(context: Context) {
     private companion object {
         const val TAG = "Timeshift"
 
-        /** Até 30 min ou 1,5 GB, o que vier primeiro (o anel acerta o tamanho pelo débito, ver TimeshiftRing). */
-        const val MAX_AGE_MS = 30 * 60_000L
-        const val MAX_BYTES = 1_536L * 1024 * 1024
+        /**
+         * Com guia, o programa todo até 4 h; sem guia, 30 min. Nunca mais de 4 GB nem de metade do espaço livre
+         * (o anel acerta o tamanho pelo débito, ver TimeshiftRing): um canal pesado guarda menos tempo.
+         */
+        const val MAX_AGE_MS = 4 * 60 * 60_000L
+        const val NO_EPG_AGE_MS = 30 * 60_000L
+        const val MAX_BYTES = 4_096L * 1024 * 1024
+        const val PROGRAMME_MARGIN_MS = 60_000L
 
         /** O que fica sempre livre no disco, para o sistema e as outras apps. */
         const val RESERVE_BYTES = 512L * 1024 * 1024

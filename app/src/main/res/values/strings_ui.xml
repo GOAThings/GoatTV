@@ -330,7 +330,7 @@
     <string name="freeze_frame">Keep picture when switching</string>
     <string name="freeze_frame_sub">No black screen between channels</string>
     <string name="timeshift">Pause live TV</string>
-    <string name="timeshift_sub">Keeps the last minutes of the channel on this device, to pause and rewind</string>
+    <string name="timeshift_sub">Keeps the programme you\'re watching on this device, to pause and rewind. Deleted when the channel or programme changes</string>
     <string name="reconnect">Reconnect if the stream fails</string>
     <string name="no">No</string>
     <string name="after_seconds">After %1$s s</string>

@@ -323,7 +323,7 @@
     <string name="freeze_frame">切り替え時に映像を残す</string>
     <string name="freeze_frame_sub">チャンネル間で黒い画面になりません</string>
     <string name="timeshift">ライブを一時停止</string>
-    <string name="timeshift_sub">チャンネルの直近の数分をこの端末に保存し、一時停止や巻き戻しができます</string>
+    <string name="timeshift_sub">視聴中の番組をこの端末に保存し、一時停止や巻き戻しができます。チャンネルや番組が変わると削除されます</string>
     <string name="reconnect">ストリームが途切れたら再接続</string>
     <string name="no">しない</string>
     <string name="after_seconds">%1$s 秒後</string>

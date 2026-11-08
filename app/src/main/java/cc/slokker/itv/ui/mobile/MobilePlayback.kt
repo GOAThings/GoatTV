@@ -251,7 +251,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
     LaunchedEffect(player) {
         while (true) {
-            playback.timeshift.update(player)
+            playback.timeshift.update(player) { wall -> vm.programmeStartAt(latestChannel, wall) }
             delay(500)
         }
     }

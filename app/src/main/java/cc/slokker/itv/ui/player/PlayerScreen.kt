@@ -487,7 +487,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
     LaunchedEffect(player) {
         while (true) {
-            timeshift.update(player)
+            timeshift.update(player) { wall -> session.channel?.let { latestVm.programmeStartAt(it, wall) } }
             delay(TIMESHIFT_TICK_MS)
         }
     }

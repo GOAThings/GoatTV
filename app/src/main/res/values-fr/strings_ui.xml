@@ -323,7 +323,7 @@
     <string name="freeze_frame">Garder l\'image en changeant de chaîne</string>
     <string name="freeze_frame_sub">Pas d\'écran noir entre les chaînes</string>
     <string name="timeshift">Mettre le direct en pause</string>
-    <string name="timeshift_sub">Garde les dernières minutes de la chaîne sur cet appareil, pour mettre en pause et revenir en arrière</string>
+    <string name="timeshift_sub">Garde l\'émission en cours sur cet appareil, pour mettre en pause et revenir en arrière. Effacée au changement de chaîne ou d\'émission</string>
     <string name="reconnect">Se reconnecter si le flux échoue</string>
     <string name="no">Non</string>
     <string name="after_seconds">Après %1$s s</string>

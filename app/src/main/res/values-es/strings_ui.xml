@@ -323,7 +323,7 @@
     <string name="freeze_frame">Mantener la imagen al cambiar</string>
     <string name="freeze_frame_sub">Sin pantalla negra entre canales</string>
     <string name="timeshift">Pausar el directo</string>
-    <string name="timeshift_sub">Guarda los últimos minutos del canal en este dispositivo, para pausar y retroceder</string>
+    <string name="timeshift_sub">Guarda el programa que estás viendo en este dispositivo, para pausar y retroceder. Se borra al cambiar de canal o de programa</string>
     <string name="reconnect">Reconectar si el stream falla</string>
     <string name="no">No</string>
     <string name="after_seconds">Tras %1$s s</string>

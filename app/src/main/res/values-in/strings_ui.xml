@@ -323,7 +323,7 @@
     <string name="freeze_frame">Pertahankan gambar saat ganti saluran</string>
     <string name="freeze_frame_sub">Tanpa layar hitam di antara saluran</string>
     <string name="timeshift">Jeda siaran langsung</string>
-    <string name="timeshift_sub">Menyimpan menit-menit terakhir saluran di perangkat ini, untuk dijeda dan diputar mundur</string>
+    <string name="timeshift_sub">Menyimpan acara yang sedang ditonton di perangkat ini, untuk jeda dan mundur. Dihapus saat ganti saluran atau acara</string>
     <string name="reconnect">Hubungkan ulang jika stream gagal</string>
     <string name="no">Tidak</string>
     <string name="after_seconds">Setelah %1$s dtk</string>

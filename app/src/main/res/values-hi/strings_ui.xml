@@ -323,7 +323,7 @@
     <string name="freeze_frame">चैनल बदलते समय तस्वीर बनाए रखें</string>
     <string name="freeze_frame_sub">चैनलों के बीच काली स्क्रीन नहीं</string>
     <string name="timeshift">लाइव टीवी रोकें</string>
-    <string name="timeshift_sub">चैनल के आखिरी कुछ मिनट इस डिवाइस पर रखता है, ताकि रोक सकें और पीछे जा सकें</string>
+    <string name="timeshift_sub">आप जो कार्यक्रम देख रहे हैं उसे इस डिवाइस पर रखता है, ताकि रोक सकें और पीछे जा सकें। चैनल या कार्यक्रम बदलने पर मिट जाता है</string>
     <string name="reconnect">स्ट्रीम फ़ेल होने पर फिर से कनेक्ट करें</string>
     <string name="no">नहीं</string>
     <string name="after_seconds">%1$s सेकंड बाद</string>

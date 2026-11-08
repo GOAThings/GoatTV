@@ -116,7 +116,7 @@ class TsScanner(private val onPcr: (offset: Long, pcrMs: Long) -> Unit) {
 class TimeshiftRing(
     private val file: File,
     capacity: Long,
-    private val maxAgeMs: Long,
+    maxAgeMs: Long,
     private val clock: () -> Long,
 ) : Closeable {
     data class Entry(val mediaMs: Long, val offset: Long)
@@ -139,6 +139,10 @@ class TimeshiftRing(
     private var finished = false
     private var failure: IOException? = null
     private var fitted = false
+    private var maxAgeMs = maxAgeMs
+
+    /** Abaixo disto (tempo do vídeo) já não se guarda: o programa anterior (ver [dropBefore]). */
+    private var floorMs = Long.MIN_VALUE
 
     /** Segmentos já tirados do início: os ids não mudam (um leitor guarda o do seu). */
     private var removed = 0
@@ -150,6 +154,24 @@ class TimeshiftRing(
     private var lastPcrAt = 0L
     private var newSegment = false
     private val scanner = TsScanner(::onPcr)
+
+    /** Muda o tempo máximo guardado; o tamanho do anel só se acerta por ele no primeiro minuto (ver [fitToAge]). */
+    fun setMaxAge(ms: Long) = synchronized(lock) {
+        if (ms == maxAgeMs) return
+        maxAgeMs = ms
+        trim()
+    }
+
+    /**
+     * Esquece tudo antes de [mediaMs] (o início do programa que se está a ver): já não se pode recuar até lá e o
+     * espaço volta a ser usado. Só avança; um leitor que já esteja atrás continua até ao próximo recomeço.
+     */
+    fun dropBefore(mediaMs: Long) = synchronized(lock) {
+        val floor = mediaMs.coerceAtMost(media)
+        if (floor <= floorMs) return
+        floorMs = floor
+        trim()
+    }
 
     /** Ver [TsScanner.isTs]. */
     val isTs: Boolean? get() = synchronized(lock) { scanner.isTs }
@@ -253,8 +275,9 @@ class TimeshiftRing(
         }
     }
 
-    /** Tira do índice o que já foi reescrito ou passou do tempo máximo. */
+    /** Tira do índice o que já foi reescrito, passou do tempo máximo ou é do programa anterior. */
     private fun trim() {
+        while (entries.size > 1 && entries.first().mediaMs < floorMs) entries.removeFirst()
         while (entries.isNotEmpty() && (entries.first().offset < clobbered || media - entries.first().mediaMs > maxAgeMs)) {
             entries.removeFirst()
         }
