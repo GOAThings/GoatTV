@@ -258,10 +258,10 @@ class ProfileStoreTest {
     @Test
     fun `a sync keeps the settings when the server sends none, and tells when the locks changed`() {
         store.applyConfig(config("""{"accent": "gold"}"""))
-        assertFalse(store.syncConfig(config("{}").copy(settings = null)))
+        assertFalse(store.applyConfig(config("{}").copy(settings = null), keepSettingsIfMissing = true))
         assertEquals("gold", store.prefs.value.accent)
-        assertTrue(store.syncConfig(config("""{"parental_pin_sha256": "${Prefs.hashPin("1")}", "locked_groups": ["acc1:3"]}""")))
-        assertFalse(store.syncConfig(config("""{"parental_pin_sha256": "${Prefs.hashPin("1")}", "locked_groups": ["acc1:3"], "accent": "mint"}""")))
+        assertTrue(store.applyConfig(config("""{"parental_pin_sha256": "${Prefs.hashPin("1")}", "locked_groups": ["acc1:3"]}""")))
+        assertFalse(store.applyConfig(config("""{"parental_pin_sha256": "${Prefs.hashPin("1")}", "locked_groups": ["acc1:3"], "accent": "mint"}""")))
         // Uma config completa sem settings começa do zero.
         store.applyConfig(config("{}").copy(settings = null))
         assertEquals(Prefs(), store.prefs.value)

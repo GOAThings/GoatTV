@@ -490,8 +490,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
                 _screen.value = Screen.Loading(I18n.s.loadingPlaylists)
                 val config = fetchConfig(null) ?: return@launch
-                applyConfig(config)
                 c.cache.saveConfig(config)
+                applyConfig(config)
                 pendingLocalProfile?.let { localProfile ->
                     pendingLocalProfile = null
                     adoptLocalProfile(localProfile)
@@ -624,11 +624,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun applyConfig(config: ConfigResponse) {
+    /**
+     * Passa a usar [config]: a conta (utilizador, nome desta TV) e o perfil. O mesmo ao arrancar e ao reler a conta
+     * ([keepSettingsIfMissing], ver ProfileStore.applyConfig); com o bloqueio mudado, o ecrã inicial atualiza-se.
+     */
+    private fun applyConfig(config: ConfigResponse, keepSettingsIfMissing: Boolean = false) {
         config.user?.id?.let { userId = it }
         config.user?.email?.let { _email.value = it }
         config.device?.name?.let { _deviceName.value = it }
-        profile.applyConfig(config)
+        if (profile.applyConfig(config, keepSettingsIfMissing)) publishHome(locksChanged = true)
     }
 
     /** O canal mudou aqui depois do que a conta diz (a gravação não chegou, ou a config é antiga): vale o daqui. */
@@ -1024,8 +1028,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (generation != sessionGeneration) return
         c.cache.saveConfig(config)
         if (generation != sessionGeneration) return
-        config.device?.name?.let { _deviceName.value = it }
-        if (profile.syncConfig(config)) publishHome(locksChanged = true)
+        applyConfig(config, keepSettingsIfMissing = true)
         val playlists = profile.playlists.value
         val current = _content.value?.playlist ?: return
         val updated = playlists.firstOrNull { it.id == current.id }

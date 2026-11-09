@@ -92,27 +92,17 @@ class ProfileStore(
         for (p in config.playlists.orEmpty()) p.id?.let { indexHashes[it] = p.indexHash }
     }
 
-    fun applyConfig(config: ConfigResponse) {
-        rememberIndexHashes(config)
-        lastConfig = config
-        _playlists.value = config.playlists.orEmpty().mapNotNull { it.toPlaylist() }
-        _favorites.value = parseKeyLists(config.favorites)
-        settings = (config.settings as? JsonObject) ?: JsonObject()
-        syncedSettings = settings.deepCopy()
-        settingsRev = config.settingsRev
-        applySettings()
-    }
-
     /**
-     * A config que a conta acabou de mandar (ao voltar à app, ao abrir as Definições). Sem `settings` (não é um
-     * objeto) ficam as definições que havia. Devolve true se o bloqueio parental mudou.
+     * Passa a usar [config] (a da conta, a da cache ou a desta TV). Sem `settings` (não é um objeto) começa-se do
+     * zero, ou, com [keepSettingsIfMissing] (uma config que só se foi reler à conta), ficam as definições que havia.
+     * Devolve true se o bloqueio parental mudou (o ecrã inicial tem de se atualizar).
      */
-    fun syncConfig(config: ConfigResponse): Boolean {
-        lastConfig = config
+    fun applyConfig(config: ConfigResponse, keepSettingsIfMissing: Boolean = false): Boolean {
         rememberIndexHashes(config)
+        lastConfig = config
         _playlists.value = config.playlists.orEmpty().mapNotNull { it.toPlaylist() }
         _favorites.value = parseKeyLists(config.favorites)
-        val incoming = config.settings as? JsonObject ?: return false
+        val incoming = config.settings as? JsonObject ?: if (keepSettingsIfMissing) return false else JsonObject()
         val locksBefore = _prefs.value.pinHash to _prefs.value.lockedGroups
         settings = incoming
         syncedSettings = incoming.deepCopy()
