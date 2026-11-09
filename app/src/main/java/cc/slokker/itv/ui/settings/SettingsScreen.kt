@@ -119,6 +119,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.BuildConfig
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.data.api.EpgCountryInfo
 import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
@@ -611,8 +612,8 @@ private fun settingItems(
             val query by route.query
             val mapping = epgMappings[ch.key]
             val logoChoice = vm.channelLogoChoice(ch)
-            val suggestions by produceState<AppViewModel.EpgResult<List<EpgGuideChannel>>?>(null, ch.key) { value = vm.epgSuggest(ch) }
-            val search by produceState<AppViewModel.EpgResult<List<EpgCountryResult>>?>(null, query) {
+            val suggestions by produceState<EpgResult<List<EpgGuideChannel>>?>(null, ch.key) { value = vm.epgSuggest(ch) }
+            val search by produceState<EpgResult<List<EpgCountryResult>>?>(null, query) {
                 value = null
                 value = vm.epgSearch(query)
             }
@@ -655,7 +656,7 @@ private fun settingItems(
                     add(Item.Info(LOADING_KEY, s.loadingShort, ""))
                     return@buildList
                 }
-                (suggestions as? AppViewModel.EpgResult.Ok)?.value?.filter { it.id != null && it.country != null && usable(it) }?.takeIf { it.isNotEmpty() }?.let { list ->
+                (suggestions as? EpgResult.Ok)?.value?.filter { it.id != null && it.country != null && usable(it) }?.takeIf { it.isNotEmpty() }?.let { list ->
                     add(Item.Header("hs", s.epgSuggestions))
                     list.forEach { g ->
                         add(
@@ -671,8 +672,8 @@ private fun settingItems(
                 }
                 add(Item.Header("hc", s.epgCountriesFor(query)))
                 when (val r = search) {
-                    is AppViewModel.EpgResult.Error -> add(Item.Info("err", r.message, ""))
-                    is AppViewModel.EpgResult.Ok -> {
+                    is EpgResult.Error -> add(Item.Info("err", r.message, ""))
+                    is EpgResult.Ok -> {
                         val countries = r.value
                             .map { it.copy(channels = it.channels?.filter(::usable)) }
                             .filter { it.country != null && !it.channels.isNullOrEmpty() }
@@ -694,7 +695,7 @@ private fun settingItems(
         }
 
         Route.LogoSource -> {
-            val countries by produceState<AppViewModel.EpgResult<List<EpgCountryInfo>>?>(null) {
+            val countries by produceState<EpgResult<List<EpgCountryInfo>>?>(null) {
                 if (vm.epgPickerAvailable) value = vm.epgCountries()
             }
             fun choose(source: String?) {
@@ -716,8 +717,8 @@ private fun settingItems(
                 add(Item.Header("hc", s.logoByCountry))
                 when (val r = countries) {
                     null -> add(Item.Info(LOADING_KEY, s.loadingShort, ""))
-                    is AppViewModel.EpgResult.Error -> add(Item.Info("err", r.message, ""))
-                    is AppViewModel.EpgResult.Ok -> r.value
+                    is EpgResult.Error -> add(Item.Info("err", r.message, ""))
+                    is EpgResult.Ok -> r.value
                         .filter { it.code != null && (it.channels ?: 0) > 0 }
                         .sortedBy { it.name ?: it.code }
                         .forEach { c ->
@@ -728,11 +729,11 @@ private fun settingItems(
         }
 
         Route.EpgCountries -> {
-            val countries by produceState<AppViewModel.EpgResult<List<EpgCountryInfo>>?>(null) { value = vm.epgCountries() }
+            val countries by produceState<EpgResult<List<EpgCountryInfo>>?>(null) { value = vm.epgCountries() }
             when (val r = countries) {
                 null -> listOf(Item.Info(LOADING_KEY, s.loadingShort, ""))
-                is AppViewModel.EpgResult.Error -> listOf(Item.Info("err", r.message, ""))
-                is AppViewModel.EpgResult.Ok -> r.value
+                is EpgResult.Error -> listOf(Item.Info("err", r.message, ""))
+                is EpgResult.Ok -> r.value
                     .filter { it.code != null && (it.channels ?: 0) > 0 }
                     .sortedBy { it.name ?: it.code }
                     .map { c ->
@@ -750,7 +751,7 @@ private fun settingItems(
             val logo = route.logo
             val mapping = epgMappings[ch.key]
             val logoChoice = vm.channelLogoChoice(ch)
-            val all by produceState<AppViewModel.EpgResult<EpgCountryResult>?>(null, route.country) {
+            val all by produceState<EpgResult<EpgCountryResult>?>(null, route.country) {
                 if (route.matches == null) value = vm.epgCountryChannels(route.country)
             }
             buildList {
@@ -759,11 +760,11 @@ private fun settingItems(
                         add(Item.Info(LOADING_KEY, s.loadingShort, ""))
                         return@buildList
                     }
-                    is AppViewModel.EpgResult.Error -> {
+                    is EpgResult.Error -> {
                         add(Item.Info("err", r.message, ""))
                         return@buildList
                     }
-                    is AppViewModel.EpgResult.Ok -> r.value.channels.orEmpty()
+                    is EpgResult.Ok -> r.value.channels.orEmpty()
                 }
                 channels.filter { it.id != null && (!logo || it.icon != null) }.forEach { g ->
                     if (logo) {

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.common.ErrorInfo
+import cc.slokker.itv.data.api.EpgResult
+import cc.slokker.itv.ui.state.GuideController
 import cc.slokker.itv.ui.state.PlaybackState
 import cc.slokker.itv.ui.state.ProfileStore
 import cc.slokker.itv.ui.common.explainPlaylistError
@@ -264,65 +266,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** As Definições já foram desbloqueadas com o PIN nesta sessão. */
     private var settingsUnlocked = false
 
-    /**
-     * Canais da lista atual associados a um canal de guia da conta (channelKey → associação). Por defeito
-     * nenhum: cada canal usa o guia da lista, e só muda quando a pessoa escolhe outro (Definições → canal → Guia).
-     */
-    private val _epgMappings = MutableStateFlow<Map<String, EpgMapping>>(emptyMap())
-    val epgMappings: StateFlow<Map<String, EpgMapping>> = _epgMappings.asStateFlow()
-    private var mappingsLoadedFor: String? = null
+    /** Listas e guias já verificados desde que a app abriu, e a última tentativa de cada (ver RefreshTracker). */
+    private val refreshes = RefreshTracker()
 
-    /** Logótipos do país escolhido em "Origem dos logótipos", para a lista em uso: ("playlistId:país", channelKey → URL). */
-    private val _countryLogos = MutableStateFlow<Pair<String, Map<String, String>>?>(null)
-    private var countryGuide: Pair<String, List<EpgGuideChannel>>? = null
+    /** O guia: XMLTV da lista e o extra, o da conta e as associações, o desvio horário e os logótipos (ver GuideController). */
+    private val guide = GuideController(viewModelScope, c.epg, c.backend, content, prefs, ::repository, refreshes, ::showToast)
 
-    /**
-     * Os logótipos que substituem os da lista (channelKey → URL), na lista em uso: os da [Prefs.logoSource]
-     * e, por cima, os escolhidos canal a canal ("" num canal volta ao da lista). Canais fora do mapa usam o da lista.
-     */
-    val channelLogos: StateFlow<Map<String, String>> =
-        combine(_content, prefs, _epgMappings, _countryLogos) { content, p, mappings, country ->
-            val playlistId = content?.playlist?.id ?: return@combine emptyMap()
-            val logos = when {
-                p.logoSource == Prefs.LogoSource.GUIDE -> mappings.mapNotNull { (key, m) -> m.icon?.let { key to it } }.toMap()
-                Prefs.LogoSource.isCountry(p.logoSource) -> {
-                    // Pelo nome, e por cima os canais com guia escolhido nesse país (acerta mesmo com o nome diferente).
-                    val byName = country?.takeIf { it.first == "$playlistId:${p.logoSource}" }?.second.orEmpty()
-                    byName + mappings.mapNotNull { (key, m) -> m.icon?.takeIf { m.country.equals(p.logoSource, ignoreCase = true) }?.let { key to it } }
-                }
-                else -> emptyMap()
-            }.toMutableMap()
-            val prefix = "$playlistId:"
-            p.channelLogos.forEach { (k, url) ->
-                if (k.startsWith(prefix)) {
-                    val key = k.removePrefix(prefix)
-                    if (url.isEmpty()) logos.remove(key) else logos[key] = url
-                }
-            }
-            logos
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    /** Canais da lista atual associados a um canal de guia da conta (channelKey → associação). */
+    val epgMappings: StateFlow<Map<String, EpgMapping>> = guide.mappings
 
-    init {
-        // Com um país em "Origem dos logótipos", vai buscar os canais de guia desse país e associa-os aos da lista
-        // pelo tvg-id ou pelo nome (como em "Usar <país> na lista inteira", mas sem gravar associações).
-        viewModelScope.launch {
-            combine(_content, prefs) { content, p -> content?.takeIf { Prefs.LogoSource.isCountry(p.logoSource) }?.let { it to p.logoSource } }
-                .distinctUntilChanged { a, b -> a?.first === b?.first && a?.second == b?.second }
-                .collectLatest { pair ->
-                    val (content, country) = pair ?: return@collectLatest
-                    if (!epgPickerAvailable) return@collectLatest
-                    // Os canais de guia do país ficam em memória: uma lista atualizada só volta a associar.
-                    val guide = countryGuide?.takeIf { it.first == country }?.second
-                        ?: ((epgCountryChannels(country) as? EpgResult.Ok)?.value?.channels ?: return@collectLatest)
-                            .filter { it.icon != null }
-                            .also { countryGuide = country to it }
-                    _countryLogos.value = "${content.playlist.id}:$country" to matchGuide(content.channels, guide).associate { (ch, g) -> ch.key to g.icon!! }
-                }
-        }
-    }
+    /** Os logótipos que substituem os da lista (channelKey → URL), na lista em uso (ver GuideController.channelLogos). */
+    val channelLogos: StateFlow<Map<String, String>> = guide.channelLogos
 
     /** Muda quando chega guia novo: a grelha e as listas voltam a ler. */
-    val epgVersion: StateFlow<Int> get() = c.epg.version
+    val epgVersion: StateFlow<Int> get() = guide.version
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
@@ -334,8 +291,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Sobe ao terminar sessão: o que ainda vinha a caminho vê que já não é desta sessão e não grava nada. */
     private var sessionGeneration = 0
 
-    /** Listas e guias já verificados desde que a app abriu, e a última tentativa de cada (ver RefreshTracker). */
-    private val refreshes = RefreshTracker()
     private var startedOnce = false
 
     /** Último canal à espera de ser gravado: (playlistId, channelKey). */
@@ -370,7 +325,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val content = _content.value ?: continue
                 if (_screen.value == Screen.Player || _screen.value == Screen.Settings) {
                     maybeRefreshPlaylist(content)
-                    openGuide(content)
+                    guide.open(content)
                 }
             }
         }
@@ -692,40 +647,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         refreshPlaylistInBackground(content.playlist)
     }
 
-    /** Abre o guia XMLTV da lista (do disco) e descarrega-o se o intervalo já passou; e o guia da conta. */
-    private fun openGuide(content: PlaylistContent, force: Boolean = false, notify: Boolean = false) {
-        val id = content.playlist.id
-        openAccountGuide(content, force)
-        c.epg.open(
-            viewModelScope, content, force,
-            isDue = { fetchedAt -> refreshes.isDue(RefreshTracker.Slot.GUIDE, id, prefs.value.epgRefreshHours, fetchedAt) },
-            onDone = { ok ->
-                refreshes.attempted(RefreshTracker.Slot.GUIDE, id)
-                if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
-            },
-        )
-        openExtraGuide(content, force)
-    }
-
-    /** O guia extra da lista (se o tiver), com as mesmas regras de renovação do guia da lista. */
-    private fun openExtraGuide(content: PlaylistContent, force: Boolean = false, notify: Boolean = false) {
-        val id = content.playlist.id
-        c.epg.openExtra(
-            viewModelScope, content, prefs.value.extraEpg[id], force,
-            isDue = { fetchedAt -> refreshes.isDue(RefreshTracker.Slot.EXTRA_GUIDE, id, prefs.value.epgRefreshHours, fetchedAt) },
-            onDone = { ok ->
-                refreshes.attempted(RefreshTracker.Slot.EXTRA_GUIDE, id)
-                if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
-            },
-        )
-    }
-
     /** Guia XMLTV extra de [playlistId] ([url] vazio ou null tira-o); na lista em uso, descarrega-se já. */
     fun setExtraEpg(playlistId: String, url: String?) {
         val clean = url?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         val current = prefs.value.extraEpg
         setPref(Prefs.Key.EXTRA_EPG, if (clean == null) current - playlistId else current + (playlistId to clean))
-        _content.value?.takeIf { it.playlist.id == playlistId }?.let { openExtraGuide(it, force = true) }
+        _content.value?.takeIf { it.playlist.id == playlistId }?.let { guide.openExtra(it, force = true) }
     }
 
     /** A app voltou ao primeiro plano: conta como "abrir a app" para as atualizações. */
@@ -735,11 +662,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         refreshes.clearChecked()
-        mappingsLoadedFor = null // as associações podem ter mudado noutra TV
+        guide.forgetMappings() // as associações podem ter mudado noutra TV
         val content = _content.value ?: return
         if (loadJob?.isActive == true) return
         maybeRefreshPlaylist(content)
-        openGuide(content)
+        guide.open(content)
     }
 
     private suspend fun showContent(loaded: PlaylistContent, resume: Boolean) {
@@ -752,8 +679,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 showToast(I18n.s.secondClosedSameAccount)
             }
         }
-        c.epg.clearShort()
-        openGuide(loaded)
+        guide.clearShort()
+        guide.open(loaded)
         _content.value = loaded
         uploadIndex(loaded)
         playback.clearForNewContent()
@@ -812,7 +739,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val guideChanged = fresh.guideUrl != _content.value?.guideUrl
             _content.value = fresh
             uploadIndex(fresh)
-            if (guideChanged) openGuide(fresh)
+            if (guideChanged) guide.open(fresh)
             playback.onContentRefreshed(fresh)
             if (notify) showToast(I18n.s.playlistUpdated)
         }
@@ -965,25 +892,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Esquece o guia em cache; os programas são pedidos de novo. */
-    fun refreshEpg() {
-        c.epg.clearShort()
-        val content = _content.value
-        when {
-            content == null -> showToast(I18n.s.epgRefreshed)
-            // O guia da lista, o da conta e o extra (o aviso diz quando o da lista chegou).
-            content.guideUrl != null -> {
-                showToast(I18n.s.epgRefreshing)
-                openGuide(content, force = true, notify = true)
-            }
-            // Sem guia da lista: o da conta e o extra, e o aviso vem do extra se houver.
-            else -> {
-                openAccountGuide(content, force = true)
-                val extra = prefs.value.extraEpg[content.playlist.id] != null
-                showToast(if (extra) I18n.s.epgRefreshing else I18n.s.epgRefreshed)
-                openExtraGuide(content, force = true, notify = extra)
-            }
-        }
-    }
+    fun refreshEpg() = guide.refresh()
 
     /** Volta a descarregar a lista atual (ex.: o fornecedor mudou canais). */
     fun reloadPlaylist() {
@@ -1195,21 +1104,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         profile.moveFavorite(playlistId, channel.key, delta)
     }
 
-    suspend fun epgFor(channel: Channel): List<EpgEntry> {
-        val content = _content.value ?: return emptyList()
-        return c.epg.shortEpg(content.playlist, channel).shifted()
-    }
+    suspend fun epgFor(channel: Channel): List<EpgEntry> = guide.epgFor(channel)
 
-    fun cachedEpg(channel: Channel): List<EpgEntry> {
-        val content = _content.value ?: return emptyList()
-        return c.epg.cached(content.playlist, channel).orEmpty().shifted()
-    }
-
-    /** Desvio horário do guia (servidores com o fuso errado). */
-    private fun List<EpgEntry>.shifted(): List<EpgEntry> {
-        val offset = prefs.value.epgOffsetMin * 60_000L
-        return if (offset == 0L) this else map { it.copy(startMs = it.startMs + offset, endMs = it.endMs + offset) }
-    }
+    fun cachedEpg(channel: Channel): List<EpgEntry> = guide.cachedEpg(channel)
 
     suspend fun xtreamConnections(): Pair<Int, Int>? {
         val content = _content.value ?: return null
@@ -1218,143 +1115,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- Guia da conta: trocar o guia de um canal ----------------------------------------------
-    // Só com conta. Dados do IPTV-EPG.org no servidor da conta (ver EpgRepository.openAccount).
+    // Só com conta (ver GuideController).
 
     /** Escolher o guia de um canal só existe com conta GOAT. */
-    val epgPickerAvailable: Boolean get() = repository().supportsEpgMapping
-
-    /** Lê as associações da lista (uma vez por lista e por abertura da app) e abre o guia da conta. */
-    private fun openAccountGuide(content: PlaylistContent, force: Boolean = false) {
-        if (!epgPickerAvailable) return
-        val id = content.playlist.id
-        viewModelScope.launch {
-            if (mappingsLoadedFor != id) {
-                if (_epgMappings.value.isNotEmpty() && _content.value?.playlist?.id != id) _epgMappings.value = emptyMap()
-                val mappings = try {
-                    c.backend.epgMappings(id)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: HttpException) {
-                    if (e.code() == 404) emptyMap() else null
-                } catch (e: Exception) {
-                    null
-                }
-                if (mappings == null) {
-                    // Sem rede: usa o guia da conta que houver em disco (e tenta outra vez mais tarde).
-                    c.epg.openAccount(viewModelScope, id, mapped = true)
-                    return@launch
-                }
-                mappingsLoadedFor = id
-                _epgMappings.value = mappings
-            }
-            c.epg.openAccount(viewModelScope, id, mapped = _epgMappings.value.isNotEmpty(), force = force)
-        }
-    }
-
-    private fun clearEpgMappings() {
-        c.epg.closeAccount()
-        _epgMappings.value = emptyMap()
-        mappingsLoadedFor = null
-    }
-
-    /** Resultado de um pedido ao guia da conta: o valor, ou a mensagem de erro a mostrar. */
-    sealed interface EpgResult<out T> {
-        data class Ok<T>(val value: T) : EpgResult<T>
-        data class Error(val message: String) : EpgResult<Nothing>
-    }
-
-    private suspend fun <T> epgCall(block: suspend () -> T): EpgResult<T> = try {
-        EpgResult.Ok(block())
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: HttpException) {
-        // Limites da conta (associações, países novos): a frase do servidor em vez do código.
-        val error = parseServerError(runCatching { e.response()?.errorBody()?.string() }.getOrNull())
-        EpgResult.Error(epgErrorText(e.code(), error, I18n.s.tooManyRequests, I18n.s.epgFailed(e.code().toString())))
-    } catch (e: Exception) {
-        EpgResult.Error(I18n.s.epgOffline)
-    }
+    val epgPickerAvailable: Boolean get() = guide.pickerAvailable
 
     /** Países com um canal de guia com esse nome (o país da pessoa primeiro). */
-    suspend fun epgSearch(query: String): EpgResult<List<EpgCountryResult>> =
-        if (query.trim().length < 2) EpgResult.Ok(emptyList()) else epgCall { c.backend.epgSearch(query.trim()).map { it.unescaped() } }
+    suspend fun epgSearch(query: String): EpgResult<List<EpgCountryResult>> = guide.epgSearch(query)
 
     /** Canais de guia prováveis para [channel] (só para mostrar como opções; nada se associa sozinho). */
-    suspend fun epgSuggest(channel: Channel): EpgResult<List<EpgGuideChannel>> {
-        val id = _content.value?.playlist?.id ?: return EpgResult.Ok(emptyList())
-        return epgCall { c.backend.epgSuggest(id, channel.key, channel.name).map { it.unescaped() } }
-    }
+    suspend fun epgSuggest(channel: Channel): EpgResult<List<EpgGuideChannel>> = guide.epgSuggest(channel)
 
-    suspend fun epgCountries(): EpgResult<List<EpgCountryInfo>> = epgCall { c.backend.epgCountries().map { it.unescaped() } }
+    suspend fun epgCountries(): EpgResult<List<EpgCountryInfo>> = guide.epgCountries()
 
-    /**
-     * A lista inteira passa a usar o guia de [country]: cada canal com o mesmo tvg-id ou o mesmo nome
-     * (normalizado: "PT: SIC HD" = "SIC") que um canal de guia desse país fica associado a ele.
-     * Os canais já trocados um a um ficam como estão; os que não têm par continuam com o guia da lista.
-     */
-    fun applyEpgCountry(country: String, countryName: String) {
-        val content = _content.value ?: return
-        val playlistId = content.playlist.id
-        repository().refusal?.let {
-            showToast(it)
-            return
-        }
-        showToast(I18n.s.epgCountryApplying(countryName))
-        viewModelScope.launch {
-            val guide = when (val r = epgCountryChannels(country)) {
-                is EpgResult.Error -> {
-                    showToast(r.message)
-                    return@launch
-                }
-                is EpgResult.Ok -> r.value.channels.orEmpty().filter { it.id != null }
-            }
-            val already = _epgMappings.value
-            val matches = matchGuide(content.channels.filter { it.key !in already }, guide)
-            if (matches.isEmpty()) {
-                showToast(I18n.s.epgCountryNone(countryName))
-                return@launch
-            }
-            var added = 0
-            var error: String? = null
-            // Poucos pedidos de cada vez e com pausa: o servidor aceita 300 pedidos em 10 s.
-            for (chunk in matches.chunked(EPG_BATCH)) {
-                val results = coroutineScope {
-                    chunk.map { (ch, g) ->
-                        async { (ch to g) to epgCall { c.backend.putEpgMapping(EpgMappingRequest(playlistId, ch.key, country, g.id!!, ch.name)) } }
-                    }.awaitAll()
-                }
-                results.forEach { (pair, r) ->
-                    val (ch, g) = pair
-                    if (r is EpgResult.Ok) {
-                        _epgMappings.value = _epgMappings.value + (ch.key to EpgMapping(country, g.id, ch.name, g.name))
-                        added++
-                    } else {
-                        error = (r as EpgResult.Error).message
-                    }
-                }
-                if (added == 0 && error != null) break
-                delay(EPG_BATCH_PAUSE_MS)
-            }
-            mappingsLoadedFor = playlistId
-            showToast(if (added > 0) I18n.s.epgCountryDone(added, countryName) else error ?: I18n.s.epgOffline)
-            if (added == 0) return@launch
-            c.epg.openAccount(viewModelScope, playlistId, mapped = true, force = true)
-            // O país pode não estar em uso ainda: os programas chegam ao servidor no minuto seguinte.
-            delay(EPG_NEW_COUNTRY_MS)
-            if (_content.value?.playlist?.id == playlistId) c.epg.openAccount(viewModelScope, playlistId, mapped = _epgMappings.value.isNotEmpty(), force = true)
-        }
-    }
-
-    /** Pares canal da lista → canal de guia com o mesmo tvg-id ou o mesmo nome (normalizado: "PT: SIC HD" = "SIC"). */
-    private fun matchGuide(channels: List<Channel>, guide: List<EpgGuideChannel>): List<Pair<Channel, EpgGuideChannel>> {
-        val byId = guide.filter { it.id != null }.associateBy { it.id!!.lowercase() }
-        val byName = HashMap<String, EpgGuideChannel>()
-        guide.forEach { g -> g.name?.let { XmltvGuide.normalizeName(it) }?.takeIf { it.isNotEmpty() }?.let { byName.putIfAbsent(it, g) } }
-        return channels.asSequence()
-            .mapNotNull { ch -> (ch.epgId?.lowercase()?.let(byId::get) ?: byName[XmltvGuide.normalizeName(ch.name)])?.let { ch to it } }
-            .distinctBy { it.first.key }
-            .toList()
-    }
+    /** A lista inteira passa a usar o guia de [country] (ver GuideController.applyEpgCountry). */
+    fun applyEpgCountry(country: String, countryName: String) = guide.applyEpgCountry(country, countryName)
 
     /** Logótipo escolhido para [channel] na lista em uso: um URL, "" para o da lista, ou null para seguir a origem geral. */
     fun channelLogoChoice(channel: Channel): String? {
@@ -1370,91 +1145,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Todos os canais da lista voltam ao guia da lista. */
-    fun resetEpgMappings() {
-        val playlistId = _content.value?.playlist?.id ?: return
-        repository().refusal?.let {
-            showToast(it)
-            return
-        }
-        viewModelScope.launch {
-            var error: String? = null
-            for (chunk in _epgMappings.value.keys.toList().chunked(EPG_BATCH)) {
-                val results = coroutineScope {
-                    chunk.map { key ->
-                        async {
-                            key to epgCall {
-                                try {
-                                    c.backend.deleteEpgMapping(playlistId, key)
-                                } catch (e: HttpException) {
-                                    if (e.code() != 404) throw e
-                                }
-                            }
-                        }
-                    }.awaitAll()
-                }
-                results.forEach { (key, r) -> if (r is EpgResult.Ok) _epgMappings.value = _epgMappings.value - key else error = (r as EpgResult.Error).message }
-                delay(EPG_BATCH_PAUSE_MS)
-            }
-            showToast(error ?: I18n.s.epgResetDone)
-            c.epg.openAccount(viewModelScope, playlistId, mapped = _epgMappings.value.isNotEmpty(), force = true)
-        }
-    }
+    fun resetEpgMappings() = guide.resetEpgMappings()
 
     /** Todos os canais de guia de um país. */
-    suspend fun epgCountryChannels(country: String): EpgResult<EpgCountryResult> = epgCall { c.backend.epgCountryChannels(country).unescaped() }
+    suspend fun epgCountryChannels(country: String): EpgResult<EpgCountryResult> = guide.epgCountryChannels(country)
 
     /** O guia de [channel] passa a ser o do canal de guia [guide] (de [country]). Grava na conta. */
-    suspend fun setEpgMapping(channel: Channel, country: String, guide: EpgGuideChannel): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        val guideId = guide.id ?: return false
-        repository().refusal?.let {
-            showToast(it)
-            return false
-        }
-        val result = epgCall { c.backend.putEpgMapping(EpgMappingRequest(playlistId, channel.key, country, guideId, channel.name)) }
-        if (result is EpgResult.Error) {
-            showToast(result.message)
-            return false
-        }
-        val guideName = guide.name ?: guideId
-        _epgMappings.value = _epgMappings.value + (channel.key to EpgMapping(country, guideId, channel.name, guideName))
-        mappingsLoadedFor = playlistId
-        showToast(I18n.s.epgMapped(channel.name, guideName))
-        c.epg.openAccount(viewModelScope, playlistId, mapped = true, force = true)
-        // País que ainda não estava em uso: o servidor descarrega os programas no minuto seguinte.
-        if (guide.now == null) {
-            viewModelScope.launch {
-                delay(EPG_NEW_COUNTRY_MS)
-                if (_content.value?.playlist?.id == playlistId) c.epg.openAccount(viewModelScope, playlistId, mapped = _epgMappings.value.isNotEmpty(), force = true)
-            }
-        }
-        return true
-    }
+    suspend fun setEpgMapping(channel: Channel, country: String, guide: EpgGuideChannel): Boolean = this.guide.setEpgMapping(channel, country, guide)
 
     /** [channel] volta ao guia da lista. */
-    suspend fun removeEpgMapping(channel: Channel): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        repository().refusal?.let {
-            showToast(it)
-            return false
-        }
-        val result = epgCall {
-            try {
-                c.backend.deleteEpgMapping(playlistId, channel.key)
-            } catch (e: HttpException) {
-                // 404: já não estava associado (ex.: mudou noutra TV); o resultado é o mesmo.
-                if (e.code() != 404) throw e
-            }
-        }
-        if (result is EpgResult.Error) {
-            showToast(result.message)
-            return false
-        }
-        _epgMappings.value = _epgMappings.value - channel.key
-        showToast(I18n.s.epgUnmapped(channel.name))
-        c.epg.openAccount(viewModelScope, playlistId, mapped = _epgMappings.value.isNotEmpty(), force = true)
-        return true
-    }
+    suspend fun removeEpgMapping(channel: Channel): Boolean = guide.removeEpgMapping(channel)
 
     // ---- Player ----------------------------------------------------------------------------
 
@@ -1613,15 +1313,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD).replace(ACCENTS, "")
 
     /** Programas do canal para a grelha (passado incluído), com o desvio horário das definições. */
-    fun guideEntries(channel: Channel): List<EpgEntry> {
-        val content = _content.value ?: return emptyList()
-        // Sem dois programas à mesma hora: as listas do ecrã usam a hora como chave única.
-        return (c.epg.guideEntries(content.playlist, channel) ?: c.epg.cached(content.playlist, channel).orEmpty()).distinctBy { it.startMs }.shifted()
-    }
+    fun guideEntries(channel: Channel): List<EpgEntry> = guide.guideEntries(channel)
 
     /** Quando começou o programa do guia de [channel] que dá às [wallMs], ou null (sem guia para essa hora). */
-    fun programmeStartAt(channel: Channel, wallMs: Long): Long? =
-        guideEntries(channel).firstOrNull { it.startMs <= wallMs && it.endMs > wallMs }?.startMs
+    fun programmeStartAt(channel: Channel, wallMs: Long): Long? = guide.programmeStartAt(channel, wallMs)
 
     // ---- Catch-up ----------------------------------------------------------------------------
 
@@ -1960,10 +1655,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         playback.reset()
         secondContents.clear()
         _content.value = null
-        c.epg.closeGuides()
-        clearEpgMappings()
-        countryGuide = null
-        _countryLogos.value = null
+        guide.reset()
         viewModelScope.launch { c.home.clear() }
         if (scope == Reset.PLAYLISTS) return
 
@@ -2017,11 +1709,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val MAX_SEARCH = 40
         const val REMINDER_AHEAD_MS = 60_000L
         const val REMINDER_GRACE_MS = 10 * 60_000L
-        /** Um país pedido pela primeira vez tem programas no servidor em ≤ 1 min. */
-        const val EPG_NEW_COUNTRY_MS = 90_000L
-        /** Associações por país: pedidos em paralelo e pausa entre grupos (≈ 20 pedidos/s). */
-        const val EPG_BATCH = 4
-        const val EPG_BATCH_PAUSE_MS = 200L
         private val ACCENTS = Regex("\\p{Mn}+")
 
         /** De quanto em quanto tempo ver se a lista ou o guia já passaram do intervalo. */

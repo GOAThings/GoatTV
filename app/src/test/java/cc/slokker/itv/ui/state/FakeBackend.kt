@@ -34,6 +34,7 @@ class FakeBackend : BackendApi {
     var onEpgMappings: (String) -> Map<String, EpgMapping> = { emptyMap() }
     var onPutEpgMapping: (EpgMappingRequest) -> EpgMapping = { EpgMapping(it.country, it.channelId, it.channelName, null) }
     var onDeleteEpgMapping: (String, String) -> Unit = { _, _ -> }
+    var onEpgGuide: (String) -> Response<ResponseBody> = { Response.error(503, "".toResponseBody()) }
 
     override suspend fun updateProfile(body: JsonObject): Response<JsonObject> {
         calls += "updateProfile"
@@ -71,7 +72,10 @@ class FakeBackend : BackendApi {
     override suspend fun epgSuggest(playlistId: String, channelKey: String, name: String): List<EpgGuideChannel> = TODO()
     override suspend fun epgCountries(): List<EpgCountryInfo> = TODO()
     override suspend fun epgCountryChannels(country: String): EpgCountryResult = TODO()
-    override suspend fun epgGuide(playlistId: String, etag: String?): Response<ResponseBody> = TODO()
+    override suspend fun epgGuide(playlistId: String, etag: String?): Response<ResponseBody> {
+        calls += "epgGuide:$playlistId"
+        return onEpgGuide(playlistId)
+    }
 
     companion object {
         fun json(text: String): JsonObject = JsonParser.parseString(text).asJsonObject

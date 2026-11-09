@@ -135,6 +135,7 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
+import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.data.api.EpgCountryInfo
 import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
@@ -1680,11 +1681,11 @@ private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClo
     if (open != null) {
         val code = open.country.orEmpty()
         val name = open.countryName ?: code.uppercase()
-        val all by produceState<AppViewModel.EpgResult<EpgCountryResult>?>(null, code, showAll) { if (showAll) value = vm.epgCountryChannels(code) }
-        val channels = if (showAll) (all as? AppViewModel.EpgResult.Ok)?.value?.channels.orEmpty() else open.channels.orEmpty()
+        val all by produceState<EpgResult<EpgCountryResult>?>(null, code, showAll) { if (showAll) value = vm.epgCountryChannels(code) }
+        val channels = if (showAll) (all as? EpgResult.Ok)?.value?.channels.orEmpty() else open.channels.orEmpty()
         PickerScaffold(name, { country = null; showAll = false }) {
             if (showAll && all == null) item { PickerRow(s.loadingShort) {} }
-            (all as? AppViewModel.EpgResult.Error)?.takeIf { showAll }?.let { e -> item { PickerRow(e.message) {} } }
+            (all as? EpgResult.Error)?.takeIf { showAll }?.let { e -> item { PickerRow(e.message) {} } }
             items(channels.filter(::usable), key = { it.id!! }) { g ->
                 PickerRow(g.name ?: g.id!!, g.now, if (logo) g.icon else null, showLogo = logo, checked = chosen(code, g)) { choose(code, g) }
             }
@@ -1706,8 +1707,8 @@ private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClo
         return
     }
 
-    val suggestions by produceState<AppViewModel.EpgResult<List<EpgGuideChannel>>?>(null, channel.key) { value = vm.epgSuggest(channel) }
-    val search by produceState<AppViewModel.EpgResult<List<EpgCountryResult>>?>(null, query) {
+    val suggestions by produceState<EpgResult<List<EpgGuideChannel>>?>(null, channel.key) { value = vm.epgSuggest(channel) }
+    val search by produceState<EpgResult<List<EpgCountryResult>>?>(null, query) {
         value = null
         delay(400)
         value = vm.epgSearch(query)
@@ -1735,7 +1736,7 @@ private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClo
                 }
             }
         }
-        val suggested = (suggestions as? AppViewModel.EpgResult.Ok)?.value.orEmpty().filter { usable(it) && it.country != null }
+        val suggested = (suggestions as? EpgResult.Ok)?.value.orEmpty().filter { usable(it) && it.country != null }
         if (suggested.isNotEmpty()) {
             item { PickerHeader(s.epgSuggestions) }
             items(suggested, key = { "s:${it.country}:${it.id}" }) { g ->
@@ -1745,8 +1746,8 @@ private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClo
         item { PickerHeader(s.epgCountriesFor(query)) }
         when (val r = search) {
             null -> item { PickerRow(s.loadingShort) {} }
-            is AppViewModel.EpgResult.Error -> item { PickerRow(r.message) {} }
-            is AppViewModel.EpgResult.Ok -> {
+            is EpgResult.Error -> item { PickerRow(r.message) {} }
+            is EpgResult.Ok -> {
                 val countries = r.value.map { it.copy(channels = it.channels?.filter(::usable)) }.filter { it.country != null && !it.channels.isNullOrEmpty() }
                 if (countries.isEmpty()) item { PickerRow(s.epgNoResults(query)) {} }
                 items(countries, key = { "c:${it.country}" }) { c ->
@@ -1762,7 +1763,7 @@ private fun EpgPickPage(vm: AppViewModel, channel: Channel, logo: Boolean, onClo
 private fun EpgCountriesPage(vm: AppViewModel, logo: Boolean, onClose: () -> Unit) {
     val s = LocalStrings.current
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val countries by produceState<AppViewModel.EpgResult<List<EpgCountryInfo>>?>(null) { value = vm.epgCountries() }
+    val countries by produceState<EpgResult<List<EpgCountryInfo>>?>(null) { value = vm.epgCountries() }
     BackHandler(onBack = onClose)
     fun source(value: String?) {
         vm.setPref(Prefs.Key.LOGO_SOURCE, value)
@@ -1775,8 +1776,8 @@ private fun EpgCountriesPage(vm: AppViewModel, logo: Boolean, onClose: () -> Uni
         }
         when (val r = countries) {
             null -> item { PickerRow(s.loadingShort) {} }
-            is AppViewModel.EpgResult.Error -> item { PickerRow(r.message) {} }
-            is AppViewModel.EpgResult.Ok -> items(
+            is EpgResult.Error -> item { PickerRow(r.message) {} }
+            is EpgResult.Ok -> items(
                 r.value.filter { it.code != null && (it.channels ?: 0) > 0 }.sortedBy { it.name ?: it.code },
                 key = { it.code!! },
             ) { c ->
