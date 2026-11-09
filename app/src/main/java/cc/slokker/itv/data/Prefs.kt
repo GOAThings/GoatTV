@@ -101,6 +101,11 @@ data class Prefs(
     /** Igual, para o guia XMLTV. */
     val epgRefreshHours: Int = 12,
     val epgOffsetMin: Int = 0,
+    /**
+     * Correção da hora pedida no catch-up, em minutos (para o relógio ou o fuso errado do fornecedor): soma-se à hora
+     * do programa só no pedido ao servidor, em todas as listas (como a "catchup correction" do Kodi).
+     */
+    val catchupOffsetMin: Int = 0,
     val epgInList: Boolean = true,
     // Controlo parental
     val pinHash: String? = null,
@@ -176,6 +181,7 @@ data class Prefs(
         const val PLAYLIST_REFRESH = "playlist_refresh_hours"
         const val EPG_REFRESH = "epg_refresh_hours"
         const val EPG_OFFSET = "epg_offset_min"
+        const val CATCHUP_OFFSET = "catchup_offset_min"
         const val EPG_IN_LIST = "epg_in_list"
         const val PIN_HASH = "parental_pin_sha256"
         const val LOCKED_GROUPS = "locked_groups"
@@ -343,6 +349,7 @@ data class Prefs(
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.epgRefreshHours,
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),
+                catchupOffsetMin = int(Key.CATCHUP_OFFSET, d.catchupOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgInList = bool(Key.EPG_IN_LIST, d.epgInList),
                 pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },
                 lockedGroups = stringSet(s, Key.LOCKED_GROUPS),

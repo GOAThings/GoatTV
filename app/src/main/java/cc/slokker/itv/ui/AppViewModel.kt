@@ -57,6 +57,8 @@ import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.api.EpgMapping
 import cc.slokker.itv.ui.player.NetMonitor
+import cc.slokker.itv.ui.player.engine.FreshLinks
+import cc.slokker.itv.ui.player.engine.StalkerLinks
 import cc.slokker.itv.data.api.accountBody
 import cc.slokker.itv.data.api.toPlaylist
 import com.google.gson.JsonObject
@@ -1220,7 +1222,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Catch-up ----------------------------------------------------------------------------
 
-    /** O servidor ainda guarda [entry] de [channel]? (Xtream com `tv_archive`, dentro dos dias que guarda.) */
+    /**
+     * O servidor ainda guarda [entry] de [channel]? (Xtream com `tv_archive`, M3U com `catchup`, Stalker com o
+     * arquivo do portal, dentro dos dias que guarda.)
+     */
     fun canCatchup(channel: Channel, entry: EpgEntry): Boolean {
         val content = content.value ?: return false
         if (!content.playlist.type.kind.supportsCatchup || channel.archiveDays <= 0) return false
@@ -1291,7 +1296,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val deviceMac: String get() = c.session.deviceMac
 
     /** O link de um canal Stalker neste momento (pede-se de cada vez que se abre, porque caduca). */
-    suspend fun stalkerCandidates(playlist: Playlist, channel: Channel) = c.stalker.candidates(playlist, channel)
+    /** O que o player pede ao portal Stalker: o link do direto, ou o da gravação de um programa (catch-up). */
+    internal val stalkerLinks = object : StalkerLinks {
+        override suspend fun live(playlist: Playlist, channel: Channel) = c.stalker.candidates(playlist, channel)
+
+        override suspend fun archive(playlist: Playlist, channel: Channel, catchup: Catchup): FreshLinks {
+            val wanted = catchup.startMs + catchup.positionMs
+            val recording = c.stalker.archive(playlist, channel, wanted, catchup.startMs, catchup.endMs) ?: return FreshLinks(emptyList())
+            return FreshLinks(listOf(recording.candidate), archiveStartMs = recording.startMs, seekMs = (wanted - recording.startMs).coerceAtLeast(0))
+        }
+    }
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
     suspend fun loadForSecond(playlist: Playlist): PlaylistContent = lists.loadForSecond(playlist)

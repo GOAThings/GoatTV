@@ -393,6 +393,8 @@
     <string name="never">Mai</string>
     <string name="time_offset">Differenza oraria</string>
     <string name="no_offset">Nessuna differenza</string>
+    <string name="catchup_offset">Correzione dell\'ora del catch-up</string>
+    <string name="catchup_offset_sub">Sposta l\'ora richiesta nel catch-up, se l\'orologio del fornitore è sbagliato</string>
     <string name="now_in_list">Programma attuale nell\'elenco</string>
     <string name="now_in_list_sub">Cosa va in onda sul canale selezionato</string>
     <string name="set_pin">Imposta PIN</string>

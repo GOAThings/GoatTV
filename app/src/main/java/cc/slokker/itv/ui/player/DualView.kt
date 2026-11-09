@@ -109,7 +109,7 @@ internal fun rememberSecondPlayback(
     LaunchedEffect(player, second?.channel?.key, second?.content?.playlist) {
         val sv = second ?: return@LaunchedEffect
         if (player == null) return@LaunchedEffect
-        playback.tune(PlaybackRequest.of(sv.content, sv.channel, null, streamFormat, stalkerLinks = null))
+        playback.tune(PlaybackRequest.of(sv.content, sv.channel, null, streamFormat, stalker = null))
     }
     return playback.takeIf { player != null }
 }

@@ -230,6 +230,7 @@ internal fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
  * [transfer]: quem conta os bytes que chegam (a página Ligação); só no ExoPlayer.
  * [timeshift]: abrir pelo anel do "pausar o direto" (só no ExoPlayer); [reconnectMs] é de quanto em quanto
  * tempo o gravador dele volta a ligar se a ligação cair. [gate]: as ligações desta tentativa (ver [StreamGate.next]).
+ * [startMs]: onde começar dentro da stream (o catch-up do Stalker abre a gravação do programa e salta para o ponto).
  */
 internal fun Player.loadStream(
     candidate: StreamCandidate,
@@ -240,14 +241,16 @@ internal fun Player.loadStream(
     timeshift: Timeshift? = null,
     reconnectMs: Long = 0L,
     gate: StreamGate? = null,
+    startMs: Long = 0L,
 ) {
     when (this) {
-        is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer)
+        is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs)
         is ExoPlayer -> {
             val direct = httpFactory(channel, userAgent, transfer)
             // Uma ligação de cada vez: a desta tentativa só abre depois de fechar a anterior (ver StreamGate).
             val http = gate?.factory(direct, exclusive = !candidate.isHls) ?: direct
-            setMediaSource(timeshift?.open(candidate, http, tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http))
+            val source = timeshift?.open(candidate, http, tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http)
+            if (startMs > 0) setMediaSource(source, startMs) else setMediaSource(source)
         }
     }
 }

@@ -393,6 +393,8 @@
     <string name="never">しない</string>
     <string name="time_offset">時刻のずれ</string>
     <string name="no_offset">ずれなし</string>
+    <string name="catchup_offset">見逃し配信の時刻補正</string>
+    <string name="catchup_offset_sub">提供元の時計がずれている場合、見逃し配信で要求する時刻をずらします</string>
     <string name="now_in_list">一覧に放送中の番組を表示</string>
     <string name="now_in_list_sub">選択中のチャンネルで放送中の番組</string>
     <string name="set_pin">PIN を設定</string>

@@ -393,6 +393,8 @@
     <string name="never">Tidak pernah</string>
     <string name="time_offset">Selisih waktu</string>
     <string name="no_offset">Tanpa selisih</string>
+    <string name="catchup_offset">Koreksi waktu siaran ulang</string>
+    <string name="catchup_offset_sub">Menggeser waktu yang diminta di siaran ulang, jika jam penyedia salah</string>
     <string name="now_in_list">Acara saat ini di daftar</string>
     <string name="now_in_list_sub">Acara yang sedang tayang di saluran yang dipilih</string>
     <string name="set_pin">Atur PIN</string>

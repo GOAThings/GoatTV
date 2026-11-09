@@ -393,6 +393,8 @@
     <string name="never">Nunca</string>
     <string name="time_offset">Desvio horário</string>
     <string name="no_offset">Sem desvio</string>
+    <string name="catchup_offset">Correção da hora do catch-up</string>
+    <string name="catchup_offset_sub">Desloca a hora pedida no catch-up, se o relógio do fornecedor estiver errado</string>
     <string name="now_in_list">Programa atual na lista</string>
     <string name="now_in_list_sub">O que está a dar no canal com foco</string>
     <string name="set_pin">Definir PIN</string>

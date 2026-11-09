@@ -393,6 +393,8 @@
     <string name="never">कभी नहीं</string>
     <string name="time_offset">समय का अंतर</string>
     <string name="no_offset">कोई अंतर नहीं</string>
+    <string name="catchup_offset">कैच-अप समय सुधार</string>
+    <string name="catchup_offset_sub">प्रदाता की घड़ी गलत हो तो कैच-अप में माँगा गया समय खिसकाता है</string>
     <string name="now_in_list">सूची में मौजूदा प्रोग्राम</string>
     <string name="now_in_list_sub">चुने गए चैनल पर अभी क्या चल रहा है</string>
     <string name="set_pin">PIN सेट करें</string>

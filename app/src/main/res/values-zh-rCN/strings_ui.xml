@@ -393,6 +393,8 @@
     <string name="never">从不</string>
     <string name="time_offset">时间偏移</string>
     <string name="no_offset">无偏移</string>
+    <string name="catchup_offset">回看时间校正</string>
+    <string name="catchup_offset_sub">服务商时钟不准时，平移回看请求的时间</string>
     <string name="now_in_list">在列表中显示当前节目</string>
     <string name="now_in_list_sub">所选频道正在播出的内容</string>
     <string name="set_pin">设置 PIN 码</string>

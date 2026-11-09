@@ -393,6 +393,8 @@
     <string name="never">Nunca</string>
     <string name="time_offset">Desfase horario</string>
     <string name="no_offset">Sin desfase</string>
+    <string name="catchup_offset">Corrección de hora del catch-up</string>
+    <string name="catchup_offset_sub">Desplaza la hora pedida en el catch-up, si el reloj del proveedor está mal</string>
     <string name="now_in_list">Programa actual en la lista</string>
     <string name="now_in_list_sub">Lo que emite el canal seleccionado</string>
     <string name="set_pin">Definir PIN</string>

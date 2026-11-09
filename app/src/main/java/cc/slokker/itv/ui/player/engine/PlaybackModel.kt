@@ -58,35 +58,60 @@ internal class PlaybackRequest(
     val channel: Channel,
     /** O programa em catch-up; null em direto. */
     val catchup: Catchup?,
-    /** Catch-up: o instante real em que o servidor começa o vídeo (ao minuto); 0 em direto. */
+    /** Catch-up: o instante real em que o servidor começa o vídeo (ao minuto no Xtream, ao segundo no M3U); 0 em direto. */
     val archiveStartMs: Long,
     val candidates: List<StreamCandidate>,
-    /** Stalker: os links caducam; cada tentativa desde o início pede um novo ao portal. */
-    val freshLinks: (suspend () -> List<StreamCandidate>)? = null,
+    /**
+     * Stalker: os links caducam; cada tentativa desde o início pede um novo ao portal (no catch-up, o da gravação do
+     * programa, que pode começar noutro instante e pedir um salto: ver [FreshLinks]).
+     */
+    val freshLinks: (suspend () -> FreshLinks)? = null,
 ) {
     val live: Boolean get() = catchup == null
 
     companion object {
         /**
-         * O pedido para [channel] de [content]: o catch-up (só Xtream), o Stalker (link pedido a cada tentativa) ou
-         * as tentativas pela ordem do formato preferido.
+         * O pedido para [channel] de [content]: o catch-up (Xtream e M3U com o URL feito aqui, Stalker com o link pedido
+         * ao portal), o Stalker em direto (link pedido a cada tentativa) ou as tentativas pela ordem do formato
+         * preferido. [correctionMin]: a correção da hora do catch-up (Definições → Guia).
          */
         fun of(
             content: PlaylistContent,
             channel: Channel,
             catchup: Catchup?,
             streamFormat: String?,
-            stalkerLinks: (suspend (Playlist, Channel) -> List<StreamCandidate>)?,
+            stalker: StalkerLinks?,
+            correctionMin: Int = 0,
         ): PlaybackRequest {
-            val archive = catchup?.let { catchupCandidates(content.playlist, it, content.account?.timezone) }
-            if (catchup != null && archive != null) return PlaybackRequest(channel, catchup, archive.startMs, archive.candidates)
             val playlist = content.playlist
-            if (playlist.type.kind.linkAtPlayTime && stalkerLinks != null) {
-                return PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { stalkerLinks(playlist, channel) })
+            if (catchup != null) {
+                if (playlist.type.kind.linkAtPlayTime && stalker != null) {
+                    // A gravação começa no início do programa do portal: até a resposta chegar, conta-se do pedido.
+                    return PlaybackRequest(channel, catchup, catchup.startMs + catchup.positionMs, emptyList(), freshLinks = { stalker.archive(playlist, channel, catchup) })
+                }
+                val archive = catchupCandidates(playlist, catchup, content.account?.timezone, correctionMin)
+                if (archive != null) return PlaybackRequest(channel, catchup, archive.startMs, archive.candidates)
+            }
+            if (playlist.type.kind.linkAtPlayTime && stalker != null) {
+                return PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { FreshLinks(stalker.live(playlist, channel)) })
             }
             return PlaybackRequest(channel, null, 0L, streamCandidates(playlist, channel, streamFormat, content.account?.allowedFormats.orEmpty()))
         }
     }
+}
+
+/**
+ * Os links pedidos ao abrir. No catch-up do Stalker, a gravação é a do programa inteiro: [archiveStartMs] é onde ela
+ * começa e [seekMs] o salto até ao ponto pedido. Sem [candidates], o portal não tem gravação (erro de catch-up).
+ */
+internal class FreshLinks(val candidates: List<StreamCandidate>, val archiveStartMs: Long? = null, val seekMs: Long = 0L)
+
+/** O que o player pede ao portal Stalker (os links caducam: pedem-se ao abrir). */
+internal interface StalkerLinks {
+    suspend fun live(playlist: Playlist, channel: Channel): List<StreamCandidate>
+
+    /** A gravação de [catchup] no arquivo do portal. */
+    suspend fun archive(playlist: Playlist, channel: Channel, catchup: Catchup): FreshLinks
 }
 
 /** Não arrancou: o erro (explicado quando se percebe porquê) e se ainda vai tentar outra vez. */
@@ -127,6 +152,8 @@ internal data class OpenOptions(
     /** Pelo anel da pausa do direto. */
     val ring: Boolean,
     val reconnectMs: Long,
+    /** Onde começar dentro da stream (a gravação do Stalker no catch-up); 0 = o início. */
+    val startMs: Long = 0L,
 )
 
 /**

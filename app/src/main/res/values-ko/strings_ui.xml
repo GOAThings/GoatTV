@@ -393,6 +393,8 @@
     <string name="never">사용 안 함</string>
     <string name="time_offset">시간 보정</string>
     <string name="no_offset">보정 없음</string>
+    <string name="catchup_offset">다시보기 시간 보정</string>
+    <string name="catchup_offset_sub">제공업체 시계가 틀리면 다시보기에서 요청하는 시간을 옮겨요</string>
     <string name="now_in_list">목록에 현재 프로그램 표시</string>
     <string name="now_in_list_sub">선택한 채널에서 방송 중인 프로그램</string>
     <string name="set_pin">PIN 설정</string>

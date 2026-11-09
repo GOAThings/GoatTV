@@ -29,8 +29,8 @@ class PlaylistKindTest {
 
     @Test
     fun `capabilities are where the app used to check the type`() {
-        // Cada canal diz se tem e quantos dias (Channel.archiveDays).
-        assertEquals(listOf(PlaylistType.XTREAM, PlaylistType.M3U), PlaylistKind.ALL.filter { it.supportsCatchup }.map { it.type })
+        // Todos (cada canal diz se tem e quantos dias: Channel.archiveDays).
+        assertEquals(listOf(PlaylistType.XTREAM, PlaylistType.M3U, PlaylistType.STALKER), PlaylistKind.ALL.filter { it.supportsCatchup }.map { it.type })
         assertEquals(listOf(PlaylistType.XTREAM), PlaylistKind.ALL.filter { it.knowsConnectionLimit }.map { it.type })
         assertEquals(listOf(PlaylistType.XTREAM), PlaylistKind.ALL.filter { it.remembersFormat }.map { it.type })
         assertEquals(listOf(PlaylistType.XTREAM, PlaylistType.STALKER), PlaylistKind.ALL.filter { it.shortEpg }.map { it.type })

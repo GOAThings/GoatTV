@@ -393,6 +393,8 @@
     <string name="never">Nunca</string>
     <string name="time_offset">Ajuste de horário</string>
     <string name="no_offset">Sem ajuste</string>
+    <string name="catchup_offset">Correção de horário do catch-up</string>
+    <string name="catchup_offset_sub">Ajusta o horário pedido no catch-up, se o relógio do provedor estiver errado</string>
     <string name="now_in_list">Programa atual na lista</string>
     <string name="now_in_list_sub">O que está passando no canal selecionado</string>
     <string name="set_pin">Definir PIN</string>

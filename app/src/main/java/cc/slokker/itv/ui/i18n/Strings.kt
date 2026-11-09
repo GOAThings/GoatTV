@@ -736,6 +736,8 @@ class Strings(context: Context) {
     // ---- Guia ----
     val timeOffset get() = s(R.string.time_offset)
     val noOffset get() = s(R.string.no_offset)
+    val catchupOffset get() = s(R.string.catchup_offset)
+    val catchupOffsetSub get() = s(R.string.catchup_offset_sub)
     val nowInList get() = s(R.string.now_in_list)
     val nowInListSub get() = s(R.string.now_in_list_sub)
 

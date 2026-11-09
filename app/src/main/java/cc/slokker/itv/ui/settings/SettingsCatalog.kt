@@ -307,6 +307,15 @@ object SettingsCatalog {
         tv = Place(TvPage.GUIDE, 20),
         phone = Place(PhonePage.GUIDE, 30),
     )
+    /** Em horas: o fuso ou o relógio errado do fornecedor costuma ser de horas certas. */
+    val CATCHUP_OFFSET = Setting.Choice(
+        Prefs.Key.CATCHUP_OFFSET, { it.catchupOffset },
+        options = { s -> CATCHUP_OFFSETS.map { it to offsetLabel(it, s) } },
+        read = { it.prefs.catchupOffsetMin },
+        subtitle = { it.catchupOffsetSub },
+        tv = Place(TvPage.GUIDE, 25),
+        phone = Place(PhonePage.GUIDE, 35),
+    )
     val EPG_IN_LIST = Setting.Toggle(
         Prefs.Key.EPG_IN_LIST, { it.nowInList }, { it.nowInListSub },
         read = { it.epgInList },
@@ -319,7 +328,8 @@ object SettingsCatalog {
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
-        ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, EPG_IN_LIST,
+        ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
+        EPG_IN_LIST,
     )
 
     /** As linhas de uma página da TV, por secção (pela ordem de [TvSection]) e, dentro dela, por [Place.order]. */
@@ -339,6 +349,8 @@ object SettingsCatalog {
     private fun refreshOptions(s: Strings) = RefreshPolicy.OPTIONS.map<Int, Pair<Any?, String>> { it to s.refreshLabel(it) }
 
     private val OFFSETS = (-180..180 step 30).toList()
+
+    private val CATCHUP_OFFSETS = (-12..12).map { it * 60 }
 
     private fun offsetLabel(min: Int, s: Strings): String =
         if (min == 0) s.noOffset else (if (min > 0) "+" else "−") + "${abs(min) / 60} h" + if (abs(min) % 60 != 0) " 30" else ""

@@ -62,6 +62,7 @@ internal class VlcPlayer(
     private var url: String? = null
     private var userAgent: String? = null
     private var referrer: String? = null
+    private var startMs = 0L
     private var mediaItem: MediaItem? = null
 
     private var playbackState = Player.STATE_IDLE
@@ -107,12 +108,16 @@ internal class VlcPlayer(
         }
     }
 
-    /** A stream a tocar (o equivalente ao `setMediaSource` do ExoPlayer); começa com [prepare]. */
-    fun setStream(url: String, userAgent: String?, referrer: String?) {
+    /**
+     * A stream a tocar (o equivalente ao `setMediaSource` do ExoPlayer); começa com [prepare]. [startMs]: onde começar
+     * dentro dela.
+     */
+    fun setStream(url: String, userAgent: String?, referrer: String?, startMs: Long = 0L) {
         this.url = url
         // Cada um é uma opção do libVLC: só texto, sem nada que a possa partir em duas.
         this.userAgent = userAgent?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
         this.referrer = referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
+        this.startMs = startMs.coerceAtLeast(0L)
         mediaItem = MediaItem.fromUri(url)
         if (playbackState != Player.STATE_IDLE) vlc.stop()
         playbackState = Player.STATE_IDLE
@@ -239,6 +244,7 @@ internal class VlcPlayer(
             addOption(":network-caching=$networkCachingMs")
             userAgent?.let { addOption(":http-user-agent=$it") }
             referrer?.let { addOption(":http-referrer=$it") }
+            if (startMs > 0) addOption(":start-time=${startMs / 1000.0}")
         }
         vlc.media = media
         media.release()

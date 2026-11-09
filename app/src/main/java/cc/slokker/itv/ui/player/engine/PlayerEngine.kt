@@ -78,6 +78,7 @@ internal class PlayerEngine(
                 timeshift = timeshift.takeIf { options.ring },
                 reconnectMs = options.reconnectMs,
                 gate = gate,
+                startMs = options.startMs,
             )
             player.prepare()
             player.play()

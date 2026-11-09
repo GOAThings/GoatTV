@@ -258,6 +258,7 @@ class PersistedFormatTest {
         "playlistRefreshHours" to (Prefs.Key.PLAYLIST_REFRESH to 24),
         "epgRefreshHours" to (Prefs.Key.EPG_REFRESH to 6),
         "epgOffsetMin" to (Prefs.Key.EPG_OFFSET to -90),
+        "catchupOffsetMin" to (Prefs.Key.CATCHUP_OFFSET to -60),
         "epgInList" to (Prefs.Key.EPG_IN_LIST to false),
         "pinHash" to (Prefs.Key.PIN_HASH to Prefs.hashPin("1234")),
         "lockedGroups" to (Prefs.Key.LOCKED_GROUPS to listOf("p1:9")),

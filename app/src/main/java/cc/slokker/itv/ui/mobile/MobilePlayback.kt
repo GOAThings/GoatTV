@@ -48,7 +48,7 @@ internal class MobilePlayback(val core: ChannelPlayback, viewState: MutableState
     val freeze get() = core.freeze
 
     /** Catch-up: instante real do início do vídeo pedido ao servidor (0 em direto). */
-    val archiveStart: Long get() = core.request?.archiveStartMs ?: 0L
+    val archiveStart: Long get() = core.archiveStartMs
 
     /** A tentativa de voltar a ligar (0 = não caiu) e quando é a próxima (elapsedRealtime; 0 = a tentar agora). */
     val reconnects: Int get() = core.reconnects
@@ -81,7 +81,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
             core.freeze = null
             return@LaunchedEffect
         }
-        core.tune(PlaybackRequest.of(data, channel, catchup, streamFormat, vm::stalkerCandidates))
+        core.tune(PlaybackRequest.of(data, channel, catchup, streamFormat, vm.stalkerLinks, latestPrefs.catchupOffsetMin))
     }
 
     LaunchedEffect(playback.view, prefs.aspect) {

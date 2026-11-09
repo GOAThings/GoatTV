@@ -393,6 +393,8 @@
     <string name="never">Никогда</string>
     <string name="time_offset">Сдвиг времени</string>
     <string name="no_offset">Без сдвига</string>
+    <string name="catchup_offset">Поправка времени архива</string>
+    <string name="catchup_offset_sub">Сдвигает запрашиваемое время в архиве, если часы провайдера идут неверно</string>
     <string name="now_in_list">Текущая передача в списке</string>
     <string name="now_in_list_sub">Что идёт на выбранном канале</string>
     <string name="set_pin">Задать PIN-код</string>

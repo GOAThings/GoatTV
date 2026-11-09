@@ -397,7 +397,7 @@ class ChannelPlaybackTest {
     fun stalkerPedeUmLinkNovoACadaTentativaDesdeOInicio() {
         val p = playback()
         var asked = 0
-        p.tuneNow(PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { asked++; listOf(StreamCandidate("http://portal/$asked", StreamFormat.TS)) }))
+        p.tuneNow(PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { asked++; FreshLinks(listOf(StreamCandidate("http://portal/$asked", StreamFormat.TS))) }))
         assertEquals(listOf("open http://portal/1"), engine.log)
         p.onError(engine, ioError)
         time.advance(5_000)
@@ -547,5 +547,34 @@ class ChannelPlaybackTest {
         p.onFirstFrame(engine)
         time.advance(40)
         assertNull(p.freeze)
+    }
+
+    // ---- Catch-up do Stalker: a gravação do programa, e o salto até ao ponto pedido -----------------
+
+    @Test
+    fun stalkerCatchUpAbreAGravacaoESaltaParaOPonto() {
+        val p = playback()
+        val cu = Catchup(channel, "Programa", 1_000_000L, 4_600_000L, positionMs = 600_000L)
+        p.tuneNow(PlaybackRequest(channel, cu, 1_600_000L, emptyList(), freshLinks = {
+            FreshLinks(listOf(StreamCandidate("http://portal/rec.mpg", StreamFormat.TS)), archiveStartMs = 900_000L, seekMs = 700_000L)
+        }))
+        assertEquals(listOf("open http://portal/rec.mpg"), engine.log)
+        assertEquals(700_000L, engine.lastOptions?.startMs)
+        // O player vai na posição da gravação (já com o salto): o programa vai em 900 000 + 700 000 − 1 000 000.
+        engine.positionMs = 700_000L
+        assertEquals(600_000L, p.programmePositionMs())
+    }
+
+    @Test
+    fun stalkerSemGravacaoMostraOErroSemTentarSozinho() {
+        val p = playback()
+        val cu = Catchup(channel, "Programa", 0L, 3_600_000L)
+        p.tuneNow(PlaybackRequest(channel, cu, 0L, emptyList(), freshLinks = { FreshLinks(emptyList()) }))
+        assertTrue(engine.opened.isEmpty())
+        val failure = p.failure!!
+        assertEquals(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND, failure.error.errorCode)
+        assertEquals(0, failure.retry)
+        time.advance(60_000)
+        assertTrue(engine.opened.isEmpty())
     }
 }

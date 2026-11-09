@@ -393,6 +393,8 @@
     <string name="never">أبدًا</string>
     <string name="time_offset">فرق التوقيت</string>
     <string name="no_offset">بلا فرق</string>
+    <string name="catchup_offset">تصحيح وقت الأرشيف</string>
+    <string name="catchup_offset_sub">يزيح الوقت المطلوب من الأرشيف إذا كانت ساعة المزوّد خاطئة</string>
     <string name="now_in_list">البرنامج الحالي في القائمة</string>
     <string name="now_in_list_sub">ما يُعرض الآن على القناة المحددة</string>
     <string name="set_pin">تعيين رمز سري</string>

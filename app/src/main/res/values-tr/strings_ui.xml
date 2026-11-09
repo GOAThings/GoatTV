@@ -393,6 +393,8 @@
     <string name="never">Asla</string>
     <string name="time_offset">Saat farkı</string>
     <string name="no_offset">Fark yok</string>
+    <string name="catchup_offset">Geriye dönük izleme saat düzeltmesi</string>
+    <string name="catchup_offset_sub">Sağlayıcının saati yanlışsa geriye dönük izlemede istenen saati kaydırır</string>
     <string name="now_in_list">Listede şu anki program</string>
     <string name="now_in_list_sub">Seçili kanalda ne yayınlandığı</string>
     <string name="set_pin">PIN belirle</string>

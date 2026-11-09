@@ -393,6 +393,8 @@
     <string name="never">Nie</string>
     <string name="time_offset">Zeitversatz</string>
     <string name="no_offset">Kein Versatz</string>
+    <string name="catchup_offset">Zeitkorrektur für Catch-up</string>
+    <string name="catchup_offset_sub">Verschiebt die angefragte Zeit bei Catch-up, wenn die Uhr des Anbieters falsch geht</string>
     <string name="now_in_list">Aktuelle Sendung in der Liste</string>
     <string name="now_in_list_sub">Was auf dem ausgewählten Sender läuft</string>
     <string name="set_pin">PIN festlegen</string>

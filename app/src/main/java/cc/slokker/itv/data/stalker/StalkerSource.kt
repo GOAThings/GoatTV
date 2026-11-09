@@ -92,6 +92,57 @@ class StalkerSource(http: OkHttpClient) {
         listOf(candidate(commandUrl(link ?: cmd, endpoint)))
     }
 
+    /**
+     * A gravação do programa [startMs]–[endMs] de [channel] (visto às [wantedMs]), no arquivo do portal: o portal não
+     * faz URLs com horas, dá o link da gravação de um programa do seu guia (`type=tv_archive&action=create_link`, com
+     * o comando `auto /media/<id do programa>.mpg`). O id procura-se na tabela do dia (`get_simple_data_table`).
+     * Devolve onde a gravação começa e o link, ou null (sem gravação, ou o portal não respondeu).
+     */
+    suspend fun archive(playlist: Playlist, channel: Channel, wantedMs: Long, startMs: Long, endMs: Long): Recording? = withContext(Dispatchers.IO) {
+        val id = channel.streamId ?: return@withContext null
+        val programme = runCatchingIo { recordingAt(playlist, id, wantedMs, startMs, endMs) } ?: return@withContext null
+        val js = runCatchingIo {
+            api(playlist, "tv_archive", "create_link", listOf("cmd" to "auto /media/${programme.id}.mpg", "series" to "", "forced_storage" to "", "disable_ad" to "0", "download" to "0"))
+        }?.asObjectOrNull() ?: return@withContext null
+        // "nothing_to_play" (ou outro erro) e um comando vazio: não há gravação.
+        if (js.text("error") != null) return@withContext null
+        val cmd = js.text("cmd") ?: return@withContext null
+        val endpoint = runCatchingIo { session(playlist).endpoint }.orEmpty()
+        val url = commandUrl(cmd, endpoint)
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return@withContext null
+        Recording(programme.startMs, candidate(url))
+    }
+
+    /** Onde a gravação de um programa começa e como abri-la. */
+    class Recording(val startMs: Long, val candidate: StreamCandidate)
+
+    private class Programme(val id: String, val startMs: Long, val stopMs: Long)
+
+    /**
+     * O programa da tabela do portal que corresponde ao programa [startMs]–[endMs] do guia, visto às [wantedMs] (o dia
+     * vem no fuso deste aparelho, que vai na cookie), ou null. Os que o portal marca como não gravados
+     * (`mark_archive` 0) não contam. Perto da meia-noite, o programa pode estar na tabela do dia anterior.
+     */
+    private suspend fun recordingAt(playlist: Playlist, channelId: String, wantedMs: Long, startMs: Long, endMs: Long): Programme? {
+        val format = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        for (dayMs in listOf(wantedMs, wantedMs - 86_400_000L)) {
+            val date = format.format(java.util.Date(dayMs))
+            val rows = ArrayList<Programme>()
+            var page = 1
+            while (page <= MAX_EPG_PAGES) {
+                val js = api(playlist, "epg", "get_simple_data_table", listOf("ch_id" to channelId, "date" to date, "p" to page.toString()))
+                val list = js.listOfData()
+                list.mapNotNullTo(rows, ::recorded)
+                val total = js.asObjectOrNull()?.text("total_items")?.toIntOrNull() ?: 0
+                val perPage = js.asObjectOrNull()?.text("max_page_items")?.toIntOrNull()?.takeIf { it > 0 } ?: list.size
+                if (list.isEmpty() || page * perPage >= total) break
+                page++
+            }
+            matching(rows, wantedMs, startMs, endMs)?.let { return it }
+        }
+        return null
+    }
+
     suspend fun shortEpg(playlist: Playlist, channel: Channel, size: Int = 4): List<EpgEntry> = withContext(Dispatchers.IO) {
         val id = channel.streamId ?: return@withContext emptyList()
         api(playlist, "itv", "get_short_epg", listOf("ch_id" to id, "size" to size.toString())).asListOrEmpty().mapNotNull { e ->
@@ -214,6 +265,42 @@ class StalkerSource(http: OkHttpClient) {
         const val USER_AGENT = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
         private const val MAX_PAGES = 200
 
+        /** A tabela de um dia vem às páginas (de 10, nos portais Ministra): um dia cheio cabe em 30. */
+        private const val MAX_EPG_PAGES = 30
+
+        /**
+         * Dias de arquivo de um canal: o portal marca-o (`tv_archive`, `enable_tv_archive` ou `archive` a 1) e diz
+         * `tv_archive_duration`, que nuns portais vem em horas (o Ministra traz 168, uma semana) e noutros em dias.
+         * Como o QiTV e o E2iPlayer: mais de 31, ou um múltiplo de 24, são horas; marcado sem duração, uma semana.
+         */
+        fun archiveDays(c: JsonObject): Int {
+            if (listOf("tv_archive", "enable_tv_archive", "archive").none { c.text(it) == "1" || c.text(it).equals("true", ignoreCase = true) }) return 0
+            val value = c.text("tv_archive_duration")?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 } ?: return 7
+            val days = if (value > 31 || value % 24 == 0.0) kotlin.math.ceil(value / 24) else kotlin.math.ceil(value)
+            return days.toInt().coerceIn(1, 31)
+        }
+
+        /** Uma linha da tabela do portal com gravação (sem `mark_archive` 0) e id, ou null. */
+        private fun recorded(row: JsonObject): Programme? {
+            val start = row.text("start_timestamp")?.toLongOrNull()?.let(SafeInput::epochMs) ?: return null
+            val stop = row.text("stop_timestamp")?.toLongOrNull()?.takeIf { it > 0 }?.let(SafeInput::epochMs) ?: return null
+            if (stop <= start || row.text("mark_archive") == "0") return null
+            val id = row.text("id") ?: row.text("real_id") ?: return null
+            return Programme(id, start, stop)
+        }
+
+        /** Até quanto o início de um programa pode variar entre o guia XMLTV e a tabela do portal. */
+        private const val DRIFT_MS = 5 * 60_000L
+
+        /**
+         * O programa do portal para o do guia ([startMs]–[endMs]) às [wantedMs]: o que dá a essa hora ou começa até
+         * [DRIFT_MS] depois, o que mais se sobrepõe ao do guia. Assim, se o guia diz 20:00 e o portal 20:01, abrir o
+         * programa desde o início dá a gravação dele e não o último minuto do anterior.
+         */
+        private fun matching(rows: List<Programme>, wantedMs: Long, startMs: Long, endMs: Long): Programme? =
+            rows.filter { (it.startMs <= wantedMs && wantedMs < it.stopMs) || (it.startMs > wantedMs && it.startMs <= wantedMs + DRIFT_MS) }
+                .maxWithOrNull(compareBy<Programme> { minOf(it.stopMs, endMs) - maxOf(it.startMs, startMs) }.thenBy { it.startMs <= wantedMs })
+
         /** Onde o portal pode responder, pela ordem a tentar. */
         fun endpoints(server: String): List<String> {
             val s = server.trim().trimEnd('/').removeSuffix("/c")
@@ -307,6 +394,7 @@ class StalkerSource(http: OkHttpClient) {
                 url = cmd,
                 userAgent = USER_AGENT,
                 epgId = c.text("xmltv_id"),
+                archiveDays = archiveDays(c),
             )
         }
 

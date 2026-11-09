@@ -309,7 +309,7 @@ fun PlayerScreen(vm: AppViewModel) {
             prefs.infoSeconds > 0 -> showInfo()
             else -> infoVisible = false
         }
-        playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
+        playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm.stalkerLinks, latestPrefs.catchupOffsetMin))
         // AFR: quando se souber a cadência deste canal, a TV muda para ela (conforme o modo).
         frameRate.reset()
         afr.newChannel()

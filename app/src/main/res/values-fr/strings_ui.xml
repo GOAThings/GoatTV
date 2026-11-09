@@ -393,6 +393,8 @@
     <string name="never">Jamais</string>
     <string name="time_offset">Décalage horaire</string>
     <string name="no_offset">Aucun décalage</string>
+    <string name="catchup_offset">Correction de l\'heure du replay</string>
+    <string name="catchup_offset_sub">Décale l\'heure demandée en replay, si l\'horloge du fournisseur est fausse</string>
     <string name="now_in_list">Programme en cours dans la liste</string>
     <string name="now_in_list_sub">Ce qui passe sur la chaîne sélectionnée</string>
     <string name="set_pin">Définir le code PIN</string>

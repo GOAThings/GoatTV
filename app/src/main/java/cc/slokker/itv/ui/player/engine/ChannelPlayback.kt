@@ -96,6 +96,13 @@ internal class ChannelPlayback(
     var wasPlaying = false
         private set
 
+    /** Catch-up: o instante real em que o vídeo aberto começa (o do pedido, ou o da gravação que o Stalker deu). */
+    var archiveStartMs = 0L
+        private set
+
+    /** Catch-up do Stalker: o salto dentro da gravação até ao ponto pedido. */
+    private var seekMs = 0L
+
     /** Já se escolheu a faixa de áudio deste canal (surround por defeito, na TV). */
     var audioChosen = false
 
@@ -134,7 +141,7 @@ internal class ChannelPlayback(
     /** Catch-up: onde vai o vídeo, em ms desde o início do programa; null em direto. */
     fun programmePositionMs(): Long? {
         val r = request ?: return null
-        return r.catchup?.positionAt(r.archiveStartMs, engine?.positionMs ?: 0L)
+        return r.catchup?.positionAt(archiveStartMs, engine?.positionMs ?: 0L)
     }
 
     // ---- Player ---------------------------------------------------------------------------------
@@ -225,6 +232,8 @@ internal class ChannelPlayback(
         held = false
         this.request = request
         candidates = request.candidates
+        archiveStartMs = request.archiveStartMs
+        seekMs = 0L
         net?.reset()
         retries = 0
         wasPlaying = false
@@ -286,14 +295,22 @@ internal class ChannelPlayback(
         if (fresh != null && index == 0 && !linkFresh) {
             ready = false
             linkJob = scope.launch {
-                candidates = fresh()
+                val links = fresh()
+                candidates = links.candidates
+                links.archiveStartMs?.let { archiveStartMs = it }
+                seekMs = links.seekMs
                 linkFresh = true
                 start(0)
             }
             return
         }
         linkFresh = false
-        val candidate = candidates.getOrNull(index) ?: return
+        val candidate = candidates.getOrNull(index)
+        if (candidate == null) {
+            // Catch-up do Stalker sem gravação deste programa: diz-se, em vez de ficar a sintonizar.
+            if (index == 0 && !req.live) fail(PlaybackException("Sem gravação", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND), req, null)
+            return
+        }
         attempt = index
         failure = null
         ready = false
@@ -309,6 +326,7 @@ internal class ChannelPlayback(
                 userAgent = prefs.userAgent.ifBlank { IPTV_USER_AGENT },
                 ring = ring,
                 reconnectMs = prefs.reconnectSeconds * 1_000L,
+                startMs = seekMs,
             ),
         )
     }

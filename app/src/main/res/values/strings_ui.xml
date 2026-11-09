@@ -394,6 +394,8 @@
     <string name="never">Never</string>
     <string name="time_offset">Time offset</string>
     <string name="no_offset">No offset</string>
+    <string name="catchup_offset">Catch-up time correction</string>
+    <string name="catchup_offset_sub">Shifts the time asked for in catch-up, if the provider\'s clock is off</string>
     <string name="now_in_list">Current show in the list</string>
     <string name="now_in_list_sub">What\'s on for the focused channel</string>
     <string name="set_pin">Set PIN</string>
