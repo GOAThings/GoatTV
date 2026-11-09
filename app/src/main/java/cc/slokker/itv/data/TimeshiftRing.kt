@@ -375,6 +375,12 @@ class TimeshiftRing(
         entries.lastOrNull { it.mediaMs <= mediaMs } ?: entries.firstOrNull()
     }
 
+    /** O primeiro ponto do índice com o tempo do vídeo em [mediaMs] ou depois (o fim de uma gravação), ou null. */
+    fun entryAtOrAfter(mediaMs: Long): Entry? = synchronized(lock) { entries.firstOrNull { it.mediaMs >= mediaMs } }
+
+    /** Uma cópia do índice (para escolher onde começa uma gravação, ver RecordingCut). */
+    fun index(): List<Entry> = synchronized(lock) { entries.toList() }
+
     /** O primeiro ponto do índice a partir de [offset] (para reabrir no início de um segmento). */
     fun entryFrom(offset: Long): Entry? = synchronized(lock) { entries.firstOrNull { it.offset >= offset } }
 
