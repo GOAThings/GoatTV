@@ -55,6 +55,9 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegVideoRenderer
 
 private const val NEAR_LIVE_OFFSET_MS = 4_000L
 
+/** O buffer para arrancar com a opção Normal (ver [buildPlayer]). */
+private const val NORMAL_START_MS = 650
+
 /** O player das definições: o ExoPlayer, ou o [VlcPlayer] (Definições → Reprodução → Player). */
 internal fun buildPlayer(context: Context, prefs: Prefs): Player {
     val softwareVideo = isEmulator || prefs.decoder == Prefs.Decoder.SOFTWARE
@@ -86,10 +89,12 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         Prefs.Buffer.LIVE -> listOf(30_000, 30_000, 500, 2_500)
         Prefs.Buffer.SMALL -> listOf(30_000, 30_000, 1_000, 3_000)
         Prefs.Buffer.LARGE -> listOf(120_000, 120_000, 4_000, 8_000)
+        // Normal: arranca com 650 ms (o Media3 usa 1 s): a imagem começa a mexer 0,35 s mais cedo num servidor sem
+        // rajada; depois de uma paragem espera o mesmo de sempre.
         else -> listOf(
             DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
             DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+            NORMAL_START_MS,
             DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
         )
     }
