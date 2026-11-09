@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import cc.slokker.itv.IPTV_USER_AGENT
@@ -103,8 +104,8 @@ internal class ChannelPlayback(
     /** Catch-up do Stalker: o salto dentro da gravação até ao ponto pedido. */
     private var seekMs = 0L
 
-    /** Já se escolheu a faixa de áudio deste canal (surround por defeito, na TV). */
-    var audioChosen = false
+    /** As faixas a escolher no canal aberto (língua preferida, surround); as escolhidas à mão ficam (ver [TrackChoice]). */
+    private val tracks = TrackChoice()
 
     private var retries = 0
     private var linkFresh = false
@@ -237,7 +238,7 @@ internal class ChannelPlayback(
         net?.reset()
         retries = 0
         wasPlaying = false
-        audioChosen = false
+        tracks.onOpen(request.channel.key)
         retryJob?.cancel()
         reconnects = 0
         nextTryAt = 0L
@@ -327,9 +328,17 @@ internal class ChannelPlayback(
                 ring = ring,
                 reconnectMs = prefs.reconnectSeconds * 1_000L,
                 startMs = seekMs,
+                audioLanguage = audioLanguage(prefs).takeIf { !tracks.isManual(C.TRACK_TYPE_AUDIO) },
+                textLanguage = textLanguage(prefs).takeIf { !tracks.isManual(C.TRACK_TYPE_TEXT) },
             ),
         )
     }
+
+    /** A língua do áudio: a das Definições ou, em "Automático", a da app. */
+    private fun audioLanguage(prefs: Prefs): String? = prefs.audioLanguage.ifEmpty { host.appLanguage.orEmpty() }.ifEmpty { null }
+
+    /** A língua das legendas (vazio nas Definições = sem legendas, além das que o stream marca). */
+    private fun textLanguage(prefs: Prefs): String? = prefs.subtitleLanguage.ifEmpty { null }.takeIf { policy.subtitleLanguage }
 
     /** Uma só espera de cada vez: dois erros seguidos não deixam duas reaberturas pendentes. */
     private fun retryLater(block: suspend () -> Unit) {
@@ -409,6 +418,29 @@ internal class ChannelPlayback(
         firstFrameSeen = true
         freeze = null
     }
+
+    /**
+     * As faixas chegaram (ou mudaram): escolhe as que faltam neste canal, uma vez por abertura (a língua preferida e,
+     * na TV, o surround). As escolhidas à mão no menu ([onManualTrack]) ficam até mudar de canal.
+     */
+    fun onTracksChanged(source: StreamEngine) {
+        if (source !== engine || request == null) return
+        val audio = tracks.pending(C.TRACK_TYPE_AUDIO)
+        val text = policy.subtitleLanguage && tracks.pending(C.TRACK_TYPE_TEXT)
+        if (!audio && !text) return
+        val prefs = host.prefs
+        val wish = TrackWish(
+            audioLanguage = audioLanguage(prefs),
+            textLanguage = textLanguage(prefs),
+            surround = policy.surroundDefault && prefs.surroundDefault,
+            audio = audio,
+            text = text,
+        )
+        source.chooseTracks(wish).forEach(tracks::done)
+    }
+
+    /** O menu das faixas: a escolha de [type] (C.TRACK_TYPE_AUDIO/TEXT) ganha às Definições até mudar de canal. */
+    fun onManualTrack(type: Int) = tracks.onManual(type)
 
     /** As faixas chegaram e o player não descodifica o áudio ou o vídeo ([cannotDecode]). */
     fun onUndecodable(source: StreamEngine) {

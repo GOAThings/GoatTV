@@ -31,6 +31,10 @@ data class Prefs(
     /** Passthrough de áudio (Dolby/DTS para o recetor ou a TV). */
     val audioPassthrough: Boolean = true,
     val surroundDefault: Boolean = false,
+    /** A língua do áudio (ISO 639-1, ver Languages); vazio = Automático (a da app, se o canal a tiver). */
+    val audioLanguage: String = "",
+    /** A língua das legendas (ISO 639-1); vazio = desligadas (menos as que o canal marca como forçadas). */
+    val subtitleLanguage: String = "",
     /** Telemóvel: o vídeo continua numa janela pequena ao sair da app. */
     val pipEnabled: Boolean = false,
     val audioDecoder: String = Decoder.HARDWARE,
@@ -140,6 +144,8 @@ data class Prefs(
         const val AFR_FALLBACK = "afr_fallback"
         const val AUDIO_PASSTHROUGH = "audio_passthrough"
         const val SURROUND_DEFAULT = "surround_default"
+        const val AUDIO_LANGUAGE = "audio_language"
+        const val SUBTITLE_LANGUAGE = "subtitle_language"
         const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
         const val HDR = "hdr"
@@ -307,6 +313,8 @@ data class Prefs(
                 afrFallback = str(Key.AFR_FALLBACK, d.afrFallback, AfrFallback.ALL),
                 audioPassthrough = bool(Key.AUDIO_PASSTHROUGH, d.audioPassthrough),
                 surroundDefault = bool(Key.SURROUND_DEFAULT, d.surroundDefault),
+                audioLanguage = language(s, Key.AUDIO_LANGUAGE),
+                subtitleLanguage = language(s, Key.SUBTITLE_LANGUAGE),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
@@ -436,6 +444,12 @@ data class Prefs(
                 .orEmpty()
 
         private val COUNTRY_CODE = Regex("[A-Za-z]{2,3}")
+
+        /** Uma língua preferida: um código ISO 639 (as Definições gravam o 639-1); outra coisa volta a Automático. */
+        private fun language(s: JsonObject, key: String): String =
+            s.get(key)?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.lowercase()?.takeIf { LANGUAGE_CODE.matches(it) }.orEmpty()
+
+        private val LANGUAGE_CODE = Regex("[a-z]{2,3}")
 
         private fun stringSet(s: JsonObject, key: String): Set<String> =
             s.get(key)?.takeIf { it.isJsonArray }?.asJsonArray

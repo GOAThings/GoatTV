@@ -42,8 +42,11 @@ internal fun rememberStreamState(player: Player?): StreamState {
 /** Uma faixa de áudio/legendas a escolher (ou "Desligadas"). */
 internal class TrackOption(val key: String, val label: String, val details: String?, val selected: Boolean, val select: () -> Unit)
 
-/** As faixas de [type] (áudio ou legendas) para escolher; [allowOff] junta "Desligadas" (legendas). */
-internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean): List<TrackOption> {
+/**
+ * As faixas de [type] (áudio ou legendas) para escolher; [allowOff] junta "Desligadas" (legendas). [onManual]: a
+ * escolha é à mão (ganha à língua preferida até mudar de canal, ver ChannelPlayback.onManualTrack).
+ */
+internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: (Int) -> Unit = {}): List<TrackOption> {
     val groups = tracks.groups.filter { it.type == type }
     if (player == null || groups.isEmpty()) return emptyList()
     val disabled = player.trackSelectionParameters.disabledTrackTypes.contains(type)
@@ -51,6 +54,7 @@ internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: 
         if (allowOff) {
             add(
                 TrackOption("off", I18n.s.subtitlesOff, null, disabled || groups.none { it.isSelected }) {
+                    onManual(type)
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, true).build()
                 },
             )
@@ -63,6 +67,7 @@ internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: 
                 val index = n++
                 add(
                     TrackOption("t:$index", trackLabel(f, index), trackDetails(f), !disabled && g.isTrackSelected(i)) {
+                        onManual(type)
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                             .setTrackTypeDisabled(type, false)
                             .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))

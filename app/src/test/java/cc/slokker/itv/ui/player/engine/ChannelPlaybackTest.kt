@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player.engine
 
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import cc.slokker.itv.data.Catchup
@@ -72,6 +73,13 @@ class ChannelPlaybackTest {
         override fun holdForZap() { log += "hold"; idle = true }
         override fun release() { log += "release" }
         override fun ringContinues() = false
+        val wishes = mutableListOf<TrackWish>()
+        /** Os tipos que as faixas já deixam decidir (no player verdadeiro, os que já chegaram). */
+        var tracksArrived = setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_TEXT)
+        override fun chooseTracks(wish: TrackWish): Set<Int> {
+            wishes += wish
+            return tracksArrived.filter { (it == C.TRACK_TYPE_AUDIO && wish.audio) || (it == C.TRACK_TYPE_TEXT && wish.text) }.toSet()
+        }
         override fun tick(programmeStart: (Long) -> Long?) = Unit
         override fun sampleNet() = Unit
     }
@@ -87,6 +95,7 @@ class ChannelPlaybackTest {
         override fun exitCatchup() { exits++ }
         override fun seekCatchup(positionMs: Long) { seeks += positionMs }
         override fun onVlcFallback() { vlcToasts++ }
+        override var appLanguage: String? = "pt"
         override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?) = ErrorInfo("explicado")
         override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
     }
@@ -547,6 +556,78 @@ class ChannelPlaybackTest {
         p.onFirstFrame(engine)
         time.advance(40)
         assertNull(p.freeze)
+    }
+
+    // ---- Faixas: língua preferida, surround e a escolha à mão -------------------------------------
+
+    @Test
+    fun asFaixasEscolhemSeUmaVezPorAberturaComALinguaDasDefinicoes() {
+        host.prefs = Prefs(audioLanguage = "en", subtitleLanguage = "pt", surroundDefault = true)
+        val p = playback()
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        p.onTracksChanged(engine)
+        assertEquals(listOf(TrackWish(audioLanguage = "en", textLanguage = "pt", surround = true)), engine.wishes)
+        // O VLC escolhe as línguas sozinho ao abrir: vão nas opções.
+        assertEquals("en", engine.lastOptions?.audioLanguage)
+        assertEquals("pt", engine.lastOptions?.textLanguage)
+    }
+
+    @Test
+    fun automaticoEALinguaDaAppSemLegendas() {
+        val p = playback()
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        assertEquals(TrackWish(audioLanguage = "pt", textLanguage = null, surround = false), engine.wishes.single())
+        assertNull(engine.lastOptions?.textLanguage)
+    }
+
+    @Test
+    fun asLegendasQueAindaNaoChegaramDecidemSeQuandoChegarem() {
+        host.prefs = Prefs(subtitleLanguage = "pt")
+        val p = playback()
+        engine.tracksArrived = setOf(C.TRACK_TYPE_AUDIO)
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        engine.tracksArrived = setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_TEXT)
+        p.onTracksChanged(engine)
+        p.onTracksChanged(engine)
+        assertEquals(listOf(true to true, false to true), engine.wishes.map { it.audio to it.text })
+    }
+
+    @Test
+    fun aEscolhaAMaoGanhaAteMudarDeCanal() {
+        host.prefs = Prefs(audioLanguage = "en", subtitleLanguage = "pt")
+        val p = playback()
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        p.onManualTrack(C.TRACK_TYPE_AUDIO)
+        // O mesmo canal noutro ponto (catch-up, um salto): o áudio escolhido à mão fica, as legendas voltam a decidir-se.
+        val cu = Catchup(channel, "Programa", 0L, 3_600_000L)
+        p.tuneNow(PlaybackRequest(channel, cu, 0L, listOf(ts)))
+        assertNull(engine.lastOptions?.audioLanguage)
+        assertEquals("pt", engine.lastOptions?.textLanguage)
+        p.onTracksChanged(engine)
+        assertEquals(TrackWish("en", "pt", surround = false, audio = false, text = true), engine.wishes.last())
+        // Outro canal: volta a valer a definição.
+        p.tuneNow(PlaybackRequest(channel.copy(key = "k2"), null, 0L, listOf(hls)))
+        assertEquals("en", engine.lastOptions?.audioLanguage)
+        p.onTracksChanged(engine)
+        assertEquals(TrackWish("en", "pt", surround = false), engine.wishes.last())
+    }
+
+    @Test
+    fun oTelemovelNaoEscolheSurroundEOSegundoCanalNaoLigaLegendas() {
+        host.prefs = Prefs(surroundDefault = true, subtitleLanguage = "pt")
+        val phone = playback(PlaybackPolicy.PHONE)
+        phone.tuneNow(live())
+        phone.onTracksChanged(engine)
+        assertEquals(false, engine.wishes.last().surround)
+        val second = FakeEngine()
+        val p = playback(PlaybackPolicy.SECOND, second)
+        p.tuneNow(live())
+        p.onTracksChanged(second)
+        assertEquals(TrackWish("pt", null, surround = false, audio = true, text = false), second.wishes.single())
     }
 
     // ---- Catch-up do Stalker: a gravação do programa, e o salto até ao ponto pedido -----------------

@@ -91,7 +91,6 @@ import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
 import cc.slokker.itv.ui.player.engine.ZapTrace
 import cc.slokker.itv.ui.player.engine.cannotDecode
-import cc.slokker.itv.ui.player.engine.selectSurroundTrack
 import cc.slokker.itv.ui.player.engine.videoFormat
 import cc.slokker.itv.ui.player.engine.titleCard
 import cc.slokker.itv.ui.player.engine.status
@@ -384,7 +383,7 @@ fun PlayerScreen(vm: AppViewModel) {
         videoView?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
-    // O que é só da TV (o resto dos eventos trata-o o ChannelPlayback): proporção, AFR, áudio surround, legendas.
+    // O que é só da TV (o resto dos eventos trata-o o ChannelPlayback, também as faixas): proporção, AFR, legendas.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -397,10 +396,6 @@ fun PlayerScreen(vm: AppViewModel) {
                 // AFR: a cadência que o formato diz (HLS com FRAME-RATE, VLC); no TS mede-se pelas imagens.
                 val video = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }?.getTrackFormat(0)
                 frameRate.fromFormat(video?.frameRate ?: player.videoFormat()?.frameRate ?: 0f)
-                // Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
-                if (latestPrefs.surroundDefault && !playback.audioChosen) {
-                    playback.audioChosen = selectSurroundTrack(player, tracks)
-                }
             }
 
             override fun onCues(cueGroup: CueGroup) {
@@ -1077,7 +1072,7 @@ fun PlayerScreen(vm: AppViewModel) {
             trackPicker?.let { type ->
                 TrackPicker(
                     title = if (type == C.TRACK_TYPE_AUDIO) LocalStrings.current.audio else LocalStrings.current.subtitles,
-                    options = trackOptions(stream.tracks, type, player, allowOff = type == C.TRACK_TYPE_TEXT),
+                    options = trackOptions(stream.tracks, type, player, allowOff = type == C.TRACK_TYPE_TEXT, onManual = playback::onManualTrack),
                     onPicked = { trackPicker = null },
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -1176,7 +1171,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInHorizontally { it / 4 },
                 exit = fadeOut() + slideOutHorizontally { it / 4 },
             ) {
-                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, onClose = {
+                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, onManualTrack = playback::onManualTrack, onClose = {
                     showSettings = false
                     settingsAtEpg = false
                     settingsAtConnection = false

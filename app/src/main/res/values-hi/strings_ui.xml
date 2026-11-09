@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS सीधे TV या रिसीवर पर जाते हैं</string>
     <string name="surround_default">डिफ़ॉल्ट रूप से सराउंड ट्रैक</string>
     <string name="surround_default_sub">चैनल में 5.1 हो तो उसे चुनता है</string>
+    <string name="audio_language">ऑडियो की भाषा</string>
+    <string name="audio_language_sub">ऑटो: ऐप की भाषा, जब चैनल में हो</string>
+    <string name="subtitle_language">सबटाइटल की भाषा</string>
+    <string name="subtitle_language_sub">चैनल में हों तो इस भाषा के सबटाइटल चालू करता है</string>
     <string name="audio_decoder">ऑडियो डिकोडर</string>
     <string name="accent">एक्सेंट रंग</string>
     <string name="accent_name">बैंगनी</string>

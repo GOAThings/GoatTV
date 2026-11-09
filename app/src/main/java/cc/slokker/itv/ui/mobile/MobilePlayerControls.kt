@@ -520,7 +520,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                 PlayerOption.AUDIO, PlayerOption.SUBTITLES -> {
                     val text = option == PlayerOption.SUBTITLES
                     Section(option.label()) {
-                        val options = trackOptions(tracks, if (text) C.TRACK_TYPE_TEXT else C.TRACK_TYPE_AUDIO, playback.player, text)
+                        val options = trackOptions(tracks, if (text) C.TRACK_TYPE_TEXT else C.TRACK_TYPE_AUDIO, playback.player, text, playback.core::onManualTrack)
                         if (options.isEmpty()) Note(s.noTracks)
                         options.forEach { o ->
                             MenuRow(o.label, null, checked = o.selected) {

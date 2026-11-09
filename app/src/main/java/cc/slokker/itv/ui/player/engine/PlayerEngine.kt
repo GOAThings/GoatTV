@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
@@ -52,7 +53,7 @@ internal class PlayerEngine(
         override fun onRenderedFirstFrame() = playback.onFirstFrame(this@PlayerEngine)
         override fun onPlayerError(error: PlaybackException) = playback.onError(this@PlayerEngine, error)
         override fun onTracksChanged(tracks: Tracks) {
-            if (!isVlc && tracks.cannotDecode()) playback.onUndecodable(this@PlayerEngine)
+            if (!isVlc && tracks.cannotDecode()) playback.onUndecodable(this@PlayerEngine) else playback.onTracksChanged(this@PlayerEngine)
         }
     }
 
@@ -79,6 +80,8 @@ internal class PlayerEngine(
                 reconnectMs = options.reconnectMs,
                 gate = gate,
                 startMs = options.startMs,
+                audioLanguage = options.audioLanguage,
+                textLanguage = options.textLanguage,
             )
             player.prepare()
             player.play()
@@ -127,6 +130,10 @@ internal class PlayerEngine(
         player.removeListener(listener)
         player.release()
     }
+
+    // O VLC já escolheu as línguas ao abrir (e não diz quantos canais tem cada faixa, para o surround).
+    override fun chooseTracks(wish: TrackWish): Set<Int> =
+        if (isVlc) setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_TEXT) else player.chooseTracks(player.currentTracks, wish)
 
     override fun ringContinues(): Boolean = timeshift?.handleEnded(player) == true
 

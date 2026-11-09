@@ -874,6 +874,10 @@ class Strings(context: Context) {
     val passthroughSub get() = s(R.string.passthrough_sub)
     val surroundDefault get() = s(R.string.surround_default)
     val surroundDefaultSub get() = s(R.string.surround_default_sub)
+    val audioLanguage get() = s(R.string.audio_language)
+    val audioLanguageSub get() = s(R.string.audio_language_sub)
+    val subtitleLanguage get() = s(R.string.subtitle_language)
+    val subtitleLanguageSub get() = s(R.string.subtitle_language_sub)
     val audioDecoder get() = s(R.string.audio_decoder)
 
     // ---- Aspeto: vidro e grupos ----

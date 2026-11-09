@@ -2,6 +2,7 @@ package cc.slokker.itv.ui.player.engine
 
 import androidx.media3.common.PlaybackException
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.Languages
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.ui.AppViewModel
@@ -24,6 +25,7 @@ internal class AppPlaybackHost(
     override fun exitCatchup() = vm.exitCatchup()
     override fun seekCatchup(positionMs: Long) = vm.seekCatchup(positionMs)
     override fun onVlcFallback() = vm.showToast(I18n.s.usingVlc)
+    override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
@@ -49,6 +51,7 @@ internal class SecondPlaybackHost(private val vm: AppViewModel, private val late
     override fun exitCatchup() = Unit
     override fun seekCatchup(positionMs: Long) = Unit
     override fun onVlcFallback() = Unit
+    override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo? = null
 }

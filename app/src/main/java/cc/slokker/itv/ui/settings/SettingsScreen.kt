@@ -136,6 +136,7 @@ internal fun settingItems(
     vm: AppViewModel,
     player: Player?,
     playing: Channel?,
+    onManualTrack: (Int) -> Unit,
     push: (Route, String) -> Unit,
     pop: () -> Unit,
     popNested: () -> Unit,
@@ -150,8 +151,8 @@ internal fun settingItems(
         Route.LogoSource -> logoSourceItems(vm, nav)
         Route.EpgCountries -> epgCountriesItems(vm, nav)
         is Route.EpgCountry -> epgCountryItems(route, vm, nav)
-        Route.Audio -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_AUDIO, player, allowOff = false)
-        Route.Subtitles -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_TEXT, player, allowOff = true)
+        Route.Audio -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_AUDIO, player, allowOff = false, onManualTrack)
+        Route.Subtitles -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_TEXT, player, allowOff = true, onManualTrack)
         Route.StreamInfo -> {
             val format by vm.streamFormat.collectAsStateWithLifecycle()
             streamInfo(player, format)
@@ -963,8 +964,8 @@ private fun guideLabel(name: String?, country: String?) = listOfNotNull(name, co
 
 // ---- Faixas de áudio e legendas, informação do stream ---------------------------------------
 
-private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean): List<Item> {
-    val options = trackOptions(tracks, type, player, allowOff)
+private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: (Int) -> Unit): List<Item> {
+    val options = trackOptions(tracks, type, player, allowOff, onManual)
     if (options.isEmpty()) return listOf(Item.Info("none", I18n.s.noTracks, ""))
     return options.map { o -> Item.Check(o.key, o.label, o.selected, o.details?.takeIf { it.isNotEmpty() }) { o.select() } }
 }

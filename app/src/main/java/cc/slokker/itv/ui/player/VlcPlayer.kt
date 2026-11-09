@@ -63,6 +63,8 @@ internal class VlcPlayer(
     private var userAgent: String? = null
     private var referrer: String? = null
     private var startMs = 0L
+    private var audioLanguage: String? = null
+    private var textLanguage: String? = null
     private var mediaItem: MediaItem? = null
 
     private var playbackState = Player.STATE_IDLE
@@ -110,14 +112,17 @@ internal class VlcPlayer(
 
     /**
      * A stream a tocar (o equivalente ao `setMediaSource` do ExoPlayer); começa com [prepare]. [startMs]: onde começar
-     * dentro dela.
+     * dentro dela. [audioLanguage]/[textLanguage]: as línguas preferidas (ISO 639-1), que o VLC escolhe ao abrir
+     * (compara-as com as das faixas nas várias formas, "pt"/"por"); null = as do stream.
      */
-    fun setStream(url: String, userAgent: String?, referrer: String?, startMs: Long = 0L) {
+    fun setStream(url: String, userAgent: String?, referrer: String?, startMs: Long = 0L, audioLanguage: String? = null, textLanguage: String? = null) {
         this.url = url
         // Cada um é uma opção do libVLC: só texto, sem nada que a possa partir em duas.
         this.userAgent = userAgent?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
         this.referrer = referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }
         this.startMs = startMs.coerceAtLeast(0L)
+        this.audioLanguage = audioLanguage?.takeIf { LANGUAGE.matches(it) }
+        this.textLanguage = textLanguage?.takeIf { LANGUAGE.matches(it) }
         mediaItem = MediaItem.fromUri(url)
         if (playbackState != Player.STATE_IDLE) vlc.stop()
         playbackState = Player.STATE_IDLE
@@ -245,6 +250,8 @@ internal class VlcPlayer(
             userAgent?.let { addOption(":http-user-agent=$it") }
             referrer?.let { addOption(":http-referrer=$it") }
             if (startMs > 0) addOption(":start-time=${startMs / 1000.0}")
+            audioLanguage?.let { addOption(":audio-language=$it") }
+            textLanguage?.let { addOption(":sub-language=$it") }
         }
         vlc.media = media
         media.release()
@@ -348,5 +355,10 @@ internal class VlcPlayer(
         if (released) return
         val muted = C.TRACK_TYPE_AUDIO in params.disabledTrackTypes
         vlc.volume = if (muted) 0 else (volume * 100).toInt().coerceIn(0, 100)
+    }
+
+    private companion object {
+        /** Uma língua como opção do libVLC: só o código, nada que a possa partir em duas. */
+        val LANGUAGE = Regex("[a-z]{2,3}")
     }
 }

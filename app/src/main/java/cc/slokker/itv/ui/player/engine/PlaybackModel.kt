@@ -35,20 +35,29 @@ internal data class PlaybackPolicy(
     val diagnostics: Boolean,
     /** Áudio Dolby/DTS em bruto, conforme as definições (o segundo canal é sempre PCM). */
     val passthrough: Boolean,
+    /** A faixa surround por defeito, conforme as definições (só a TV tem a opção). */
+    val surroundDefault: Boolean,
+    /** Liga as legendas na língua preferida (o segundo canal não mostra legendas). */
+    val subtitleLanguage: Boolean,
 ) {
     companion object {
         val TV = PlaybackPolicy(
             maxStartRetries = 3, reconnectFloorMs = 1_000L, alwaysRetry = false, timeshift = true,
             vlcFallback = true, learnFormat = true, diagnostics = true, passthrough = true,
+            surroundDefault = true, subtitleLanguage = true,
         )
 
-        /** Como a TV; a medição da ligação não tem onde aparecer no telemóvel. */
-        val PHONE = TV.copy(diagnostics = false)
+        /** Como a TV; a medição da ligação não tem onde aparecer no telemóvel, nem o surround por defeito (é da TV). */
+        val PHONE = TV.copy(diagnostics = false, surroundDefault = false)
 
-        /** O segundo canal (imagem na imagem): outra lista, sem pausa, sem VLC, PCM, a tentar sempre de 3 em 3 s. */
+        /**
+         * O segundo canal (imagem na imagem): outra lista, sem pausa, sem VLC, PCM, a tentar sempre de 3 em 3 s.
+         * O áudio segue a língua preferida (quando é o que se ouve); legendas não há.
+         */
         val SECOND = PlaybackPolicy(
             maxStartRetries = Int.MAX_VALUE, reconnectFloorMs = 3_000L, alwaysRetry = true, timeshift = false,
             vlcFallback = false, learnFormat = false, diagnostics = false, passthrough = false,
+            surroundDefault = false, subtitleLanguage = false,
         )
     }
 }
@@ -135,6 +144,9 @@ internal interface PlaybackHost {
     fun exitCatchup()
     fun seekCatchup(positionMs: Long)
 
+    /** A língua da app (ISO 639-1): a do áudio em "Automático". */
+    val appLanguage: String?
+
     /** O canal passou para o VLC (o ExoPlayer não o descodifica). */
     fun onVlcFallback()
 
@@ -154,6 +166,9 @@ internal data class OpenOptions(
     val reconnectMs: Long,
     /** Onde começar dentro da stream (a gravação do Stalker no catch-up); 0 = o início. */
     val startMs: Long = 0L,
+    /** As línguas preferidas, para o VLC escolher ao abrir (null = as do stream; ver [StreamEngine.chooseTracks]). */
+    val audioLanguage: String? = null,
+    val textLanguage: String? = null,
 )
 
 /**
@@ -186,6 +201,12 @@ internal interface StreamEngine {
 
     /** A leitura do anel acabou: true se continuou sozinho (fim de uma ligação, ou o ponto saiu do anel). */
     fun ringContinues(): Boolean
+
+    /**
+     * As faixas chegaram: escolhe as de [wish] (ver [TrackPick]). Devolve os tipos (C.TRACK_TYPE_AUDIO/TEXT) já
+     * decididos; o VLC escolhe as línguas sozinho ao abrir ([OpenOptions.audioLanguage]).
+     */
+    fun chooseTracks(wish: TrackWish): Set<Int>
 
     /** De meio em meio segundo: o estado da pausa do direto. */
     fun tick(programmeStart: (Long) -> Long?)

@@ -649,6 +649,7 @@ internal fun SettingsSheet(
     onClose: () -> Unit,
     startAtEpg: Boolean = false,
     startAtConnection: Boolean = false,
+    onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
@@ -660,7 +661,7 @@ internal fun SettingsSheet(
             .glass(ItvShapes.Panel)
             .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
-        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection)
+        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, onManualTrack = onManualTrack)
     }
     }
 }

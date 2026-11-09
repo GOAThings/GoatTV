@@ -448,6 +448,10 @@
     <string name="passthrough_sub">Dolby/DTS go straight to the TV or receiver</string>
     <string name="surround_default">Surround track by default</string>
     <string name="surround_default_sub">Picks 5.1 when the channel has it</string>
+    <string name="audio_language">Audio language</string>
+    <string name="audio_language_sub">Auto: the app\'s language, when the channel has it</string>
+    <string name="subtitle_language">Subtitle language</string>
+    <string name="subtitle_language_sub">Turns subtitles on in this language when the channel has them</string>
     <string name="audio_decoder">Audio decoder</string>
     <string name="accent">Accent colour</string>
     <string name="accent_name">Violet</string>

@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS をテレビやレシーバーにそのまま送ります</string>
     <string name="surround_default">サラウンドトラックを優先</string>
     <string name="surround_default_sub">チャンネルに 5.1 がある場合は選択します</string>
+    <string name="audio_language">音声の言語</string>
+    <string name="audio_language_sub">自動：チャンネルにあればアプリの言語</string>
+    <string name="subtitle_language">字幕の言語</string>
+    <string name="subtitle_language_sub">チャンネルにあればこの言語の字幕をオンにします</string>
     <string name="audio_decoder">音声デコーダー</string>
     <string name="accent">アクセントカラー</string>
     <string name="accent_name">バイオレット</string>

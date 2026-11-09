@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS передаются прямо на ТВ или ресивер</string>
     <string name="surround_default">Объёмная дорожка по умолчанию</string>
     <string name="surround_default_sub">Выбирает 5.1, если канал её поддерживает</string>
+    <string name="audio_language">Язык звука</string>
+    <string name="audio_language_sub">Авто: язык приложения, если он есть на канале</string>
+    <string name="subtitle_language">Язык субтитров</string>
+    <string name="subtitle_language_sub">Включает субтитры на этом языке, если они есть на канале</string>
     <string name="audio_decoder">Аудиодекодер</string>
     <string name="accent">Цвет акцента</string>
     <string name="accent_name">Фиолетовый</string>

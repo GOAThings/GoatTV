@@ -183,6 +183,8 @@ fun SettingsContent(
     startAtNewPlaylist: Boolean = false,
     startAtEpgFor: Channel? = null,
     startAtConnection: Boolean = false,
+    /** Uma faixa escolhida à mão (Canal atual → Áudio/Legendas): ganha à língua preferida até mudar de canal. */
+    onManualTrack: (Int) -> Unit = {},
 ) {
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {
@@ -298,7 +300,7 @@ fun SettingsContent(
                     pop()
                 }
                 else -> {
-                    val items = settingItems(entry.route, vm, player, playing, ::push, ::pop, ::popNested, ::replace, ::popToCurrent)
+                    val items = settingItems(entry.route, vm, player, playing, onManualTrack, ::push, ::pop, ::popNested, ::replace, ::popToCurrent)
                     Column {
                         // Ligação: o veredicto fica fixo por cima da lista (dentro dela, a lista deslizava até à
                         // primeira linha com foco e cortava-o).

@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS langsung dikirim ke TV atau receiver</string>
     <string name="surround_default">Trek surround secara default</string>
     <string name="surround_default_sub">Memilih 5.1 jika saluran memilikinya</string>
+    <string name="audio_language">Bahasa audio</string>
+    <string name="audio_language_sub">Otomatis: bahasa aplikasi, jika saluran memilikinya</string>
+    <string name="subtitle_language">Bahasa subtitle</string>
+    <string name="subtitle_language_sub">Menyalakan subtitle dalam bahasa ini jika saluran memilikinya</string>
     <string name="audio_decoder">Decoder audio</string>
     <string name="accent">Warna aksen</string>
     <string name="accent_name">Violet</string>

@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS를 TV나 리시버로 바로 보내요</string>
     <string name="surround_default">기본으로 서라운드 트랙</string>
     <string name="surround_default_sub">채널에 5.1이 있으면 선택해요</string>
+    <string name="audio_language">오디오 언어</string>
+    <string name="audio_language_sub">자동: 채널에 있으면 앱 언어</string>
+    <string name="subtitle_language">자막 언어</string>
+    <string name="subtitle_language_sub">채널에 있으면 이 언어의 자막을 켜요</string>
     <string name="audio_decoder">오디오 디코더</string>
     <string name="accent">강조 색상</string>
     <string name="accent_name">바이올렛</string>

@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS vão direto para a TV ou o recetor</string>
     <string name="surround_default">Faixa surround por defeito</string>
     <string name="surround_default_sub">Escolhe 5.1 quando o canal tem</string>
+    <string name="audio_language">Idioma do áudio</string>
+    <string name="audio_language_sub">Auto: o idioma da app, quando o canal o tem</string>
+    <string name="subtitle_language">Idioma das legendas</string>
+    <string name="subtitle_language_sub">Liga as legendas neste idioma quando o canal as tem</string>
     <string name="audio_decoder">Descodificador de áudio</string>
     <string name="accent">Cor de destaque</string>
     <string name="accent_name">Violeta</string>

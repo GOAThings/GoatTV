@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.settings
 
 import androidx.compose.ui.graphics.Brush
+import cc.slokker.itv.data.Languages
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
@@ -118,6 +119,23 @@ object SettingsCatalog {
         Prefs.Key.SURROUND_DEFAULT, { it.surroundDefault }, { it.surroundDefaultSub },
         read = { it.surroundDefault },
         tv = Place(TvPage.PLAYBACK, 20, TvSection.AUDIO),
+    )
+    /** Automático: a língua da app, quando o canal a tem (ver ChannelPlayback). */
+    val AUDIO_LANGUAGE = Setting.Choice(
+        Prefs.Key.AUDIO_LANGUAGE, { it.audioLanguage },
+        options = { s -> listOf<Pair<Any?, String>>("" to s.auto) + languages(s) },
+        read = { it.prefs.audioLanguage },
+        subtitle = { it.audioLanguageSub },
+        tv = Place(TvPage.PLAYBACK, 5, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 30, PhoneSection.PICTURE_SOUND),
+    )
+    val SUBTITLE_LANGUAGE = Setting.Choice(
+        Prefs.Key.SUBTITLE_LANGUAGE, { it.subtitleLanguage },
+        options = { s -> listOf<Pair<Any?, String>>("" to s.subtitlesOff) + languages(s) },
+        read = { it.prefs.subtitleLanguage },
+        subtitle = { it.subtitleLanguageSub },
+        tv = Place(TvPage.PLAYBACK, 10, TvSection.SUBTITLES),
+        phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.PICTURE_SOUND),
     )
     val AUDIO_DECODER = Setting.Choice(
         Prefs.Key.AUDIO_DECODER, { it.audioDecoder },
@@ -326,7 +344,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST,
@@ -352,6 +370,12 @@ object SettingsCatalog {
 
     private val CATCHUP_OFFSETS = (-12..12).map { it * 60 }
 
+    /** As línguas a escolher, com o nome na língua da app e por ordem alfabética dela. */
+    private fun languages(s: Strings): List<Pair<Any?, String>> {
+        val collator = java.text.Collator.getInstance(s.locale)
+        return Languages.CHOICES.map { it to Languages.displayName(it, s.locale) }.sortedWith(compareBy(collator) { it.second })
+    }
+
     private fun offsetLabel(min: Int, s: Strings): String =
         if (min == 0) s.noOffset else (if (min > 0) "+" else "−") + "${abs(min) / 60} h" + if (abs(min) % 60 != 0) " 30" else ""
 }
@@ -376,6 +400,7 @@ enum class TvPage { PLAYBACK, GENERAL, ZAPPING, APPEARANCE, GUIDE }
 enum class TvSection(val headerKey: String?, val title: ((Strings) -> String)?) {
     MAIN(null, null),
     AUDIO("audio", { it.audioSection }),
+    SUBTITLES("hsubs", { it.subtitles }),
     LANGUAGE_TEXT("hlang", { it.sectionLanguageText }),
     CHANNEL_LIST("hlist", { it.sectionChannelList }),
     PANELS_COLOUR("hpanels", { it.sectionPanelsColour }),

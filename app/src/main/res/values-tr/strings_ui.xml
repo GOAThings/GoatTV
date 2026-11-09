@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS doğrudan TV\'ye veya alıcıya gider</string>
     <string name="surround_default">Varsayılan olarak surround parça</string>
     <string name="surround_default_sub">Kanalda varsa 5.1\'i seçer</string>
+    <string name="audio_language">Ses dili</string>
+    <string name="audio_language_sub">Otomatik: kanalda varsa uygulamanın dili</string>
+    <string name="subtitle_language">Altyazı dili</string>
+    <string name="subtitle_language_sub">Kanalda varsa altyazıları bu dilde açar</string>
     <string name="audio_decoder">Ses kod çözücü</string>
     <string name="accent">Vurgu rengi</string>
     <string name="accent_name">Mor</string>

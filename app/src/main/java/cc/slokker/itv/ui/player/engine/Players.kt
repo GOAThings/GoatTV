@@ -209,20 +209,39 @@ private class HdrVideoRenderer(builder: Builder, private val context: Context, p
     }
 }
 
-/** Escolhe a faixa de áudio com mais canais (5.1/7.1), se houver. Devolve true se decidiu. */
-internal fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
-    val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-    if (audio.isEmpty()) return false
-    val best = audio.flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
-        .maxByOrNull { (g, i) -> g.getTrackFormat(i).channelCount }
-        ?: return true
-    val (group, index) = best
-    if (group.getTrackFormat(index).channelCount > 2 && !group.isTrackSelected(index)) {
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+/**
+ * Escolhe as faixas de [tracks] conforme [wish] (a língua preferida e, na TV, o surround; ver [TrackPick]).
+ * Devolve os tipos (C.TRACK_TYPE_AUDIO/TEXT) que já se puderam decidir: um tipo sem faixas ainda fica por decidir.
+ */
+internal fun Player.chooseTracks(tracks: Tracks, wish: TrackWish): Set<Int> {
+    val decided = HashSet<Int>()
+    val textOff = C.TRACK_TYPE_TEXT in trackSelectionParameters.disabledTrackTypes
+    for (type in listOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_TEXT)) {
+        if (if (type == C.TRACK_TYPE_AUDIO) !wish.audio else !wish.text) continue
+        val groups = tracks.groups.filter { it.type == type }
+        if (groups.isEmpty()) continue
+        decided += type
+        val all = groups.flatMap { g -> (0 until g.length).map { g to it } }
+        val infos = all.map { (g, i) ->
+            val f = g.getTrackFormat(i)
+            TrackInfo(
+                f.language, f.label, f.channelCount, g.isTrackSupported(i),
+                selected = g.isTrackSelected(i) && !(type == C.TRACK_TYPE_TEXT && textOff),
+                forced = f.selectionFlags and C.SELECTION_FLAG_FORCED != 0,
+            )
+        }
+        val index = if (type == C.TRACK_TYPE_AUDIO) {
+            TrackPick.audio(infos, wish.audioLanguage, wish.surround)
+        } else {
+            TrackPick.text(infos, wish.textLanguage)?.takeIf { !infos[it].selected }
+        } ?: continue
+        val (group, i) = all[index]
+        trackSelectionParameters = trackSelectionParameters.buildUpon()
+            .apply { if (type == C.TRACK_TYPE_TEXT) setTrackTypeDisabled(type, false) }
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
             .build()
     }
-    return true
+    return decided
 }
 
 /**
@@ -231,6 +250,8 @@ internal fun selectSurroundTrack(player: Player, tracks: Tracks): Boolean {
  * [timeshift]: abrir pelo anel do "pausar o direto" (só no ExoPlayer); [reconnectMs] é de quanto em quanto
  * tempo o gravador dele volta a ligar se a ligação cair. [gate]: as ligações desta tentativa (ver [StreamGate.next]).
  * [startMs]: onde começar dentro da stream (o catch-up do Stalker abre a gravação do programa e salta para o ponto).
+ * [audioLanguage]/[textLanguage]: as línguas preferidas, que o VLC escolhe sozinho ao abrir (no ExoPlayer escolhe o
+ * [ChannelPlayback] quando as faixas chegam, ver [chooseTracks]).
  */
 internal fun Player.loadStream(
     candidate: StreamCandidate,
@@ -242,9 +263,11 @@ internal fun Player.loadStream(
     reconnectMs: Long = 0L,
     gate: StreamGate? = null,
     startMs: Long = 0L,
+    audioLanguage: String? = null,
+    textLanguage: String? = null,
 ) {
     when (this) {
-        is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs)
+        is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is ExoPlayer -> {
             val direct = httpFactory(channel, userAgent, transfer)
             // Uma ligação de cada vez: a desta tentativa só abre depois de fechar a anterior (ver StreamGate).

@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS 直接输出到电视或功放</string>
     <string name="surround_default">默认使用环绕声音轨</string>
     <string name="surround_default_sub">频道提供 5.1 时自动选择</string>
+    <string name="audio_language">音频语言</string>
+    <string name="audio_language_sub">自动：频道提供时使用应用的语言</string>
+    <string name="subtitle_language">字幕语言</string>
+    <string name="subtitle_language_sub">频道提供时开启该语言的字幕</string>
     <string name="audio_decoder">音频解码器</string>
     <string name="accent">强调色</string>
     <string name="accent_name">紫罗兰</string>

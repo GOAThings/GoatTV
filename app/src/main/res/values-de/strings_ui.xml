@@ -447,6 +447,10 @@
     <string name="passthrough_sub">Dolby/DTS gehen direkt an TV oder Receiver</string>
     <string name="surround_default">Standardmäßig Surround-Spur</string>
     <string name="surround_default_sub">Wählt 5.1, wenn der Sender es anbietet</string>
+    <string name="audio_language">Audiosprache</string>
+    <string name="audio_language_sub">Auto: die Sprache der App, wenn der Sender sie anbietet</string>
+    <string name="subtitle_language">Untertitelsprache</string>
+    <string name="subtitle_language_sub">Schaltet Untertitel in dieser Sprache ein, wenn der Sender sie anbietet</string>
     <string name="audio_decoder">Audio-Decoder</string>
     <string name="accent">Akzentfarbe</string>
     <string name="accent_name">Violett</string>
