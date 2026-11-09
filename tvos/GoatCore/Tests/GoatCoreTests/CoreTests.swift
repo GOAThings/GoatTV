@@ -74,6 +74,17 @@ enum CoreTests {
         ("ringServerRefusesOtherPaths", ringServerRefusesOtherPaths),
         ("ringServerAnswers502WhenTheStreamNeverCame", ringServerAnswers502WhenTheStreamNeverCame),
         ("ringServerStopCutsAWaitingResponse", ringServerStopCutsAWaitingResponse),
+        ("openRetryBusyTriesFastAndOften", openRetryBusyTriesFastAndOften),
+        ("openRetryNotFoundOnceMore", openRetryNotFoundOnceMore),
+        ("openRetryOtherErrorsShorter", openRetryOtherErrorsShorter),
+        ("zapPacerOnePressOpensAtOnce", zapPacerOnePressOpensAtOnce),
+        ("zapPacerFlippingOpensWhereYouStop", zapPacerFlippingOpensWhereYouStop),
+        ("zapPacerOffAndFixed", zapPacerOffAndFixed),
+        ("frameRateSnap", frameRateSnap),
+        ("frameRateCounter", frameRateCounter),
+        ("afrSessionModes", afrSessionModes),
+        ("prefsAfrModeKeepsTheOldKey", prefsAfrModeKeepsTheOldKey),
+        ("prefsNewKeysAcceptOnlyTheirOptions", prefsNewKeysAcceptOnlyTheirOptions),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.

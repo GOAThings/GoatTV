@@ -24,8 +24,13 @@ public struct Prefs: Equatable, Sendable {
     public var engine = "exo"
     /// "hw" ou "sw" (descodificador de vídeo).
     public var decoder = "hw"
-    /// Auto frame rate: a TV muda de refresh rate para a cadência do canal.
+    /// Auto frame rate: a TV muda de refresh rate para a cadência do canal. Continua a ser o ligado/desligado (as
+    /// versões antigas só leem esta); o modo ([afrMode]) diz quando muda, e [afrModeValues] grava as duas a condizer.
     public var afr = false
+    /// Quando o AFR muda o modo da TV ([AfrMode]); desligado sempre que [afr] for false.
+    public var afrMode = AfrMode.off
+    /// A cadência a usar quando a do canal não se consegue medir ([AfrFallback]).
+    public var afrFallback = AfrFallback.none
     /// "auto" (HDR quando o canal é HDR) ou "sdr".
     public var hdr = "auto"
     /// Desentrelaçar no VLC (só tvOS): "yadif2x", "yadif" ou "off".
@@ -38,11 +43,17 @@ public struct Prefs: Equatable, Sendable {
     public var timeshift = true
     /// Faixa surround por defeito.
     public var surroundDefault = false
+    /// A língua preferida do áudio (ISO 639-1); vazio = automático (a da app, quando o canal a tem).
+    public var audioLanguage = ""
+    /// A língua das legendas (ISO 639-1); vazio = sem legendas além das que o stream marca.
+    public var subtitleLanguage = ""
     /// Escala da interface, em % (80–120).
     public var uiScale = 100
     // Mudança de canal
     public var upDown = UpDown.zap
     public var reverseZap = false
+    /// O atraso ao mudar de canal, em ms ([ZapDelay]: automático, desligado ou um tempo fixo).
+    public var zapDelayMs = ZapDelay.auto
     public var infoSeconds = 4
     public var startup = Startup.last
     /// Telemóvel: ao abrir, o ecrã inicial (recentes e grupos) ou já o último canal a dar.
@@ -69,6 +80,11 @@ public struct Prefs: Equatable, Sendable {
     public var epgRefreshHours = 12
     public var epgOffsetMin = 0
     public var epgInList = true
+    /// Correção da hora pedida no catch-up, em minutos (o relógio ou o fuso do fornecedor errado).
+    public var catchupOffsetMin = 0
+    // Gravações
+    public var recordPaddingBeforeMin = 1
+    public var recordPaddingAfterMin = 2
     // Controlo parental
     public var pinHash: String?
     public var lockedGroups: Set<String> = []
@@ -90,6 +106,35 @@ public struct Prefs: Equatable, Sendable {
             }
         }
     }
+    /// Quando o AFR muda o modo da TV: nunca, só no primeiro canal (depois fica, sem o ecrã apagar a cada zap; volta
+    /// ao normal ao sair do leitor) ou em cada canal. Desligado não se grava: é `afr` a false (ver [afrModeValues]).
+    public enum AfrMode {
+        public static let off = "off", start = "start", always = "always"
+        public static let all = [off, start, always]
+    }
+
+    /// A cadência assumida quando a do canal não se mede (nenhuma, 50 ou 59,94 imagens por segundo).
+    public enum AfrFallback {
+        public static let none = "none", hz50 = "50", hz5994 = "59.94"
+        public static let all = [none, hz50, hz5994]
+        public static func fps(_ value: String) -> Double? {
+            switch value {
+            case hz50: return 50
+            case hz5994: return 59.94
+            default: return nil
+            }
+        }
+    }
+
+    /// O atraso ao mudar de canal (ver ZapPacer): automático, desligado, ou sempre 1 ou 2 s (em ms).
+    public enum ZapDelay {
+        public static let auto = -1, off = 0
+        public static let all = [auto, off, 1_000, 2_000]
+    }
+
+    /// As margens das gravações, em minutos (as mesmas opções do Android).
+    public static let paddingOptions = [0, 1, 2, 5, 10]
+
     public enum UpDown { public static let zap = "zap", list = "list" }
     public enum Startup { public static let last = "last", list = "list" }
     public enum PhoneStartup { public static let home = "home", last = "last" }
@@ -153,14 +198,20 @@ public struct Prefs: Equatable, Sendable {
         freezeFrame = bool("freeze_frame", d.freezeFrame)
         timeshift = bool("timeshift", d.timeshift)
         surroundDefault = bool("surround_default", d.surroundDefault)
+        audioLanguage = Prefs.language(s["audio_language"])
+        subtitleLanguage = Prefs.language(s["subtitle_language"])
         uiScale = clamp(int("ui_scale", d.uiScale), 80, 120)
         engine = str("engine", d.engine, ["exo", "vlc"])
         decoder = str("decoder", d.decoder, ["hw", "sw"])
         afr = bool("afr", d.afr)
+        afrMode = Prefs.readAfrMode(s)
+        afrFallback = str("afr_fallback", d.afrFallback, Set(AfrFallback.all))
         hdr = str("hdr", d.hdr, ["auto", "sdr"])
         deinterlace = str("deinterlace", d.deinterlace, ["yadif2x", "yadif", "off"])
         upDown = str("up_down", d.upDown, [UpDown.zap, UpDown.list])
         reverseZap = bool("reverse_zap", d.reverseZap)
+        let zapDelay = int("zap_delay_ms", d.zapDelayMs)
+        zapDelayMs = ZapDelay.all.contains(zapDelay) ? zapDelay : d.zapDelayMs
         infoSeconds = clamp(int("info_seconds", d.infoSeconds), 0, 30)
         startup = str("startup", d.startup, [Startup.last, Startup.list])
         phoneStartup = str("phone_startup", d.phoneStartup, [PhoneStartup.home, PhoneStartup.last])
@@ -186,9 +237,46 @@ public struct Prefs: Equatable, Sendable {
         epgRefreshHours = Prefs.refreshOptions.contains(epgRefresh) ? epgRefresh : d.epgRefreshHours
         epgOffsetMin = clamp(int("epg_offset_min", d.epgOffsetMin), -12 * 60, 12 * 60)
         epgInList = bool("epg_in_list", d.epgInList)
+        catchupOffsetMin = clamp(int("catchup_offset_min", d.catchupOffsetMin), -12 * 60, 12 * 60)
+        let before = int("record_padding_before_min", d.recordPaddingBeforeMin)
+        recordPaddingBeforeMin = Prefs.paddingOptions.contains(before) ? before : d.recordPaddingBeforeMin
+        let after = int("record_padding_after_min", d.recordPaddingAfterMin)
+        recordPaddingAfterMin = Prefs.paddingOptions.contains(after) ? after : d.recordPaddingAfterMin
         pinHash = s["parental_pin_sha256"]?.string.flatMap { $0.count == 64 ? $0 : nil }
         lockedGroups = stringSet("locked_groups")
         settingsPin = bool("settings_pin", d.settingsPin)
+    }
+
+    /// O modo do AFR, como no Android: `afr` a false desliga sempre (as versões antigas só mexem nela); ligada, vale
+    /// `afr_mode` e, sem ele (gravado antes de haver modos), "sempre", que é o que o sim/não fazia. Sem nenhuma, desligado.
+    static func readAfrMode(_ s: JSON) -> String {
+        // Como o Gson do Android: um texto "true" vale, um número não.
+        let raw = s["afr"]
+        let on: Bool?
+        switch raw {
+        case .bool(let b)?: on = b
+        case .string(let t)?: on = t.lowercased() == "true"
+        case .number?: on = false
+        default: on = nil
+        }
+        let mode = s["afr_mode"]?.string.flatMap { $0 == AfrMode.start || $0 == AfrMode.always ? $0 : nil }
+        if on == false { return AfrMode.off }
+        if let mode { return mode }
+        return on == true ? AfrMode.always : AfrMode.off
+    }
+
+    /// O que gravar para o modo [mode] do AFR: as duas chaves a condizer (desligado apaga o modo).
+    public static func afrModeValues(_ mode: String) -> [String: JSON?] {
+        mode == AfrMode.start || mode == AfrMode.always
+            ? ["afr": .bool(true), "afr_mode": .string(mode)]
+            : ["afr": .bool(false), "afr_mode": nil]
+    }
+
+    /// Uma língua das Definições: um código de 2 ou 3 letras (minúsculas), ou vazio.
+    private static func language(_ v: JSON?) -> String {
+        guard case .string(let raw)? = v else { return "" }
+        let code = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        return (2...3).contains(code.count) && code.allSatisfy({ $0 >= "a" && $0 <= "z" }) ? code : ""
     }
 
     private static func isCountryCode(_ s: String) -> Bool {
