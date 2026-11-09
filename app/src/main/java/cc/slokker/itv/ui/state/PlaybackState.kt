@@ -140,12 +140,17 @@ class PlaybackState(
         _catchup.value = Catchup(channel, entry.title, entry.startMs, entry.endMs, positionMs.coerceAtLeast(0))
     }
 
-    /** Avança/recua no catch-up para [positionMs]; passar do direto volta ao direto. */
+    /** Vê uma gravação do disco ([recording] = `file://…`) no lugar do catch-up; o canal a tocar fica o mesmo. */
+    fun startRecording(recording: Catchup) {
+        _catchup.value = recording
+    }
+
+    /** Avança/recua no catch-up para [positionMs]; passar do direto volta ao direto (numa gravação, só o fim). */
     fun seekCatchup(positionMs: Long) {
         val current = _catchup.value ?: return
         val liveEdge = now() - current.startMs - Catchup.MIN_AGE_MS
         _catchup.value = when {
-            positionMs >= liveEdge -> null
+            current.recording == null && positionMs >= liveEdge -> null
             positionMs >= current.durationMs -> null
             else -> current.copy(positionMs = positionMs.coerceAtLeast(0))
         }

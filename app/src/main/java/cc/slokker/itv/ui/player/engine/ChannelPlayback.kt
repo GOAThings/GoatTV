@@ -307,6 +307,12 @@ internal class ChannelPlayback(
             return
         }
         linkFresh = false
+        // Uma gravação deste canal: abre-se o endereço que ela grava (é a mesma ligação).
+        val recordingUrl = if (req.live) host.recordingUrl(req.channel) else null
+        if (index == 0 && recordingUrl != null) {
+            val i = candidates.indexOfFirst { it.url == recordingUrl }
+            if (i > 0) return start(i)
+        }
         val candidate = candidates.getOrNull(index)
         if (candidate == null) {
             // Catch-up do Stalker sem gravação deste programa: diz-se, em vez de ficar a sintonizar.
@@ -319,7 +325,7 @@ internal class ChannelPlayback(
         val prefs = host.prefs
         // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes;
         // uma gravação deste canal também abre pelo anel, para o player ler a ligação dela.
-        val ring = policy.timeshift && timeshift != null && (prefs.timeshift || host.recordingUses(candidate)) && req.live && engine.supportsRing
+        val ring = policy.timeshift && timeshift != null && (prefs.timeshift || candidate.url == recordingUrl) && req.live && engine.supportsRing
         when {
             ring -> Unit
             // Uma gravação no disco não liga ao fornecedor: a gravação que esteja a decorrer continua.

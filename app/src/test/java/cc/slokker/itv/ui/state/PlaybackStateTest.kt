@@ -124,6 +124,21 @@ class PlaybackStateTest {
         assertNull(state.catchup.value)
     }
 
+    /** Uma gravação do disco no lugar do catch-up: o canal a dar fica, e só o fim dela volta ao direto. */
+    @Test
+    fun `a recording plays over the live channel and only its end goes live`() {
+        state.playIn(ch("n1"), "news")
+        val rec = cc.slokker.itv.data.Catchup(Channel(-1, "rec:x", 0, "X", null, ""), "Gravado", clock - 60_000L, clock, 0L, recording = "file:///r.ts")
+        state.startRecording(rec)
+        assertEquals("n1", state.playing.value?.key)
+        assertEquals("file:///r.ts", state.catchup.value?.recording)
+        // Mesmo perto de "agora" (o catch-up do servidor voltava ao direto): numa gravação fica.
+        state.seekCatchup(59_000)
+        assertEquals(59_000L, state.catchup.value?.positionMs)
+        state.seekCatchup(60_000)
+        assertNull(state.catchup.value)
+    }
+
     @Test
     fun `second view zaps its own list and skips locked groups`() {
         val other = PlaylistContent.build(Playlist("p2", PlaylistType.M3U, "Outra", url = "u"), listOf(Category("g", "G")), listOf(

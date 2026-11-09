@@ -27,6 +27,7 @@ internal class AppPlaybackHost(
     override fun onVlcFallback() = vm.showToast(I18n.s.usingVlc)
     override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
+    override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()

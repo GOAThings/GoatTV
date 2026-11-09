@@ -9,6 +9,7 @@ import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.catchupCandidates
 import cc.slokker.itv.data.streamCandidates
 import cc.slokker.itv.ui.common.ErrorInfo
@@ -93,6 +94,12 @@ internal class PlaybackRequest(
             correctionMin: Int = 0,
         ): PlaybackRequest {
             val playlist = content.playlist
+            // Uma gravação no disco: o ficheiro, a começar no ponto pedido (o ExoPlayer salta dentro dele).
+            catchup?.recording?.let { file ->
+                return PlaybackRequest(catchup.channel, catchup, catchup.startMs, emptyList(), freshLinks = {
+                    FreshLinks(listOf(StreamCandidate(file, StreamFormat.TS)), archiveStartMs = catchup.startMs, seekMs = catchup.positionMs)
+                })
+            }
             if (catchup != null) {
                 if (playlist.type.kind.linkAtPlayTime && stalker != null) {
                     // A gravação começa no início do programa do portal: até a resposta chegar, conta-se do pedido.
@@ -156,8 +163,11 @@ internal interface PlaybackHost {
     /** Quando começou o programa de [channel] que dá às [wallMs] (o anel da pausa guarda só esse). */
     fun programmeStartAt(channel: Channel, wallMs: Long): Long?
 
-    /** Uma gravação está a usar a ligação de [candidate]: o player abre pelo anel dela (mesmo sem a pausa do direto). */
-    fun recordingUses(candidate: StreamCandidate): Boolean = false
+    /**
+     * O endereço de [channel] cuja ligação é (ou vai ser já) de uma gravação: o player abre esse pelo anel (mesmo sem
+     * a pausa do direto) e lê da gravação. null sem gravação nesse canal.
+     */
+    fun recordingUrl(channel: Channel): String? = null
 }
 
 /** Como abrir uma tentativa (ver [loadStream]). */

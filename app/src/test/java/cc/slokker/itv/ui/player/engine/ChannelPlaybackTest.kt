@@ -98,6 +98,8 @@ class ChannelPlaybackTest {
         override var appLanguage: String? = "pt"
         override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?) = ErrorInfo("explicado")
         override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
+        var recording: String? = null
+        override fun recordingUrl(channel: Channel): String? = recording
     }
 
     private val time = FakeTime()
@@ -425,6 +427,34 @@ class ChannelPlaybackTest {
         engine.idle = true
         withRing.tuneNow(live())
         assertEquals(true, engine.lastOptions?.nearLive)
+    }
+
+    // ---- Gravações ----
+
+    /** Uma gravação deste canal grava o endereço .m3u8? Não: grava um TS; o player abre o que ela grava, primeiro. */
+    @Test
+    fun comUmaGravacaoAbreOEnderecoDela() {
+        val other = StreamCandidate("http://x/1-b.ts", StreamFormat.TS)
+        host.recording = other.url
+        playback().tuneNow(live(ts, other, hls))
+        assertEquals(listOf("open ${other.url}"), engine.log)
+    }
+
+    @Test
+    fun umaGravacaoNoDiscoAbreOFicheiroNoPontoPedido() {
+        val p = playback()
+        val cu = Catchup(channel, "Telejornal", 1_000_000L, 4_600_000L, positionMs = 90_000L, recording = "file:///rec/a.ts")
+        val content = cc.slokker.itv.data.PlaylistContent(
+            cc.slokker.itv.data.Playlist(id = "p1", name = "P", type = cc.slokker.itv.data.PlaylistType.M3U, url = "http://x/list.m3u"),
+            emptyList(), listOf(channel),
+        )
+        p.tuneNow(PlaybackRequest.of(content, channel, cu, null, null))
+        assertEquals(listOf("open file:///rec/a.ts"), engine.log)
+        assertEquals(90_000L, engine.lastOptions?.startMs)
+        assertEquals(false, engine.lastOptions?.ring)
+        // A posição no programa é a do ficheiro (que começa no início da gravação).
+        engine.positionMs = 95_000L
+        assertEquals(95_000L, p.programmePositionMs())
     }
 
     // ---- Atraso ao mudar de canal e recusas "ocupado" ----

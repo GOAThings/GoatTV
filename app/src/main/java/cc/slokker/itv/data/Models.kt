@@ -242,6 +242,8 @@ data class Catchup(
     val endMs: Long,
     /** Onde o vídeo começa, em ms desde [startMs] (avançar/recuar = pedir de novo daí). */
     val positionMs: Long = 0L,
+    /** Uma gravação no disco (`file://…`), em vez do arquivo do servidor: não usa a ligação ao fornecedor. */
+    val recording: String? = null,
 ) {
     val durationMs: Long get() = endMs - startMs
 

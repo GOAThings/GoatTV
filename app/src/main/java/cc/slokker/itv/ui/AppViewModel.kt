@@ -81,6 +81,15 @@ import java.io.IOException
 import cc.slokker.itv.data.at
 import cc.slokker.itv.data.after
 import cc.slokker.itv.data.isOn
+import cc.slokker.itv.data.recording.RecordingInfo
+import cc.slokker.itv.data.recording.RecordingPlan
+import cc.slokker.itv.data.recording.RecordingReason
+import cc.slokker.itv.data.recording.RecordingState
+import cc.slokker.itv.data.recording.Schedule
+import cc.slokker.itv.data.recording.ScheduledRecording
+import cc.slokker.itv.data.recording.SeriesRule
+import cc.slokker.itv.recording.RecordingManager
+import cc.slokker.itv.ui.player.ChannelFeed
 
 /** Estado das atualizações da app. */
 sealed interface UpdateState {
@@ -650,6 +659,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
+        // Uma gravação deste canal a decorrer (a app foi aberta a meio): abre nele, que é a ligação que já está aberta.
+        activeRecordings.value.firstOrNull { it.playlistId == playlist.id }?.channelKey?.let { loaded.byKey[it] }?.let { channel ->
+            playback.playIn(channel, channel.categoryId)
+            _screen.value = Screen.Player
+            return
+        }
+
         if (resume) {
             val lastKey = if (profile.lastPlaylistId == playlist.id) {
                 profile.lastChannelKey
@@ -873,6 +889,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (_screen.value == Screen.Settings) closeSettings()
             return
         }
+        // Outra lista abre outro canal: com uma gravação a decorrer, pergunta primeiro.
+        if (!force && activeRecordings.value.isNotEmpty() && _switchPrompt.value == null) {
+            return guarded(null) { switchPlaylist(playlist, force = true) }
+        }
         profile.setLastPlaylist(playlist.id)
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadPlaylist(playlist, resume = false) }
@@ -1059,12 +1079,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Põe [channel] a tocar; CH+/CH− passam a percorrer o grupo [groupId]. */
     fun play(channel: Channel, groupId: String) {
-        playback.playIn(channel, groupId)
-        _screen.value = Screen.Player
+        // Com uma gravação de outro canal a decorrer, pergunta antes de largar a ligação dela.
+        guarded(channel) {
+            playback.playIn(channel, groupId)
+            _screen.value = Screen.Player
+        }
     }
 
     /** Muda de canal dentro da categoria atual (dá a volta nas pontas). */
-    fun zap(delta: Int) = playback.zap(delta)
+    fun zap(delta: Int) = guarded(null) { playback.zap(delta) }
 
     /** O último canal visto antes do atual: o da sessão, ou o dos Recentes (ex.: logo ao abrir a app). */
     fun previousChannel(): Channel? = playback.previousChannel()
@@ -1182,7 +1205,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Teclas numéricas: muda já de canal (sem mudar de ecrã) e o zapping passa a ser por "Todos". */
     fun playNumber(n: Int): Boolean {
         val channel = channelByNumber(n) ?: return false
-        playback.playIn(channel, SpecialCategory.ALL)
+        guarded(channel) { playback.playIn(channel, SpecialCategory.ALL) }
         return true
     }
 
@@ -1234,8 +1257,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Vê [entry] em catch-up, desde o início (ou desde [positionMs]). */
-    fun playCatchup(channel: Channel, entry: EpgEntry, positionMs: Long = 0L) {
-        if (playback.playing.value?.key != channel.key) play(channel, groupFor(channel))
+    fun playCatchup(channel: Channel, entry: EpgEntry, positionMs: Long = 0L) = guarded(null) {
+        if (playback.playing.value?.key != channel.key) {
+            playback.playIn(channel, groupFor(channel))
+        }
         _screen.value = Screen.Player
         playback.startCatchup(channel, entry, positionMs)
     }
@@ -1272,6 +1297,265 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         play(channel, groupFor(channel))
+    }
+
+    // ---- Gravações ---------------------------------------------------------------------------
+    // O RecordingManager é do processo (continua com a app em segundo plano); aqui diz-se o que o player está a ver,
+    // pergunta-se antes de largar a ligação de uma gravação e fazem-se as marcadas a partir do guia.
+
+    private val recordings get() = c.recordings
+
+    /** As gravações no disco (as a decorrer também). */
+    val recordingList: StateFlow<List<RecordingInfo>> get() = recordings.list
+    val recordingSchedule: StateFlow<Schedule> get() = recordings.schedule
+    val activeRecordings: StateFlow<List<RecordingManager.Active>> get() = recordings.active
+
+    /** "Mudar para X para gravar" / "Não gravar" (uma marcada noutro canal, quase a começar). */
+    val recordingPrompt: StateFlow<ScheduledRecording?> get() = recordings.prompt
+
+    /** O canal cuja ligação é de uma gravação: o player abre-o pelo anel dela (ver RecordingManager.ringFor). */
+    val recordingRing: StateFlow<RecordingPlan.Busy?> get() = recordings.ringFor
+
+    /** Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta. */
+    class SwitchPrompt(val title: String, val action: () -> Unit)
+    private val _switchPrompt = MutableStateFlow<SwitchPrompt?>(null)
+    val switchPrompt: StateFlow<SwitchPrompt?> = _switchPrompt.asStateFlow()
+
+    private var playerVisible = false
+
+    init {
+        viewModelScope.launch {
+            recordings.events.collect { e ->
+                val s = I18n.s
+                when (e) {
+                    is RecordingManager.Event.Started -> showToast(s.recordingNow(e.info.title))
+                    is RecordingManager.Event.Finished -> showToast(
+                        when {
+                            e.info.state == RecordingState.DONE || e.info.reason == RecordingReason.USER -> s.recordingSaved(e.info.title)
+                            e.info.reason == RecordingReason.LOW_SPACE -> s.recordingStoppedSpace
+                            else -> s.recordingStoppedConnection
+                        },
+                    )
+                    is RecordingManager.Event.Skipped -> when (e.reason) {
+                        RecordingPlan.SKIP_USER -> Unit
+                        RecordingPlan.SKIP_HLS -> showToast(s.recordingHlsOnly)
+                        RecordingPlan.SKIP_SPACE -> showToast(s.recordingNoSpace)
+                        else -> showToast(s.recordingSkipped(e.recording.title))
+                    }
+                }
+            }
+        }
+        // Uma marcada noutro canal: ninguém disse que não, ou disse que sim; muda-se (também de lista, se for de outra).
+        viewModelScope.launch {
+            recordings.switchTo.collect { r -> openLink(r.playlistId, r.channelKey) }
+        }
+        viewModelScope.launch { playback.playing.collect { updateWatching() } }
+        viewModelScope.launch { playback.catchup.collect { updateWatching() } }
+        viewModelScope.launch { prefs.collect { p -> recordings.setPadding(p.recordPaddingBeforeMin, p.recordPaddingAfterMin) } }
+        // As séries marcam os programas novos que o guia vai trazendo.
+        recordings.guide = { playlistId, key -> content.value?.takeIf { it.playlist.id == playlistId }?.byKey?.get(key)?.let(::guideEntries) }
+        viewModelScope.launch { guide.version.collect { recordings.expandSeries(::seriesInstance) } }
+    }
+
+    /** A atividade fechou de vez: as gravações continuam, mas já não há quem diga o que se vê nem o guia. */
+    override fun onCleared() {
+        recordings.watching = null
+        recordings.guide = null
+        super.onCleared()
+    }
+
+    /** O player está à vista (a TV, ou o telemóvel com o canal aberto) ou não. */
+    fun onPlayerVisible(visible: Boolean) {
+        playerVisible = visible
+        updateWatching()
+    }
+
+    private fun updateWatching() {
+        val channel = playback.playing.value
+        val content = content.value
+        val cu = playback.catchup.value
+        // Uma gravação do disco não usa a ligação: para as marcadas é como não estar a ver nada.
+        recordings.watching = if (!playerVisible || channel == null || content == null || cu?.recording != null) {
+            null
+        } else {
+            RecordingPlan.Watching(content.playlist.id, channel.key, live = cu == null)
+        }
+    }
+
+    /** As gravações a decorrer de [channel] (da lista aberta). */
+    fun recordingOf(channel: Channel): RecordingManager.Active? {
+        val id = content.value?.playlist?.id ?: return null
+        return activeRecordings.value.firstOrNull { it.playlistId == id && it.channelKey == channel.key }
+    }
+
+    /** O endereço de [channel] que uma gravação usa (o player abre-o pelo anel dela), ou null. */
+    fun recordingRingUrl(channel: Channel): String? = recordings.ringUrl(content.value?.playlist?.id, channel.key)
+
+    /**
+     * [action] precisa da ligação ao fornecedor para outra coisa ([channel] em direto, ou null: outro canal, um
+     * catch-up do servidor, outra lista). Com uma gravação a decorrer de outra coisa, pergunta primeiro.
+     */
+    private fun guarded(channel: Channel?, action: () -> Unit) {
+        val active = activeRecordings.value
+        val playlistId = content.value?.playlist?.id
+        val same = channel != null && active.all { it.playlistId == playlistId && it.channelKey == channel.key }
+        if (active.isEmpty() || same) return action()
+        _switchPrompt.value = SwitchPrompt(active.first().info.title, action)
+    }
+
+    /** A resposta: parar a gravação e fazer o que se pediu, ou ficar a gravar ([stop] false). */
+    fun answerSwitch(stop: Boolean) {
+        val p = _switchPrompt.value ?: return
+        _switchPrompt.value = null
+        if (!stop) return
+        recordings.stopAll()
+        p.action()
+    }
+
+    /** A resposta ao aviso de uma marcada ("Mudar para X para gravar" ou "Não gravar"). */
+    fun answerRecordingPrompt(id: String, switch: Boolean) = recordings.answer(id, switch)
+
+    /** O programa a dar em [channel] (o guia, ou o EPG curto). */
+    private fun programmeNow(channel: Channel): EpgEntry? = programmes(channel, cachedEpg(channel)).at(System.currentTimeMillis())
+
+    /** "Gravar" no player: o programa a dar, desde o início que o anel da pausa do direto ainda tem. */
+    internal fun recordNow(channel: Channel, feed: ChannelFeed?) {
+        val s = I18n.s
+        if (feed == null) return showToast(s.recordingNotRecordable)
+        val content = content.value
+        val p = programmeNow(channel)
+        val refusal = recordings.recordNow(
+            feed,
+            RecordingManager.Meta(content?.playlist?.id, channel.key, channel.name, logoOf(channel), p?.title ?: channel.name, p?.startMs, p?.endMs),
+        )
+        when (refusal) {
+            null -> Unit
+            RecordingManager.Refusal.NO_SPACE -> showToast(s.recordingNoSpace)
+            RecordingManager.Refusal.OTHER_CHANNEL -> showToast(s.recordingOtherChannel)
+            RecordingManager.Refusal.ALREADY -> showToast(s.recordingNow(p?.title ?: channel.name))
+            RecordingManager.Refusal.NOT_RECORDABLE -> showToast(s.recordingNotRecordable)
+        }
+    }
+
+    /** "Parar a gravação" de [channel]. */
+    fun stopRecording(channel: Channel) {
+        recordingOf(channel)?.let { recordings.stop(it.info.id) }
+    }
+
+    fun stopRecording(id: String) = recordings.stop(id)
+
+    fun deleteRecording(id: String) {
+        // A ver esta gravação: sai dela primeiro (volta ao direto do canal a dar).
+        val file = recordings.files.videoFile(id).toURI().toString()
+        if (playback.catchup.value?.recording == file) playback.exitCatchup()
+        recordings.delete(id)
+        showToast(I18n.s.recordingDeleted)
+    }
+
+    fun cancelScheduled(id: String) {
+        recordings.cancel(id)
+        showToast(I18n.s.recordingCancelled)
+    }
+
+    fun cancelSeries(seriesId: String) {
+        recordings.cancelSeries(seriesId)
+        showToast(I18n.s.recordingCancelled)
+    }
+
+    /** O espaço livre onde ficam as gravações. */
+    fun recordingFreeBytes(): Long = recordings.freeBytes()
+
+    /** O logótipo que a app mostra para [channel] (o escolhido/do guia, ou o da lista). */
+    private fun logoOf(channel: Channel): String? = channelLogos.value[channel.key] ?: channel.logo
+
+    /** Como está marcado um programa no guia. */
+    enum class RecordMark { NONE, ONE, SERIES }
+
+    fun recordMark(channel: Channel, entry: EpgEntry): RecordMark {
+        val id = content.value?.playlist?.id ?: return RecordMark.NONE
+        if (recordings.seriesFor(id, channel.key, entry.title) != null) return RecordMark.SERIES
+        if (recordings.scheduledFor(id, channel.key, entry.startMs) != null) return RecordMark.ONE
+        // O programa a gravar agora também conta como marcado.
+        val active = recordingOf(channel)
+        return if (active != null && active.info.programmeStartMs == entry.startMs) RecordMark.ONE else RecordMark.NONE
+    }
+
+    /** A marcada de [entry] em [channel] (com as tentativas do canal e o User-Agent, para gravar sem a app aberta). */
+    private fun scheduledFor(channel: Channel, entry: EpgEntry, seriesId: String? = null): ScheduledRecording? {
+        val content = content.value ?: return null
+        val playlist = content.playlist
+        // O Stalker dá o link na hora (e caduca): não dá para guardar para depois.
+        if (playlist.type.kind.linkAtPlayTime) return null
+        val candidates = cc.slokker.itv.data.streamCandidates(playlist, channel, streamFormat.value, content.account?.allowedFormats.orEmpty())
+        return ScheduledRecording(
+            id = "s-${entry.startMs}-${java.util.UUID.randomUUID().toString().take(6)}",
+            playlistId = playlist.id, channelKey = channel.key, channelName = channel.name, logo = logoOf(channel),
+            title = entry.title, startMs = entry.startMs, endMs = entry.endMs, candidates = candidates,
+            userAgent = SafeInput.headerSafe(channel.userAgent ?: prefs.value.userAgent).ifBlank { IPTV_USER_AGENT },
+            referrer = channel.referrer, seriesId = seriesId,
+        )
+    }
+
+    private fun seriesInstance(rule: SeriesRule, entry: EpgEntry): ScheduledRecording? {
+        val channel = content.value?.takeIf { it.playlist.id == rule.playlistId }?.byKey?.get(rule.channelKey) ?: return null
+        return scheduledFor(channel, entry, rule.id)
+    }
+
+    /**
+     * Menu (TV) ou o botão ⏺ (telemóvel) num programa do guia: gravar → gravar a série → desmarcar. O programa a dar no
+     * canal a ver grava-se já ("Gravar" do player).
+     */
+    internal fun cycleRecording(channel: Channel, entry: EpgEntry, feed: ChannelFeed? = null) {
+        val s = I18n.s
+        val content = content.value ?: return
+        val now = System.currentTimeMillis()
+        if (entry.endMs <= now) return
+        val playlistId = content.playlist.id
+        when (recordMark(channel, entry)) {
+            RecordMark.NONE -> {
+                // A dar agora no canal a ver: grava-se do anel (desde o início do programa).
+                if (entry.startMs <= now && playback.playing.value?.key == channel.key && feed != null) return recordNow(channel, feed)
+                val r = scheduledFor(channel, entry) ?: return showToast(s.recordingNotRecordable)
+                if (r.url == null) return showToast(s.recordingHlsOnly)
+                val overlap = recordings.schedule(r)
+                showToast(overlap.firstOrNull()?.let { s.recordingOverlap(it.title) } ?: s.recordingScheduled(entry.title))
+            }
+            RecordMark.ONE -> {
+                val first = recordings.scheduledFor(playlistId, channel.key, entry.startMs)
+                val ruleId = "series-${java.util.UUID.randomUUID().toString().take(8)}"
+                val rule = SeriesRule(ruleId, playlistId, channel.key, channel.name, logoOf(channel), entry.title)
+                val one = (first ?: scheduledFor(channel, entry))?.copy(seriesId = ruleId)
+                if (one == null) {
+                    // A gravar agora (sem marcada): a série vale para os próximos.
+                    recordings.addSeries(rule, null, ::seriesInstance)
+                } else {
+                    recordings.addSeries(rule, one, ::seriesInstance)
+                }
+                showToast(s.recordingSeriesScheduled(entry.title))
+            }
+            RecordMark.SERIES -> {
+                recordings.seriesFor(playlistId, channel.key, entry.title)?.let { recordings.cancelSeries(it.id) }
+                recordings.scheduledFor(playlistId, channel.key, entry.startMs)?.let { recordings.cancel(it.id) }
+                showToast(s.recordingCancelled)
+            }
+        }
+    }
+
+    /** Vê uma gravação do disco no player (com a barra e os saltos do catch-up; sem ligação ao fornecedor). */
+    fun playRecording(info: RecordingInfo) {
+        val content = content.value
+        val file = recordings.files.videoFile(info.id)
+        if (!file.exists()) return
+        val channel = content?.takeIf { it.playlist.id == info.playlistId }?.byKey?.get(info.channelKey)
+            ?: Channel(uid = -1, key = "rec:${info.id}", num = 0, name = info.channelName, logo = info.logo, categoryId = "")
+        // Sem canal a dar não há player: abre-se o canal da gravação (ou o primeiro) por baixo dela.
+        if (playback.playing.value == null) {
+            val base = content?.byKey?.get(info.channelKey) ?: channelsOf(SpecialCategory.ALL).firstOrNull() ?: return
+            playback.playIn(base, groupFor(base))
+        }
+        _screen.value = Screen.Player
+        val end = if (info.recording) System.currentTimeMillis() else info.fileEndMs
+        playback.startRecording(Catchup(channel, info.title, info.fileStartMs, end.coerceAtLeast(info.fileStartMs + 1), 0L, recording = file.toURI().toString()))
     }
 
     // ---- Segundo canal -------------------------------------------------------------------------

@@ -159,6 +159,8 @@ internal fun rememberChannelPlayback(
     channelKey: String?,
     enabled: Boolean = true,
     net: NetMonitor? = null,
+    /** Uma gravação usa a ligação deste canal: o ExoPlayer (o único que lê o anel dela), mesmo com o VLC escolhido. */
+    forceExo: Boolean = false,
     captureFreeze: suspend () -> ImageBitmap? = { null },
 ): ChannelPlayback {
     val context = LocalContext.current
@@ -173,7 +175,7 @@ internal fun rememberChannelPlayback(
             gate = if (policy.timeshift) StreamGate.MAIN else StreamGate(),
         ).also { it.freezeCapture = { latestCapture() } }
     }
-    val build = PlayerBuild.of(prefs, playback.engineFor(channelKey, prefs.engine), policy.passthrough)
+    val build = PlayerBuild.of(prefs, if (forceExo) Prefs.Engine.EXO else playback.engineFor(channelKey, prefs.engine), policy.passthrough)
     // Criado (e ligado ao controlador) já aqui, para o ecrã ter o player na mesma composição.
     val engine = remember(build, enabled) {
         if (!enabled) return@remember null
