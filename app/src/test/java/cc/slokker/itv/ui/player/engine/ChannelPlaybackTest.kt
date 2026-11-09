@@ -479,4 +479,34 @@ class ChannelPlaybackTest {
         type.getField("responseCode").apply { isAccessible = true }.setInt(e, 403)
         return e
     }
+
+    @Test
+    fun aImagemCongeladaNaoAtrasaAAbertura() {
+        host.prefs = Prefs(zapDelayMs = Prefs.ZapDelay.OFF)
+        val p = playback()
+        p.tuneNow(request("a"))
+        p.onState(engine, Player.STATE_READY)
+        val bitmap = object : androidx.compose.ui.graphics.ImageBitmap {
+            override val width = 1
+            override val height = 1
+            override val config = androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888
+            override val colorSpace = androidx.compose.ui.graphics.colorspace.ColorSpaces.Srgb
+            override val hasAlpha = false
+            override fun readPixels(buffer: IntArray, startX: Int, startY: Int, width: Int, height: Int, bufferOffset: Int, stride: Int) = Unit
+            override fun prepareToDraw() = Unit
+        }
+        // A imagem demora (PixelCopy): o canal novo abre logo, sem esperar por ela.
+        p.freezeCapture = { time.wait(40); bitmap }
+        time.advance(5_000)
+        scope.launch { p.tune(request("b")) }
+        assertEquals("open http://x/b.ts", engine.log.last())
+        time.advance(40)
+        assertEquals(bitmap, p.freeze)
+        // Já com a primeira imagem do canal novo, uma imagem atrasada do anterior não fica por cima.
+        p.onState(engine, Player.STATE_READY)
+        scope.launch { p.tune(request("c")) }
+        p.onFirstFrame(engine)
+        time.advance(40)
+        assertNull(p.freeze)
+    }
 }

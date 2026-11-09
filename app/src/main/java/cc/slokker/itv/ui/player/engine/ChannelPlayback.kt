@@ -16,6 +16,9 @@ import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -99,6 +102,9 @@ internal class ChannelPlayback(
     private var retries = 0
     private var linkFresh = false
     private val pacer = ZapPacer()
+
+    /** O canal novo já mostrou a primeira imagem: a do anterior, se só chegar agora, já não serve. */
+    private var firstFrameSeen = false
     private var retryJob: Job? = null
     private var linkJob: Job? = null
     private var tickJob: Job? = null
@@ -176,7 +182,8 @@ internal class ChannelPlayback(
 
     /**
      * Novo canal (ou outro ponto do catch-up, ou um player novo): guarda a última imagem e recomeça pelas
-     * tentativas na ordem do formato preferido. Num efeito: espera pela imagem antes de abrir.
+     * tentativas na ordem do formato preferido. A imagem tira-se ao mesmo tempo que o canal novo abre: o
+     * descodificador é esvaziado, não libertado, e a última imagem fica no ecrã até à primeira do canal novo.
      *
      * Outro canal em direto passa pelo atraso ao mudar de canal ([ZapPacer]): a passar canais depressa, espera aqui
      * (o canal anterior continua a dar) e uma mudança nova pelo meio cancela o efeito, e com ele esta espera.
@@ -191,8 +198,18 @@ internal class ChannelPlayback(
             }
         }
         ZapTrace.tune(request.channel.name)
-        if (ready) freezeCapture?.invoke()?.let { freeze = it }
-        ZapTrace.mark("F")
+        val capture = freezeCapture.takeIf { ready }
+        coroutineScope {
+            // O pedido da imagem sai já (antes de abrir); a resposta espera-se depois.
+            val shot = capture?.let { async(start = CoroutineStart.UNDISPATCHED) { it() } }
+            firstFrameSeen = false
+            open(request)
+            shot?.await()?.let { if (!firstFrameSeen) freeze = it }
+            ZapTrace.mark("F")
+        }
+    }
+
+    private fun open(request: PlaybackRequest) {
         this.request = request
         candidates = request.candidates
         net?.reset()
@@ -343,7 +360,9 @@ internal class ChannelPlayback(
     }
 
     fun onFirstFrame(source: StreamEngine) {
-        if (source === engine) freeze = null
+        if (source !== engine) return
+        firstFrameSeen = true
+        freeze = null
     }
 
     /** As faixas chegaram e o player não descodifica o áudio ou o vídeo ([cannotDecode]). */
