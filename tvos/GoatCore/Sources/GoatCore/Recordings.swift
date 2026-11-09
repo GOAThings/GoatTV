@@ -1,0 +1,527 @@
+import Foundation
+
+// As gravações (o `data/recording` do GoatTV Android): os mesmos ficheiros (a ficha `<id>.json` ao lado do `<id>.ts`
+// e a lista do que está marcado), onde cortar no anel da pausa do direto e as regras de quando gravar. Os nomes dos
+// campos são os do Android, para as fichas se lerem nas duas apps.
+
+/// Uma gravação no disco: o `<id>.ts` e esta ficha ao lado, `<id>.json` (ver [RecordingFiles]). As horas são ms desde
+/// 1970; os cortes [mediaStartMs]/[mediaEndMs] são do relógio do vídeo do anel (os PCR do TS, ver TimeshiftRing).
+public struct RecordingInfo: Equatable, Sendable {
+    public static let version = 1
+
+    public var version = RecordingInfo.version
+    public var id: String
+    public var playlistId: String?
+    public var channelKey: String?
+    public var channelName: String
+    public var logo: String?
+    public var title: String
+    /// O guia desta app não guarda descrições: fica nil (o campo existe para quando houver).
+    public var description: String?
+    /// O programa no guia (sem guia, o que se pediu: do carregar no botão até ao máximo).
+    public var programmeStartMs: Int64
+    public var programmeEndMs: Int64
+    /// O que se quis gravar: o programa com as margens antes e depois.
+    public var startMs: Int64
+    public var endMs: Int64
+    /// A hora real do primeiro e do último byte do ficheiro (o fim vai avançando enquanto grava).
+    public var fileStartMs: Int64
+    public var fileEndMs: Int64
+    public var mediaStartMs: Int64
+    public var mediaEndMs: Int64
+    public var bytes: Int64
+    /// Ver [RecordingState].
+    public var state: String
+    /// Porque parou antes do fim (ver [RecordingReason]); nil quando acabou no fim ou ainda grava.
+    public var reason: String?
+    /// Quantas vezes faltou um bocado (a ligação caiu e voltou, ou a escrita ficou para trás).
+    public var gaps = 0
+    /// A gravação marcada que a fez; nil quando foi "gravar agora".
+    public var scheduledId: String?
+
+    public var durationMs: Int64 { max(0, fileEndMs - fileStartMs) }
+    public var recording: Bool { state == RecordingState.recording }
+
+    /// A ficha em JSON (com os nulos, como o Gson do Android a escreve).
+    public var json: JSON {
+        func opt(_ s: String?) -> JSON { s.map(JSON.string) ?? .null }
+        func n(_ v: Int64) -> JSON { .number(Double(v)) }
+        return .object([
+            "version": .number(Double(version)), "id": .string(id), "playlistId": opt(playlistId), "channelKey": opt(channelKey),
+            "channelName": .string(channelName), "logo": opt(logo), "title": .string(title), "description": opt(description),
+            "programmeStartMs": n(programmeStartMs), "programmeEndMs": n(programmeEndMs), "startMs": n(startMs), "endMs": n(endMs),
+            "fileStartMs": n(fileStartMs), "fileEndMs": n(fileEndMs), "mediaStartMs": n(mediaStartMs), "mediaEndMs": n(mediaEndMs),
+            "bytes": n(bytes), "state": .string(state), "reason": opt(reason), "gaps": .number(Double(gaps)), "scheduledId": opt(scheduledId),
+        ])
+    }
+
+    /// Lê uma ficha; sem `id` ou `state` não é uma ficha. Os campos que faltem ficam a zero (ou nil nos textos).
+    public init?(json o: JSON) {
+        guard let id = o["id"]?.string, let state = o["state"]?.string else { return nil }
+        func l(_ k: String) -> Int64 { o[k]?.double.flatMap { $0.isFinite ? Int64($0) : nil } ?? 0 }
+        self.version = o["version"]?.int ?? 0
+        self.id = id
+        playlistId = o["playlistId"]?.string
+        channelKey = o["channelKey"]?.string
+        channelName = o["channelName"]?.string ?? ""
+        logo = o["logo"]?.string
+        title = o["title"]?.string ?? ""
+        description = o["description"]?.string
+        programmeStartMs = l("programmeStartMs")
+        programmeEndMs = l("programmeEndMs")
+        startMs = l("startMs")
+        endMs = l("endMs")
+        fileStartMs = l("fileStartMs")
+        fileEndMs = l("fileEndMs")
+        mediaStartMs = l("mediaStartMs")
+        mediaEndMs = l("mediaEndMs")
+        bytes = l("bytes")
+        self.state = state
+        reason = o["reason"]?.string
+        gaps = o["gaps"]?.int ?? 0
+        scheduledId = o["scheduledId"]?.string
+    }
+
+    public init(id: String, playlistId: String?, channelKey: String?, channelName: String, logo: String?, title: String,
+                programmeStartMs: Int64, programmeEndMs: Int64, startMs: Int64, endMs: Int64, fileStartMs: Int64, fileEndMs: Int64,
+                mediaStartMs: Int64, mediaEndMs: Int64, bytes: Int64, state: String, reason: String? = nil, gaps: Int = 0,
+                scheduledId: String? = nil) {
+        self.id = id
+        self.playlistId = playlistId
+        self.channelKey = channelKey
+        self.channelName = channelName
+        self.logo = logo
+        self.title = title
+        self.programmeStartMs = programmeStartMs
+        self.programmeEndMs = programmeEndMs
+        self.startMs = startMs
+        self.endMs = endMs
+        self.fileStartMs = fileStartMs
+        self.fileEndMs = fileEndMs
+        self.mediaStartMs = mediaStartMs
+        self.mediaEndMs = mediaEndMs
+        self.bytes = bytes
+        self.state = state
+        self.reason = reason
+        self.gaps = gaps
+        self.scheduledId = scheduledId
+    }
+}
+
+public enum RecordingState {
+    public static let recording = "recording"
+    /// Chegou ao fim que se queria.
+    public static let done = "done"
+    /// Parou antes (à mão, por falta de espaço, porque a ligação acabou ou a app terminou): ver o `reason`.
+    public static let stopped = "stopped"
+    /// Não chegou a gravar nada.
+    public static let failed = "failed"
+}
+
+public enum RecordingReason {
+    public static let user = "user"
+    public static let lowSpace = "low_space"
+    /// A ligação fechou de vez (outro canal precisou dela, ou o servidor deixou de dar).
+    public static let connection = "connection"
+    /// A app terminou a meio (a ficha ficou como "a gravar").
+    public static let appEnded = "app_ended"
+}
+
+/// Uma gravação marcada no guia, com o que é preciso para a gravar: as tentativas do canal (com as credenciais da
+/// lista no URL, por isso esta lista não fica ao lado das gravações) e o User-Agent.
+public struct ScheduledRecording: Equatable, Sendable {
+    public var id: String
+    public var playlistId: String
+    public var channelKey: String
+    public var channelName: String
+    public var logo: String?
+    public var title: String
+    public var startMs: Int64
+    public var endMs: Int64
+    public var candidates: [StreamCandidate]
+    public var userAgent: String
+    public var referrer: String?
+    /// Veio de uma regra "gravar a série" ([SeriesRule]).
+    public var seriesId: String?
+
+    public init(id: String, playlistId: String, channelKey: String, channelName: String, logo: String?, title: String,
+                startMs: Int64, endMs: Int64, candidates: [StreamCandidate], userAgent: String, referrer: String? = nil, seriesId: String? = nil) {
+        self.id = id
+        self.playlistId = playlistId
+        self.channelKey = channelKey
+        self.channelName = channelName
+        self.logo = logo
+        self.title = title
+        self.startMs = startMs
+        self.endMs = endMs
+        self.candidates = candidates
+        self.userAgent = userAgent
+        self.referrer = referrer
+        self.seriesId = seriesId
+    }
+
+    /// O programa (lista, canal e início): é assim que se reconhece no guia e nas séries.
+    public var instanceKey: String { Self.instanceKey(playlistId, channelKey, startMs) }
+
+    /// O endereço que se grava (o primeiro TS: o HLS não se grava).
+    public var url: String? { candidates.first { !$0.isHLS }?.url }
+
+    public func sameChannel(_ playlistId: String, _ channelKey: String) -> Bool {
+        self.playlistId == playlistId && self.channelKey == channelKey
+    }
+
+    public static func instanceKey(_ playlistId: String, _ channelKey: String, _ startMs: Int64) -> String {
+        "\(playlistId)|\(channelKey)|\(startMs)"
+    }
+
+    var json: JSON {
+        .object([
+            "id": .string(id), "playlistId": .string(playlistId), "channelKey": .string(channelKey), "channelName": .string(channelName),
+            "logo": logo.map(JSON.string) ?? .null, "title": .string(title), "startMs": .number(Double(startMs)), "endMs": .number(Double(endMs)),
+            "candidates": .array(candidates.map { .object(["url": .string($0.url), "format": .string($0.format)]) }),
+            "userAgent": .string(userAgent), "referrer": referrer.map(JSON.string) ?? .null, "seriesId": seriesId.map(JSON.string) ?? .null,
+        ])
+    }
+
+    init?(json o: JSON) {
+        guard let id = o["id"]?.string, let list = o["candidates"]?.array else { return nil }
+        let candidates = list.compactMap { c -> StreamCandidate? in
+            guard let url = c["url"]?.string, let format = c["format"]?.string else { return nil }
+            return StreamCandidate(url: url, format: format)
+        }
+        self.init(id: id, playlistId: o["playlistId"]?.string ?? "", channelKey: o["channelKey"]?.string ?? "",
+                  channelName: o["channelName"]?.string ?? "", logo: o["logo"]?.string, title: o["title"]?.string ?? "",
+                  startMs: Int64(o["startMs"]?.double ?? 0), endMs: Int64(o["endMs"]?.double ?? 0), candidates: candidates,
+                  userAgent: o["userAgent"]?.string ?? "", referrer: o["referrer"]?.string, seriesId: o["seriesId"]?.string)
+    }
+}
+
+/// "Gravar a série": todos os programas com este título neste canal.
+public struct SeriesRule: Equatable, Sendable {
+    public var id: String
+    public var playlistId: String
+    public var channelKey: String
+    public var channelName: String
+    public var logo: String?
+    public var title: String
+
+    public init(id: String, playlistId: String, channelKey: String, channelName: String, logo: String?, title: String) {
+        self.id = id
+        self.playlistId = playlistId
+        self.channelKey = channelKey
+        self.channelName = channelName
+        self.logo = logo
+        self.title = title
+    }
+}
+
+/// O que está marcado. [handled]: programas que já não se voltam a marcar pela série (já gravados, cancelados ou
+/// saltados), com a hora de início para se esquecerem ao fim de uns dias (ver RecordingPlan.prune).
+public struct Schedule: Equatable, Sendable {
+    public static let version = 1
+
+    public var version = Schedule.version
+    public var recordings: [ScheduledRecording] = []
+    public var series: [SeriesRule] = []
+    public var handled: [String: Int64] = [:]
+    /// As margens das Definições, guardadas aqui para se saberem sem as Definições.
+    public var paddingBeforeMin = RecordingPlan.paddingBeforeDefault
+    public var paddingAfterMin = RecordingPlan.paddingAfterDefault
+
+    public init(recordings: [ScheduledRecording] = [], series: [SeriesRule] = [], handled: [String: Int64] = [:]) {
+        self.recordings = recordings
+        self.series = series
+        self.handled = handled
+    }
+
+    public var json: JSON {
+        .object([
+            "version": .number(Double(version)),
+            "recordings": .array(recordings.map(\.json)),
+            "series": .array(series.map { r in
+                .object(["id": .string(r.id), "playlistId": .string(r.playlistId), "channelKey": .string(r.channelKey),
+                         "channelName": .string(r.channelName), "logo": r.logo.map(JSON.string) ?? .null, "title": .string(r.title)])
+            }),
+            "handled": .object(handled.mapValues { .number(Double($0)) }),
+            "paddingBeforeMin": .number(Double(paddingBeforeMin)),
+            "paddingAfterMin": .number(Double(paddingAfterMin)),
+        ])
+    }
+
+    public init(json o: JSON) {
+        version = o["version"]?.int ?? Schedule.version
+        recordings = (o["recordings"]?.array ?? []).compactMap(ScheduledRecording.init(json:))
+        series = (o["series"]?.array ?? []).compactMap { r in
+            guard let id = r["id"]?.string else { return nil }
+            return SeriesRule(id: id, playlistId: r["playlistId"]?.string ?? "", channelKey: r["channelKey"]?.string ?? "",
+                              channelName: r["channelName"]?.string ?? "", logo: r["logo"]?.string, title: r["title"]?.string ?? "")
+        }
+        handled = (o["handled"]?.object ?? [:]).compactMapValues { $0.double.map { Int64($0) } }
+        func padding(_ key: String, _ def: Int) -> Int {
+            guard let v = o[key]?.int, RecordingPlan.paddingOptions.contains(v) else { return def }
+            return v
+        }
+        paddingBeforeMin = padding("paddingBeforeMin", RecordingPlan.paddingBeforeDefault)
+        paddingAfterMin = padding("paddingAfterMin", RecordingPlan.paddingAfterDefault)
+    }
+}
+
+/// Onde cortar uma gravação no anel. O anel não sabe horas: sabe o tempo do vídeo (pelos PCR) de meio em meio segundo
+/// ([TimeshiftRing.Entry]) e o do último byte que chegou ([liveMediaMs], que é "agora"). Uma hora real `t` fica no
+/// tempo do vídeo `liveMediaMs - (agora - t)`; como o relógio do anel avança com o tempo real quando a ligação cai,
+/// isto não escorrega com as quebras.
+public enum RecordingCut {
+    /// O pedaço a gravar: começa num ponto do índice ([startOffset], o início de um pacote TS) e acaba quando o vídeo
+    /// chegar a [endMediaMs]. [late]: o início pedido já não está no anel (começa no mais antigo que há).
+    public struct Range: Equatable, Sendable {
+        public var startOffset: Int64
+        public var startMediaMs: Int64
+        public var endMediaMs: Int64
+        /// A hora real do início do ficheiro.
+        public var fileStartMs: Int64
+        public var late: Bool
+    }
+
+    /// O pedaço de [startWall] a [endWall] (horas reais), com o índice [entries] do anel, o tempo do vídeo no direto
+    /// [liveMediaMs] e a hora [nowWall]. O início é o último ponto do índice até ao instante pedido (nunca depois:
+    /// mais vale meio segundo a mais do que a menos). nil sem índice.
+    public static func range(_ entries: [TimeshiftRing.Entry], liveMediaMs: Int64, nowWall: Int64, startWall: Int64, endWall: Int64) -> Range? {
+        guard let first = entries.first else { return nil }
+        let wanted = mediaAt(liveMediaMs, nowWall, startWall)
+        let start = atOrBefore(entries, wanted) ?? first
+        let late = start.mediaMs > wanted + TimeshiftRing.entryMs
+        let end = max(start.mediaMs, mediaAt(liveMediaMs, nowWall, endWall))
+        return Range(startOffset: start.offset, startMediaMs: start.mediaMs, endMediaMs: end,
+                     fileStartMs: wallAt(liveMediaMs, nowWall, start.mediaMs), late: late)
+    }
+
+    /// O tempo do vídeo à hora real [wall].
+    public static func mediaAt(_ liveMediaMs: Int64, _ nowWall: Int64, _ wall: Int64) -> Int64 { liveMediaMs - (nowWall - wall) }
+
+    /// A hora real do tempo do vídeo [mediaMs].
+    public static func wallAt(_ liveMediaMs: Int64, _ nowWall: Int64, _ mediaMs: Int64) -> Int64 { nowWall - (liveMediaMs - mediaMs) }
+
+    /// O último ponto com o tempo até [mediaMs] (procura binária: o índice vai por ordem).
+    public static func atOrBefore(_ entries: [TimeshiftRing.Entry], _ mediaMs: Int64) -> TimeshiftRing.Entry? {
+        var lo = 0
+        var hi = entries.count - 1
+        var found: TimeshiftRing.Entry?
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if entries[mid].mediaMs <= mediaMs {
+                found = entries[mid]
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return found
+    }
+}
+
+/// As regras das gravações: as margens, o que fazer quando chega a hora de uma gravação marcada, as séries. O
+/// fornecedor só deixa uma ligação: grava-se um canal de cada vez e, a ver outro canal, ou se muda para o da gravação
+/// ou não se grava.
+public enum RecordingPlan {
+    /// As margens a escolher (minutos), antes e depois do programa.
+    public static let paddingOptions = [0, 1, 2, 5, 10]
+    public static let paddingBeforeDefault = 1
+    public static let paddingAfterDefault = 2
+    /// O aviso "Mudar para X para gravar" aparece este tanto antes de a gravação começar (como os lembretes).
+    public static let promptLeadMs: Int64 = 60_000
+    /// Sem guia, "gravar agora" grava até isto (ou até se parar).
+    public static let maxNoEpgMs: Int64 = 4 * 3_600_000
+    /// As séries marcam os programas desta janela do guia.
+    public static let seriesHorizonMs: Int64 = 7 * 24 * 3_600_000
+    /// Os programas já tratados esquecem-se depois disto (o guia já não os tem).
+    public static let handledKeepMs: Int64 = 3 * 24 * 3_600_000
+
+    /// De [fromMs] a [toMs]: o programa com as margens.
+    public struct Window: Equatable, Sendable {
+        public var fromMs: Int64
+        public var toMs: Int64
+    }
+
+    public static func window(_ startMs: Int64, _ endMs: Int64, _ beforeMin: Int, _ afterMin: Int) -> Window {
+        Window(fromMs: startMs - Int64(beforeMin) * 60_000, toMs: endMs + Int64(afterMin) * 60_000)
+    }
+
+    public static func window(_ r: ScheduledRecording, _ beforeMin: Int, _ afterMin: Int) -> Window {
+        window(r.startMs, r.endMs, beforeMin, afterMin)
+    }
+
+    /// O que o leitor está a usar: o canal em direto (nil = nada, a app em segundo plano, ou uma gravação no disco).
+    public struct Watching: Equatable, Sendable {
+        public var playlistId: String
+        public var channelKey: String
+        public var live = true
+
+        public init(_ playlistId: String, _ channelKey: String, live: Bool = true) {
+            self.playlistId = playlistId
+            self.channelKey = channelKey
+            self.live = live
+        }
+    }
+
+    /// Uma gravação a decorrer (o canal dela).
+    public struct Busy: Equatable, Sendable {
+        public var playlistId: String
+        public var channelKey: String
+
+        public init(_ playlistId: String, _ channelKey: String) {
+            self.playlistId = playlistId
+            self.channelKey = channelKey
+        }
+    }
+
+    /// A resposta ao aviso.
+    public enum Answer: Sendable { case switchChannel, skip }
+
+    public enum Decision: Equatable, Sendable {
+        /// Ainda falta.
+        case wait
+        /// A ver outro canal: perguntar se muda (falta pouco para começar).
+        case prompt
+        /// Gravar agora: o canal já está aberto (a ver ou a gravar), ou não se está a ver nada.
+        case start
+        /// Mudar o leitor para o canal da gravação (respondeu que sim, ou ninguém respondeu até à hora).
+        case switchChannel
+        /// Não gravar: [skipUser], [skipBusy] (já se grava outro canal), [skipHls] ou [skipSpace].
+        case skip(String)
+        /// A hora já passou sem se ter gravado.
+        case expired
+    }
+
+    public static let skipUser = "user"
+    public static let skipBusy = "busy"
+    public static let skipHls = "hls"
+    public static let skipSpace = "space"
+
+    /// O que fazer agora ([now]) com [r], que grava em [w]. Sem resposta até à hora, muda-se para o canal da gravação
+    /// (como uma box com um só sintonizador). Uma gravação de outro canal a decorrer ganha (a que já começou não se corta).
+    public static func decide(_ r: ScheduledRecording, _ w: Window, now: Int64, watching: Watching?, busy: [Busy], answer: Answer?) -> Decision {
+        if now >= w.toMs { return .expired }
+        if now < w.fromMs - promptLeadMs { return .wait }
+        if r.url == nil { return now >= w.fromMs ? .skip(skipHls) : .wait }
+        if answer == .skip { return .skip(skipUser) }
+        let recordingThis = busy.contains { r.sameChannel($0.playlistId, $0.channelKey) }
+        if !busy.isEmpty, !recordingThis { return now >= w.fromMs ? .skip(skipBusy) : .wait }
+        let watchingThis = watching.map { $0.live && r.sameChannel($0.playlistId, $0.channelKey) } ?? false
+        if watching == nil || watchingThis || recordingThis { return now >= w.fromMs ? .start : .wait }
+        if answer == .switchChannel || now >= w.fromMs { return .switchChannel }
+        return .prompt
+    }
+
+    /// As marcadas de outros canais que se sobrepõem a [r] (com as margens): só uma delas vai gravar.
+    public static func conflicts(_ r: ScheduledRecording, _ all: [ScheduledRecording], _ beforeMin: Int, _ afterMin: Int) -> [ScheduledRecording] {
+        let w = window(r, beforeMin, afterMin)
+        return all.filter { o in
+            let ow = window(o, beforeMin, afterMin)
+            return o.id != r.id && !o.sameChannel(r.playlistId, r.channelKey) && ow.fromMs < w.toMs && w.fromMs < ow.toMs
+        }
+    }
+
+    /// A próxima hora a que é preciso tratar de uma marcada: o início, com a margem, da próxima que ainda não começou.
+    public static func nextWake(_ schedule: Schedule, _ beforeMin: Int, _ afterMin: Int, now: Int64) -> Int64? {
+        schedule.recordings.map { window($0, beforeMin, afterMin).fromMs }.filter { $0 > now }.min()
+    }
+
+    /// O mesmo título, sem maiúsculas, acentos nem espaços a mais (o guia não escreve sempre igual).
+    public static func titleKey(_ title: String) -> String {
+        let folded = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US_POSIX"))
+        return folded.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
+    /// Os programas de [entries] (o guia do canal da série) que a regra marca agora: o mesmo título, ainda por
+    /// começar, dentro de [seriesHorizonMs], que não estejam marcados nem já tratados.
+    public static func seriesEntries(_ rule: SeriesRule, _ entries: [EpgEntry], _ schedule: Schedule, now: Int64) -> [EpgEntry] {
+        let key = titleKey(rule.title)
+        let marked = Set(schedule.recordings.map(\.instanceKey))
+        return entries.filter { e in
+            let k = ScheduledRecording.instanceKey(rule.playlistId, rule.channelKey, e.startMs)
+            return e.startMs > now && e.startMs < now + seriesHorizonMs && titleKey(e.title) == key && !marked.contains(k) && schedule.handled[k] == nil
+        }
+    }
+
+    /// Tira o que já passou: marcadas cujo fim (com margem) já foi, e programas tratados há mais de uns dias.
+    public static func prune(_ schedule: Schedule, _ beforeMin: Int, _ afterMin: Int, now: Int64) -> Schedule {
+        var s = schedule
+        s.recordings = schedule.recordings.filter { window($0, beforeMin, afterMin).toMs > now }
+        s.handled = schedule.handled.filter { $0.value > now - handledKeepMs }
+        return s
+    }
+}
+
+/// O espaço em disco das gravações, com a mesma reserva da pausa do direto (o que fica sempre livre para o sistema).
+public enum RecordingSpace {
+    public static let reserveBytes: Int64 = 512 * 1024 * 1024
+    /// Sem saber o débito do canal: 8 Mbit/s (um canal HD normal).
+    public static let defaultBytesPerSecond: Int64 = 1_000_000
+    /// Para começar, tem de caber isto do canal além da reserva.
+    public static let minStartMs: Int64 = 10 * 60_000
+
+    /// Cabe uma gravação nova? [free]: o livre no disco; [bytesPerSecond]: o débito do canal, se se souber.
+    public static func canStart(free: Int64, bytesPerSecond: Int64?) -> Bool {
+        free - reserveBytes >= (bytesPerSecond ?? defaultBytesPerSecond) * (minStartMs / 1000)
+    }
+
+    /// A meio: pára quando o livre chega à reserva.
+    public static func mustStop(free: Int64) -> Bool { free <= reserveBytes }
+
+    /// O débito de um anel que gravou [bytes] em [mediaMs] de vídeo, ou nil com pouco ainda (menos de 5 s).
+    public static func rate(bytes: Int64, mediaMs: Int64) -> Int64? { mediaMs < 5_000 ? nil : bytes * 1000 / mediaMs }
+}
+
+/// As gravações no disco: em [dir] cada uma é `<id>.ts` (o vídeo) e `<id>.json` (a [RecordingInfo]). A lista do que
+/// está marcado fica noutro sítio, [scheduleFile] (tem os URLs com as credenciais). As fichas escrevem-se de forma
+/// atómica (um ficheiro temporário que depois troca de nome): uma app que morre a meio não deixa uma ficha partida.
+public struct RecordingFiles: Sendable {
+    public let dir: URL
+    public let scheduleFile: URL
+
+    public init(dir: URL, scheduleFile: URL) {
+        self.dir = dir
+        self.scheduleFile = scheduleFile
+    }
+
+    public func videoFile(_ id: String) -> URL { dir.appendingPathComponent(id + ".ts") }
+    private func infoFile(_ id: String) -> URL { dir.appendingPathComponent(id + ".json") }
+
+    /// Todas as gravações, as mais recentes primeiro (uma ficha que não se lê é ignorada; o ficheiro fica).
+    public func list() -> [RecordingInfo] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "json" }
+            .compactMap { (try? Data(contentsOf: $0)).flatMap(Self.parseInfo) }
+            .sorted { $0.fileStartMs > $1.fileStartMs }
+    }
+
+    public func read(_ id: String) -> RecordingInfo? { (try? Data(contentsOf: infoFile(id))).flatMap(Self.parseInfo) }
+
+    public func write(_ info: RecordingInfo) throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try info.json.encoded().write(to: infoFile(info.id), options: .atomic)
+    }
+
+    /// Apaga o vídeo e a ficha.
+    @discardableResult
+    public func delete(_ id: String) -> Bool {
+        let files = FileManager.default
+        let video = videoFile(id)
+        let ok = !files.fileExists(atPath: video.path) || (try? files.removeItem(at: video)) != nil
+        try? files.removeItem(at: infoFile(id))
+        return ok
+    }
+
+    public static func parseInfo(_ data: Data) -> RecordingInfo? { (try? JSON.parse(data)).flatMap(RecordingInfo.init(json:)) }
+
+    public func loadSchedule() -> Schedule {
+        guard let data = try? Data(contentsOf: scheduleFile), let js = try? JSON.parse(data) else { return Schedule() }
+        return Schedule(json: js)
+    }
+
+    public func saveSchedule(_ schedule: Schedule) throws {
+        try FileManager.default.createDirectory(at: scheduleFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try schedule.json.encoded().write(to: scheduleFile, options: .atomic)
+    }
+}
