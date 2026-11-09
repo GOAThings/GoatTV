@@ -89,6 +89,7 @@ import cc.slokker.itv.ui.theme.tabular
 import androidx.tv.material3.LocalTextStyle
 import cc.slokker.itv.ui.player.engine.titleCard
 import cc.slokker.itv.ui.player.engine.status
+import cc.slokker.itv.ui.common.formatDuration
 
 @Composable
 internal fun VideoArea(
@@ -292,7 +293,7 @@ internal fun VideoArea(
                         when {
                             behind != null -> if (behind <= Timeshift.LIVE_SNAP_MS) s.playerGoLive else behindLabel(behind)
                             goesLive -> s.playerGoLive
-                            else -> "→ ${durationText(landing(target, seekBase))}"
+                            else -> "→ ${formatDuration(landing(target, seekBase))}"
                         },
                         color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                         modifier = Modifier.align(Alignment.TopCenter).offset(y = (-30).dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 5.dp),
@@ -352,7 +353,7 @@ internal fun VideoArea(
                     val fraction = scrub ?: (position.toFloat() / duration).coerceIn(0f, 1f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // No catch-up conta onde vai; em direto, as horas já estão por cima.
-                        if (cu != null) Text(durationText((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
+                        if (cu != null) Text(formatDuration((fraction * duration).toLong()), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
                         if (cu == null && ts.shifted && scrub == null) {
                             Text(behindLabel(ts.behindMs), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp), style = LocalTextStyle.current.tabular)
                         }
@@ -369,7 +370,7 @@ internal fun VideoArea(
                             },
                             modifier = Modifier.weight(1f),
                         )
-                        if (cu != null) Text(durationText(duration), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp), style = LocalTextStyle.current.tabular)
+                        if (cu != null) Text(formatDuration(duration), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp), style = LocalTextStyle.current.tabular)
                     }
                 }
                 if (fullscreen) {
@@ -468,13 +469,6 @@ private fun PlayerBar(progress: Float, seekable: Boolean, onChange: (Float) -> U
     }
 }
 
-private fun durationText(ms: Long): String {
-    val total = ms.coerceAtLeast(0) / 1000
-    val hours = total / 3600
-    val minutes = total / 60 % 60
-    val seconds = total % 60
-    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
-}
 
 /** Recuar ou avançar 30 segundos, ao lado do botão de pausa. */
 @Composable

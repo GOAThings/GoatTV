@@ -70,6 +70,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.ui.common.formatDuration
 
 /** Pesquisa de canais e programas, encostada à esquerda (como os painéis). */
 @Composable
@@ -308,14 +310,6 @@ internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendi
 
 /** "−1:05": quanto a pausa do direto vai atrás (para a cápsula no canto). */
 internal fun behindLabel(ms: Long) = "−" + formatDuration(ms)
-
-private fun formatDuration(ms: Long): String {
-    val total = (ms / 1000).coerceAtLeast(0)
-    val h = total / 3600
-    val m = (total % 3600) / 60
-    val sec = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-}
 
 /** Escolha do temporizador para desligar. */
 @Composable

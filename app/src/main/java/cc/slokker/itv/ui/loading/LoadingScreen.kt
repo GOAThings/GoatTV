@@ -26,8 +26,8 @@ import cc.slokker.itv.ui.common.Logo
 import cc.slokker.itv.ui.glass.AuroraBackground
 import cc.slokker.itv.ui.glass.GlassButton
 import cc.slokker.itv.ui.glass.glass
-import cc.slokker.itv.ui.player.focusWithRetry
 import cc.slokker.itv.ui.theme.ItvColors
+import cc.slokker.itv.ui.common.focusWithRetry
 
 @Composable
 fun LoadingScreen(

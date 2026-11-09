@@ -43,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,6 +96,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.ui.common.focusWithRetry
 
 /** Painel de vidro encostado à esquerda; canais e grupos trocam no mesmo sítio. */
 @Composable
@@ -675,13 +675,5 @@ internal fun PinDialog(title: String, error: String?, onDone: (String) -> Unit, 
             .padding(24.dp),
     ) {
         PinPad(title = title, message = error, onDone = onDone, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-/** Pede foco durante alguns frames, até o elemento existir (listas e animações ainda a compor). */
-internal suspend fun focusWithRetry(requester: FocusRequester) {
-    repeat(10) {
-        withFrameNanos { }
-        if (runCatching { requester.requestFocus() }.getOrDefault(false)) return
     }
 }

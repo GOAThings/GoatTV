@@ -110,6 +110,7 @@ import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
 import cc.slokker.itv.ui.player.engine.AppPlaybackHost
+import cc.slokker.itv.ui.common.focusWithRetry
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }

@@ -104,6 +104,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.scale
 import java.util.Calendar
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.ui.common.dayLabel
 
 /** Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui). */
 /** A informação do programa escolhido, entre os grupos e a grelha. */
@@ -792,17 +794,4 @@ private fun floorHalfHour(t: Long): Long {
     c.set(Calendar.SECOND, 0)
     c.set(Calendar.MILLISECOND, 0)
     return c.timeInMillis
-}
-
-/** "Hoje", "Ontem", "Amanhã" ou o dia da semana. */
-internal fun dayLabel(s: Strings, t: Long): String {
-    // Dias desde 1970 na hora local (dá certo também na passagem de ano).
-    fun dayOf(ms: Long) = Math.floorDiv(ms + java.util.TimeZone.getDefault().getOffset(ms), 86_400_000L)
-    val today = dayOf(System.currentTimeMillis())
-    return when ((dayOf(t) - today).toInt()) {
-        0 -> s.today
-        -1 -> s.yesterday
-        1 -> s.tomorrow
-        else -> java.text.SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(s.locale, "EEEd"), s.locale).format(java.util.Date(t))
-    }
 }

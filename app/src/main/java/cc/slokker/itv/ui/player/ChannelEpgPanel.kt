@@ -50,6 +50,8 @@ import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.ui.common.dayLabel
 
 /**
  * EPG de um canal, ao lado da lista de canais (→ na lista): os programas por ordem, com o atual em foco.

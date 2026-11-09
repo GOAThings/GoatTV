@@ -28,10 +28,10 @@ import cc.slokker.itv.ui.common.Logo
 import cc.slokker.itv.ui.glass.AuroraBackground
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
-import cc.slokker.itv.ui.player.focusWithRetry
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalAccent
+import cc.slokker.itv.ui.common.focusWithRetry
 
 /**
  * Primeira vez que se abre a app: entrar com a conta GOAT (recomendado, sincroniza tudo entre dispositivos)

@@ -80,10 +80,10 @@ import cc.slokker.itv.ui.glass.rowText
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextOverflow
 import cc.slokker.itv.ui.i18n.LocalStrings
-import cc.slokker.itv.ui.player.focusWithRetry
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.ui.common.focusWithRetry
 
 /** Uma linha de definições. [key] serve para devolver o foco à linha certa ao voltar atrás. */
 internal sealed class Item(val key: String) {

@@ -62,9 +62,9 @@ import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
-import cc.slokker.itv.ui.player.dayLabel
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import cc.slokker.itv.ui.common.dayLabel
 
 /**
  * Procurar: antes de escrever, as pesquisas recentes, o que está a dar nos canais vistos há pouco e os grupos;

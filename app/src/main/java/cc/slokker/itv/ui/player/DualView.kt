@@ -66,6 +66,7 @@ import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.SecondPlaybackHost
 import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
+import cc.slokker.itv.ui.common.focusWithRetry
 
 /** Como se mostram os dois canais. */
 internal enum class DualLayout { PIP, SPLIT }
