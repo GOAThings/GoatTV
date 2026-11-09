@@ -110,6 +110,8 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var openedCandidates: [StreamCandidate] = []
     /// Parado a meio de uma passagem de canais (a imagem fica, a ligação foi largada), à espera de onde se parar.
     @ObservationIgnored private var held = false
+    /// Largou a ligação para uma gravação abrir a sua (ver [releaseForRecording]).
+    @ObservationIgnored private var waitingForRecording = false
 
     // MARK: Faixas (língua preferida)
 
@@ -128,6 +130,9 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var manualSubtitle: (code: String?, name: String)?
     /// "auto" (HDR quando o canal é HDR) ou "sdr" (a TV fica sempre em SDR).
     @ObservationIgnored var hdr = "auto"
+    /// O leitor principal: a sua ligação é a única ao fornecedor (com a das gravações, ver ChannelFeed). O segundo canal
+    /// tem a sua, à parte.
+    @ObservationIgnored var ownsProviderConnection = true
     /// Só o leitor principal muda o modo da TV (o segundo canal não).
     @ObservationIgnored var controlsDisplay = true
     /// Mantém a última imagem do canal anterior até o novo começar.
@@ -356,6 +361,24 @@ final class PlayerEngine: NSObject {
         }
     }
 
+    /// Uma gravação marcada deste canal vai abrir a sua ligação (com a pausa do direto desligada, o leitor tinha a sua):
+    /// o leitor larga a dele primeiro (uma ligação de cada vez), e [reopenAfterRecording] volta a abrir o canal pelo anel
+    /// da gravação.
+    func releaseForRecording() {
+        guard ownsProviderConnection, state != .idle, openedLive, !timeshift.usesRing else { return }
+        retry?.cancel()
+        watchdog?.cancel()
+        stopBackends()
+        state = .opening
+        waitingForRecording = true
+    }
+
+    func reopenAfterRecording() {
+        guard waitingForRecording else { return }
+        waitingForRecording = false
+        retryNow()
+    }
+
     /// Volta a tentar já (OK no erro).
     func retryNow() {
         retry?.cancel()
@@ -419,6 +442,11 @@ final class PlayerEngine: NSObject {
     }
 
     private func start() {
+        // Uma gravação deste canal: abre-se o endereço que ela grava (é a mesma ligação).
+        if index == 0, pausable, let feed = ChannelFeed.current, !feed.isClosed,
+           let i = attempts.firstIndex(where: { $0.candidate.url == feed.url && $0.backend == .vlc }), i > 0 {
+            index = i
+        }
         guard let linkResolver, index == 0 else {
             open()
             return
@@ -453,8 +481,9 @@ final class PlayerEngine: NSObject {
         state = .opening
         switch backend {
         case .vlc:
-            // Pausar o direto: a ligação é do gravador, o VLC lê do anel. Sem ele, o VLC liga-se ao servidor.
-            if pausable, timeshiftEnabled, !attempt.candidate.isHLS,
+            // Pausar o direto: a ligação é do gravador, o VLC lê do anel. Sem ele, o VLC liga-se ao servidor. O canal que
+            // uma gravação está a gravar abre sempre pelo anel dela (é a mesma ligação), mesmo sem a pausa do direto.
+            if pausable, timeshiftEnabled || ChannelFeed.find(attempt.candidate.url) != nil, !attempt.candidate.isHLS,
                let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
                 startVLC(local, ring: true)
                 startTimeshiftTicker()
@@ -1313,7 +1342,11 @@ extension PlayerEngine {
 
     /// Uma ligação de cada vez: se a do gravador da pausa do direto ainda está a fechar, espera por ela (até 3 s).
     fileprivate func whenConnectionFree(_ work: @escaping () -> Void) {
-        guard timeshift.closing else { return work() }
+        // Uma ligação sua (sem anel): a do anel (o direto anterior, ou uma gravação) fecha primeiro. Um ficheiro do
+        // disco (uma gravação a ver) não liga ao fornecedor; o segundo canal tem a sua.
+        let local = attempts.indices.contains(index) && URL(string: attempts[index].candidate.url)?.isFileURL == true
+        if ownsProviderConnection, !local { ChannelFeed.yieldConnection() }
+        guard ownsProviderConnection, !local, timeshift.closing else { return work() }
         let attempt = index
         openTask = Task { [weak self] in
             await self?.timeshift.waitClosed()

@@ -51,7 +51,6 @@ final class Timeshift {
     @ObservationIgnored private var following = true
     @ObservationIgnored private var baselineMs: Int64 = 0
     @ObservationIgnored private var session: Session?
-    @ObservationIgnored private var lastRecorder: TimeshiftRecorder?
     @ObservationIgnored private var generation = 0
     /// HLS no leitor da Apple: o direto e o mais antigo da janela dele, na última atualização (ms do AVPlayer).
     @ObservationIgnored private(set) var hls = false
@@ -60,89 +59,74 @@ final class Timeshift {
     @ObservationIgnored private var hlsSeenEnd: Int64?
     @ObservationIgnored private var hlsSeenAt: Int64 = 0
 
-    /// Um canal aberto pelo anel.
+    /// Um canal aberto pelo anel: a ligação do canal (partilhada com uma gravação, ver ChannelFeed) e a porta local por
+    /// onde o VLC a lê.
     private final class Session {
         let id: Int
-        let ring: TimeshiftRing
+        let feed: ChannelFeed
         let server: RingServer
-        let recorder: TimeshiftRecorder
         /// Tempo do vídeo (no anel) onde começou a leitura atual do VLC.
         var startMediaMs: Int64 = 0
 
-        init(id: Int, ring: TimeshiftRing, server: RingServer, recorder: TimeshiftRecorder) {
+        init(id: Int, feed: ChannelFeed, server: RingServer) {
             self.id = id
-            self.ring = ring
+            self.feed = feed
             self.server = server
-            self.recorder = recorder
         }
 
-        /// Fecha a ligação ao servidor, a porta local e apaga o anel.
-        func close() {
-            recorder.close()
-            server.stop()
-            ring.close()
-        }
+        var ring: TimeshiftRing { feed.ring }
     }
 
-    /// O VLC está a ler do anel (o gravador tem a ligação).
+    /// O VLC está a ler do anel (a ligação é do anel).
     var usesRing: Bool { session != nil }
+    /// A ligação do canal a dar pelo anel (para gravar o que se está a ver).
+    var feed: ChannelFeed? { session.flatMap { $0.feed.isClosed ? nil : $0.feed } }
     /// O código HTTP com que o servidor recusou o stream ao gravador (para explicar o erro).
-    var httpStatus: Int? { session?.recorder.httpStatus }
+    var httpStatus: Int? { session?.feed.recorder.httpStatus }
 
     // MARK: Abrir e fechar
 
     /// Abre [url] pelo anel e devolve o endereço local para o VLC, ou nil para abrir como sempre (pouco espaço
     /// livre, sem porta). [reconnectSeconds]: de quanto em quanto tempo o gravador volta a ligar se a ligação cair.
+    /// Se a ligação deste canal já está aberta (uma gravação dele), o leitor lê dela, uns segundos atrás do direto.
+    @MainActor
     func open(_ url: URL, userAgent: String, referrer: String?, reconnectSeconds: Int) -> URL? {
         clear()
-        guard let capacity = Self.capacity() else { return nil }
-        generation += 1
-        let id = generation
-        let ring: TimeshiftRing
-        do {
-            ring = try TimeshiftRing(path: Self.dir.appendingPathComponent("ring-\(id).ts").path, capacity: capacity,
-                                     maxAgeMs: Self.maxAgeMs, clock: Self.clock)
-        } catch {
-            DebugLog.add("Timeshift: no ring (\(error))")
-            return nil
-        }
-        let server = RingServer(ring: ring)
+        let shared = ChannelFeed.find(url.absoluteString).flatMap { $0.hold(.player) ? $0 : nil }
+        guard let feed = shared ?? ChannelFeed.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds,
+                                                    holder: .player) else { return nil }
+        let server = RingServer(ring: feed.ring)
         do {
             try server.start()
         } catch {
-            ring.close()
+            feed.release(.player)
             DebugLog.add("Timeshift: no local port (\(error))")
             return nil
         }
-        var request = URLRequest(url: url)
-        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        if let referrer, !referrer.isEmpty { request.setValue(referrer, forHTTPHeaderField: "Referer") }
-        let recorder = TimeshiftRecorder(ring: ring, request: request, reconnectSeconds: reconnectSeconds, previous: lastRecorder)
-        // Os avisos do gravador chegam de outra fila; um gravador antigo (canal anterior) já não conta.
-        recorder.onReconnect = { [weak self] attempt, wait in
-            Task { @MainActor in
-                guard let self, self.session?.id == id else { return }
-                self.onReconnect?(attempt, Date().addingTimeInterval(wait), wait)
-            }
+        generation += 1
+        let id = generation
+        // Os avisos da ligação (um leitor antigo já não conta).
+        feed.onReconnect = { [weak self] attempt, wait in
+            guard let self, self.session?.id == id else { return }
+            self.onReconnect?(attempt, Date().addingTimeInterval(wait), wait)
         }
-        recorder.onConnected = { [weak self] in
-            Task { @MainActor in
-                guard let self, self.session?.id == id else { return }
-                self.onConnected?()
-            }
+        feed.onConnected = { [weak self] in
+            guard let self, self.session?.id == id else { return }
+            self.onConnected?()
         }
-        recorder.onNotTs = { [weak self] in
-            Task { @MainActor in
-                guard let self, self.session?.id == id else { return }
-                DebugLog.add("Timeshift: not a TS stream, opening it directly")
-                self.onNotTs?()
-            }
+        feed.onNotTs = { [weak self] in
+            guard let self, self.session?.id == id else { return }
+            DebugLog.add("Timeshift: not a TS stream, opening it directly")
+            self.onNotTs?()
         }
-        session = Session(id: id, ring: ring, server: server, recorder: recorder)
-        lastRecorder = recorder
-        recorder.start()
-        DebugLog.add("Timeshift: recording (ring \(capacity / 1_048_576) MB)")
-        return server.url(at: 0)
+        let s = Session(id: id, feed: feed, server: server)
+        session = s
+        guard shared != nil, let entry = feed.ring.entry(atOrBefore: feed.ring.liveMediaMs - Self.liveStartMs) else {
+            return server.url(at: 0)
+        }
+        DebugLog.add("Timeshift: reading the recording's connection")
+        s.startMediaMs = entry.mediaMs
+        return server.url(at: entry.offset)
     }
 
     /// HLS no leitor da Apple: a janela dele (ver [updateHls]).
@@ -151,9 +135,13 @@ final class Timeshift {
         hls = true
     }
 
-    /// Fecha a ligação e apaga o anel (outro canal, catch-up, app em segundo plano).
+    /// O leitor larga o anel (outro canal, catch-up, app em segundo plano): sem uma gravação a segurá-la, a ligação
+    /// fecha e o anel apaga-se.
     func clear() {
-        session?.close()
+        if let s = session {
+            s.server.stop()
+            s.feed.release(.player)
+        }
         session = nil
         hls = false
         seeking = false
@@ -163,37 +151,13 @@ final class Timeshift {
         unavailable()
     }
 
-    /// A ligação do gravador anterior ainda não fechou.
-    var closing: Bool { session == nil && lastRecorder?.isDone == false }
+    /// A ligação anterior ainda não fechou.
+    var closing: Bool { session == nil && ChannelFeed.closing }
 
-    /// Espera (até 3 s) que a ligação do gravador anterior feche: o fornecedor só deixa uma.
+    /// Espera (até 3 s) que a ligação anterior feche: o fornecedor só deixa uma.
     func waitClosed() async {
-        var waited = 0
-        while closing, waited < Self.previousWaitMs {
-            try? await Task.sleep(for: .milliseconds(50))
-            waited += 50
-        }
+        await ChannelFeed.waitClosed()
     }
-
-    /// Espaço para o anel: até [maxBytes], sem passar de metade do livre (tirando uma reserva).
-    private static func capacity() -> Int64? {
-        let files = FileManager.default
-        try? files.createDirectory(at: dir, withIntermediateDirectories: true)
-        // Restos de uma sessão que não fechou (a app morreu a meio).
-        for file in (try? files.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [] {
-            try? files.removeItem(at: file)
-        }
-        let free = ((try? files.attributesOfFileSystem(forPath: dir.path))?[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
-        let bytes = min(maxBytes, (free - reserveBytes) / 2)
-        guard bytes >= TimeshiftRing.minCapacity else {
-            DebugLog.add("Timeshift: little free space (\(free / 1_048_576) MB), no pause")
-            return nil
-        }
-        return bytes
-    }
-
-    private static let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("timeshift", isDirectory: true)
 
     /// Um relógio que só anda para a frente (o do vídeo não pode recuar se a hora do aparelho mudar).
     private static let clock: () -> Int64 = { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
@@ -207,7 +171,7 @@ final class Timeshift {
     func update(positionMs: Int64?, paused: Bool, settled: Bool, programmeStart: (Int64) -> Int64?) {
         guard let s = session else { return }
         let ring = s.ring
-        guard ring.isTs == true, !s.recorder.notTs else { return unavailable() }
+        guard ring.isTs == true, !s.feed.recorder.notTs else { return unavailable() }
         var live = ring.liveMediaMs
         let at = s.startMediaMs + (positionMs ?? 0)
         // O programa no ponto que se vê (não no direto: em pausa no fim do jogo, o jogo fica até se passar dele).
