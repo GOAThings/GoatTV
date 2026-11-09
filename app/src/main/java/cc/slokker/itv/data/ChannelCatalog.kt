@@ -123,6 +123,9 @@ class ChannelCatalog(
     /** Canal com o número [n] (teclas numéricas do comando). Os bloqueados e os escondidos (canal ou grupo) não contam. */
     fun channelByNumber(n: Int): Channel? = content?.channels?.firstOrNull { it.num == n && isVisible(it) }
 
+    /** As chaves dos Recentes da lista, o mais recente primeiro (sem filtro: quem lê decide o que conta). */
+    fun recentKeys(): List<String> = playlistId?.let { recents[it] }.orEmpty()
+
     fun isFavorite(channel: Channel): Boolean {
         val playlistId = playlistId ?: return false
         return channel.key in favorites[playlistId].orEmpty()

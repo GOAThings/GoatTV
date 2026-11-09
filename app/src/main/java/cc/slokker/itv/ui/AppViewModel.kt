@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.common.ErrorInfo
+import cc.slokker.itv.ui.state.PlaybackState
 import cc.slokker.itv.ui.common.explainPlaylistError
 import android.app.Application
 import android.content.Context
@@ -205,30 +206,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _unlocked = MutableStateFlow<Set<String>>(emptySet())
     val unlocked: StateFlow<Set<String>> = _unlocked.asStateFlow()
 
+    /** O canal a tocar, o grupo do zapping, o anterior, o catch-up e o segundo canal (ver PlaybackState). */
+    private val playback = PlaybackState(::catalog, ::catalogFor, onTuned = ::scheduleSaveLast)
+
     /** Grupo do canal a ver: é por ele que CH+/CH− navegam e é o que o painel de canais abre. */
-    private val _selectedCategory = MutableStateFlow(SpecialCategory.ALL)
-    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+    val selectedCategory: StateFlow<String> = playback.selectedCategory
 
-    /** Quando não há canal para retomar, o player abre já com o painel de canais. */
-    private var openPanelOnStart = false
-
-    private val _playing = MutableStateFlow<Channel?>(null)
-    val playing: StateFlow<Channel?> = _playing.asStateFlow()
-
-    /** Canais da categoria onde se carregou OK: é por eles que CH+/CH− navegam. */
-    private var zapList: List<Channel> = emptyList()
+    val playing: StateFlow<Channel?> = playback.playing
 
     /** Últimos canais vistos (`settings.recent_channels`): playlistId → channelKeys, o mais recente primeiro. */
     private val _recents = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val recents: StateFlow<Map<String, List<String>>> = _recents.asStateFlow()
 
-    /** O canal visto antes do atual (→ volta a ele) e desde quando o atual está no ecrã. */
-    private var previous: Channel? = null
-    private var playingSince = 0L
-
     /** Programa a ver em catch-up (null = em direto). */
-    private val _catchup = MutableStateFlow<Catchup?>(null)
-    val catchup: StateFlow<Catchup?> = _catchup.asStateFlow()
+    val catchup: StateFlow<Catchup?> = playback.catchup
 
     /** Hora a que o temporizador para a app (null = desligado). Só nesta TV, até a app fechar. */
     private val _sleepAt = MutableStateFlow<Long?>(null)
@@ -239,10 +230,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val reminders: StateFlow<List<Reminder>> = _reminders.asStateFlow()
 
     /** Segundo canal no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
-    data class SecondView(val content: PlaylistContent, val channel: Channel, val zapList: List<Channel>)
-
-    private val _second = MutableStateFlow<SecondView?>(null)
-    val second: StateFlow<SecondView?> = _second.asStateFlow()
+    val second: StateFlow<PlaybackState.SecondView?> = playback.second
 
     /** Listas carregadas só para o segundo canal (a principal está em [content]). */
     private val secondContents = HashMap<String, PlaylistContent>()
@@ -436,7 +424,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun leaveActivation() {
         when {
             !_local.value -> _screen.value = Screen.Welcome
-            _content.value != null && _playing.value != null -> _screen.value = Screen.Player
+            _content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
             else -> startLoading(resume = true)
         }
     }
@@ -806,11 +794,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun showContent(loaded: PlaylistContent, resume: Boolean) {
         val playlist = loaded.playlist
-        _second.value?.let { sv ->
+        playback.second.value?.let { sv ->
             // A lista principal passou a ser a da conta do segundo canal, e o plano só tem 1 ligação.
             val twoAllowed = !playlist.type.kind.knowsConnectionLimit || (loaded.account?.maxConnections ?: 0) >= 2
             if (sv.content.playlist.sharesConnectionsWith(playlist) && !twoAllowed) {
-                _second.value = null
+                playback.closeSecond()
                 showToast(I18n.s.secondClosedSameAccount)
             }
         }
@@ -818,8 +806,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         openGuide(loaded)
         _content.value = loaded
         uploadIndex(loaded)
-        _selectedCategory.value = SpecialCategory.ALL
-        _playing.value = null
+        playback.clearForNewContent()
         if (loaded.channels.isEmpty()) {
             _screen.value = Screen.Loading("", I18n.s.errPlaylistEmpty(playlist.name))
             return
@@ -842,7 +829,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             val channel = lastKey?.let { loaded.byKey[it] }?.takeIf { !isGroupLocked(it.categoryId) }
             if (channel != null) {
-                openPanelOnStart = _prefs.value.startup == Prefs.Startup.LIST
+                playback.openPanelOnStart(_prefs.value.startup == Prefs.Startup.LIST)
                 play(channel, channel.categoryId)
                 return
             }
@@ -851,11 +838,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val first = channelsOf(SpecialCategory.ALL).firstOrNull() ?: loaded.channels.firstOrNull { !isGroupLocked(it.categoryId) }
         if (first == null) {
             // Tudo bloqueado: nunca abre um canal assim. As Definições (com o PIN) ou outra lista resolvem.
-            zapList = emptyList()
             _screen.value = Screen.Loading("", I18n.s.errAllLocked(playlist.name))
             return
         }
-        openPanelOnStart = true
+        playback.openPanelOnStart(true)
         play(first, SpecialCategory.ALL)
     }
 
@@ -877,14 +863,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _content.value = fresh
             uploadIndex(fresh)
             if (guideChanged) openGuide(fresh)
-            // O canal a tocar continua o mesmo (pela chave); o zapping passa a usar a lista nova.
-            _playing.value?.let { p -> fresh.byKey[p.key]?.let { _playing.value = it } }
-            // Se o grupo do canal deixou de existir (o fornecedor mudou a lista), o painel abre em "Todos".
-            val group = _selectedCategory.value
-            if (group != SpecialCategory.ALL && group != SpecialCategory.FAVORITES && fresh.byCategory[group].isNullOrEmpty()) {
-                _selectedCategory.value = SpecialCategory.ALL
-            }
-            zapList = channelsOf(_selectedCategory.value).ifEmpty { listOfNotNull(_playing.value) }
+            playback.onContentRefreshed(fresh)
             if (notify) showToast(I18n.s.playlistUpdated)
         }
     }
@@ -1045,7 +1024,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _screen.value = Screen.Welcome
             }
             playlist.id == _content.value?.playlist?.id -> switchPlaylist(remaining.first())
-            _second.value?.content?.playlist?.id == playlist.id -> _second.value = null
+            playback.second.value?.content?.playlist?.id == playlist.id -> playback.closeSecond()
         }
     }
 
@@ -1077,7 +1056,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** true uma única vez depois de carregar sem canal para retomar. */
-    fun consumeOpenPanelOnStart(): Boolean = openPanelOnStart.also { openPanelOnStart = false }
+    fun consumeOpenPanelOnStart(): Boolean = playback.consumeOpenPanelOnStart()
 
     /**
      * Volta a ler a config da conta (listas, favoritos, definições) sem recarregar a lista atual.
@@ -1575,56 +1554,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Põe [channel] a tocar; CH+/CH− passam a percorrer o grupo [groupId]. */
     fun play(channel: Channel, groupId: String) {
-        _selectedCategory.value = groupId
-        zapList = channelsOf(groupId).ifEmpty { listOf(channel) }
-        _catchup.value = null
-        setPlaying(channel, explicit = true)
+        playback.playIn(channel, groupId)
         _screen.value = Screen.Player
     }
 
     /** Muda de canal dentro da categoria atual (dá a volta nas pontas). */
-    fun zap(delta: Int) {
-        val current = _playing.value ?: return
-        if (zapList.size < 2) return
-        val index = zapList.indexOfFirst { it.uid == current.uid }.coerceAtLeast(0)
-        // A lista foi feita antes: o que conta é o bloqueio neste momento.
-        val next = nextAllowed(zapList, index, delta) { isGroupLocked(it.categoryId) } ?: return
-        _catchup.value = null
-        setPlaying(next)
-    }
-
-    /**
-     * Troca o canal no ecrã e decide qual fica como "anterior" (→): o que se via, se se ficou nele uns segundos
-     * (passar por canais no zapping não conta), ou sempre que se salta de propósito com [explicit].
-     */
-    private fun setPlaying(next: Channel, explicit: Boolean = false) {
-        val old = _playing.value
-        val now = System.currentTimeMillis()
-        if (old != null && old.key != next.key && (explicit || now - playingSince >= WATCHED_MS)) previous = old
-        if (old?.key != next.key) playingSince = now
-        _playing.value = next
-        scheduleSaveLast(next)
-    }
+    fun zap(delta: Int) = playback.zap(delta)
 
     /** O último canal visto antes do atual: o da sessão, ou o dos Recentes (ex.: logo ao abrir a app). */
-    fun previousChannel(): Channel? {
-        val content = _content.value ?: return null
-        val current = _playing.value?.key
-        previous?.let { p -> content.byKey[p.key]?.takeIf { it.key != current && !isGroupLocked(it.categoryId) }?.let { return it } }
-        return _recents.value[content.playlist.id].orEmpty().asSequence()
-            .filter { it != current }
-            .mapNotNull { content.byKey[it] }
-            .firstOrNull { !isGroupLocked(it.categoryId) }
-    }
+    fun previousChannel(): Channel? = playback.previousChannel()
 
     /** → no player: volta ao canal anterior (e carregar outra vez regressa). */
     fun playPrevious(): Boolean {
         val channel = previousChannel() ?: return false
-        _selectedCategory.value = groupFor(channel)
-        zapList = channelsOf(_selectedCategory.value).ifEmpty { listOf(channel) }
-        _catchup.value = null
-        setPlaying(channel, explicit = true)
-        _screen.value = Screen.Player
+        play(channel, groupFor(channel))
         return true
     }
 
@@ -1667,7 +1610,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             groups = groups,
             prefs = _prefs.value,
             favorites = _favorites.value[content.playlist.id].orEmpty().toSet(),
-            current = _playing.value?.key,
+            current = playback.playing.value?.key,
             logos = channelLogos.value,
             byKey = content.byKey,
         )
@@ -1685,7 +1628,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     internal fun phoneNow(): ByteArray? {
         if (!phoneReady()) return null
-        val channel = _playing.value?.key?.let(::phoneChannel) ?: return PhoneChannelList.nowJson(null, null, null)
+        val channel = playback.playing.value?.key?.let(::phoneChannel) ?: return PhoneChannelList.nowJson(null, null, null)
         val now = System.currentTimeMillis()
         val epg = guideEntries(channel).ifEmpty { cachedEpg(channel) }
         val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
@@ -1725,19 +1668,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Grupo onde [channel] fica a fazer zapping: o atual, se o tiver, senão o dele. */
-    fun groupFor(channel: Channel): String {
-        val selected = _selectedCategory.value
-        return if (channelsOf(selected).any { it.uid == channel.uid }) selected else channel.categoryId
-    }
+    fun groupFor(channel: Channel): String = playback.groupFor(channel)
 
     fun channelByNumber(n: Int): Channel? = catalog().channelByNumber(n)
 
+    /** Teclas numéricas: muda já de canal (sem mudar de ecrã) e o zapping passa a ser por "Todos". */
     fun playNumber(n: Int): Boolean {
         val channel = channelByNumber(n) ?: return false
-        _selectedCategory.value = SpecialCategory.ALL
-        zapList = channelsOf(SpecialCategory.ALL).ifEmpty { listOf(channel) }
-        _catchup.value = null
-        setPlaying(channel, explicit = true)
+        playback.playIn(channel, SpecialCategory.ALL)
         return true
     }
 
@@ -1791,25 +1729,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Vê [entry] em catch-up, desde o início (ou desde [positionMs]). */
     fun playCatchup(channel: Channel, entry: EpgEntry, positionMs: Long = 0L) {
-        if (_playing.value?.key != channel.key) play(channel, groupFor(channel))
+        if (playback.playing.value?.key != channel.key) play(channel, groupFor(channel))
         _screen.value = Screen.Player
-        _catchup.value = Catchup(channel, entry.title, entry.startMs, entry.endMs, positionMs.coerceAtLeast(0))
+        playback.startCatchup(channel, entry, positionMs)
     }
 
     /** Avança/recua no catch-up para [positionMs]; passar do direto volta ao direto. */
-    fun seekCatchup(positionMs: Long) {
-        val current = _catchup.value ?: return
-        val liveEdge = System.currentTimeMillis() - current.startMs - Catchup.MIN_AGE_MS
-        _catchup.value = when {
-            positionMs >= liveEdge -> null
-            positionMs >= current.durationMs -> null
-            else -> current.copy(positionMs = positionMs.coerceAtLeast(0))
-        }
-    }
+    fun seekCatchup(positionMs: Long) = playback.seekCatchup(positionMs)
 
-    fun exitCatchup() {
-        _catchup.value = null
-    }
+    fun exitCatchup() = playback.exitCatchup()
 
     // ---- Temporizador e lembretes ------------------------------------------------------------
 
@@ -1901,23 +1829,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsForSecond(content: PlaylistContent, groupId: String): List<Channel> = catalogFor(content).channelsOf(groupId)
 
-    fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) {
-        _second.value = SecondView(content, channel, channelsForSecond(content, groupId).ifEmpty { listOf(channel) })
-    }
+    fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) = playback.openSecond(content, channel, groupId)
 
     /** ↑/↓ no segundo canal (dá a volta nas pontas, como o principal). */
-    fun zapSecond(delta: Int) {
-        val current = _second.value ?: return
-        if (current.zapList.size < 2) return
-        val index = current.zapList.indexOfFirst { it.uid == current.channel.uid }.coerceAtLeast(0)
-        val catalog = catalogFor(current.content)
-        val next = nextAllowed(current.zapList, index, delta) { catalog.isGroupLocked(it.categoryId) } ?: return
-        _second.value = current.copy(channel = next)
-    }
+    fun zapSecond(delta: Int) = playback.zapSecond(delta)
 
-    fun closeSecond() {
-        _second.value = null
-    }
+    fun closeSecond() = playback.closeSecond()
 
     // ---- Atualizações da app -----------------------------------------------------------------
 
@@ -2042,19 +1959,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveLastJob?.cancel()
         pendingLast = playlistId to channel.key
         saveLastJob = viewModelScope.launch {
-            delay(WATCHED_MS) // só grava se ficar no canal (evita um PATCH por cada CH+)
+            delay(PlaybackState.WATCHED_MS) // só grava se ficar no canal (evita um PATCH por cada CH+)
             saveLast(watched = true)
         }
     }
 
     /**
      * A app vai para segundo plano: grava já o canal atual como último (para abrir onde se saiu); nos Recentes
-     * só entra se já se ficou nele [WATCHED_MS].
+     * só entra se já se ficou nele [PlaybackState.WATCHED_MS].
      */
     fun flushLastChannel() {
         if (pendingLast == null) return
         saveLastJob?.cancel()
-        val watched = System.currentTimeMillis() - playingSince >= WATCHED_MS
+        val watched = playback.watchedCurrent()
         viewModelScope.launch { saveLast(watched) }
     }
 
@@ -2093,7 +2010,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeSettings() {
         settingsStartAtNewPlaylist = false
         when {
-            _content.value != null && _playing.value != null -> _screen.value = Screen.Player
+            _content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
             // Sem conta e sem listas (ex.: Voltar no formulário da primeira lista).
             c.token == null && _playlists.value.isEmpty() -> _screen.value = Screen.Welcome
             else -> startLoading(resume = false)
@@ -2152,14 +2069,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // O que está aberto: canal, lista, segundo canal (as listas dele têm credenciais), guias e logótipos.
         cancelBackgroundJobs()
         pendingLast = null
-        _second.value = null
+        playback.reset()
         secondContents.clear()
         _content.value = null
-        _playing.value = null
-        _catchup.value = null
-        zapList = emptyList()
-        previous = null
-        _selectedCategory.value = SpecialCategory.ALL
         c.epg.closeGuides()
         clearEpgMappings()
         countryGuide = null
@@ -2326,8 +2238,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val HOME_UPCOMING = 4
         const val MAX_RECENTS = 20
         const val MAX_SEARCH = 40
-        /** Tempo num canal para contar como visto (anterior e Recentes). */
-        const val WATCHED_MS = 5_000L
         const val REMINDER_AHEAD_MS = 60_000L
         const val REMINDER_GRACE_MS = 10 * 60_000L
         /** Um país pedido pela primeira vez tem programas no servidor em ≤ 1 min. */

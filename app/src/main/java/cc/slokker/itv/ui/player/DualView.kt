@@ -50,6 +50,7 @@ import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.ui.AppViewModel
+import cc.slokker.itv.ui.state.PlaybackState
 import cc.slokker.itv.ui.common.ChannelLogo
 import cc.slokker.itv.ui.common.explainPlaylistError
 import cc.slokker.itv.ui.glass.GlassRow
@@ -83,7 +84,7 @@ internal fun setAudible(player: Player, audible: Boolean) {
 @Composable
 internal fun rememberSecondPlayback(
     vm: AppViewModel,
-    second: AppViewModel.SecondView?,
+    second: PlaybackState.SecondView?,
     prefs: Prefs,
     streamFormat: String?,
     onVideoSize: (Float) -> Unit,
@@ -270,7 +271,7 @@ internal fun SecondChannelPicker(
  */
 @Composable
 internal fun DualDecorations(
-    second: AppViewModel.SecondView,
+    second: PlaybackState.SecondView,
     mainChannel: Channel,
     playback: ChannelPlayback?,
     swapped: Boolean,
