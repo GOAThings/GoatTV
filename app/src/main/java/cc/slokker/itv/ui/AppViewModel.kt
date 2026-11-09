@@ -53,7 +53,7 @@ import cc.slokker.itv.data.TestModeProfile
 import cc.slokker.itv.data.ProfileKeys
 import cc.slokker.itv.data.ProfileKeys.parseKeyLists
 import cc.slokker.itv.data.ProfileKeys.string
-import cc.slokker.itv.data.RefreshPolicy
+import cc.slokker.itv.data.RefreshTracker
 import cc.slokker.itv.data.SessionStore
 import cc.slokker.itv.data.SettingsMerge
 import cc.slokker.itv.data.SpecialCategory
@@ -334,11 +334,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Sobe ao terminar sessão: o que ainda vinha a caminho vê que já não é desta sessão e não grava nada. */
     private var sessionGeneration = 0
 
-    /** Listas e guias já verificados desde que a app abriu (para "sempre que abrir a app"). */
-    private val playlistsChecked = HashSet<String>()
-    private val guidesChecked = HashSet<String>()
-    /** Última tentativa de atualizar: "p:id" (lista) / "g:id" (guia). */
-    private val lastAttempt = HashMap<String, Long>()
+    /** Listas e guias já verificados desde que a app abriu, e a última tentativa de cada (ver RefreshTracker). */
+    private val refreshes = RefreshTracker()
     private var startedOnce = false
 
     /** Último canal à espera de ser gravado: (playlistId, channelKey). */
@@ -682,19 +679,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         c.cache.savePlaylist(loaded)
-        playlistsChecked += playlist.id
+        refreshes.markChecked(RefreshTracker.Slot.PLAYLIST, playlist.id)
         showContent(loaded, resume)
     }
 
     /** Volta a descarregar os canais por trás se o intervalo das definições já passou. */
     private fun maybeRefreshPlaylist(content: PlaylistContent) {
         val id = content.playlist.id
-        val now = System.currentTimeMillis()
-        if (!RefreshPolicy.isDue(prefs.value.playlistRefreshHours, content.fetchedAt, now, id in playlistsChecked)) return
-        if (id in playlistsChecked && now - (lastAttempt["p:$id"] ?: 0L) < RefreshPolicy.RETRY_MS) return
+        if (!refreshes.isDue(RefreshTracker.Slot.PLAYLIST, id, prefs.value.playlistRefreshHours, content.fetchedAt)) return
         if (refreshJob?.isActive == true) return
-        playlistsChecked += id
-        lastAttempt["p:$id"] = now
+        refreshes.attempted(RefreshTracker.Slot.PLAYLIST, id)
         refreshPlaylistInBackground(content.playlist)
     }
 
@@ -704,14 +698,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         openAccountGuide(content, force)
         c.epg.open(
             viewModelScope, content, force,
-            isDue = { fetchedAt ->
-                val now = System.currentTimeMillis()
-                RefreshPolicy.isDue(prefs.value.epgRefreshHours, fetchedAt, now, id in guidesChecked) &&
-                    (id !in guidesChecked || now - (lastAttempt["g:$id"] ?: 0L) >= RefreshPolicy.RETRY_MS)
-            },
+            isDue = { fetchedAt -> refreshes.isDue(RefreshTracker.Slot.GUIDE, id, prefs.value.epgRefreshHours, fetchedAt) },
             onDone = { ok ->
-                guidesChecked += id
-                lastAttempt["g:$id"] = System.currentTimeMillis()
+                refreshes.attempted(RefreshTracker.Slot.GUIDE, id)
                 if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
             },
         )
@@ -723,20 +712,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val id = content.playlist.id
         c.epg.openExtra(
             viewModelScope, content, prefs.value.extraEpg[id], force,
-            isDue = { fetchedAt ->
-                val now = System.currentTimeMillis()
-                RefreshPolicy.isDue(prefs.value.epgRefreshHours, fetchedAt, now, id in extraGuidesChecked) &&
-                    (id !in extraGuidesChecked || now - (lastAttempt["x:$id"] ?: 0L) >= RefreshPolicy.RETRY_MS)
-            },
+            isDue = { fetchedAt -> refreshes.isDue(RefreshTracker.Slot.EXTRA_GUIDE, id, prefs.value.epgRefreshHours, fetchedAt) },
             onDone = { ok ->
-                extraGuidesChecked += id
-                lastAttempt["x:$id"] = System.currentTimeMillis()
+                refreshes.attempted(RefreshTracker.Slot.EXTRA_GUIDE, id)
                 if (notify) showToast(if (ok) I18n.s.epgRefreshed else I18n.s.epgRefreshFailed)
             },
         )
     }
-
-    private val extraGuidesChecked = HashSet<String>()
 
     /** Guia XMLTV extra de [playlistId] ([url] vazio ou null tira-o); na lista em uso, descarrega-se já. */
     fun setExtraEpg(playlistId: String, url: String?) {
@@ -752,9 +734,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startedOnce = true
             return
         }
-        playlistsChecked.clear()
-        guidesChecked.clear()
-        extraGuidesChecked.clear()
+        refreshes.clearChecked()
         mappingsLoadedFor = null // as associações podem ter mudado noutra TV
         val content = _content.value ?: return
         if (loadJob?.isActive == true) return
@@ -1992,10 +1972,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         profile.reset()
         _unlocked.value = emptySet()
         settingsUnlocked = false
-        playlistsChecked.clear()
-        guidesChecked.clear()
-        extraGuidesChecked.clear()
-        lastAttempt.clear()
+        refreshes.clear()
         if (scope == Reset.PROFILE) return
 
         // A sessão.
