@@ -21,7 +21,13 @@ data class Playlist(
     val deviceId: String? = null,
     val deviceId2: String? = null,
     val signature: String? = null,
-)
+) {
+    /**
+     * Tudo o que identifica a conta do fornecedor (endereços, credenciais, MAC e ids da box), para tirar dos relatórios.
+     * Só o id e o nome ficam de fora: um campo novo entra aqui (o PlaylistKindTest confere).
+     */
+    fun secrets(): List<String> = listOfNotNull(server, username, password, url, epgUrl, serial, deviceId, deviceId2, signature)
+}
 
 /** Dados de uma lista a criar/editar na TV (nesta TV sem conta, ou na conta). */
 data class PlaylistForm(

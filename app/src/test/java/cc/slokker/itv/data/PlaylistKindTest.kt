@@ -66,6 +66,17 @@ class PlaylistKindTest {
         assertEquals("", m.get("epg_url").asString)
     }
 
+    /** O relatório de erros tira estes valores do registo: um campo novo da lista sem entrar aqui vazava (30b926b). */
+    @Test
+    fun `every playlist field but id and name is a secret`() {
+        val fields = Playlist::class.java.declaredFields.filter { it.type == String::class.java }.map { it.name } - setOf("id", "name")
+        val marked = Playlist::class.java.getDeclaredConstructor(
+            String::class.java, PlaylistType::class.java, String::class.java,
+            *Array(fields.size) { String::class.java },
+        ).newInstance("id", PlaylistType.XTREAM, "name", *fields.map { "v:$it" }.toTypedArray())
+        assertEquals(fields.map { "v:$it" }.sorted(), marked.secrets().sorted())
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `a stalker playlist never goes to the account as m3u`() {
         stalker.accountBody()
