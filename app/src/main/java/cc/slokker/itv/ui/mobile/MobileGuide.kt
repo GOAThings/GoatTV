@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,7 +95,7 @@ internal fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: Strin
 private fun SlotChip(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, color = if (on) Color.Black else ItvColors.TextFaint, fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, maxLines = 1,
-        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) Color.White else Color.Transparent).clickable(onClick = onClick)
+        modifier = Modifier.clip(PhoneShapes.List).background(if (on) Color.White else Color.Transparent).clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
@@ -123,8 +122,8 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (playing) accent.start.copy(alpha = 0.13f) else Color.Transparent)
+            .clip(PhoneShapes.List)
+            .background(if (playing) accent.start.copy(alpha = PhoneColors.SELECTED_ALPHA) else Color.Transparent)
             .combinedClickable(onClick = {
                 when {
                     slot == null -> onPlay()
@@ -146,8 +145,8 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
             }
             Text(times ?: s.noGuide, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (live) {
-                Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-                    Box(Modifier.fillMaxWidth(entry!!.progress(now)).fillMaxHeight().background(if (playing) accent.brush else SolidColor(Color.White.copy(alpha = 0.34f))))
+                Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(PhoneColors.ProgressTrack)) {
+                    Box(Modifier.fillMaxWidth(entry!!.progress(now)).fillMaxHeight().background(if (playing) accent.brush else SolidColor(PhoneColors.ProgressDim)))
                 }
             }
             if (next != null) {

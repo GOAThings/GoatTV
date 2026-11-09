@@ -266,7 +266,7 @@ fun MobileMain(vm: AppViewModel) {
     }
     if (!pip) reminder?.let { r ->
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(12.dp)) {
-            Row(Modifier.fillMaxWidth().clip(CardShape).background(Color(0xFF20232E)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().clip(PhoneShapes.Card).background(PhoneColors.Reminder).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(r.title, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(r.channelName, color = ItvColors.TextDim, fontSize = 13.sp)
@@ -297,7 +297,7 @@ private fun FullscreenBars(fullscreen: Boolean) {
 @Composable
 private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> Unit) {
     val s = LocalStrings.current
-    Column(modifier.fillMaxWidth().background(Color(0xFF0C0E13)).navigationBarsPadding()) {
+    Column(modifier.fillMaxWidth().background(PhoneColors.TabBar).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.1f)))
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp)) {
             BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }

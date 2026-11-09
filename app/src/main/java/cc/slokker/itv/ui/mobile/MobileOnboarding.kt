@@ -49,7 +49,7 @@ fun MobileWelcome(onAccount: () -> Unit, onLocal: () -> Unit) {
 
 @Composable
 private fun ChoiceCard(title: String, body: String, badge: String?, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(CardShape).background(Card).clickable(onClick = onClick).padding(18.dp)) {
+    Column(Modifier.fillMaxWidth().clip(PhoneShapes.Card).background(PhoneColors.Card).clickable(onClick = onClick).padding(18.dp)) {
         if (badge != null) {
             Text(
                 badge.uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,

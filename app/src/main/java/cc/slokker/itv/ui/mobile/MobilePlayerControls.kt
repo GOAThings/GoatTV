@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -249,10 +248,10 @@ internal fun VideoArea(
                         .padding(horizontal = 20.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ControlButton(ItvIcons.FullscreenExit, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = onFullscreen)
+                    ControlButton(ItvIcons.FullscreenExit, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton), onClick = onFullscreen)
                     Spacer(Modifier.weight(1f))
                     Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp), style = LocalTextStyle.current.tabular)
-                    onPip?.let { ControlButton(ItvIcons.Pip, Modifier.size(40.dp).clip(CircleShape).background(HudButton), onClick = it) }
+                    onPip?.let { ControlButton(ItvIcons.Pip, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton), onClick = it) }
                 }
             }
             Box(Modifier.align(if (fullscreen) Alignment.Center else BiasAlignment(0f, -0.3f))) {
@@ -273,7 +272,7 @@ internal fun VideoArea(
                             Spinner()
                         }
                     } else {
-                        ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(60.dp).clip(CircleShape).background(HudButton)) {
+                        ControlButton(if (playback.playing) ItvIcons.Pause else ItvIcons.Play, Modifier.size(60.dp).clip(CircleShape).background(PhoneColors.HudButton)) {
                             when {
                                 // Não arrancou: tenta outra vez desde o primeiro formato (o OK da TV).
                                 playback.failure != null -> playback.core.retry()
@@ -342,7 +341,7 @@ internal fun VideoArea(
                             Text(next.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    if (!fullscreen) ControlButton(ItvIcons.Fullscreen, Modifier.size(38.dp).clip(CircleShape).background(HudButton), onClick = onFullscreen)
+                    if (!fullscreen) ControlButton(ItvIcons.Fullscreen, Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.HudButton), onClick = onFullscreen)
                 }
                 // Onde vai e quanto dura: o catch-up, ou o programa a dar. Em direto, só se pode arrastar se houver catch-up.
                 val duration = cu?.durationMs ?: entry?.let { it.endMs - it.startMs }
@@ -395,7 +394,7 @@ internal fun VideoArea(
                         }
                         // O que estava no "mais": cada um no seu botão.
                         PlayerOption.entries.forEach { option ->
-                            ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(HudButton)) { onOption(option); touched++ }
+                            ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
                 }
@@ -408,7 +407,7 @@ internal fun VideoArea(
 @Composable
 private fun HudPill(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
-        Modifier.clip(CircleShape).background(HudButton).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp),
+        Modifier.clip(CircleShape).background(PhoneColors.HudButton).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -417,7 +416,6 @@ private fun HudPill(icon: ImageVector, label: String, onClick: () -> Unit) {
     }
 }
 
-private val HudButton = Color.White.copy(alpha = 0.14f)
 
 /** O botão do direto: em direto só avisa; em catch-up ou na pausa do direto, volta ([behind]: quanto vai atrás). */
 @Composable
@@ -427,7 +425,7 @@ private fun LiveButton(live: Boolean, behind: String? = null, onClick: () -> Uni
         Modifier.clip(CircleShape).background(if (live) Color.Transparent else Color.White.copy(alpha = 0.16f)).clickable(enabled = !live, onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(if (live) Color(0xFFE53935) else Color.White.copy(alpha = 0.6f)))
+        Box(Modifier.size(8.dp).clip(CircleShape).background(if (live) PhoneColors.LiveRed else Color.White.copy(alpha = 0.6f)))
         Spacer(Modifier.width(6.dp))
         Text(if (live) s.playerLive else s.playerGoLive, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         if (!live && behind != null) {
@@ -502,10 +500,10 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
+    Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color(0xFF14161E))
+                .clip(PhoneShapes.Sheet).background(PhoneColors.Sheet)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
@@ -561,7 +559,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
         favorites.size
         val favorite = vm.isFavorite(channel)
-        ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
+        ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) PhoneColors.FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
         PlayerOption.entries.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
@@ -574,7 +572,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
 @Composable
 private fun ActionPill(icon: ImageVector, label: String, tint: Color = ItvColors.Text, onClick: () -> Unit) {
     Row(
-        Modifier.clip(CircleShape).background(Card).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier.clip(CircleShape).background(PhoneColors.Card).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
@@ -597,7 +595,7 @@ internal fun NextUp(vm: AppViewModel, channel: Channel) {
     reminders.size
     val reminded = vm.hasReminder(channel, next)
     Row(
-        Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 4.dp).fillMaxWidth().clip(ListShape).background(Card)
+        Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 4.dp).fillMaxWidth().clip(PhoneShapes.List).background(PhoneColors.Card)
             .clickable { vm.toggleReminder(channel, next) }.padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -608,7 +606,6 @@ internal fun NextUp(vm: AppViewModel, channel: Channel) {
     }
 }
 
-private val FavoriteGold = Color(0xFFF5C04A)
 
 private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L

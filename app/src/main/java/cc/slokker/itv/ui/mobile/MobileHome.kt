@@ -93,7 +93,7 @@ internal fun MobileHome(
                     Text(data.playlist.name, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(
-                    Modifier.size(38.dp).clip(CircleShape).background(TileFill).clickable(onClick = onSearch),
+                    Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onSearch),
                     contentAlignment = Alignment.Center,
                 ) { Icon(ItvIcons.Search, s.search, tint = ItvColors.TextDim, modifier = Modifier.size(20.dp)) }
             }
@@ -153,8 +153,8 @@ private fun ContinueCard(vm: AppViewModel, channel: Channel, first: Boolean, onC
         Modifier
             .fillMaxWidth()
             .height(196.dp)
-            .clip(HeroShape)
-            .background(Brush.linearGradient(listOf(Color(0xFF1D2236), Color(0xFF0E1018))))
+            .clip(PhoneShapes.Hero)
+            .background(Brush.linearGradient(listOf(PhoneColors.HeroTop, PhoneColors.HeroBottom)))
             .drawBehind {
                 // Um brilho da cor de destaque no canto, para o cartão não ser um bloco liso.
                 drawCircle(
@@ -217,10 +217,10 @@ private fun ContinueCard(vm: AppViewModel, channel: Channel, first: Boolean, onC
 private fun GroupTile(vm: AppViewModel, group: GroupTileInfo, modifier: Modifier, onClick: () -> Unit) {
     val s = LocalStrings.current
     val channels = remember(group.id, group.locked) { if (group.locked) emptyList() else vm.channelsOf(group.id) }
-    Column(modifier.clip(TileShape).background(TileFill).clickable(onClick = onClick).padding(14.dp)) {
+    Column(modifier.clip(PhoneShapes.Tile).background(PhoneColors.Tile).clickable(onClick = onClick).padding(14.dp)) {
         Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             channels.take(3).forEach { ch ->
-                Box(Modifier.size(width = 34.dp, height = 24.dp).clip(RoundedCornerShape(6.dp)).background(TileFill), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(width = 34.dp, height = 24.dp).clip(RoundedCornerShape(6.dp)).background(PhoneColors.Tile), contentAlignment = Alignment.Center) {
                     ChannelLogo(ch, 20.dp)
                 }
             }
@@ -249,9 +249,9 @@ internal fun MiniPlayer(vm: AppViewModel, channel: Channel, playback: MobilePlay
         modifier
             .fillMaxWidth()
             .height(62.dp)
-            .shadow(16.dp, MiniShape)
-            .clip(MiniShape)
-            .background(Color(0xFF1A1E2A))
+            .shadow(16.dp, PhoneShapes.MiniPlayer)
+            .clip(PhoneShapes.MiniPlayer)
+            .background(PhoneColors.MiniPlayer)
             .clickable(onClick = onOpen),
     ) {
         Row(Modifier.fillMaxSize().padding(start = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -277,15 +277,11 @@ internal fun MiniPlayer(vm: AppViewModel, channel: Channel, playback: MobilePlay
             Icon(ItvIcons.Close, null, tint = ItvColors.TextDim, modifier = Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClose).padding(11.dp))
         }
         if (current != null) {
-            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.08f))) {
+            Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(PhoneColors.ProgressTrack)) {
                 Box(Modifier.fillMaxWidth(current.progress(now)).fillMaxHeight().background(accent.brush))
             }
         }
     }
 }
 
-private val MiniShape = RoundedCornerShape(16.dp)
-private val HeroShape = RoundedCornerShape(20.dp)
-private val TileShape = RoundedCornerShape(16.dp)
-private val TileFill = Color.White.copy(alpha = 0.06f)
 private const val HOME_RECENTS = 6

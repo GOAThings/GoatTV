@@ -247,8 +247,8 @@ fun MobileMenu(vm: AppViewModel) {
 private fun PlaylistCard(name: String, detail: String) {
     val accent = LocalAccent.current
     Row(
-        Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF1D2236), Color(0xFF12151D)))).padding(16.dp),
+        Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(PhoneShapes.Card)
+            .background(Brush.linearGradient(listOf(PhoneColors.HeroTop, PhoneColors.PlaylistCardBottom))).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(accent.brush), contentAlignment = Alignment.Center) {
@@ -375,7 +375,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
                 val on = form.type == type
                 Text(
                     label, color = if (on) Color.Black else ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else Card).clickable { form = form.withType(type, vm.deviceMac) }.padding(horizontal = 18.dp, vertical = 9.dp),
+                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PhoneColors.Card).clickable { form = form.withType(type, vm.deviceMac) }.padding(horizontal = 18.dp, vertical = 9.dp),
                 )
             }
         }
@@ -399,7 +399,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
         error?.let { Text(it, color = ItvColors.Error, fontSize = 14.sp) }
         Text(
             s.save, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(CardShape).background(LocalAccent.current.brush).clickable {
+            modifier = Modifier.clip(PhoneShapes.Card).background(LocalAccent.current.brush).clickable {
                 val problem = form.problem()
                 if (problem != null) {
                     error = problem

@@ -55,10 +55,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 
-internal val Card = Color.White.copy(alpha = 0.08f)
-internal val CardShape = RoundedCornerShape(18.dp)
-internal val ListShape = RoundedCornerShape(12.dp)
-internal const val SELECTED_ALPHA = 0.13f
 
 /** O canal está a abrir. */
 @Composable
@@ -85,7 +81,7 @@ internal fun Note(text: String) = Text(text, color = ItvColors.TextFaint, fontSi
 
 @Composable
 internal fun Field(hint: String, value: String, modifier: Modifier = Modifier, secret: Boolean = false, keyboard: KeyboardType = KeyboardType.Text, onChange: (String) -> Unit) {
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Card).padding(14.dp)) {
+    Box(modifier.fillMaxWidth().clip(PhoneShapes.Field).background(PhoneColors.Card).padding(14.dp)) {
         if (value.isEmpty()) Text(hint, color = ItvColors.TextFaint, fontSize = 16.sp)
         BasicTextField(
             value, onChange,
@@ -106,7 +102,7 @@ internal fun PinDialog(title: String, onClose: (() -> Unit)?, rejected: () -> St
     var pin by remember { mutableStateOf("") }
     var wrong by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
-        Column(Modifier.padding(24.dp).clip(CardShape).background(Color(0xFF14161E)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(24.dp).clip(PhoneShapes.Card).background(PhoneColors.Sheet).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Field(s.pinHint, pin, secret = true, keyboard = KeyboardType.NumberPassword) { v ->
                 pin = v.filter(Char::isDigit).take(4)
@@ -122,9 +118,6 @@ internal fun PinDialog(title: String, onClose: (() -> Unit)?, rejected: () -> St
     }
 }
 
-private val RowLine = Color.White.copy(alpha = 0.08f)
-private val SectionFill = Color.White.copy(alpha = 0.05f)
-private val SectionShape = RoundedCornerShape(16.dp)
 
 @Composable
 internal fun Section(title: String?, rows: @Composable () -> Unit) {
@@ -134,7 +127,7 @@ internal fun Section(title: String?, rows: @Composable () -> Unit) {
         }
         // Num cartão, como nas Definições da TV. A linha por baixo da última fila fica de fora.
         Column(
-            Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(SectionShape).background(SectionFill).layout { measurable, constraints ->
+            Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(PhoneShapes.Section).background(PhoneColors.Section).layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints)
                 layout(placeable.width, placeable.height - 0.5.dp.roundToPx()) { placeable.place(0, 0) }
             },
@@ -147,7 +140,7 @@ internal fun Section(title: String?, rows: @Composable () -> Unit) {
 internal fun PageHeader(title: String, back: String, onBack: () -> Unit) {
     val accent = LocalAccent.current.start
     Box(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        Row(Modifier.align(Alignment.CenterStart).clip(ListShape).clickable(onClick = onBack).padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.align(Alignment.CenterStart).clip(PhoneShapes.List).clickable(onClick = onBack).padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(ItvIcons.Back, null, tint = accent, modifier = Modifier.size(24.dp))
             Text(back, color = accent, fontSize = 16.sp)
         }
@@ -174,7 +167,7 @@ internal fun MenuRow(title: String, value: String?, icon: ImageVector? = null, c
             if (checked) Icon(ItvIcons.Check, null, tint = accent, modifier = Modifier.size(22.dp))
             if (chevron) Icon(ItvIcons.Chevron, null, tint = ItvColors.TextFaint.copy(alpha = 0.42f), modifier = Modifier.size(22.dp))
         }
-        Box(Modifier.padding(start = if (icon != null) 64.dp else 16.dp).fillMaxWidth().height(0.5.dp).background(RowLine))
+        Box(Modifier.padding(start = if (icon != null) 64.dp else 16.dp).fillMaxWidth().height(0.5.dp).background(PhoneColors.RowLine))
     }
 }
 
@@ -189,6 +182,6 @@ internal fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) 
                 contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
             ) { Box(Modifier.size(20.dp).clip(CircleShape).background(Color.White)) }
         }
-        Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(RowLine))
+        Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(PhoneColors.RowLine))
     }
 }

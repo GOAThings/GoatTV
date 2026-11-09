@@ -105,7 +105,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                         FlowRow(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             recentQueries.forEach { q ->
                                 Row(
-                                    Modifier.clip(CircleShape).background(PillFill).clickable { query = q }.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    Modifier.clip(CircleShape).background(PhoneColors.Card).clickable { query = q }.padding(horizontal = 12.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(ItvIcons.History, null, tint = ItvColors.TextFaint, modifier = Modifier.size(15.dp))
@@ -129,7 +129,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                         vm.guideGroups().filter { it.id != SpecialCategory.RECENT }.forEach { g ->
                             Text(
                                 g.name, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(PillFill).clickable { onGroup(g.id) }.padding(horizontal = 14.dp, vertical = 9.dp),
+                                modifier = Modifier.clip(PhoneShapes.List).background(PhoneColors.Card).clickable { onGroup(g.id) }.padding(horizontal = 14.dp, vertical = 9.dp),
                             )
                         }
                     }
@@ -203,7 +203,7 @@ private fun LazyListScope.caption(text: String) {
 private fun Pill(label: String, on: Boolean, onClick: () -> Unit) {
     Text(
         label, color = if (on) Color.Black else ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PillFill).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 7.dp),
+        modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PhoneColors.Card).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 7.dp),
     )
 }
 
@@ -213,7 +213,7 @@ private fun Pill(label: String, on: Boolean, onClick: () -> Unit) {
 private fun ResultRow(channel: Channel, title: String, sub: String, progress: Float?, action: String? = null, bell: Boolean? = null, onLong: () -> Unit, onClick: () -> Unit) {
     val accent = LocalAccent.current
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 10.dp, vertical = 11.dp),
+        Modifier.fillMaxWidth().clip(PhoneShapes.List).combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
@@ -222,8 +222,8 @@ private fun ResultRow(channel: Channel, title: String, sub: String, progress: Fl
             Text(title, color = ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(sub, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (progress != null) {
-                Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color.White.copy(alpha = 0.34f)))
+                Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(PhoneColors.ProgressTrack)) {
+                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(PhoneColors.ProgressDim))
                 }
             }
         }
@@ -312,7 +312,7 @@ private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, o
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val entry: EpgEntry? = epg.at(now)
-    Column(Modifier.clip(RoundedCornerShape(16.dp)).background(CardFill).combinedClickable(onClick = onClick, onLongClick = onLong)) {
+    Column(Modifier.clip(PhoneShapes.Tile).background(PhoneColors.Tile).combinedClickable(onClick = onClick, onLongClick = onLong)) {
         Box(
             Modifier.fillMaxWidth().height(92.dp).background(
                 Brush.radialGradient(listOf(accent.start.copy(alpha = if (playing) 0.35f else 0.16f), Color.Transparent), center = Offset(80f, 40f), radius = 380f),
@@ -320,12 +320,12 @@ private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, o
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.size(72.dp, 48.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
-            Icon(ItvIcons.Star, null, tint = Color(0xFFF5C04A), modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(16.dp))
+            Icon(ItvIcons.Star, null, tint = PhoneColors.FavoriteGold, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(16.dp))
         }
         Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
             Text(channel.name, color = if (playing) accent.start else ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(entry?.title ?: " ", color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
+            Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(PhoneColors.ProgressTrack)) {
                 if (entry != null) Box(Modifier.fillMaxWidth(entry.progress(now)).fillMaxHeight().background(accent.brush))
             }
         }
@@ -348,5 +348,3 @@ private const val FILTER_PROGRAMMES = 2
 private const val SEARCH_PREFS = "mobile_search"
 private const val SEARCH_KEY = "recent"
 private const val MAX_RECENT_SEARCHES = 6
-private val PillFill = Color.White.copy(alpha = 0.08f)
-private val CardFill = Color.White.copy(alpha = 0.06f)

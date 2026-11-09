@@ -114,7 +114,7 @@ internal fun MobileUpdateSheet(vm: AppViewModel, modifier: Modifier = Modifier) 
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(PhoneColors.Scrim)
                     .clickable(remember { MutableInteractionSource() }, indication = null) { if (!busy) vm.dismissUpdateNotice() },
             )
         }
@@ -136,7 +136,7 @@ private fun UpdateSheetContent(release: AppRelease, state: UpdateState, onUpdate
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .background(Color(0xFF151821))
+            .background(PhoneColors.UpdateSheet)
             // Não deixa o toque passar para o fundo (que fecharia a folha).
             .clickable(remember { MutableInteractionSource() }, indication = null) { }
             .navigationBarsPadding()

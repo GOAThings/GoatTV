@@ -28,10 +28,6 @@ import cc.slokker.itv.R
 
 /** A palete comum às apps GOAT (tema escuro), usada pelo redesenho dos painéis. */
 object GoatPalette {
-    val Text = Color(0xFFE4E4E4)
-    val Muted = Color(0xFF9298A8)
-    val Raised = Color(0xFF1E2029)
-    val BrandSoft = Color(0xFF18204A)
     val Link = Color(0xFF7C92E0)
     val Live = Color(0xFFF2777E)
     val Warning = Color(0xFFE5B454)
@@ -50,7 +46,6 @@ object ItvColors {
     /** Elemento com foco: vidro claro, texto branco e contorno no gradiente da marca. */
     val Focus = Color(0x33FFFFFF)
     val OnFocus = Text
-    val Pressed = Color(0x4DFFFFFF)
 
     val Error = Color(0xFFFF6961)
 

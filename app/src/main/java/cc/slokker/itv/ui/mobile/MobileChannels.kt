@@ -92,8 +92,8 @@ internal fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = fa
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     modifier = Modifier
-                        .clip(ListShape)
-                        .background(if (on) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
+                        .clip(PhoneShapes.List)
+                        .background(if (on) accent.copy(alpha = PhoneColors.SELECTED_ALPHA) else Color.Transparent)
                         .clickable { group = g.id }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 )
@@ -101,7 +101,7 @@ internal fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = fa
             items(locked, key = { it.id }) { g ->
                 Text(
                     "🔒 ${g.name}", color = ItvColors.TextFaint, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                    modifier = Modifier.clip(ListShape).clickable { pinFor = g.id }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.clip(PhoneShapes.List).clickable { pinFor = g.id }.padding(horizontal = 12.dp, vertical = 8.dp),
                 )
             }
         }
@@ -141,8 +141,8 @@ internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, f
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(ListShape)
-            .background(if (playing) accent.copy(alpha = SELECTED_ALPHA) else Color.Transparent)
+            .clip(PhoneShapes.List)
+            .background(if (playing) accent.copy(alpha = PhoneColors.SELECTED_ALPHA) else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLong)
             .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -163,8 +163,8 @@ internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, f
                 Text(if (found == null) programme.title else "${formatTime(programme.startMs)}  ${programme.title}", color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (programme.startMs <= now) {
                     Spacer(Modifier.height(6.dp))
-                    Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))) {
-                        Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(if (playing) accent else Color.White.copy(alpha = 0.34f)))
+                    Box(Modifier.fillMaxWidth().height(2.dp).clip(CircleShape).background(PhoneColors.ProgressTrack)) {
+                        Box(Modifier.fillMaxWidth(programme.progress(now)).fillMaxHeight().background(if (playing) accent else PhoneColors.ProgressDim))
                     }
                 }
             }
@@ -184,10 +184,10 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
     val list = rememberLazyListState()
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).
     LaunchedEffect(entries) { entries.indexOfFirst { it.endMs > now }.takeIf { it > 0 }?.let { list.scrollToItem(it) } }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
+    Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.75f)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color(0xFF14161E))
+                .clip(PhoneShapes.Sheet).background(PhoneColors.Sheet)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .padding(16.dp),
         ) {
@@ -200,7 +200,7 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(false to s.epgGuideChannel, true to s.channelLogo).forEach { (logo, title) ->
                         Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Card).clickable { onPick(logo) }.padding(vertical = 10.dp),
+                            Modifier.weight(1f).clip(PhoneShapes.List).background(PhoneColors.Card).clickable { onPick(logo) }.padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center,
                         ) { Text(title, color = ItvColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }

@@ -1,6 +1,5 @@
 package cc.slokker.itv.ui.glass
 
-import cc.slokker.itv.ui.theme.ControlRadius
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import android.graphics.Bitmap
@@ -89,7 +88,6 @@ import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import cc.slokker.itv.ui.theme.GoatPalette
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.theme.TvSafePadding
@@ -275,8 +273,6 @@ fun GlassRow(
     outlineFocus: Boolean = false,
     /** A lista desenha um só destaque que desliza entre as linhas ([drawSlidingFocus]): a linha não desenha o seu. */
     slidingFocus: Boolean = false,
-    /** O [selected] fica marcado como na palete: fundo azul escuro e um traço à esquerda (em vez do fundo claro). */
-    accentSelected: Boolean = false,
     /** Barra fina por baixo do texto (ex.: quanto já passou do programa), de 0 a 1. */
     progress: Float? = null,
     /** Guarda o lugar da barra mesmo sem [progress] (linhas com a mesma altura numa lista). */
@@ -294,7 +290,7 @@ fun GlassRow(
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
     // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
-    val rest = if (selected && !outlineFocus && !accentSelected && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    val rest = if (selected && !outlineFocus && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
     val outlineBrush = LocalOutlineBrush.current
@@ -320,11 +316,6 @@ fun GlassRow(
         Row(
             Modifier
                 .drawBehind {
-                    if (selected && accentSelected) {
-                        val r = CornerRadius(ControlRadius.toPx())
-                        drawRoundRect(GoatPalette.BrandSoft, cornerRadius = r)
-                        drawRect(GoatPalette.Link, size = size.copy(width = 4.dp.toPx()))
-                    }
                     if (slidingFocus) return@drawBehind
                     val a = fade.value.takeIf { it > 0f } ?: return@drawBehind
                     if (outlineFocus) {
