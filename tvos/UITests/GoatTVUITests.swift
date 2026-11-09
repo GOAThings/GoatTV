@@ -29,7 +29,7 @@ final class GoatTVUITests: XCTestCase {
         press(.left, wait: 2); shot("groups")
 
         // Definições → Listas → Demo → Grupos: o olho.
-        guard focus("gear", .up) else { return shot("no-gear") }
+        guard focusGear() else { return shot("no-gear") }
         press(.select, wait: 2); shot("settings")
         open("lists"); open("p:demo"); shot("playlist")
         open("groups"); shot("groups-eye")
@@ -61,7 +61,7 @@ final class GoatTVUITests: XCTestCase {
 
         // O outro motor: VLC.
         press(.left, wait: 2); press(.left, wait: 2)
-        guard focus("gear", .up) else { return shot("no-gear-2") }
+        guard focusGear() else { return shot("no-gear-2") }
         press(.select, wait: 2)
         open("playback"); shot("playback")
         open("engine"); shot("engine")
@@ -212,6 +212,21 @@ final class GoatTVUITests: XCTestCase {
         if element.exists, element.hasFocus { return true }
         XCTFail("Sem foco em \(id)")
         shot("missing-\(id)")
+        return false
+    }
+
+    /// O ⚙ no cabeçalho dos grupos: ↑ chega ao cabeçalho (ao botão das gravações, ao lado) e → ao ⚙.
+    private func focusGear() -> Bool {
+        let gear = app.buttons["gear"], recordings = app.buttons["recordings"]
+        guard gear.waitForExistence(timeout: 3) else {
+            XCTFail("gear não existe")
+            return false
+        }
+        for _ in 0..<25 where !(gear.hasFocus || recordings.hasFocus) { press(.up, wait: 0.35) }
+        for _ in 0..<4 where !gear.hasFocus { press(.right, wait: 0.35) }
+        if gear.hasFocus { return true }
+        XCTFail("Sem foco em gear")
+        shot("missing-gear")
         return false
     }
 
