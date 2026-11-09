@@ -266,11 +266,8 @@ final class PlayerEngine: NSObject {
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
         let zap = live && openedKey != nil && (!same || held)
         let back = !zap && live && openedLive && same && openedCandidates == candidates && (state == .opening || state == .playing)
-        var pause: Int64 = 0
-        if zap || back {
-            pause = pacer.delayFor(nowMs: Self.uptimeMs(), setting: zapDelayMs)
-            if back { return }
-        }
+        let pause: Int64 = zap || back ? pacer.delayFor(nowMs: Self.uptimeMs(), setting: zapDelayMs) : 0
+        if back { return }
         openedKey = channelKey
         openedLive = live
         openedCandidates = candidates
