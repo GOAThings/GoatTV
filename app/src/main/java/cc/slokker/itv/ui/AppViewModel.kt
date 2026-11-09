@@ -45,6 +45,9 @@ import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.sameSourceAs
 import cc.slokker.itv.data.sharesConnectionsWith
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProfileKeys
+import cc.slokker.itv.data.ProfileKeys.parseKeyLists
+import cc.slokker.itv.data.ProfileKeys.string
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.SessionStore
 import cc.slokker.itv.data.SettingsMerge
@@ -543,7 +546,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             saveSettings()
             moved = true
         }
-        val localFavorites = parseFavorites(remap(local.favorites)).filter { (id, keys) -> id in ids.values && keys.isNotEmpty() }
+        val localFavorites = parseKeyLists(remap(local.favorites)).filter { (id, keys) -> id in ids.values && keys.isNotEmpty() }
         val adopted = localFavorites.filterKeys { _favorites.value[it].isNullOrEmpty() }
         if (adopted.isNotEmpty()) {
             _favorites.value = _favorites.value + adopted
@@ -654,7 +657,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         config.user?.email?.let { _email.value = it }
         config.device?.name?.let { _deviceName.value = it }
         _playlists.value = config.playlists.orEmpty().mapNotNull { it.toPlaylist() }
-        _favorites.value = parseFavorites(config.favorites)
+        _favorites.value = parseKeyLists(config.favorites)
         settings = (config.settings as? JsonObject) ?: JsonObject()
         syncedSettings = settings.deepCopy()
         settingsRev = config.settingsRev
@@ -663,8 +666,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lê de [settings] os recentes, o formato e as preferências. */
     private fun applySettings() {
-        _recents.value = parseFavorites(settings.get(RECENTS_KEY))
-        _streamFormat.value = settings.string("stream_format")
+        _recents.value = parseKeyLists(settings.get(ProfileKeys.RECENT_CHANNELS))
+        _streamFormat.value = settings.string(ProfileKeys.STREAM_FORMAT)
             ?.takeIf { it == StreamFormat.TS || it == StreamFormat.HLS }
         _prefs.value = Prefs.from(settings)
         applyLanguage()
@@ -673,13 +676,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O canal mudou aqui depois do que a conta diz (a gravação não chegou, ou a config é antiga): vale o daqui. */
     private suspend fun adoptNewerLastChannel() {
         val at = c.session.lastAt()
-        val saved = settings.get(LAST_AT_KEY)?.takeIf { it.isJsonPrimitive }?.runCatching { asLong }?.getOrNull() ?: 0L
+        val saved = settings.get(ProfileKeys.LAST_CHANNEL_AT)?.takeIf { it.isJsonPrimitive }?.runCatching { asLong }?.getOrNull() ?: 0L
         val playlistId = c.session.lastPlaylist()
         val channelKey = c.session.lastChannel()
         if (at <= saved || playlistId == null || channelKey == null) return
-        settings.addProperty("last_playlist", playlistId)
-        settings.addProperty("last_channel", channelKey)
-        settings.addProperty(LAST_AT_KEY, at)
+        settings.addProperty(ProfileKeys.LAST_PLAYLIST, playlistId)
+        settings.addProperty(ProfileKeys.LAST_CHANNEL, channelKey)
+        settings.addProperty(ProfileKeys.LAST_CHANNEL_AT, at)
         saveSettings()
     }
 
@@ -687,7 +690,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Um link do ecrã inicial manda na lista a abrir (se ainda existir).
         pendingLink?.first?.let { id -> _playlists.value.firstOrNull { it.id == id }?.let { return it } }
         adoptNewerLastChannel()
-        val lastId = settings.string("last_playlist") ?: c.session.lastPlaylist()
+        val lastId = settings.string(ProfileKeys.LAST_PLAYLIST) ?: c.session.lastPlaylist()
         return _playlists.value.firstOrNull { it.id == lastId } ?: _playlists.value.first()
     }
 
@@ -822,8 +825,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         if (resume) {
-            val lastKey = if (settings.string("last_playlist") == playlist.id) {
-                settings.string("last_channel")
+            val lastKey = if (settings.string(ProfileKeys.LAST_PLAYLIST) == playlist.id) {
+                settings.string(ProfileKeys.LAST_CHANNEL)
             } else {
                 c.session.lastChannel().takeIf { c.session.lastPlaylist() == playlist.id }
             }
@@ -898,7 +901,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         syncConfig()
         when {
             _content.value == null -> {
-                settings.addProperty("last_playlist", playlist.id)
+                settings.addProperty(ProfileKeys.LAST_PLAYLIST, playlist.id)
                 saveSettings()
                 startLoading(resume = false)
             }
@@ -991,7 +994,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             persistConfigCache()
             when {
                 first -> {
-                    settings.addProperty("last_playlist", playlist.id)
+                    settings.addProperty(ProfileKeys.LAST_PLAYLIST, playlist.id)
                     saveSettings()
                     startLoading(resume = false)
                 }
@@ -1012,7 +1015,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _favorites.value = _favorites.value - playlist.id
         if (_recents.value.containsKey(playlist.id)) {
             _recents.value = _recents.value - playlist.id
-            settings.add(RECENTS_KEY, c.gson.toJsonTree(_recents.value))
+            settings.add(ProfileKeys.RECENT_CHANNELS, c.gson.toJsonTree(_recents.value))
         }
         if (Prefs.removePlaylist(settings, playlist.id)) _prefs.value = Prefs.from(settings)
         saveSettings()
@@ -1085,7 +1088,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         config.device?.name?.let { _deviceName.value = it }
         val playlists = config.playlists.orEmpty().mapNotNull { it.toPlaylist() }
         _playlists.value = playlists
-        _favorites.value = parseFavorites(config.favorites)
+        _favorites.value = parseKeyLists(config.favorites)
         (config.settings as? JsonObject)?.let {
             val locksBefore = _prefs.value.pinHash to _prefs.value.lockedGroups
             settings = it
@@ -1111,7 +1114,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (_screen.value == Screen.Settings) closeSettings()
             return
         }
-        settings.addProperty("last_playlist", playlist.id)
+        settings.addProperty(ProfileKeys.LAST_PLAYLIST, playlist.id)
         saveSettings()
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadPlaylist(playlist, resume = false) }
@@ -1983,16 +1986,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (c.session.lastPlaylist() != playlistId || c.session.lastChannel() != channelKey) {
             val now = System.currentTimeMillis()
             c.session.saveLast(playlistId, channelKey, now)
-            settings.addProperty("last_playlist", playlistId)
-            settings.addProperty("last_channel", channelKey)
-            settings.addProperty(LAST_AT_KEY, now)
+            settings.addProperty(ProfileKeys.LAST_PLAYLIST, playlistId)
+            settings.addProperty(ProfileKeys.LAST_CHANNEL, channelKey)
+            settings.addProperty(ProfileKeys.LAST_CHANNEL_AT, now)
             changed = true
         }
         // Recentes: só entram os canais em que se ficou (os mesmos WATCHED_MS do último canal).
         val recents = (listOf(channelKey) + _recents.value[playlistId].orEmpty().filter { it != channelKey }).take(MAX_RECENTS)
         if (watched && recents != _recents.value[playlistId]) {
             _recents.value = _recents.value + (playlistId to recents)
-            settings.add(RECENTS_KEY, c.gson.toJsonTree(_recents.value))
+            settings.add(ProfileKeys.RECENT_CHANNELS, c.gson.toJsonTree(_recents.value))
             changed = true
         }
         if (changed) saveSettings()
@@ -2020,7 +2023,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** null = Auto. */
     fun setStreamFormat(format: String?) {
         _streamFormat.value = format
-        if (format == null) settings.remove("stream_format") else settings.addProperty("stream_format", format)
+        if (format == null) settings.remove(ProfileKeys.STREAM_FORMAT) else settings.addProperty(ProfileKeys.STREAM_FORMAT, format)
         saveSettings()
     }
 
@@ -2231,7 +2234,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val SETTINGS_ATTEMPTS = 4
         const val UPDATE_FIRST_CHECK_MS = 20_000L
         const val UPDATE_INTERVAL_MS = 12 * 3600_000L
-        const val RECENTS_KEY = "recent_channels"
         /** Canais na linha da GoatTV no ecrã inicial. */
         const val HOME_ITEMS = 10
         /** Os programas seguintes que vão para o "A seguir" (o GoatLauncher mostra até três, mesmo depois de o atual acabar). */
@@ -2249,25 +2251,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         /** De quanto em quanto tempo ver se a lista ou o guia já passaram do intervalo. */
         const val REFRESH_TICK_MS = 10 * 60_000L
-        const val LAST_AT_KEY = "last_channel_at"
 
         /** Id de uma lista desta TV (sem conta). */
         fun newLocalId(): String = "local" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
-
-        fun parseFavorites(json: JsonElement?): Map<String, List<String>> {
-            if (json == null || !json.isJsonObject) return emptyMap()
-            return json.asJsonObject.entrySet().associate { (playlistId, value) ->
-                playlistId to if (value.isJsonArray) {
-                    value.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString }.distinct()
-                } else {
-                    emptyList()
-                }
-            }
-        }
-
-        fun JsonObject.string(key: String): String? {
-            val e = get(key) ?: return null
-            return if (e.isJsonPrimitive) e.asString.takeIf { it.isNotEmpty() } else null
-        }
     }
 }
