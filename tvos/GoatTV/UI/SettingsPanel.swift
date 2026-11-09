@@ -732,6 +732,9 @@ struct SettingsPanel: View {
                 },
                 .header("hsubs", s.r("subtitles")),
                 pickItem("subtitle_language", subtitle: s.r("subtitle_language_sub")),
+                .header("hrec", s.r("recordings")),
+                pickItem("record_padding_before_min", subtitle: s.r("recording_padding_sub")),
+                pickItem("record_padding_after_min", subtitle: s.r("recording_padding_sub")),
             ]
 
         case .zapping:
@@ -1454,6 +1457,11 @@ struct SettingsPanel: View {
             return (s.r("audio_language"), [o(.string(""), s.r("auto"))] + languageOptions(), .string(p.audioLanguage))
         case "subtitle_language":
             return (s.r("subtitle_language"), [o(.string(""), s.r("subtitles_off"))] + languageOptions(), .string(p.subtitleLanguage))
+        case "record_padding_before_min", "record_padding_after_min":
+            let before = key == "record_padding_before_min"
+            return (s.r(before ? "recording_padding_before" : "recording_padding_after"),
+                    Prefs.paddingOptions.map { o(n($0), $0 == 0 ? s.r("off") : s.r("minutes", "\($0)")) },
+                    n(before ? p.recordPaddingBeforeMin : p.recordPaddingAfterMin))
         case "catchup_offset_min":
             let options = (-12...12).map { (h: Int) -> Option in
                 o(n(h * 60), h == 0 ? s.r("no_offset") : (h > 0 ? "+" : "−") + "\(abs(h)) h")

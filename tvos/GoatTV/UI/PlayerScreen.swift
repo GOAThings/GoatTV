@@ -14,6 +14,7 @@ struct PlayerScreen: View {
         /// Pedir o PIN para abrir um grupo bloqueado.
         case pin(String)
         case search
+        case recordings
         case sleep
         case second
         case settings(SettingsPanel.Page)
@@ -24,6 +25,7 @@ struct PlayerScreen: View {
         case channel(Int)
         case group(String)
         case gear
+        case recordings
         case swap
         case playlist(String)
         case hud(String)
@@ -165,11 +167,12 @@ struct PlayerScreen: View {
                 VStack {
                     HStack {
                         Spacer()
-                        CatchupPill(paused: model.player.paused)
+                        CatchupPill(paused: model.player.paused, label: catchupBadge(cu))
                     }
                     Spacer()
                     if catchupBar || model.player.paused || pendingSeek != nil {
-                        CatchupBar(catchup: cu, positionMs: catchupPosition, pendingSeekMs: pendingSeek, paused: model.player.paused)
+                        CatchupBar(catchup: cu, positionMs: catchupPosition, pendingSeekMs: pendingSeek, paused: model.player.paused,
+                                   badge: catchupBadge(cu))
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -264,6 +267,38 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
+            if panel == .recordings {
+                HStack {
+                    RecordingsPanel(onPlay: { info in
+                        closePanel()
+                        model.playRecording(info)
+                        showCatchupBar()
+                    })
+                    .onExitCommand(perform: closePanel)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 40)
+                .padding(.vertical, 40)
+                .ignoresSafeArea()
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
+            // A gravar: a cápsula REC no canto (debaixo dos painéis, como no Android).
+            if let rec = model.recordings.active.first, panel == .none, !tvGuide {
+                VStack {
+                    HStack {
+                        RecPill(title: rec.title)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.top, 48)
+                .padding(.horizontal, 64)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
             if panel == .second {
                 HStack {
                     SecondChannelPicker(onPick: { c, ch, g in
@@ -293,7 +328,24 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            if let reminder, panel == .none, !tvGuide {
+            if recordingCard, panel == .none, !tvGuide {
+                VStack {
+                    Spacer()
+                    HStack {
+                        if let prompt = model.switchPrompt {
+                            RecordingSwitchCard(prompt: prompt)
+                        } else if let soon = model.recordings.prompt {
+                            RecordingPromptCard(recording: soon)
+                        }
+                        Spacer()
+                    }
+                }
+                .padding(64)
+                .ignoresSafeArea()
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
+            if let reminder, panel == .none, !tvGuide, !recordingCard {
                 VStack {
                     Spacer()
                     HStack {
@@ -358,6 +410,17 @@ struct PlayerScreen: View {
         .onChange(of: focusSecond) { _, _ in applyAudio() }
         .onChange(of: model.second?.channel.key) { _, _ in applyAudio() }
         .animation(.easeOut(duration: 0.18), value: reminder)
+        .animation(.easeOut(duration: 0.18), value: model.switchPrompt?.id)
+        .animation(.easeOut(duration: 0.18), value: model.recordings.prompt?.id)
+        .animation(.easeOut(duration: 0.18), value: model.recordings.active.first?.id)
+        // Um cartão de gravação que aparece fecha o que estiver aberto por cima do vídeo (fica ele com o foco).
+        .onChange(of: model.switchPrompt?.id) { _, id in
+            guard id != nil else { return focusLater(.surface) }
+            hud = false
+            tvGuide = false
+            if panel != .none { panel = .none }
+        }
+        .onChange(of: model.recordings.prompt?.id) { _, id in if id == nil { focusLater(.surface) } }
         .animation(.easeOut(duration: 0.25), value: showUpdate)
         .defaultFocus($focus, .surface)
         .onAppear {
@@ -472,7 +535,7 @@ struct PlayerScreen: View {
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focus, equals: .surface)
-        .disabled(panel != .none || hud || tvGuide || reminder != nil)
+        .disabled(panel != .none || hud || tvGuide || reminder != nil || recordingCard)
         .onMoveCommand(perform: move)
         .onPlayPauseCommand(perform: playPause)
         .onExitCommand(perform: backAction)
@@ -704,6 +767,14 @@ struct PlayerScreen: View {
             model.catchup == nil && !(timeshift.available && (model.player.paused || !timeshift.atLive))
     }
 
+    /// Há um cartão de gravação no ecrã (mudar de canal a gravar, ou uma marcada noutro canal).
+    private var recordingCard: Bool { model.switchPrompt != nil || model.recordings.prompt != nil }
+
+    /// "CATCH-UP", ou "GRAVADO" numa gravação do disco.
+    private func catchupBadge(_ cu: Catchup) -> String {
+        cu.recording != nil ? model.strings.r("recordings_recorded").uppercased(with: model.strings.locale) : "CATCH-UP"
+    }
+
     /// Pausa do direto: cada ← → recua/avança isto.
     private static let timeshiftStepMs: Int64 = 10_000
 
@@ -754,6 +825,16 @@ struct PlayerScreen: View {
                 // Pausar o direto (também com Play/Pausa no comando).
                 if tsActive {
                     chip("pauselive", "pause.fill", s.r("pause_live")) { tsToggle() }
+                }
+                // Gravar o programa a dar (do anel da pausa do direto), ou parar a gravação deste canal.
+                if model.recordingOf(channel) != nil {
+                    chip("record", "stop.circle.fill", s.r("stop_recording")) { model.stopRecording(channel) }
+                } else {
+                    chip("record", "record.circle", s.r("record")) { model.recordNow(channel) }
+                }
+                chip("recordings", "film.stack", s.r("recordings")) {
+                    hud = false
+                    panel = .recordings
                 }
                 chip("search", "magnifyingglass", s.t("Search", "Pesquisar")) {
                     hud = false
@@ -822,6 +903,7 @@ struct PlayerScreen: View {
         }
         .buttonStyle(ChipButtonStyle())
         .focused($focus, equals: .hud(id))
+        .accessibilityIdentifier("hud:" + id)
     }
 
     // MARK: Painéis
@@ -997,6 +1079,17 @@ struct PlayerScreen: View {
                 .focused($focus, equals: .swap)
                 .disabled(playlistMenu)
             }
+            // As gravações (com um ponto vermelho enquanto grava), ao lado das Definições.
+            Button {
+                panel = .recordings
+            } label: {
+                Image(systemName: model.recordings.active.isEmpty ? "record.circle" : "record.circle.fill").font(.system(size: 28))
+                    .foregroundStyle(model.recordings.active.isEmpty ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.red))
+            }
+            .buttonStyle(IconButtonStyle())
+            .focused($focus, equals: .recordings)
+            .accessibilityIdentifier("recordings")
+            .disabled(playlistMenu)
             Button {
                 panel = .settings(.root)
             } label: {

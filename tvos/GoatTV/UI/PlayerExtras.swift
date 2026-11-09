@@ -95,13 +95,15 @@ struct CatchupBar: View {
     let positionMs: Int64
     let pendingSeekMs: Int64?
     let paused: Bool
+    /// "CATCH-UP", ou "GRAVADO" numa gravação do disco.
+    var badge = "CATCH-UP"
 
     var body: some View {
         let s = model.strings
         let shown = pendingSeekMs ?? positionMs
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 22) {
-                Text("CATCH-UP")
+                Text(badge)
                     .font(.system(size: 21, weight: .heavy))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)

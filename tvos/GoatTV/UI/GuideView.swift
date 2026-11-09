@@ -185,6 +185,23 @@ struct GuideView: View {
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focused)
+        // Manter OK num programa que ainda não acabou: gravar, gravar a série ou desmarcar (a tecla Menu do Android;
+        // o Siri Remote não a tem).
+        .contextMenu {
+            if !onHeader, let ch = current, let e = selected?.entry, e.endMs > nowMs() {
+                let s = model.strings
+                switch model.recordMark(ch, e) {
+                case .unmarked:
+                    Button(s.r("record")) { model.recordProgramme(ch, e) }
+                    Button(s.r("record_series")) { model.recordSeries(ch, e) }
+                case .one:
+                    Button(s.r("record_series")) { model.recordSeries(ch, e) }
+                    Button(s.r("cancel_recording"), role: .destructive) { model.cancelRecordMark(ch, e) }
+                case .series:
+                    Button(s.r("cancel_series"), role: .destructive) { model.cancelRecordMark(ch, e) }
+                }
+            }
+        }
         .onMoveCommand(perform: move)
         .onExitCommand(perform: onClose)
         .onPlayPauseCommand {
@@ -346,6 +363,7 @@ struct GuideView: View {
                     } else {
                         Text(s.t("Not available on catch-up", "Sem catch-up")).font(.system(size: 25)).foregroundStyle(Theme.textFaint)
                     }
+                    if !onHeader, let e, e.endMs > now { KeyHint(key: s.t("Hold OK", "Manter OK"), label: s.r("record")) }
                     if !onHeader { KeyHint(key: "▶︎❚❚", label: s.t("Back to now", "Voltar a agora")) }
                 }
                 .padding(.top, 8)
@@ -473,6 +491,14 @@ private struct GuideRow: View {
             let past = e.endMs <= now
             var icon: String?
             if e.startMs > now, model.hasReminder(channel, e) { icon = "bell.fill" }
+            // Marcado para gravar (ou a gravar): o ícone de gravar (cheio numa série).
+            if e.endMs > now {
+                switch model.recordMark(channel, e) {
+                case .one: icon = "record.circle"
+                case .series: icon = "record.circle.fill"
+                case .unmarked: break
+                }
+            }
             if past, model.canCatchup(channel, e) { icon = "clock.arrow.circlepath" }
             list.append(Cell(
                 id: "\(e.startMs)", title: e.title, startLabel: e.startMs >= windowStart ? e.startMs : nil,
