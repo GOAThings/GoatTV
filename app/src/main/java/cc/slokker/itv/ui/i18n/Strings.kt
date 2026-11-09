@@ -858,6 +858,10 @@ class Strings(context: Context) {
     // ---- Reprodução: AFR e áudio ----
     val afr get() = s(R.string.afr)
     val afrSub get() = s(R.string.afr_sub)
+    val afrOnStart get() = s(R.string.afr_on_start)
+    val afrAlways get() = s(R.string.afr_always)
+    val afrFallback get() = s(R.string.afr_fallback)
+    val afrFallbackSub get() = s(R.string.afr_fallback_sub)
     val hdr get() = "HDR"
     val hdrAuto get() = s(R.string.hdr_auto)
     val hdrSdr get() = s(R.string.hdr_sdr)

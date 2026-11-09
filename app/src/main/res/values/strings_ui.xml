@@ -437,6 +437,10 @@
     <string name="user_agent_sub">For providers that block the default one. Empty resets it.</string>
     <string name="afr">Auto frame rate (AFR)</string>
     <string name="afr_sub">The TV switches to the channel\'s frame rate (e.g. 50 Hz)</string>
+    <string name="afr_on_start">On start</string>
+    <string name="afr_always">Always</string>
+    <string name="afr_fallback">Frame rate if unknown</string>
+    <string name="afr_fallback_sub">When the channel\'s frame rate can\'t be measured</string>
     <string name="audio_section">Audio</string>
     <string name="passthrough">Audio passthrough</string>
     <string name="passthrough_sub">Dolby/DTS go straight to the TV or receiver</string>

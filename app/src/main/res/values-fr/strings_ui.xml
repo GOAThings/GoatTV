@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Pour les fournisseurs qui bloquent celui par défaut. Vide pour le réinitialiser.</string>
     <string name="afr">Fréquence d\'images auto (AFR)</string>
     <string name="afr_sub">La TV passe à la fréquence d\'images de la chaîne (ex. 50 Hz)</string>
+    <string name="afr_on_start">Au démarrage</string>
+    <string name="afr_always">Toujours</string>
+    <string name="afr_fallback">Fréquence si inconnue</string>
+    <string name="afr_fallback_sub">Quand la fréquence d\'images de la chaîne ne peut pas être mesurée</string>
     <string name="audio_section">Audio</string>
     <string name="passthrough">Passthrough audio</string>
     <string name="passthrough_sub">Dolby/DTS vont directement à la TV ou à l\'ampli</string>

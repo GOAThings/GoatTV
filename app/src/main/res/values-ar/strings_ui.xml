@@ -436,6 +436,10 @@
     <string name="user_agent_sub">للمزوّدين الذين يحظرون الافتراضي. تركه فارغًا يعيد ضبطه.</string>
     <string name="afr">معدل الإطارات التلقائي (AFR)</string>
     <string name="afr_sub">يتحوّل التلفزيون إلى معدل إطارات القناة (مثلًا 50 Hz)</string>
+    <string name="afr_on_start">عند البدء</string>
+    <string name="afr_always">دائمًا</string>
+    <string name="afr_fallback">معدل الإطارات إن كان مجهولًا</string>
+    <string name="afr_fallback_sub">عندما يتعذّر قياس معدل إطارات القناة</string>
     <string name="audio_section">الصوت</string>
     <string name="passthrough">تمرير الصوت</string>
     <string name="passthrough_sub">يُرسل Dolby/DTS مباشرةً إلى التلفزيون أو جهاز الاستقبال</string>

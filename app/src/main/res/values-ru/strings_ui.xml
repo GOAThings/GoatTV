@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Для провайдеров, которые блокируют стандартный. Пустое поле сбрасывает его.</string>
     <string name="afr">Автоматическая частота кадров (AFR)</string>
     <string name="afr_sub">ТВ переключается на частоту кадров канала (например, 50 Гц)</string>
+    <string name="afr_on_start">При запуске</string>
+    <string name="afr_always">Всегда</string>
+    <string name="afr_fallback">Частота кадров, если неизвестна</string>
+    <string name="afr_fallback_sub">Когда частоту кадров канала не удаётся измерить</string>
     <string name="audio_section">Звук</string>
     <string name="passthrough">Прямой вывод звука</string>
     <string name="passthrough_sub">Dolby/DTS передаются прямо на ТВ или ресивер</string>

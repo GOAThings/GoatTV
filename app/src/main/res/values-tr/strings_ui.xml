@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Varsayılanı engelleyen sağlayıcılar için. Boş bırakılırsa sıfırlanır.</string>
     <string name="afr">Otomatik kare hızı (AFR)</string>
     <string name="afr_sub">TV, kanalın kare hızına geçer (ör. 50 Hz)</string>
+    <string name="afr_on_start">Başlangıçta</string>
+    <string name="afr_always">Her zaman</string>
+    <string name="afr_fallback">Bilinmiyorsa kare hızı</string>
+    <string name="afr_fallback_sub">Kanalın kare hızı ölçülemediğinde</string>
     <string name="audio_section">Ses</string>
     <string name="passthrough">Ses geçişi (passthrough)</string>
     <string name="passthrough_sub">Dolby/DTS doğrudan TV\'ye veya alıcıya gider</string>

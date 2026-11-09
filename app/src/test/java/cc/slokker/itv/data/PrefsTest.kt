@@ -150,4 +150,41 @@ class PrefsTest {
         )
         assertFalse(Prefs.removePlaylist(settings, "p1"))
     }
+
+    @Test
+    fun `afr mode keeps reading the old on-off key`() {
+        // Gravado antes de haver modos: ligado era "sempre".
+        assertEquals(Prefs.AfrMode.ALWAYS, prefs("""{"afr":true}""").afrMode)
+        assertEquals(Prefs.AfrMode.OFF, prefs("""{"afr":false}""").afrMode)
+        assertEquals(Prefs.AfrMode.OFF, prefs("""{}""").afrMode)
+        // A chave antiga a false desliga sempre (a Apple TV e as versões antigas só mexem nela).
+        assertEquals(Prefs.AfrMode.OFF, prefs("""{"afr":false,"afr_mode":"start"}""").afrMode)
+        assertEquals(Prefs.AfrMode.START, prefs("""{"afr":true,"afr_mode":"start"}""").afrMode)
+        assertEquals(Prefs.AfrMode.ALWAYS, prefs("""{"afr":true,"afr_mode":"x"}""").afrMode)
+    }
+
+    @Test
+    fun `afr mode writes both keys`() {
+        for (mode in Prefs.AfrMode.ALL) {
+            val settings = JsonParser.parseString("""{"afr":true,"afr_mode":"always"}""").asJsonObject
+            Prefs.afrModeValues(mode).forEach { (k, v) -> Prefs.put(settings, k, v) }
+            val p = Prefs.from(settings)
+            assertEquals(mode, p.afrMode)
+            assertEquals(mode != Prefs.AfrMode.OFF, p.afr)
+        }
+        // Desligado não deixa o modo gravado.
+        val off = JsonParser.parseString("""{"afr":true,"afr_mode":"start"}""").asJsonObject
+        Prefs.afrModeValues(Prefs.AfrMode.OFF).forEach { (k, v) -> Prefs.put(off, k, v) }
+        assertEquals("""{"afr":false}""", off.toString())
+    }
+
+    @Test
+    fun `zap delay and afr fallback accept only their options`() {
+        assertEquals(Prefs.ZapDelay.AUTO, Prefs().zapDelayMs)
+        assertEquals(1_000, prefs("""{"zap_delay_ms":1000}""").zapDelayMs)
+        assertEquals(Prefs.ZapDelay.AUTO, prefs("""{"zap_delay_ms":1234}""").zapDelayMs)
+        assertEquals(Prefs.AfrFallback.HZ50, prefs("""{"afr_fallback":"50"}""").afrFallback)
+        assertEquals(Prefs.AfrFallback.NONE, prefs("""{"afr_fallback":"48"}""").afrFallback)
+        assertEquals(59.94f, Prefs.AfrFallback.fps(Prefs.AfrFallback.HZ5994))
+    }
 }

@@ -86,10 +86,21 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 80),
         phone = Place(PhonePage.PLAYBACK, 20, PhoneSection.CONNECTION),
     )
-    val AFR = Setting.Toggle(
-        Prefs.Key.AFR, { it.afr }, { it.afrSub },
-        read = { it.afr },
+    /** Era um sim/não: a chave "afr" continua a dizer se está ligado, o modo vai ao lado (ver Prefs.afrModeValues). */
+    val AFR = Setting.Choice(
+        Prefs.Key.AFR, { it.afr },
+        options = { s -> listOf(Prefs.AfrMode.OFF to s.off, Prefs.AfrMode.START to s.afrOnStart, Prefs.AfrMode.ALWAYS to s.afrAlways) },
+        read = { it.prefs.afrMode },
+        write = Write.AFR_MODE,
+        subtitle = { it.afrSub },
         tv = Place(TvPage.PLAYBACK, 90),
+    )
+    val AFR_FALLBACK = Setting.Choice(
+        Prefs.Key.AFR_FALLBACK, { it.afrFallback },
+        options = { s -> listOf(Prefs.AfrFallback.NONE to s.off, Prefs.AfrFallback.HZ50 to "50 Hz", Prefs.AfrFallback.HZ5994 to "59.94 Hz") },
+        read = { it.prefs.afrFallback },
+        subtitle = { it.afrFallbackSub },
+        tv = Place(TvPage.PLAYBACK, 95),
     )
     /** Na TV, o subtítulo diz o HDR que o ecrã aceita (a página da TV acrescenta-o). */
     val HDR = Setting.Choice(
@@ -305,8 +316,8 @@ object SettingsCatalog {
 
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
-        STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, HDR, PASSTHROUGH, SURROUND,
-        AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
+        SURROUND, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, EPG_IN_LIST,
     )
@@ -337,13 +348,14 @@ object SettingsCatalog {
 fun AppViewModel.saveSetting(setting: Setting.Choice, value: Any?) = when (setting.write) {
     Write.PREF -> setPref(setting.key, value)
     Write.STREAM_FORMAT -> setStreamFormat(value as String?)
+    Write.AFR_MODE -> setPrefs(Prefs.afrModeValues(value as String))
 }
 
 /** O que as definições leem: as Prefs e o formato preferido (que não está nas Prefs, ver ProfileKeys). */
 class SettingValues(val prefs: Prefs, val streamFormat: String?)
 
-/** Como se grava uma escolha: numa chave das Prefs, ou como formato preferido. */
-enum class Write { PREF, STREAM_FORMAT }
+/** Como se grava uma escolha: numa chave das Prefs, como formato preferido, ou o modo do AFR (duas chaves). */
+enum class Write { PREF, STREAM_FORMAT, AFR_MODE }
 
 /** As páginas da TV onde há linhas do catálogo. */
 enum class TvPage { PLAYBACK, GENERAL, ZAPPING, APPEARANCE, GUIDE }

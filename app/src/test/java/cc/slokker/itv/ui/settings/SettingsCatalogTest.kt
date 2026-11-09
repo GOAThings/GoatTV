@@ -55,7 +55,7 @@ class SettingsCatalogTest {
         val k = Prefs.Key
         assertEquals(
             listOf(
-                TvSection.MAIN to listOf("format", k.BUFFER, k.ENGINE, k.DECODER, k.ASPECT, k.FREEZE_FRAME, k.TIMESHIFT, k.RECONNECT_SECONDS, k.AFR, k.HDR),
+                TvSection.MAIN to listOf("format", k.BUFFER, k.ENGINE, k.DECODER, k.ASPECT, k.FREEZE_FRAME, k.TIMESHIFT, k.RECONNECT_SECONDS, k.AFR, k.AFR_FALLBACK, k.HDR),
                 TvSection.AUDIO to listOf(k.AUDIO_PASSTHROUGH, k.SURROUND_DEFAULT, k.AUDIO_DECODER),
             ),
             tv(TvPage.PLAYBACK),
@@ -96,7 +96,7 @@ class SettingsCatalogTest {
     fun `which platform has each setting is written down`() {
         val tvOnly = SettingsCatalog.ALL.filter { it.phone == null }.map { it.key }.toSet()
         val phoneOnly = SettingsCatalog.ALL.filter { it.tv == null }.map { it.key }.toSet()
-        assertTrue(Prefs.Key.AFR in tvOnly && Prefs.Key.HDR in tvOnly && Prefs.Key.UI_SCALE in tvOnly)
+        assertTrue(Prefs.Key.AFR in tvOnly && Prefs.Key.AFR_FALLBACK in tvOnly && Prefs.Key.HDR in tvOnly && Prefs.Key.UI_SCALE in tvOnly)
         // O atraso ao mudar de canal vale nos dois (o telemóvel também muda de canal a deslizar).
         assertTrue(SettingsCatalog.ZAP_DELAY.tv != null && SettingsCatalog.ZAP_DELAY.phone != null)
         assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)

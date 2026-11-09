@@ -176,8 +176,11 @@ class ProfileStore(
     }
 
     /** Muda uma definição da conta: String, Boolean, Int, lista de Strings, ou null para repor o padrão. */
-    fun setPref(key: String, value: Any?) {
-        Prefs.put(settings, key, value)
+    fun setPref(key: String, value: Any?) = setPrefs(mapOf(key to value))
+
+    /** Muda várias definições de uma vez (uma só gravação), como [setPref]. */
+    fun setPrefs(values: Map<String, Any?>) {
+        values.forEach { (key, value) -> Prefs.put(settings, key, value) }
         _prefs.value = Prefs.from(settings)
         onLanguage(_prefs.value.language)
         save()

@@ -436,6 +436,10 @@
     <string name="user_agent_sub">उन प्रदाताओं के लिए जो डिफ़ॉल्ट को रोकते हैं। खाली छोड़ने पर रीसेट हो जाता है।</string>
     <string name="afr">ऑटो फ़्रेम रेट (AFR)</string>
     <string name="afr_sub">TV चैनल के फ़्रेम रेट पर चला जाता है (जैसे 50 Hz)</string>
+    <string name="afr_on_start">शुरू होने पर</string>
+    <string name="afr_always">हमेशा</string>
+    <string name="afr_fallback">अज्ञात होने पर फ़्रेम रेट</string>
+    <string name="afr_fallback_sub">जब चैनल का फ़्रेम रेट मापा न जा सके</string>
     <string name="audio_section">ऑडियो</string>
     <string name="passthrough">ऑडियो पासथ्रू</string>
     <string name="passthrough_sub">Dolby/DTS सीधे TV या रिसीवर पर जाते हैं</string>

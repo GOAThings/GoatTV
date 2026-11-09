@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Para fornecedores que bloqueiam o predefinido. Vazio repõe.</string>
     <string name="afr">Auto frame rate (AFR)</string>
     <string name="afr_sub">A TV muda para a cadência do canal (ex.: 50 Hz)</string>
+    <string name="afr_on_start">Ao começar</string>
+    <string name="afr_always">Sempre</string>
+    <string name="afr_fallback">Cadência se for desconhecida</string>
+    <string name="afr_fallback_sub">Quando não se consegue medir a cadência do canal</string>
     <string name="audio_section">Áudio</string>
     <string name="passthrough">Passthrough de áudio</string>
     <string name="passthrough_sub">Dolby/DTS vão direto para a TV ou o recetor</string>

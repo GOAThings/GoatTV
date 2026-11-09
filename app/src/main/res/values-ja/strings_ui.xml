@@ -436,6 +436,10 @@
     <string name="user_agent_sub">デフォルトをブロックするプロバイダ向けです。空欄にすると元に戻ります。</string>
     <string name="afr">フレームレート自動切り替え（AFR）</string>
     <string name="afr_sub">テレビがチャンネルのフレームレート（例：50 Hz）に切り替わります</string>
+    <string name="afr_on_start">開始時</string>
+    <string name="afr_always">常に</string>
+    <string name="afr_fallback">不明な場合のフレームレート</string>
+    <string name="afr_fallback_sub">チャンネルのフレームレートを測定できないとき</string>
     <string name="audio_section">音声</string>
     <string name="passthrough">音声パススルー</string>
     <string name="passthrough_sub">Dolby/DTS をテレビやレシーバーにそのまま送ります</string>

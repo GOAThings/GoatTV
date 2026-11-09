@@ -436,6 +436,10 @@
     <string name="user_agent_sub">适用于屏蔽默认 User-Agent 的服务商。留空则恢复默认。</string>
     <string name="afr">自动帧率（AFR）</string>
     <string name="afr_sub">电视切换为频道的帧率（例如 50 Hz）</string>
+    <string name="afr_on_start">开始时</string>
+    <string name="afr_always">始终</string>
+    <string name="afr_fallback">未知时的帧率</string>
+    <string name="afr_fallback_sub">无法测量频道帧率时</string>
     <string name="audio_section">音频</string>
     <string name="passthrough">音频直通</string>
     <string name="passthrough_sub">Dolby/DTS 直接输出到电视或功放</string>

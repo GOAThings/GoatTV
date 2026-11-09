@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Untuk penyedia yang memblokir User-Agent default. Kosongkan untuk mengatur ulang.</string>
     <string name="afr">Frame rate otomatis (AFR)</string>
     <string name="afr_sub">TV beralih ke frame rate saluran (mis. 50 Hz)</string>
+    <string name="afr_on_start">Saat mulai</string>
+    <string name="afr_always">Selalu</string>
+    <string name="afr_fallback">Frame rate jika tidak diketahui</string>
+    <string name="afr_fallback_sub">Saat frame rate saluran tidak dapat diukur</string>
     <string name="audio_section">Audio</string>
     <string name="passthrough">Passthrough audio</string>
     <string name="passthrough_sub">Dolby/DTS langsung dikirim ke TV atau receiver</string>

@@ -198,6 +198,8 @@ class PersistedFormatTest {
         "freezeFrame" to (Prefs.Key.FREEZE_FRAME to false),
         "reconnectSeconds" to (Prefs.Key.RECONNECT_SECONDS to 10),
         "afr" to (Prefs.Key.AFR to true),
+        "afrMode" to (Prefs.Key.AFR_MODE to Prefs.AfrMode.START),
+        "afrFallback" to (Prefs.Key.AFR_FALLBACK to Prefs.AfrFallback.HZ50),
         "audioPassthrough" to (Prefs.Key.AUDIO_PASSTHROUGH to false),
         "surroundDefault" to (Prefs.Key.SURROUND_DEFAULT to true),
         "pipEnabled" to (Prefs.Key.PIP_ENABLED to true),

@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +82,8 @@ import cc.slokker.itv.ui.UpdateState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.media3.exoplayer.ExoPlayer
 import cc.slokker.itv.ui.player.engine.FREEZE_HEIGHT
 import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
 import cc.slokker.itv.ui.player.engine.aspectOrNull
@@ -134,6 +137,9 @@ fun PlayerScreen(vm: AppViewModel) {
     }
     val player = checkNotNull(playback.player)
     val frameRateMatcher = remember { (context as? Activity)?.let { FrameRateMatcher(it) } }
+    /** AFR: a cadência do canal (medida pelas imagens, ver FpsEstimator) e quando se muda o modo da TV. */
+    val frameRate = remember { FrameRateProbe() }
+    val afr = remember { AfrSession() }
     /** Pausar o direto (ver Timeshift): o anel em disco do canal a dar. */
     val timeshift = checkNotNull(playback.timeshift)
     val backdrop = remember { GlassBackdrop() }
@@ -304,6 +310,20 @@ fun PlayerScreen(vm: AppViewModel) {
             else -> infoVisible = false
         }
         playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
+        // AFR: quando se souber a cadência deste canal, a TV muda para ela (conforme o modo).
+        frameRate.reset()
+        afr.newChannel()
+        val mode = latestPrefs.afrMode
+        val matcher = frameRateMatcher
+        if (mode != Prefs.AfrMode.OFF && matcher != null) {
+            snapshotFlow { playback.ready }.first { it }
+            // Sem cadência de recurso, espera pela medida o que for preciso (até mudar de canal).
+            val measured = withTimeoutOrNull(AFR_MEASURE_MS) { frameRate.fps.first { it > 0f } }
+            val fps = measured ?: Prefs.AfrFallback.fps(latestPrefs.afrFallback) ?: frameRate.fps.first { it > 0f }
+            val target = fps?.let { afr.onFps(mode, it) }
+            if (PLAYER_LOGS) Log.d("Afr", "modo=$mode medida=$measured → ${target ?: "fica"}")
+            target?.let { matcher.match(it, HdrType.of(player.videoFormat())) }
+        }
     }
 
     // Posição no catch-up (para a barra).
@@ -374,8 +394,9 @@ fun PlayerScreen(vm: AppViewModel) {
             override fun onTracksChanged(tracks: Tracks) {
                 // A passar para o VLC (o ChannelPlayback trata disso): neste player não há nada a escolher.
                 if (player !is VlcPlayer && tracks.cannotDecode()) return
-                // AFR: a TV acompanha a cadência do canal.
-                if (latestPrefs.afr) player.videoFormat()?.let { f -> frameRateMatcher?.match(f.frameRate, HdrType.of(f)) }
+                // AFR: a cadência que o formato diz (HLS com FRAME-RATE, VLC); no TS mede-se pelas imagens.
+                val video = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }?.getTrackFormat(0)
+                frameRate.fromFormat(video?.frameRate ?: player.videoFormat()?.frameRate ?: 0f)
                 // Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
                 if (latestPrefs.surroundDefault && !playback.audioChosen) {
                     playback.audioChosen = selectSurroundTrack(player, tracks)
@@ -405,6 +426,7 @@ fun PlayerScreen(vm: AppViewModel) {
             playback.stop()
             seek.reset()
             frameRateMatcher?.restore()
+            afr.reset()
             vm.flushLastChannel()
         }
     }
@@ -428,7 +450,19 @@ fun PlayerScreen(vm: AppViewModel) {
     LaunchedEffect(netHint) { if (netHint) focusWithRetry(netHintFocus) }
 
     // AFR desligado nas definições: devolve já a TV ao modo normal.
-    LaunchedEffect(prefs.afr) { if (!prefs.afr) frameRateMatcher?.restore() }
+    LaunchedEffect(prefs.afrMode) {
+        if (prefs.afrMode == Prefs.AfrMode.OFF) {
+            frameRateMatcher?.restore()
+            afr.reset()
+        }
+    }
+
+    // As imagens do ExoPlayer medem a cadência do canal (o TS não a diz).
+    DisposableEffect(player) {
+        val exo = player as? ExoPlayer
+        exo?.let(frameRate::attach)
+        onDispose { exo?.let(frameRate::detach) }
+    }
 
     LaunchedEffect(prefs.glassOpacity) { backdrop.opacity = prefs.glassOpacity / 100f }
 
@@ -1180,6 +1214,8 @@ private const val SEEK_COMMIT_MS = 900L
 /** Pausa do direto: cada ← → (ou ⏪ ⏩) recua/avança isto. */
 private const val TIMESHIFT_STEP_MS = 10_000L
 private const val NUMBER_COMMIT_MS = 1_500L
+/** AFR: quanto se espera pela cadência do canal depois de ele arrancar, antes de usar a de recurso. */
+private const val AFR_MEASURE_MS = 3_000L
 /** O cartão de versão nova: quanto fica no ecrã e quanto tempo se mantém OK para instalar. */
 private const val UPDATE_CARD_SECONDS = 12
 private const val UPDATE_HOLD_MS = 1_500L

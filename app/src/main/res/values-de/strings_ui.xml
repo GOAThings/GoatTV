@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Für Anbieter, die den Standard blockieren. Leer setzt ihn zurück.</string>
     <string name="afr">Automatische Bildrate (AFR)</string>
     <string name="afr_sub">Der TV wechselt auf die Bildrate des Senders (z. B. 50 Hz)</string>
+    <string name="afr_on_start">Beim Start</string>
+    <string name="afr_always">Immer</string>
+    <string name="afr_fallback">Bildrate, falls unbekannt</string>
+    <string name="afr_fallback_sub">Wenn sich die Bildrate des Senders nicht messen lässt</string>
     <string name="audio_section">Audio</string>
     <string name="passthrough">Audio-Passthrough</string>
     <string name="passthrough_sub">Dolby/DTS gehen direkt an TV oder Receiver</string>

@@ -436,6 +436,10 @@
     <string name="user_agent_sub">기본값을 차단하는 제공업체용이에요. 비워 두면 초기화돼요.</string>
     <string name="afr">자동 프레임 레이트(AFR)</string>
     <string name="afr_sub">TV가 채널의 프레임 레이트로 전환돼요(예: 50Hz)</string>
+    <string name="afr_on_start">시작할 때</string>
+    <string name="afr_always">항상</string>
+    <string name="afr_fallback">알 수 없을 때 프레임 레이트</string>
+    <string name="afr_fallback_sub">채널의 프레임 레이트를 측정할 수 없을 때</string>
     <string name="audio_section">오디오</string>
     <string name="passthrough">오디오 패스스루</string>
     <string name="passthrough_sub">Dolby/DTS를 TV나 리시버로 바로 보내요</string>

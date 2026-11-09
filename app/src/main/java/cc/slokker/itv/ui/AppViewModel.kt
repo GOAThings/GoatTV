@@ -984,6 +984,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Muda uma definição da conta: String, Boolean, Int, lista de Strings, ou null para repor o padrão. */
     fun setPref(key: String, value: Any?) = profile.setPref(key, value)
 
+    fun setPrefs(values: Map<String, Any?>) = profile.setPrefs(values)
+
     fun isFavorite(channel: Channel): Boolean = catalog().isFavorite(channel)
 
     /** Adiciona/remove dos favoritos e grava logo na conta. */

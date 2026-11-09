@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Para provedores que bloqueiam o padrão. Vazio restaura o padrão.</string>
     <string name="afr">Taxa de quadros automática (AFR)</string>
     <string name="afr_sub">A TV muda para a taxa de quadros do canal (ex.: 50 Hz)</string>
+    <string name="afr_on_start">Ao iniciar</string>
+    <string name="afr_always">Sempre</string>
+    <string name="afr_fallback">Taxa de quadros se desconhecida</string>
+    <string name="afr_fallback_sub">Quando não dá para medir a taxa de quadros do canal</string>
     <string name="audio_section">Áudio</string>
     <string name="passthrough">Passthrough de áudio</string>
     <string name="passthrough_sub">Dolby/DTS vão direto para a TV ou o receiver</string>

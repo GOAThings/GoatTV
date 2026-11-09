@@ -436,6 +436,10 @@
     <string name="user_agent_sub">Para proveedores que bloquean el predeterminado. Vacío lo restablece.</string>
     <string name="afr">Frecuencia automática (AFR)</string>
     <string name="afr_sub">La TV cambia a la frecuencia de imagen del canal (p. ej., 50 Hz)</string>
+    <string name="afr_on_start">Al iniciar</string>
+    <string name="afr_always">Siempre</string>
+    <string name="afr_fallback">Frecuencia si se desconoce</string>
+    <string name="afr_fallback_sub">Cuando no se puede medir la frecuencia de imagen del canal</string>
     <string name="audio_section">Audio</string>
     <string name="passthrough">Passthrough de audio</string>
     <string name="passthrough_sub">Dolby/DTS van directos a la TV o al receptor</string>

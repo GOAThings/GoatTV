@@ -19,8 +19,15 @@ data class Prefs(
     val freezeFrame: Boolean = true,
     /** Segundos até voltar a ligar quando a stream falha (0 = não tentar). */
     val reconnectSeconds: Int = 5,
-    /** Auto frame rate: a TV muda de refresh rate para a cadência do canal. */
+    /**
+     * Auto frame rate: a TV muda de refresh rate para a cadência do canal. É a chave antiga (sim/não), que a Apple
+     * TV também lê; o modo ([afrMode]) diz quando muda, e [afrModeValues] grava as duas a condizer.
+     */
     val afr: Boolean = false,
+    /** Quando o AFR muda o modo da TV ([AfrMode]); desligado sempre que [afr] for false. */
+    val afrMode: String = AfrMode.OFF,
+    /** A cadência a usar quando a do canal não se consegue medir ([AfrFallback]). */
+    val afrFallback: String = AfrFallback.NONE,
     /** Passthrough de áudio (Dolby/DTS para o recetor ou a TV). */
     val audioPassthrough: Boolean = true,
     val surroundDefault: Boolean = false,
@@ -124,6 +131,8 @@ data class Prefs(
         const val FREEZE_FRAME = "freeze_frame"
         const val RECONNECT_SECONDS = "reconnect_seconds"
         const val AFR = "afr"
+        const val AFR_MODE = "afr_mode"
+        const val AFR_FALLBACK = "afr_fallback"
         const val AUDIO_PASSTHROUGH = "audio_passthrough"
         const val SURROUND_DEFAULT = "surround_default"
         const val PIP_ENABLED = "pip_enabled"
@@ -214,6 +223,28 @@ data class Prefs(
         const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill"
         val ALL = setOf(FIT, ZOOM, FILL)
     }
+    /**
+     * Quando o AFR muda o modo da TV: nunca, só no primeiro canal (depois fica, sem o ecrã apagar a cada zap; volta
+     * ao normal ao sair do player) ou em cada canal que precise de outra frequência. Desligado não se grava: é
+     * [Key.AFR] a false (ver [afrModeValues]).
+     */
+    object AfrMode {
+        const val OFF = "off"; const val START = "start"; const val ALWAYS = "always"
+        val ALL = setOf(OFF, START, ALWAYS)
+    }
+
+    /** A cadência assumida quando a do canal não se mede (nenhuma, 50 ou 59,94 imagens por segundo). */
+    object AfrFallback {
+        const val NONE = "none"; const val HZ50 = "50"; const val HZ5994 = "59.94"
+        val ALL = setOf(NONE, HZ50, HZ5994)
+
+        fun fps(value: String): Float? = when (value) {
+            HZ50 -> 50f
+            HZ5994 -> 59.94f
+            else -> null
+        }
+    }
+
     /** O atraso ao mudar de canal (ver ZapPacer): automático, desligado, ou sempre 1 ou 2 s (em ms). */
     object ZapDelay {
         const val AUTO = -1; const val OFF = 0
@@ -266,6 +297,8 @@ data class Prefs(
                 freezeFrame = bool(Key.FREEZE_FRAME, d.freezeFrame),
                 reconnectSeconds = int(Key.RECONNECT_SECONDS, d.reconnectSeconds).coerceIn(0, 120),
                 afr = bool(Key.AFR, d.afr),
+                afrMode = afrMode(s),
+                afrFallback = str(Key.AFR_FALLBACK, d.afrFallback, AfrFallback.ALL),
                 audioPassthrough = bool(Key.AUDIO_PASSTHROUGH, d.audioPassthrough),
                 surroundDefault = bool(Key.SURROUND_DEFAULT, d.surroundDefault),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
@@ -314,6 +347,28 @@ data class Prefs(
                 pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },
                 lockedGroups = stringSet(s, Key.LOCKED_GROUPS),
             )
+        }
+
+        /**
+         * O modo do AFR: a chave antiga [Key.AFR] a false desliga sempre (a Apple TV e as versões antigas só mexem
+         * nela); ligada, vale [Key.AFR_MODE] e, sem ele (gravado antes de haver modos), "sempre", que é o que o
+         * sim/não fazia. Sem nenhuma das duas, desligado.
+         */
+        private fun afrMode(s: JsonObject): String {
+            val on = s.get(Key.AFR)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asBoolean }.getOrNull() }
+            val mode = s.get(Key.AFR_MODE)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it == AfrMode.START || it == AfrMode.ALWAYS }
+            return when {
+                on == false -> AfrMode.OFF
+                mode != null -> mode
+                on == true -> AfrMode.ALWAYS
+                else -> AfrMode.OFF
+            }
+        }
+
+        /** O que gravar para o modo [mode] do AFR: as duas chaves a condizer (desligado apaga o modo). */
+        fun afrModeValues(mode: String): Map<String, Any?> = when (mode) {
+            AfrMode.START, AfrMode.ALWAYS -> mapOf(Key.AFR to true, Key.AFR_MODE to mode)
+            else -> mapOf(Key.AFR to false, Key.AFR_MODE to null)
         }
 
         /**
