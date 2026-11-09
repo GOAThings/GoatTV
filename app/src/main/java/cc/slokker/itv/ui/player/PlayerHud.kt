@@ -32,12 +32,13 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 
 /** Os botões da barra completa que mexem no ecrã do player (abrir um painel, trocar os canais...). */
-internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, SECOND_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, EPG_CHANNEL, SLEEP }
+internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, SLEEP }
 
 /**
  * Os botões da barra completa (OK no vídeo). O que é só pedir ao ViewModel (imagem, favorito, ver do início,
  * fechar o segundo canal) faz-se aqui; o que abre ou troca coisas no ecrã vai para [onAction].
- * [live]: o programa a dar; [pauseLive]: há pausa do direto; [second]: há segundo canal.
+ * [live]: o programa a dar; [pauseLive]: há pausa do direto; [second]: há segundo canal; [recording]: este canal está
+ * a gravar (o botão pára), senão "Gravar" aparece com a pausa do direto (grava-se do anel dela).
  */
 @Composable
 internal fun HudButtons(
@@ -48,6 +49,7 @@ internal fun HudButtons(
     isFavorite: Boolean,
     sleepAt: Long?,
     pauseLive: Boolean,
+    recording: Boolean,
     second: Boolean,
     dualLayout: DualLayout,
     firstFocus: FocusRequester,
@@ -93,6 +95,10 @@ internal fun HudButtons(
         )
         // Pausar o direto (também com Play/Pausa no comando, para quem o tem).
         if (pauseLive) GlassChipButton(ItvIcons.Pause, s.pauseLive, { onAction(HudAction.PAUSE_LIVE) })
+        // Um só botão (gravar ⇄ parar), para o foco ficar nele quando muda.
+        if (recording || pauseLive && !second) {
+            GlassChipButton(if (recording) ItvIcons.Stop else ItvIcons.Record, if (recording) s.stopRecording else s.record, { onAction(HudAction.RECORD) })
+        }
         if (!second) {
             GlassChipButton(ItvIcons.Pip, s.secondChannel, { onAction(HudAction.SECOND_CHANNEL) })
         } else {
@@ -107,6 +113,7 @@ internal fun HudButtons(
         }
         GlassChipButton(ItvIcons.Search, s.search, { onAction(HudAction.SEARCH) })
         GlassChipButton(ItvIcons.Guide, s.tvGuide, { onAction(HudAction.GUIDE) })
+        GlassChipButton(ItvIcons.Recordings, s.recordings, { onAction(HudAction.RECORDINGS) })
         // Trocar o guia deste canal por outro (só com conta; sem conta explica como ligar).
         GlassChipButton(ItvIcons.Guide, s.epgGuideChannel, {
             if (vm.epgPickerAvailable) {

@@ -12,7 +12,7 @@ class TvBackTest {
         // Tudo aberto: cada Voltar fecha o de cima; depois de o fechar, o seguinte é o próximo da lista.
         val order = listOf(
             TvBack.DISMISS_REMINDER, TvBack.CLEAR_NUMBER, TvBack.CLOSE_NET_HINT, TvBack.CLOSE_PIN, TvBack.CLOSE_PLAYLIST_MENU,
-            TvBack.CLOSE_SLEEP, TvBack.SECOND_PICKER, TvBack.CLOSE_TRACKS, TvBack.CLOSE_SEARCH, TvBack.CLOSE_GUIDE,
+            TvBack.CLOSE_SLEEP, TvBack.SECOND_PICKER, TvBack.CLOSE_TRACKS, TvBack.CLOSE_SEARCH, TvBack.CLOSE_RECORDINGS, TvBack.CLOSE_GUIDE,
             TvBack.CLOSE_EPG_PANEL, TvBack.CLOSE_PANEL, TvBack.HIDE_INFO, TvBack.EXIT_CATCHUP, TvBack.GO_LIVE, TvBack.CLOSE_SECOND,
         )
         val open = order.toMutableSet()
@@ -54,6 +54,7 @@ class TvBackTest {
         secondPicker = TvBack.SECOND_PICKER in open,
         tracks = TvBack.CLOSE_TRACKS in open,
         search = TvBack.CLOSE_SEARCH in open,
+        recordings = TvBack.CLOSE_RECORDINGS in open,
         guide = TvBack.CLOSE_GUIDE in open,
         epgPanel = TvBack.CLOSE_EPG_PANEL in open,
         panel = TvBack.CLOSE_PANEL in open,

@@ -110,6 +110,7 @@ internal fun SidePanel(
     onOpenGroups: () -> Unit,
     onSelectGroup: (String) -> Unit,
     onSettings: () -> Unit,
+    onRecordings: () -> Unit,
     onClose: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
@@ -151,7 +152,7 @@ internal fun SidePanel(
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
-            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
         }
     }
     Box(
@@ -420,6 +421,7 @@ private fun GroupList(
     onSelectGroup: (String) -> Unit,
     onFocusGroup: (String) -> Unit,
     onSettings: () -> Unit,
+    onRecordings: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
     active: Boolean,
@@ -529,6 +531,15 @@ private fun GroupList(
                 )
                 Spacer(Modifier.width(8.dp))
             }
+            // As gravações, ao lado das Definições (como o ⇄ das listas).
+            GlassIconButton(
+                ItvIcons.Recordings,
+                contentDescription = s.recordings,
+                onClick = onRecordings,
+                enabled = !playlistMenu,
+                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedGroup = null },
+            )
+            Spacer(Modifier.width(8.dp))
             GlassIconButton(
                 ItvIcons.Settings,
                 contentDescription = s.settings,

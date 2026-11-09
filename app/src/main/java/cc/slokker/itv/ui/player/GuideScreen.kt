@@ -153,6 +153,7 @@ private data class Slot(val entry: EpgEntry?, val start: Long, val end: Long)
  * O foco é gerido à mão (linha + hora), como nos guias das boxes: andar para os lados segue os programas,
  * para cima/baixo mantém a hora. ↑ na primeira linha passa para o grupo (← → muda de grupo).
  * OK: em direto vê o canal; já passou e há arquivo vê em catch-up; ainda vai dar marca um lembrete.
+ * Menu (≡) ou a tecla de gravar: gravar → gravar a série → desmarcar ([onRecord], ver AppViewModel.cycleRecording).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -162,12 +163,17 @@ internal fun TvGuide(
     startGroup: String,
     onPlay: (Channel, String) -> Unit,
     onCatchup: (Channel, EpgEntry) -> Unit,
+    onRecord: (Channel, EpgEntry) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val s = LocalStrings.current
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val version by vm.epgVersion.collectAsStateWithLifecycle()
     val reminders by vm.reminders.collectAsStateWithLifecycle()
+    // As marcas de gravação (o ponto vermelho nos programas) mudam com as marcadas e as que estão a gravar.
+    val schedule by vm.recordingSchedule.collectAsStateWithLifecycle()
+    val recordingNow by vm.activeRecordings.collectAsStateWithLifecycle()
+    val marks = remember(schedule, recordingNow) { java.util.Objects.hash(schedule, recordingNow.map { it.info.id }) }
     val content by vm.content.collectAsStateWithLifecycle()
     val data = content ?: return
     val now = rememberNow()
@@ -306,6 +312,11 @@ internal fun TvGuide(
                         if (!onHeader && ch != null && slot != null) act(ch, slot)
                         true
                     }
+                    AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_MEDIA_RECORD -> {
+                        val e2 = slot?.entry
+                        if (!onHeader && ch != null && e2 != null && e2.endMs > System.currentTimeMillis()) onRecord(ch, e2)
+                        true
+                    }
                     AndroidKeyEvent.KEYCODE_CHANNEL_UP, AndroidKeyEvent.KEYCODE_PAGE_UP -> {
                         row = (row - PAGE_ROWS).coerceAtLeast(0); true
                     }
@@ -332,7 +343,7 @@ internal fun TvGuide(
             Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
                 val shown = hero
                 if (shown != null) {
-                    GuideHero(vm, s, shown.first, shown.second, now, onHeader, prefs.showLogos)
+                    GuideHero(vm, s, shown.first, shown.second, now, onHeader, prefs.showLogos, marks)
                 } else {
                     Text(s.noChannelsInGroup, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyLarge)
                 }
@@ -396,7 +407,7 @@ internal fun TvGuide(
                                     now = now,
                                     showNumbers = prefs.showNumbers,
                                     showLogos = prefs.showLogos,
-                                    reminders = reminders.size,
+                                    reminders = reminders.size * 1_000 + marks,
                                 )
                             }
                         }
@@ -499,7 +510,7 @@ private fun GroupTabs(groups: List<Pair<String, String>>, selected: String, focu
 
 /** O programa escolhido, como no HUD: logótipo, canal, título, horas (e o que falta, se está a dar) e o que o OK faz. */
 @Composable
-private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean) {
+private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean, marks: Int) {
     val e = slot.entry
     val live = e == null || e.isOn(now)
     Row(verticalAlignment = Alignment.Bottom) {
@@ -534,6 +545,18 @@ private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot
                     e!!.startMs > now -> KeyHint("OK", if (vm.hasReminder(channel, e)) s.removeReminder else s.setReminder)
                     vm.canCatchup(channel, e) -> KeyHint("OK", s.watchCatchup)
                     else -> Text(s.noCatchup, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodyMedium)
+                }
+                // Gravar (o que ainda não acabou): o que o Menu faz a seguir.
+                if (!onHeader && e != null && e.endMs > now) {
+                    val mark = remember(e, marks) { vm.recordMark(channel, e) }
+                    KeyHint(
+                        "≡",
+                        when (mark) {
+                            AppViewModel.RecordMark.NONE -> s.record
+                            AppViewModel.RecordMark.ONE -> s.recordSeries
+                            AppViewModel.RecordMark.SERIES -> s.cancelRecording
+                        },
+                    )
                 }
                 if (!onHeader) KeyHint("0", s.backToNow)
             }
@@ -654,6 +677,7 @@ private class Cell(
 private const val ICON_NONE = 0
 private const val ICON_BELL = 1
 private const val ICON_HISTORY = 2
+private const val ICON_REC = 3
 
 /**
  * Os programas de um canal na janela visível, desenhados num só Canvas (o texto medido com cache). Antes era
@@ -682,6 +706,7 @@ private fun GuideTimeline(
             for (e in visible) {
                 val past = e.endMs <= now
                 val icon = when {
+                    e.endMs > now && vm.recordMark(channel, e) != AppViewModel.RecordMark.NONE -> ICON_REC
                     e.startMs > now && vm.hasReminder(channel, e) -> ICON_BELL
                     past && vm.canCatchup(channel, e) -> ICON_HISTORY
                     else -> ICON_NONE
@@ -705,6 +730,7 @@ private fun GuideTimeline(
     val titleSelected = title.copy(fontWeight = FontWeight.SemiBold)
     val time = MaterialTheme.typography.labelSmall.tabular
     val bell = rememberVectorPainter(ItvIcons.Bell)
+    val rec = rememberVectorPainter(ItvIcons.Record)
     val history = rememberVectorPainter(ItvIcons.History)
     val accent = LocalAccent.current.brush
     Canvas(modifier) {
@@ -745,11 +771,17 @@ private fun GuideTimeline(
             val painter = when (c.icon) {
                 ICON_BELL -> bell
                 ICON_HISTORY -> history
+                ICON_REC -> rec
                 else -> null
             }
             if (painter != null && width > 40.dp.toPx()) {
+                val tint = when {
+                    c.icon == ICON_REC -> GoatPalette.Live
+                    c.selected -> Color.Black
+                    else -> ItvColors.TextDim
+                }
                 translate(x, (size.height - iconSize) / 2) {
-                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(if (c.selected) Color.Black else ItvColors.TextDim)) }
+                    with(painter) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(tint)) }
                 }
                 x += iconSize + 6.dp.toPx()
             }

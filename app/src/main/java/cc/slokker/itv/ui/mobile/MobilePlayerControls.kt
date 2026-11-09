@@ -104,6 +104,7 @@ internal fun VideoArea(
     var controls by remember { mutableStateOf(true) }
     var touched by remember { mutableStateOf(0) }
     val catchup by vm.catchup.collectAsStateWithLifecycle()
+    val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var seekDelta by remember { mutableStateOf(0L) }
     var seekBase by remember { mutableStateOf(0L) }
@@ -225,6 +226,17 @@ internal fun VideoArea(
             !playback.ready && playback.reconnects == 0 -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Spinner()
                 Text(s.loadingPlaylist(channel.name), color = ItvColors.TextDim, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+        // A gravar: um ponto vermelho com "REC" no canto (também por cima dos botões).
+        if (activeRecordings.isNotEmpty() && !pip) {
+            Row(
+                Modifier.align(Alignment.TopStart).padding(10.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(PhoneColors.LiveRed))
+                Spacer(Modifier.width(6.dp))
+                Text(s.recBadge, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
@@ -397,6 +409,12 @@ internal fun VideoArea(
                                 touched++
                             }
                             HudPill(ItvIcons.Channels, s.searchChannels, onClick = onChannels)
+                            val recording = activeRecordings.any { vm.recordingOf(channel)?.info?.id == it.info.id }
+                            if (recording) {
+                                HudPill(ItvIcons.Stop, s.stopRecording) { vm.stopRecording(channel); touched++ }
+                            } else if (catchup == null && ts.available) {
+                                HudPill(ItvIcons.Record, s.record) { vm.recordNow(channel, ts.feed); touched++ }
+                            }
                         }
                         // O que estava no "mais": cada um no seu botão.
                         PlayerOption.entries.forEach { option ->
@@ -554,6 +572,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     val rows = rememberRowState(vm)
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -565,6 +584,13 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
         val favorite = rows.isFavorite(channel)
         ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) PhoneColors.FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
+        // Gravar o programa a dar (pelo anel da pausa do direto), ou parar a gravação deste canal.
+        val recording = activeRecordings.isNotEmpty() && vm.recordingOf(channel) != null
+        if (recording) {
+            ActionPill(ItvIcons.Stop, s.stopRecording, tint = PhoneColors.LiveRed) { vm.stopRecording(channel) }
+        } else if (catchup == null && ts.available) {
+            ActionPill(ItvIcons.Record, s.record, tint = PhoneColors.LiveRed) { vm.recordNow(channel, ts.feed) }
+        }
         PlayerOption.entries.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()

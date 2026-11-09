@@ -131,7 +131,15 @@ fun PlayerScreen(vm: AppViewModel) {
     // A reprodução (tentativas, voltar a ligar, VLC, pausa do direto, ligação): a mesma do telemóvel e do segundo
     // canal. O player recria-se quando mudam as definições dele, ou quando este canal passa para o VLC.
     val host = remember { AppPlaybackHost(vm, { latestPrefs }, { latestData }) }
-    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net) {
+    // Gravações: a que decorre (o cartão "REC"), a pergunta antes de largar a ligação dela, o aviso de uma marcada e
+    // o canal cuja ligação é de uma gravação (o player abre-o pelo anel dela, com o ExoPlayer).
+    val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
+    val switchPrompt by vm.switchPrompt.collectAsStateWithLifecycle()
+    val recordingPrompt by vm.recordingPrompt.collectAsStateWithLifecycle()
+    val recordingRing by vm.recordingRing.collectAsStateWithLifecycle()
+    val recordingSchedule by vm.recordingSchedule.collectAsStateWithLifecycle()
+    val ringRecording = recordingRing?.let { it.playlistId == data.playlist.id && it.channelKey == current.key } == true
+    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net, forceExo = ringRecording) {
         if (latestPrefs.freezeFrame) videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val player = checkNotNull(playback.player)
@@ -171,6 +179,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showGuide by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    var showRecordings by remember { mutableStateOf(false) }
     /** Aviso "este canal está sempre a parar" (uma vez por canal; ver NetHintCard). */
     var netHint by remember { mutableStateOf(false) }
     val netHintFocus = remember { FocusRequester() }
@@ -206,7 +215,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val latestSecondView by rememberUpdatedState(secondView)
     val latestMainView by rememberUpdatedState(mainView)
     val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
-    val overlayOpen = showGuide || showSearch || showSleep || trackPicker != null || showSecondPicker || netHint
+    val overlayOpen = showGuide || showSearch || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
 
     /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
     fun covered() = panel != Panel.None || showSettings || overlayOpen
@@ -415,7 +424,9 @@ fun PlayerScreen(vm: AppViewModel) {
     // (definições, VLC) o canal só volta a abrir pelo efeito acima, uma vez.
     LifecycleStartEffect(playback) {
         playback.onStart()
+        vm.onPlayerVisible(true)
         onStopOrDispose {
+            vm.onPlayerVisible(false)
             // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
             vm.closeSecond()
             playback.stop()
@@ -424,6 +435,14 @@ fun PlayerScreen(vm: AppViewModel) {
             afr.reset()
             vm.flushLastChannel()
         }
+    }
+
+    // Uma gravação passou a usar a ligação deste canal (marcada a começar) e o player abriu-o sem o anel (pausa do
+    // direto desligada, ou outro formato): recomeça pelo anel dela. Uma ligação de cada vez: o portão fecha a antiga.
+    LaunchedEffect(ringRecording, player, catchup) {
+        if (!ringRecording || catchup != null) return@LaunchedEffect
+        val url = vm.recordingRingUrl(current) ?: return@LaunchedEffect
+        if (timeshift.feed?.url != url && playback.request?.live == true) playback.retry()
     }
 
     // Aviso de paragens: uma vez por canal, quando parou várias vezes e se percebe porquê. drop(1): o estado
@@ -476,7 +495,7 @@ fun PlayerScreen(vm: AppViewModel) {
     // O guia não usa vidro (o vídeo fica pequeno, no canto).
     val glassVisible = !showGuide && (
         panel != Panel.None || showSettings || infoVisible || playback.failure != null || !playback.ready ||
-            showSearch || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || sleepWarning != null || numberEntry.isNotEmpty() ||
+            showSearch || showRecordings || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || recordingPrompt != null || switchPrompt != null || sleepWarning != null || numberEntry.isNotEmpty() ||
             tsShifted()
         )
     GlassBackdropEffect(glassVisible, videoView, backdrop, prefs.glassOpacity, lastInput, player)
@@ -554,6 +573,7 @@ fun PlayerScreen(vm: AppViewModel) {
             secondPicker = showSecondPicker,
             tracks = trackPicker != null,
             search = showSearch,
+            recordings = showRecordings,
             guide = showGuide,
             epgPanel = epgPanelChannel != null,
             panel = panel != Panel.None,
@@ -577,6 +597,7 @@ fun PlayerScreen(vm: AppViewModel) {
             TvBack.SECOND_PICKER -> if (!secondPicker.back()) showSecondPicker = false
             TvBack.CLOSE_TRACKS -> trackPicker = null
             TvBack.CLOSE_SEARCH -> showSearch = false
+            TvBack.CLOSE_RECORDINGS -> showRecordings = false
             TvBack.CLOSE_GUIDE -> {
                 showGuide = false
                 // Fechar o guia que o Voltar abriu conta como o 1.º Voltar para sair: o seguinte sai,
@@ -621,6 +642,23 @@ fun PlayerScreen(vm: AppViewModel) {
                     if (sleepWarning != null && code != AndroidKeyEvent.KEYCODE_BACK) {
                         if (e.type == KeyEventType.KeyUp) vm.setSleepTimer(null)
                         return@onPreviewKeyEvent true
+                    }
+                    // Mudar de canal com uma gravação: OK pára e muda, Voltar fica a gravar; o resto das teclas espera.
+                    if (switchPrompt != null) {
+                        if (e.type == KeyEventType.KeyUp) {
+                            when {
+                                ok -> vm.answerSwitch(stop = true)
+                                code == AndroidKeyEvent.KEYCODE_BACK -> vm.answerSwitch(stop = false)
+                            }
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                    // Uma marcada noutro canal quase a começar: OK muda (e grava), Voltar não grava.
+                    recordingPrompt?.let { r ->
+                        if (ok || code == AndroidKeyEvent.KEYCODE_BACK) {
+                            if (e.type == KeyEventType.KeyUp) vm.answerRecordingPrompt(r.id, switch = ok)
+                            return@onPreviewKeyEvent true
+                        }
                     }
                     // Lembrete no ecrã: OK muda para o programa (Voltar ignora, mais abaixo).
                     if (reminder != null && ok) {
@@ -705,6 +743,11 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         AndroidKeyEvent.KEYCODE_SEARCH -> {
                             showSearch = true; return@onKeyEvent true
+                        }
+                        // Comandos com a tecla de gravar (ou o GoatRemote): grava ou pára, como o botão do HUD.
+                        AndroidKeyEvent.KEYCODE_MEDIA_RECORD -> {
+                            if (vm.recordingOf(current) != null) vm.stopRecording(current) else vm.recordNow(current, timeshift.feed)
+                            return@onKeyEvent true
                         }
                         // Teclas de comandos com mais botões (ou do GoatRemote, no telemóvel).
                         AndroidKeyEvent.KEYCODE_CAPTIONS -> {
@@ -907,6 +950,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         vm.playCatchup(ch, entry)
                         showGuide = false
                     },
+                    onRecord = { ch, entry -> vm.cycleRecording(ch, entry, timeshift.feed) },
                 )
             }
 
@@ -952,12 +996,20 @@ fun PlayerScreen(vm: AppViewModel) {
                 NowPlayingBar(current, data, vm, badges = qualityBadges(stream, container)) { live ->
                     HudButtons(
                         vm, current, live, prefs.aspect, isFavorite, sleepAt,
-                        pauseLive = tsActive(), second = second != null, dualLayout = dualLayout, firstFocus = hudFocus,
+                        pauseLive = tsActive(), recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
+                        second = second != null, dualLayout = dualLayout, firstFocus = hudFocus,
                     ) { action ->
                         when (action) {
                             HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
                             HudAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
                             HudAction.PAUSE_LIVE -> tsToggle()
+                            HudAction.RECORD -> {
+                                if (vm.recordingOf(current) != null) vm.stopRecording(current) else vm.recordNow(current, timeshift.feed)
+                            }
+                            HudAction.RECORDINGS -> {
+                                infoVisible = false
+                                showRecordings = true
+                            }
                             HudAction.SECOND_CHANNEL -> {
                                 infoVisible = false
                                 secondPicker.reset()
@@ -995,7 +1047,10 @@ fun PlayerScreen(vm: AppViewModel) {
                     ) {
                         CatchupBar(cu, catchupPosition, seek.pending, seek.paused)
                     }
-                    if (playback.ready || playback.failure != null) CatchupPill(seek.paused, Modifier.align(Alignment.TopEnd))
+                    if (playback.ready || playback.failure != null) {
+                        val s = LocalStrings.current
+                        CatchupPill(seek.paused, Modifier.align(Alignment.TopEnd), label = if (cu.recording != null) s.recordingsRecorded.uppercase(s.locale) else s.catchupLabel)
+                    }
                 }
             }
 
@@ -1038,6 +1093,18 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                     },
                 )
+            }
+
+            AnimatedVisibility(
+                visible = showRecordings,
+                modifier = Modifier.align(Alignment.CenterStart),
+                enter = fadeIn() + slideInHorizontally { -it / 4 },
+                exit = fadeOut() + slideOutHorizontally { -it / 4 },
+            ) {
+                RecordingsPanel(vm, width = (prefs.panelWidth + 120).dp, onPlay = { info ->
+                    showRecordings = false
+                    vm.playRecording(info)
+                })
             }
 
             if (showSleep) {
@@ -1101,6 +1168,19 @@ fun PlayerScreen(vm: AppViewModel) {
                 NetHintCard(vm.net, actions, netHintFocus)
             }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
+            activeRecordings.firstOrNull()?.let { if (!showGuide) RecPill(it.info.title, Modifier.align(Alignment.TopCenter)) }
+            recordingPrompt?.let { r ->
+                val from = cc.slokker.itv.data.recording.RecordingPlan.window(r, recordingSchedule.paddingBeforeMin, recordingSchedule.paddingAfterMin).fromMs
+                var left by remember(r.id) { mutableIntStateOf(0) }
+                LaunchedEffect(r.id) {
+                    while (true) {
+                        left = ((from - System.currentTimeMillis() + 999) / 1000).toInt()
+                        delay(1_000)
+                    }
+                }
+                RecordingPromptCard(r, left, Modifier.align(Alignment.BottomEnd))
+            }
+            switchPrompt?.let { RecordingSwitchCard(it, Modifier.align(Alignment.Center)) }
 
             var lastNotice by remember { mutableStateOf<AppRelease?>(null) }
             updateNotice?.let { lastNotice = it }
@@ -1144,6 +1224,10 @@ fun PlayerScreen(vm: AppViewModel) {
                         panel = Panel.None
                         showSettings = true
                         vm.refreshConfig()
+                    },
+                    onRecordings = {
+                        panel = Panel.None
+                        showRecordings = true
                     },
                     onClose = { panel = Panel.None },
                     playlistMenu = playlistMenu,

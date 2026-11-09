@@ -59,6 +59,7 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import cc.slokker.itv.ui.common.formatTime
 import kotlinx.coroutines.delay
 
 /** Chamado depois de abrir um canal a partir de uma lista: no ecrã inicial, passa a mostrar o vídeo. */
@@ -179,6 +180,10 @@ fun MobileMain(vm: AppViewModel) {
                                 NextUp(vm, current)
                                 ChannelsTab(vm, current) { epgFor = it }
                             }
+                            nav.recordings -> RecordingsPage(vm, onBack = { nav = nav.closeRecordings() }) { info ->
+                                vm.playRecording(info)
+                                played()
+                            }
                             nav.homeGroup != null -> nav.homeGroup?.let { id ->
                                 Column(Modifier.fillMaxSize()) {
                                     PageHeader(vm.guideGroups().firstOrNull { it.id == id }?.name?.ifBlank { null } ?: data.categoryName(id), "TV") { nav = nav.closeGroup() }
@@ -194,6 +199,7 @@ fun MobileMain(vm: AppViewModel) {
                                 onGroup = { nav = nav.openGroup(it) },
                                 onLockedGroup = { homePinFor = it },
                                 onSearch = { nav = nav.tabTapped(PhoneTab.Search) },
+                                onRecordings = { nav = nav.openRecordings() },
                             )
                         }
                         PhoneTab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
@@ -240,6 +246,30 @@ fun MobileMain(vm: AppViewModel) {
             delay(15_000)
         }
     }
+    // Gravações: mudar de canal com uma a decorrer (pergunta-se), e uma marcada noutro canal quase a começar.
+    val switchPrompt by vm.switchPrompt.collectAsStateWithLifecycle()
+    val recordingPrompt by vm.recordingPrompt.collectAsStateWithLifecycle()
+    val recordingSchedule by vm.recordingSchedule.collectAsStateWithLifecycle()
+    val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
+    // Android 13+: a notificação da gravação (com "Parar") só aparece com autorização; pede-se uma vez, à primeira.
+    val wantsNotifications = activeRecordings.isNotEmpty() || recordingSchedule.recordings.isNotEmpty()
+    LaunchedEffect(wantsNotifications) {
+        if (wantsNotifications && activity != null) askNotificationsOnce(activity)
+    }
+    if (!pip) switchPrompt?.let { p ->
+        PhonePromptCard(
+            overline = strings.recBadge, title = strings.recordingSwitchTitle(p.title), text = strings.recordingSwitchText,
+            primary = strings.recordingStopAndSwitch, secondary = strings.recordingKeep,
+            onPrimary = { vm.answerSwitch(stop = true); played() }, onSecondary = { vm.answerSwitch(stop = false) },
+        )
+    }
+    if (!pip && switchPrompt == null) recordingPrompt?.let { r ->
+        PhonePromptCard(
+            overline = strings.recordingSoon(r.channelName), title = r.title, text = formatTime(r.startMs),
+            primary = strings.recordingSwitchTo(r.channelName), secondary = strings.recordingSkip,
+            onPrimary = { vm.answerRecordingPrompt(r.id, switch = true); played() }, onSecondary = { vm.answerRecordingPrompt(r.id, switch = false) },
+        )
+    }
     if (!pip) reminder?.let { r ->
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(12.dp)) {
             Row(Modifier.fillMaxWidth().clip(PhoneShapes.Card).background(PhoneColors.Reminder).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -252,6 +282,17 @@ fun MobileMain(vm: AppViewModel) {
             }
         }
     }
+}
+
+/** Pede a autorização das notificações (Android 13+) uma só vez: sem ela a gravação continua, só não se vê a notificação. */
+private fun askNotificationsOnce(activity: Activity) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+    val permission = android.Manifest.permission.POST_NOTIFICATIONS
+    if (androidx.core.content.ContextCompat.checkSelfPermission(activity, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) return
+    val store = activity.getSharedPreferences("recordings", android.content.Context.MODE_PRIVATE)
+    if (store.getBoolean("asked_notifications", false)) return
+    store.edit().putBoolean("asked_notifications", true).apply()
+    androidx.core.app.ActivityCompat.requestPermissions(activity, arrayOf(permission), 1)
 }
 
 /** Em paisagem o vídeo ocupa o ecrã todo: escondem-se as barras do sistema. */

@@ -218,6 +218,18 @@ object ItvIcons {
         icon("Info", "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z")
     }
 
+    /** Gravar: o ponto (vermelho onde se mostra a gravar). */
+    val Record: ImageVector by lazy { icon("Record", "M12 6a6 6 0 1 0 0 12a6 6 0 1 0 0-12z") }
+    /** Gravar a série: o ponto com uma volta à roda. */
+    val RecordSeries: ImageVector by lazy {
+        icon("RecordSeries", "M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z")
+    }
+    val Recordings: ImageVector by lazy {
+        icon("Recordings", "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z")
+    }
+    val Stop: ImageVector by lazy { icon("Stop", "M6 6h12v12H6z") }
+    val Delete: ImageVector by lazy { icon("Delete", "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z") }
+
     private fun icon(name: String, path: String) = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,

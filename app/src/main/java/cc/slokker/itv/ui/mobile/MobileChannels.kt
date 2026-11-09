@@ -185,6 +185,9 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
     val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
     // A estrela e os sinos seguem os favoritos e os lembretes (lidos aqui, não do ViewModel linha a linha).
     val rows = rememberRowState(vm)
+    val schedule by vm.recordingSchedule.collectAsStateWithLifecycle()
+    val recordingNow by vm.activeRecordings.collectAsStateWithLifecycle()
+    val recordMarks = remember(schedule, recordingNow) { java.util.Objects.hash(schedule, recordingNow.map { it.info.id }) }
     val list = rememberLazyListState()
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).
     LaunchedEffect(entries) { entries.indexOfFirst { it.endMs > now }.takeIf { it > 0 }?.let { list.scrollToItem(it) } }
@@ -232,6 +235,20 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
                         when {
                             catchup -> Icon(ItvIcons.Replay, s.watchCatchup, tint = ItvColors.TextDim, modifier = Modifier.size(18.dp))
                             future && rows.reminded(channel, e) -> Icon(ItvIcons.Bell, s.removeReminder, tint = LocalAccent.current.start, modifier = Modifier.size(18.dp))
+                        }
+                        // Gravar o que ainda não acabou: um toque marca, outro a série, outro desmarca (como o Menu na TV).
+                        if (e.endMs > now) {
+                            val mark = remember(e, recordMarks) { vm.recordMark(channel, e) }
+                            Icon(
+                                if (mark == AppViewModel.RecordMark.SERIES) ItvIcons.RecordSeries else ItvIcons.Record,
+                                when (mark) {
+                                    AppViewModel.RecordMark.NONE -> s.record
+                                    AppViewModel.RecordMark.ONE -> s.recordSeries
+                                    AppViewModel.RecordMark.SERIES -> s.cancelRecording
+                                },
+                                tint = if (mark == AppViewModel.RecordMark.NONE) ItvColors.TextFaint.copy(alpha = 0.6f) else PhoneColors.LiveRed,
+                                modifier = Modifier.padding(start = 6.dp).size(34.dp).clip(CircleShape).clickable { vm.cycleRecording(channel, e) }.padding(8.dp),
+                            )
                         }
                     }
                 }

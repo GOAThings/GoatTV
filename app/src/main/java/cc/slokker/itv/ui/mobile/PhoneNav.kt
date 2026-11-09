@@ -15,7 +15,7 @@ internal enum class PhoneBack {
     CLOSE_EPG,
     /** De outro separador, volta à TV. */
     TV_TAB,
-    /** Da lista de um grupo, volta ao ecrã inicial. */
+    /** Da lista de um grupo (ou das gravações), volta ao ecrã inicial. */
     LEAVE_GROUP,
     /** Do canal, volta ao ecrã inicial (o canal continua no mini-leitor). */
     HOME,
@@ -34,6 +34,8 @@ internal data class PhoneNav(
     val stopped: Boolean = true,
     /** O grupo aberto a partir do ecrã inicial (ou da procura). */
     val homeGroup: String? = null,
+    /** As gravações abertas a partir do ecrã inicial (no lugar dele, como um grupo). */
+    val recordings: Boolean = false,
 ) {
     /** Nas Definições o canal está fechado. */
     val settings: Boolean get() = tab == PhoneTab.Menu
@@ -56,7 +58,7 @@ internal data class PhoneNav(
         fullscreen -> PhoneBack.LEAVE_FULLSCREEN
         epgOpen -> PhoneBack.CLOSE_EPG
         tab != PhoneTab.Tv -> PhoneBack.TV_TAB
-        homeGroup != null -> PhoneBack.LEAVE_GROUP
+        homeGroup != null || recordings -> PhoneBack.LEAVE_GROUP
         !home -> PhoneBack.HOME
         else -> null
     }
@@ -64,17 +66,17 @@ internal data class PhoneNav(
     /** O estado depois de [back] (as folhas e a rotação mudam-se no ecrã). */
     fun after(back: PhoneBack): PhoneNav = when (back) {
         PhoneBack.TV_TAB -> copy(tab = PhoneTab.Tv)
-        PhoneBack.LEAVE_GROUP -> copy(homeGroup = null)
+        PhoneBack.LEAVE_GROUP -> copy(homeGroup = null, recordings = false)
         PhoneBack.HOME -> copy(home = true)
         PhoneBack.CLOSE_OPTIONS, PhoneBack.LEAVE_FULLSCREEN, PhoneBack.CLOSE_EPG -> this
     }
 
     /** Abriu-se um canal a partir de uma lista, do guia, da procura, do catch-up ou de um lembrete: vê-se em grande. */
-    fun played(): PhoneNav = copy(stopped = false, home = false, homeGroup = null, tab = PhoneTab.Tv)
+    fun played(): PhoneNav = copy(stopped = false, home = false, homeGroup = null, recordings = false, tab = PhoneTab.Tv)
 
     /** Toque num separador; "TV" outra vez, já na TV, volta ao ecrã inicial. */
     fun tabTapped(tapped: PhoneTab): PhoneNav =
-        if (tapped == PhoneTab.Tv && tab == PhoneTab.Tv) copy(tab = tapped, home = true, homeGroup = null) else copy(tab = tapped)
+        if (tapped == PhoneTab.Tv && tab == PhoneTab.Tv) copy(tab = tapped, home = true, homeGroup = null, recordings = false) else copy(tab = tapped)
 
     /** Toque no mini-leitor: o canal em grande. */
     fun openPlayer(): PhoneNav = copy(tab = PhoneTab.Tv, home = false)
@@ -86,6 +88,11 @@ internal data class PhoneNav(
 
     fun closeGroup(): PhoneNav = copy(homeGroup = null)
 
+    /** As gravações, a partir do ecrã inicial. */
+    fun openRecordings(): PhoneNav = copy(tab = PhoneTab.Tv, home = true, homeGroup = null, recordings = true)
+
+    fun closeRecordings(): PhoneNav = copy(recordings = false)
+
     /** Um grupo escolhido na procura abre-se no ecrã inicial da TV. */
     fun groupFromSearch(id: String): PhoneNav = copy(tab = PhoneTab.Tv, home = true, homeGroup = id)
 
@@ -93,7 +100,7 @@ internal data class PhoneNav(
     fun channelChanged(): PhoneNav = if (settings) copy(tab = PhoneTab.Tv) else this
 
     /** Para o rememberSaveable (sobrevive à rotação e à app ir para trás). */
-    fun toList(): List<Any?> = listOf(tab.name, home, stopped, homeGroup)
+    fun toList(): List<Any?> = listOf(tab.name, home, stopped, homeGroup, recordings)
 
     companion object {
         /** Ao abrir: o ecrã inicial sem nada a dar, ou já o último canal em grande (Definições → no arranque). */
@@ -103,6 +110,6 @@ internal data class PhoneNav(
         }
 
         fun fromList(list: List<Any?>): PhoneNav =
-            PhoneNav(PhoneTab.valueOf(list[0] as String), list[1] as Boolean, list[2] as Boolean, list[3] as String?)
+            PhoneNav(PhoneTab.valueOf(list[0] as String), list[1] as Boolean, list[2] as Boolean, list[3] as String?, list.getOrNull(4) as? Boolean ?: false)
     }
 }

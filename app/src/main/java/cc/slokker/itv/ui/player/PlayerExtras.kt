@@ -225,7 +225,9 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
                     .background(LocalAccent.current.brush)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
             ) {
-                Text(s.catchupLabel, color = Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                // Uma gravação do disco usa a mesma barra, com o nome dela.
+                val badge = if (catchup.recording != null) s.recordingsRecorded.uppercase(s.locale) else s.catchupLabel
+                Text(badge, color = Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {

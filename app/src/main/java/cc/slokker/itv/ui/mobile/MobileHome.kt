@@ -70,9 +70,11 @@ internal fun MobileHome(
     onGroup: (String) -> Unit,
     onLockedGroup: (String) -> Unit,
     onSearch: () -> Unit,
+    onRecordings: () -> Unit,
 ) {
     val s = LocalStrings.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
     val recentKeys by vm.recents.collectAsStateWithLifecycle()
     val unlocked by vm.unlocked.collectAsStateWithLifecycle()
     // O último canal primeiro (mesmo que ainda não tenha entrado nos Recentes), depois os outros.
@@ -94,6 +96,17 @@ internal fun MobileHome(
                     Text(s.greeting(hour), color = ItvColors.Text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                     Text(data.playlist.name, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                // As gravações (o ponto fica vermelho enquanto grava) e a pesquisa.
+                Box(
+                    Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onRecordings),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (activeRecordings.isEmpty()) ItvIcons.Recordings else ItvIcons.Record, s.recordings,
+                        tint = if (activeRecordings.isEmpty()) ItvColors.TextDim else PhoneColors.LiveRed, modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
                 Box(
                     Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onSearch),
                     contentAlignment = Alignment.Center,

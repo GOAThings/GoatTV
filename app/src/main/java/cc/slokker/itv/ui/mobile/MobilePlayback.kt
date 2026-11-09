@@ -67,7 +67,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val latestActive by rememberUpdatedState(active)
     val host = remember { AppPlaybackHost(vm, { latestPrefs }, { latestData }) }
     val viewState = remember { mutableStateOf<VideoView?>(null) }
-    val core = rememberChannelPlayback(PlaybackPolicy.PHONE, host, prefs, channel.key) {
+    // Uma gravação usa a ligação deste canal: o ExoPlayer lê o anel dela (ver o efeito mais abaixo).
+    val recordingRing by vm.recordingRing.collectAsStateWithLifecycle()
+    val ringRecording = recordingRing?.let { it.playlistId == data.playlist.id && it.channelKey == channel.key } == true
+    val core = rememberChannelPlayback(PlaybackPolicy.PHONE, host, prefs, channel.key, forceExo = ringRecording) {
         if (latestPrefs.freezeFrame) viewState.value?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val playback = remember(core) { MobilePlayback(core, viewState) }
@@ -76,6 +79,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     LaunchedEffect(channel.key, data.playlist, player, catchup, active) {
         // Nas Definições o canal fecha-se (e liberta a ligação); ao sair, volta a dar.
+        vm.onPlayerVisible(active)
         if (!active) {
             core.stop()
             core.freeze = null
@@ -111,9 +115,20 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
     // Em segundo plano pára o stream e liberta a ligação Xtream. Ao recriar o player, o canal volta a abrir só pelo
     // efeito acima (uma vez).
+    // Uma gravação passou a usar a ligação deste canal e o player abriu-o sem o anel: recomeça pelo anel dela.
+    LaunchedEffect(ringRecording, player, catchup, active) {
+        if (!ringRecording || catchup != null || !active) return@LaunchedEffect
+        val url = vm.recordingRingUrl(channel) ?: return@LaunchedEffect
+        if (core.timeshift?.feed?.url != url && core.request?.live == true) core.retry()
+    }
+
     LifecycleStartEffect(core) {
-        if (latestActive) core.onStart()
+        if (latestActive) {
+            core.onStart()
+            vm.onPlayerVisible(true)
+        }
         onStopOrDispose {
+            vm.onPlayerVisible(false)
             core.stop()
             vm.flushLastChannel()
         }

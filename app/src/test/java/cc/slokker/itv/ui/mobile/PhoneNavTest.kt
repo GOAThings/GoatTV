@@ -92,9 +92,23 @@ class PhoneNavTest {
     }
 
     @Test
+    fun `recordings open on the TV home and back or playing leaves them`() {
+        val open = watching.tabTapped(PhoneTab.Favorites).openRecordings()
+        assertEquals(PhoneNav(PhoneTab.Tv, home = true, stopped = false, recordings = true), open)
+        assertEquals(PhoneBack.LEAVE_GROUP, open.back(optionsOpen = false, fullscreen = false, epgOpen = false))
+        assertFalse(open.after(PhoneBack.LEAVE_GROUP).recordings)
+        assertFalse(open.played().recordings)
+        assertFalse(open.tabTapped(PhoneTab.Tv).recordings)
+    }
+
+    @Test
     fun `survives being saved and restored`() {
         val state = watching.copy(home = true).openGroup("news").tabTapped(PhoneTab.Guide)
         assertEquals(state, PhoneNav.fromList(state.toList()))
+        val recordings = watching.openRecordings()
+        assertEquals(recordings, PhoneNav.fromList(recordings.toList()))
+        // Guardado antes de haver gravações (quatro campos).
+        assertEquals(home, PhoneNav.fromList(home.toList().take(4)))
         assertEquals(home, PhoneNav.fromList(home.toList()))
     }
 }

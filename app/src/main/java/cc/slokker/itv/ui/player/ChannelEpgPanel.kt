@@ -66,11 +66,14 @@ internal fun ChannelEpgPanel(
     onPlay: (Channel) -> Unit,
     onCatchup: (Channel, EpgEntry) -> Unit,
     onBack: () -> Unit,
+    onRecord: (EpgEntry) -> Unit = { vm.cycleRecording(channel, it) },
 ) {
     val s = LocalStrings.current
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val version by vm.epgVersion.collectAsStateWithLifecycle()
     val reminders by vm.reminders.collectAsStateWithLifecycle()
+    val schedule by vm.recordingSchedule.collectAsStateWithLifecycle()
+    val recordingNow by vm.activeRecordings.collectAsStateWithLifecycle()
     val now = rememberNow()
     val entries = remember(channel, version) { vm.guideEntries(channel) }
     // Sem guia completo deste canal: pede o EPG curto (Xtream).
@@ -147,14 +150,23 @@ internal fun ChannelEpgPanel(
                     SectionLabel(dayLabel(s, e.startMs))
                 }
                 val live = e.isOn(now)
+                val recordMark = remember(e, schedule, recordingNow) { if (e.endMs > now) vm.recordMark(channel, e) else AppViewModel.RecordMark.NONE }
                 val icon = when {
+                    recordMark == AppViewModel.RecordMark.SERIES -> ItvIcons.RecordSeries
+                    recordMark == AppViewModel.RecordMark.ONE -> ItvIcons.Record
                     e.startMs > now && reminders.isNotEmpty() && vm.hasReminder(channel, e) -> ItvIcons.Bell
                     e.endMs <= now && vm.canCatchup(channel, e) -> ItvIcons.History
                     else -> null
                 }
                 GlassRow(
                     onClick = { act(e) },
-                    modifier = if (i == current) Modifier.focusRequester(focus) else Modifier,
+                    // Menu (≡) ou a tecla de gravar: gravar → a série → desmarcar (como no guia).
+                    modifier = (if (i == current) Modifier.focusRequester(focus) else Modifier).onPreviewKeyEvent { k ->
+                        val code = k.key.nativeKeyCode
+                        val rec = (code == AndroidKeyEvent.KEYCODE_MENU || code == AndroidKeyEvent.KEYCODE_MEDIA_RECORD) && e.endMs > System.currentTimeMillis()
+                        if (rec && k.type == KeyEventType.KeyUp) onRecord(e)
+                        rec
+                    },
                     selected = live,
                     leading = {
                         // Da cor do texto da linha (escura na placa branca do foco), um pouco apagada.
