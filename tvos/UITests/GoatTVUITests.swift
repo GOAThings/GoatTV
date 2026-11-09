@@ -67,10 +67,18 @@ final class GoatTVUITests: XCTestCase {
         open("engine"); shot("engine")
         if focus("o1") { press(.select, wait: 1.5) }
         shot("playback-vlc")
+        // As linhas novas (como no Android TV): o modo do AFR e a língua do áudio.
+        open("afr"); shot("afr-modes")
+        press(.menu, wait: 1)
+        open("audio_language"); shot("audio-languages")
+        press(.menu, wait: 1)
         for _ in 0..<2 { press(.menu, wait: 1) }
         press(.down, wait: 10); shot("vlc-playing")
         press(.select, wait: 2); shot("vlc-hud")
         press(.menu, wait: 1.5)
+        // A passar canais depressa (atraso automático): a informação segue cada tecla, o canal abre onde se parar.
+        press(.down, wait: 0.2); press(.down, wait: 0.2); shot("zap-flipping")
+        press(.down, wait: 10); shot("zap-settled")
 
         // A Top Shelf: no ecrã principal com o GoatTV em foco (sem a extensão é a imagem fixa); ↑ e OK abre o canal.
         press(.home, wait: 4)
