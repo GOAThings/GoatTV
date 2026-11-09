@@ -1,17 +1,14 @@
 package cc.slokker.itv.ui.state
 
-import cc.slokker.itv.data.CacheStore
-import cc.slokker.itv.data.LocalStore
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProfileRepository
 import cc.slokker.itv.data.ProfileKeys
 import cc.slokker.itv.data.ProfileKeys.parseKeyLists
 import cc.slokker.itv.data.ProfileKeys.string
 import cc.slokker.itv.data.SettingsMerge
 import cc.slokker.itv.data.StreamFormat
-import cc.slokker.itv.data.api.BackendApi
 import cc.slokker.itv.data.api.ConfigResponse
-import cc.slokker.itv.data.api.toDto
 import cc.slokker.itv.data.api.toPlaylist
 import cc.slokker.itv.data.sameSourceAs
 import com.google.gson.Gson
@@ -36,12 +33,8 @@ import kotlinx.coroutines.sync.withLock
 class ProfileStore(
     private val scope: CoroutineScope,
     private val gson: Gson,
-    private val backend: BackendApi,
-    private val cache: CacheStore,
-    private val localStore: LocalStore,
-    /** Sem conta: só nesta TV (LocalStore), nada vai ao servidor. */
-    private val isLocal: () -> Boolean,
-    private val testMode: () -> Boolean,
+    /** Onde se grava agora: na conta, só nesta TV, ou em nenhum lado (modo de teste). Lê-se em cada gravação. */
+    private val repository: () -> ProfileRepository,
     /** A sessão em curso: uma resposta que chega depois de a sessão mudar já não grava nada. */
     private val generation: () -> Int,
     /** Uma gravação no servidor falhou: o código HTTP, ou null sem rede. */
@@ -333,24 +326,20 @@ class ProfileStore(
      */
     fun persistConfigCache() {
         val base = lastConfig ?: return
-        val local = isLocal()
-        val updated = base.copy(
-            settings = settings.deepCopy(),
-            favorites = gson.toJsonTree(_favorites.value),
-            playlists = if (local) _playlists.value.map { it.toDto() } else base.playlists,
-        )
+        val repo = repository()
+        val updated = repo.withProfile(base, settings.deepCopy(), gson.toJsonTree(_favorites.value), _playlists.value)
         lastConfig = updated
-        scope.launch { if (local) localStore.save(updated) else cache.saveConfig(updated) }
+        scope.launch { repo.save(updated) }
     }
 
-    /** Grava `settings` ou `favorites` (o objeto inteiro) no perfil GoatTV da conta (sem conta, só no LocalStore). */
+    /** Grava `settings` ou `favorites` (o objeto inteiro) no perfil GoatTV da conta (só quando o perfil [ProfileRepository.syncs]). */
     private fun patchUser(field: String, value: JsonElement) {
-        if (testMode() || isLocal()) return
+        val repo = repository().takeIf { it.syncs } ?: return
         scope.launch {
             // Em série, para os PATCH chegarem pela ordem em que foram feitos.
             patchMutex.withLock {
                 try {
-                    val res = backend.updateProfile(JsonObject().apply { add(field, value) })
+                    val res = repo.patch(JsonObject().apply { add(field, value) })
                     if (!res.isSuccessful && res.code() != 401) onSaveFailed(res.code())
                 } catch (e: CancellationException) {
                     throw e
@@ -367,7 +356,7 @@ class ProfileStore(
      * ex.: no site) põe as alterações daqui por cima das do servidor e tenta outra vez.
      */
     private fun pushSettings() {
-        if (testMode() || isLocal()) return
+        val repo = repository().takeIf { it.syncs } ?: return
         val generation = generation()
         scope.launch {
             patchMutex.withLock {
@@ -380,7 +369,7 @@ class ProfileStore(
                         if (SettingsMerge.hasTopLevelArray(patch)) settingsRev?.let { addProperty("settings_rev", it) }
                     }
                     val res = try {
-                        backend.updateProfile(body)
+                        repo.patch(body)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

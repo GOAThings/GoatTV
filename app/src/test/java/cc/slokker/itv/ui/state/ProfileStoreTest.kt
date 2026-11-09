@@ -1,12 +1,15 @@
 package cc.slokker.itv.ui.state
 
+import cc.slokker.itv.data.AccountProfile
 import cc.slokker.itv.data.CacheStore
+import cc.slokker.itv.data.LocalProfile
 import cc.slokker.itv.data.LocalStore
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.ProfileKeys
 import cc.slokker.itv.data.StreamFormat
+import cc.slokker.itv.data.TestModeProfile
 import cc.slokker.itv.data.api.ConfigResponse
 import cc.slokker.itv.data.api.PlaylistDto
 import cc.slokker.itv.ui.state.FakeBackend.Companion.json
@@ -38,9 +41,14 @@ class ProfileStoreTest {
     private val languages = mutableListOf<String>()
 
     private val store = ProfileStore(
-        scope, gson, backend, cache, localStore,
-        isLocal = { local },
-        testMode = { testMode },
+        scope, gson,
+        repository = {
+            when {
+                local -> LocalProfile(localStore)
+                testMode -> TestModeProfile(backend, cache)
+                else -> AccountProfile(backend, cache)
+            }
+        },
         generation = { generation },
         onSaveFailed = { failures += it },
         onLanguage = { languages += it },
@@ -240,7 +248,7 @@ class ProfileStoreTest {
         assertEquals(mapOf("acc1" to listOf("101", "102")), store.favorites.value)
         assertTrue(backend.profileBodies.any { it.has("favorites") })
         // Já com definições na conta, as desta TV não passam por cima.
-        val other = ProfileStore(scope, gson, backend, cache, localStore, { false }, { false }, { 0 }, {}, {})
+        val other = ProfileStore(scope, gson, { AccountProfile(backend, cache) }, { 0 }, {}, {})
         other.applyConfig(config("""{"accent": "gold"}""", favorites = """{"acc1": ["5"]}"""))
         assertFalse(other.adoptLocalProfile(localConfig))
         assertEquals("gold", other.prefs.value.accent)

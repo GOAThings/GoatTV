@@ -45,7 +45,11 @@ import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.sameSourceAs
 import cc.slokker.itv.data.sharesConnectionsWith
+import cc.slokker.itv.data.AccountProfile
+import cc.slokker.itv.data.LocalProfile
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProfileRepository
+import cc.slokker.itv.data.TestModeProfile
 import cc.slokker.itv.data.ProfileKeys
 import cc.slokker.itv.data.ProfileKeys.parseKeyLists
 import cc.slokker.itv.data.ProfileKeys.string
@@ -160,15 +164,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Listas, favoritos, recentes e definições, e a gravação deles (ver ProfileStore). */
     private val profile = ProfileStore(
-        viewModelScope, c.gson, c.backend, c.cache, c.local,
-        isLocal = { _local.value },
-        testMode = { c.testMode },
+        viewModelScope, c.gson,
+        repository = ::repository,
         generation = { sessionGeneration },
         onSaveFailed = { code -> showToast(if (code == null) I18n.s.saveOffline else I18n.s.saveFailed(code)) },
         onLanguage = Strings::apply,
     )
 
     val playlists: StateFlow<List<Playlist>> = profile.playlists
+
+    private val localProfile = LocalProfile(c.local)
+    private val accountProfile = AccountProfile(c.backend, c.cache)
+    private val testModeProfile = TestModeProfile(c.backend, c.cache)
+
+    /**
+     * Onde vive o perfil agora. Sem conta, ou ainda sem sessão (a primeira lista nas boas-vindas): nesta TV. Com conta:
+     * na conta, ou, no modo de teste, numa conta só de leitura.
+     */
+    private fun repository(): ProfileRepository = when {
+        _local.value || c.token == null -> localProfile
+        c.testMode -> testModeProfile
+        else -> accountProfile
+    }
 
     private val _content = MutableStateFlow<PlaylistContent?>(null)
     val content: StateFlow<PlaylistContent?> = _content.asStateFlow()
@@ -584,7 +601,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * que ela tem. Corre por trás e nunca atrapalha a TV: sem rede ou com erro, tenta-se na próxima carga.
      */
     private fun uploadIndex(content: PlaylistContent) {
-        if (_local.value || c.testMode) return
+        if (!repository().uploadsIndex) return
         val playlistId = content.playlist.id
         if (!profile.knowsIndexOf(playlistId)) return // lista que a conta não conhece
         indexJob?.cancel()
@@ -819,16 +836,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     suspend fun savePlaylist(id: String?, form: PlaylistForm): String? {
         form.problem()?.let { return it }
-        if (_local.value || c.token == null) {
+        val account = repository() as? AccountProfile
+        if (account == null) {
             saveLocalPlaylist(id, form)
             return null
         }
-        if (c.testMode) return "Test mode"
+        account.refusal?.let { return it }
         // Só a UI escondia o Stalker com conta: aqui também não passa (ver PlaylistKind.supportsAccount).
         if (!form.type.kind.supportsAccount) return I18n.s.playlistRejected
         val saved = try {
             val body = form.toPlaylist(id.orEmpty()).accountBody()
-            if (id == null) c.backend.createPlaylist(body) else c.backend.updatePlaylist(id, body)
+            if (id == null) account.createPlaylist(body) else account.updatePlaylist(id, body)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -850,13 +868,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Apaga uma lista: da conta (em todas as TVs) ou desta TV. Devolve o erro a mostrar, ou null. */
     suspend fun deletePlaylist(playlist: Playlist): String? {
-        if (_local.value || c.token == null) {
+        val account = repository() as? AccountProfile
+        if (account == null) {
             deleteLocalPlaylist(playlist)
             return null
         }
-        if (c.testMode) return "Test mode"
+        account.refusal?.let { return it }
         try {
-            c.backend.deletePlaylist(playlist.id)
+            account.deletePlaylist(playlist.id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: HttpException) {
@@ -1211,7 +1230,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // Só com conta. Dados do IPTV-EPG.org no servidor da conta (ver EpgRepository.openAccount).
 
     /** Escolher o guia de um canal só existe com conta GOAT. */
-    val epgPickerAvailable: Boolean get() = !_local.value && c.token != null
+    val epgPickerAvailable: Boolean get() = repository().supportsEpgMapping
 
     /** Lê as associações da lista (uma vez por lista e por abertura da app) e abre o guia da conta. */
     private fun openAccountGuide(content: PlaylistContent, force: Boolean = false) {
@@ -1285,8 +1304,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun applyEpgCountry(country: String, countryName: String) {
         val content = _content.value ?: return
         val playlistId = content.playlist.id
-        if (c.testMode) {
-            showToast("Test mode")
+        repository().refusal?.let {
+            showToast(it)
             return
         }
         showToast(I18n.s.epgCountryApplying(countryName))
@@ -1362,8 +1381,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Todos os canais da lista voltam ao guia da lista. */
     fun resetEpgMappings() {
         val playlistId = _content.value?.playlist?.id ?: return
-        if (c.testMode) {
-            showToast("Test mode")
+        repository().refusal?.let {
+            showToast(it)
             return
         }
         viewModelScope.launch {
@@ -1397,8 +1416,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun setEpgMapping(channel: Channel, country: String, guide: EpgGuideChannel): Boolean {
         val playlistId = _content.value?.playlist?.id ?: return false
         val guideId = guide.id ?: return false
-        if (c.testMode) {
-            showToast("Test mode")
+        repository().refusal?.let {
+            showToast(it)
             return false
         }
         val result = epgCall { c.backend.putEpgMapping(EpgMappingRequest(playlistId, channel.key, country, guideId, channel.name)) }
@@ -1424,8 +1443,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** [channel] volta ao guia da lista. */
     suspend fun removeEpgMapping(channel: Channel): Boolean {
         val playlistId = _content.value?.playlist?.id ?: return false
-        if (c.testMode) {
-            showToast("Test mode")
+        repository().refusal?.let {
+            showToast(it)
             return false
         }
         val result = epgCall {
@@ -1701,7 +1720,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** As listas Stalker só existem sem conta: com conta, o site expõe o portal como M3U. */
-    val canAddStalker: Boolean get() = _local.value || c.token == null
+    val canAddStalker: Boolean get() = repository().supportsStalker
 
     val deviceMac: String get() = c.session.deviceMac
 
