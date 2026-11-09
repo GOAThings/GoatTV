@@ -386,8 +386,6 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
     var onConnected: (@Sendable () -> Void)?
     var onNotTs: (@Sendable () -> Void)?
 
-    /// Como o ExoPlayer (DefaultLoadErrorHandlingPolicy): mais 3 tentativas antes de dar erro.
-    static let openRetries = 3
     /// Quanto se espera que a ligação do canal anterior feche.
     static let previousWaitSeconds = 3.0
 
@@ -495,6 +493,20 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
 
     // MARK: URLSessionDataDelegate
 
+    /// Uma recusa (403, 404, conta ocupada…) vê-se logo no cabeçalho: a ligação fecha já, sem esperar pela página de erro.
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        if let http = response as? HTTPURLResponse {
+            locked { status = http.statusCode }
+            if !(200..<300).contains(http.statusCode) {
+                refused = http.statusCode
+                completionHandler(.cancel)
+                return
+            }
+        }
+        completionHandler(.allow)
+    }
+
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard !isClosed, !data.isEmpty, refused == nil else { return }
         if !gotData {
@@ -544,15 +556,17 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         }
         let failure: Error? = refused.map { Failure.http($0) } ?? error
         if !everData {
-            // Ainda não deu: como o ExoPlayer, mais umas tentativas seguidas (o servidor pode ainda não ter largado a
-            // ligação do canal anterior); depois o erro vai para o leitor, que o explica.
+            // Ainda não deu: mais umas tentativas seguidas (ver OpenRetry, como no Android). Recusado por estar ocupado
+            // (o fornecedor ainda não largou a ligação do canal anterior), depressa e várias vezes; um 404, só mais
+            // uma; o resto, 0, 0,5 e 1 s. Depois o erro vai para o leitor, que o explica.
             failures += 1
-            if failures > Self.openRetries {
+            guard let wait = OpenRetry.delayMs(httpCode: refused, retry: failures) else {
+                DebugLog.add("Timeshift: gave up after \(failures - 1) retries (HTTP \(refused.map(String.init) ?? "-"))")
                 ring.endSegment(final: true, error: failure ?? Failure.empty)
                 finish()
                 return
             }
-            retry(after: Double(min(failures - 1, 5)))
+            retry(after: Double(wait) / 1000)
             return
         }
         guard reconnectSeconds > 0 else {

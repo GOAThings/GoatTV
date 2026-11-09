@@ -62,8 +62,11 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var onFailed: (() -> Void)?
     /// Caiu a meio: devolve true se quem usa o leitor trata disso (ex.: o catch-up pede de novo daquele ponto).
     @ObservationIgnored var onDropped: (() -> Bool)?
-    /// A forma que funcionou ("ts" ou "m3u8").
+    /// O direto abriu noutro formato que não o primeiro ("ts" ou "m3u8"): passa a ser o preferido (como no Android,
+    /// só quando foi preciso o outro formato; o catch-up não conta).
     @ObservationIgnored var onFormatWorked: ((String) -> Void)?
+    /// Começou a dar (ou voltou a dar depois de cair).
+    @ObservationIgnored var onPlaying: (() -> Void)?
 
     struct Track: Identifiable, Equatable {
         let id: Int32
@@ -84,10 +87,45 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var softwareDecoder = false
     /// Desentrelaçar no VLC: "yadif2x" (50/60 imagens por segundo, mais suave), "yadif" ou "off".
     @ObservationIgnored var deinterlace = "yadif2x"
-    /// A TV muda de frame rate (e de HDR) para a do canal.
-    @ObservationIgnored var matchFrameRate = false {
-        didSet { if matchFrameRate != oldValue { applyDisplayCriteria() } }
+    /// Quando a TV muda de frame rate (e de HDR) para a do canal (`afr_mode`): desligado, só no primeiro canal ou em
+    /// cada canal (ver AfrSession).
+    @ObservationIgnored var afrMode = Prefs.AfrMode.off {
+        didSet { if afrMode != oldValue { afrModeChanged() } }
     }
+    /// A cadência a pedir quando a do canal não se mede ao fim de [afrMeasureMs] (`afr_fallback`; "none" = esperar).
+    @ObservationIgnored var afrFallback = Prefs.AfrFallback.none
+    @ObservationIgnored private var afr = AfrSession()
+    @ObservationIgnored private var afrTask: Task<Void, Never>?
+    /// Ao fim disto sem cadência medida, usa-se a de recurso (como no Android).
+    static let afrMeasureMs: Int64 = 3_000
+
+    // MARK: Mudar de canal
+
+    /// O atraso ao mudar de canal (`zap_delay_ms`, ver ZapPacer).
+    @ObservationIgnored var zapDelayMs = Prefs.ZapDelay.auto
+    @ObservationIgnored private var pacer = ZapPacer()
+    /// O canal do último pedido (o direto ou o catch-up dele) e se era o direto, com as formas de o abrir.
+    @ObservationIgnored private var openedKey: String?
+    @ObservationIgnored private var openedLive = false
+    @ObservationIgnored private var openedCandidates: [StreamCandidate] = []
+    /// Parado a meio de uma passagem de canais (a imagem fica, a ligação foi largada), à espera de onde se parar.
+    @ObservationIgnored private var held = false
+
+    // MARK: Faixas (língua preferida)
+
+    /// A língua do áudio das Definições (ISO 639-1; vazio = automático, a da app em [appLanguage]).
+    @ObservationIgnored var audioLanguage = ""
+    /// A língua da app (ISO 639-1), para o áudio em "Automático".
+    @ObservationIgnored var appLanguage: String?
+    /// A língua das legendas (vazio = sem legendas além das que o stream marca).
+    @ObservationIgnored var subtitleLanguage = ""
+    /// Este leitor liga as legendas na língua preferida (o segundo canal não).
+    @ObservationIgnored var subtitlesByLanguage = true
+    @ObservationIgnored private var trackChoice = TrackChoice()
+    /// A faixa escolhida à mão neste canal (a língua e o nome), para a voltar a pôr ao reabrir o mesmo canal (catch-up,
+    /// saltos, reconexões). Nas legendas, nil com a escolha feita = desligadas.
+    @ObservationIgnored private var manualAudio: (code: String?, name: String)?
+    @ObservationIgnored private var manualSubtitle: (code: String?, name: String)?
     /// "auto" (HDR quando o canal é HDR) ou "sdr" (a TV fica sempre em SDR).
     @ObservationIgnored var hdr = "auto"
     /// Só o leitor principal muda o modo da TV (o segundo canal não).
@@ -151,13 +189,16 @@ final class PlayerEngine: NSObject {
     private let avPlayer = AVPlayer()
 
     @ObservationIgnored private var muted = false
-    @ObservationIgnored private var surroundChosen = false
+    /// As escolhas à mão já repostas nesta abertura.
+    @ObservationIgnored private var manualApplied: Set<TrackChoice.Kind> = []
     @ObservationIgnored private var observers: [NSKeyValueObservation] = []
     @ObservationIgnored private var notifications: [NSObjectProtocol] = []
 
     private struct Attempt {
         let candidate: StreamCandidate
         let backend: Backend
+        /// A posição da forma na lista pedida (0 = o formato preferido).
+        let candidateIndex: Int
     }
 
     @ObservationIgnored private var attempts: [Attempt] = []
@@ -202,14 +243,40 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var linkResolver: (() async -> [StreamCandidate]?)?
 
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
-        candidates.flatMap { c -> [Attempt] in
-            engine != "vlc" && c.isHLS ? [Attempt(candidate: c, backend: .apple), Attempt(candidate: c, backend: .vlc)] : [Attempt(candidate: c, backend: .vlc)]
+        candidates.enumerated().flatMap { i, c -> [Attempt] in
+            engine != "vlc" && c.isHLS
+                ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+                : [Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
         }
     }
 
-    /// [pausable]: é o direto (não o catch-up), e pode ir pelo anel da pausa do direto.
-    func play(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, pausable: Bool = false,
-              linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+    /// Abre [channelKey]: o direto ([live]) ou outro pedido do mesmo canal (catch-up). [pausable]: o direto pode ir
+    /// pelo anel da pausa do direto (só o leitor principal).
+    ///
+    /// Outro canal em direto passa pelo atraso ao mudar de canal ([ZapPacer]): a passar canais depressa, o canal que
+    /// estava a dar pára (fica a última imagem) e larga a ligação, para o fornecedor a libertar enquanto se escolhe; só
+    /// abre onde se parar, e uma mudança nova pelo meio cancela a espera. Voltar ao canal que ainda está a dar (a mesma
+    /// lista outra vez, a lista que deu a volta) não abre nada.
+    func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
+              pausable: Bool = false, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+        let same = openedKey == channelKey
+        // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
+        let zap = live && openedKey != nil && (!same || held)
+        let back = !zap && live && openedLive && same && openedCandidates == candidates && (state == .opening || state == .playing)
+        var pause: Int64 = 0
+        if zap || back {
+            pause = pacer.delayFor(nowMs: Self.uptimeMs(), setting: zapDelayMs)
+            if back { return }
+        }
+        openedKey = channelKey
+        openedLive = live
+        openedCandidates = candidates
+        if !same {
+            manualAudio = nil
+            manualSubtitle = nil
+        }
+        afr.newChannel()
+        afrTask?.cancel()
         self.linkResolver = linkResolver
         self.pausable = pausable
         retry?.cancel()
@@ -229,23 +296,22 @@ final class PlayerEngine: NSObject {
         retries = 0
         reconnects = 0
         nextTryAt = nil
-        surroundChosen = false
         lastHTTPStatus = nil
         guard freezeFrame, wasShowing else {
             // Ainda a abrir (ex.: dois canais seguidos): a última imagem fica até o novo começar.
             if !freezeFrame { hideFreeze() }
-            start()
+            begin(after: pause)
             return
         }
         // A última imagem fica por cima até o canal novo começar.
         switch backend {
         case .apple:
             showFreeze(appleSnapshot())
-            start()
+            begin(after: pause)
         case .vlc:
             // Sem saída de vídeo (ainda a abrir, ou só som), o VLC lança uma exceção em vez de gravar a imagem.
             guard vlc.hasVideoOut else {
-                start()
+                begin(after: pause)
                 return
             }
             // O VLC grava a imagem num ficheiro; espera-se um instante antes de parar o canal antigo.
@@ -265,14 +331,35 @@ final class PlayerEngine: NSObject {
                 guard let self else { return }
                 self.savingSnapshot = false
                 self.showFreeze(image)
-                self.start()
+                self.begin(after: pause)
             }
+        }
+    }
+
+    /// Abre o pedido já, ou (a passar canais) depois de [pause] ms, com o canal anterior parado e a ligação largada.
+    private func begin(after pause: Int64) {
+        guard pause > 0 else {
+            held = false
+            return start()
+        }
+        DebugLog.add("Player: zap delay \(pause) ms")
+        watchdog?.cancel()
+        stopBackends()
+        state = .opening
+        held = true
+        pendingStart = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(pause))
+            guard !Task.isCancelled, let self else { return }
+            self.held = false
+            self.start()
         }
     }
 
     /// Volta a tentar já (OK no erro).
     func retryNow() {
         retry?.cancel()
+        pendingStart?.cancel()
+        held = false
         nextTryAt = nil
         index = 0
         start()
@@ -302,13 +389,17 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
+        afrTask?.cancel()
+        held = false
         reconnects = 0
         nextTryAt = nil
         hideFreeze()
         stopBackends()
         hasPicture = false
         state = .idle
+        // A TV volta ao modo normal: o AFR "ao começar" volta a mudar no próximo canal.
         clearDisplayCriteria()
+        afr.reset()
     }
 
     private func stopBackends() {
@@ -321,6 +412,8 @@ final class PlayerEngine: NSObject {
         for n in notifications { NotificationCenter.default.removeObserver(n) }
         notifications.removeAll()
         vlc.stop()
+        // O leitor da Apple fecha as ligações dele sozinho (e sem avisar quando): cancela-se já o que está a carregar.
+        (avPlayer.currentItem?.asset as? AVURLAsset)?.cancelLoading()
         avPlayer.replaceCurrentItem(with: nil)
     }
 
@@ -348,6 +441,7 @@ final class PlayerEngine: NSObject {
             return
         }
         stopBackends()
+        resetTrackChoice()
         let attempt = attempts[index]
         backend = attempt.backend
         DebugLog.add("Player: opening \(attempt.candidate.format) with \(backend) (\(index + 1)/\(attempts.count))")
@@ -388,6 +482,13 @@ final class PlayerEngine: NSObject {
     }
 
     private func next() {
+        // O fornecedor recusou por ainda ter a ligação anterior (o gravador já tentou várias vezes, ver OpenRetry): o
+        // outro formato também seria recusado e, se desse depois, ficava aprendido um formato errado. Mostra o erro
+        // (explicado) e tenta outra vez, desde o primeiro formato.
+        if !wasPlaying, OpenRetry.isBusy(currentHTTPStatus) {
+            DebugLog.add("Player: the provider is busy (HTTP \(currentHTTPStatus.map(String.init) ?? "-")), no other format")
+            return fail()
+        }
         index += 1
         if index < attempts.count {
             open()
@@ -401,9 +502,7 @@ final class PlayerEngine: NSObject {
     private func fail() {
         DebugLog.add("Player: failed (\(backend), was playing: \(wasPlaying), HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
         watchdog?.cancel()
-        if lastHTTPStatus == nil, backend == .apple { lastHTTPStatus = appleHTTPStatus }
-        // Pelo anel, quem falou com o servidor foi o gravador.
-        if lastHTTPStatus == nil, backend == .vlc, let status = timeshift.httpStatus, !(200..<300).contains(status) { lastHTTPStatus = status }
+        if lastHTTPStatus == nil { lastHTTPStatus = currentHTTPStatus }
         stopBackends()
         if wasPlaying {
             if onDropped?() == true { return }
@@ -443,6 +542,18 @@ final class PlayerEngine: NSObject {
         }
     }
 
+    /// O código HTTP com que o servidor recusou a tentativa atual, quando se sabe: o do leitor da Apple ou, pelo anel,
+    /// o do gravador (que é quem fala com o servidor).
+    private var currentHTTPStatus: Int? {
+        if let lastHTTPStatus { return lastHTTPStatus }
+        switch backend {
+        case .apple: return appleHTTPStatus
+        case .vlc:
+            guard let status = timeshift.httpStatus, !(200..<300).contains(status) else { return nil }
+            return status
+        }
+    }
+
     /// O código HTTP do último erro do leitor da Apple.
     private var appleHTTPStatus: Int? {
         guard let event = avPlayer.currentItem?.errorLog()?.events.last, event.errorStatusCode != 0 else { return nil }
@@ -460,6 +571,7 @@ final class PlayerEngine: NSObject {
         reconnects = 0
         nextTryAt = nil
         lastHTTPStatus = nil
+        onPlaying?()
         // No VLC, "a dar" chega antes da primeira imagem: a imagem congelada sai quando o vídeo aparecer.
         if backend == .apple {
             positionValid = true
@@ -467,24 +579,15 @@ final class PlayerEngine: NSObject {
             hideFreeze()
             checkApplePicture()
         }
-        if let format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil { onFormatWorked?(format) }
-        format = attempts.indices.contains(index) ? attempts[index].candidate.format : nil
+        let attempt = attempts.indices.contains(index) ? attempts[index] : nil
+        format = attempt?.candidate.format
+        // O outro formato é que deu (no direto): fica a ser o preferido. A ordem das tentativas não muda: ao voltar a
+        // ligar, começa-se sempre pela primeira (um .ts em baixo uns minutos volta a ser tentado primeiro).
+        if let attempt, attempt.candidateIndex > 0, openedLive { onFormatWorked?(attempt.candidate.format) }
         applyAspect()
         applyAudio()
-        if index > 0 {
-            attempts.insert(attempts.remove(at: index), at: 0)
-            index = 0
-        }
-        // A frame rate e as faixas só se sabem uns instantes depois de começar.
-        criteriaTask?.cancel()
-        criteriaTask = Task { [weak self] in
-            for delay in [0.8, 2.5] {
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled else { return }
-                self?.applyDisplayCriteria()
-                self?.chooseSurround()
-            }
-        }
+        scheduleTrackChoice()
+        startAfr()
     }
 
     // MARK: VLC
@@ -501,6 +604,11 @@ final class PlayerEngine: NSObject {
             media.addOption(":http-reconnect")
         }
         if softwareDecoder { media.addOption(":codec=avcodec") }
+        // A língua preferida (o libVLC entende ISO 639-1 e 639-2); as etiquetas e o surround escolhem-se depois
+        // ([chooseTracks]). Uma escolha feita à mão neste canal ganha.
+        let audio = audioLanguage.isEmpty ? (appLanguage ?? "") : audioLanguage
+        if !audio.isEmpty, !trackChoice.isManual(.audio) { media.addOption(":audio-language=\(audio)") }
+        if subtitlesByLanguage, !subtitleLanguage.isEmpty, !trackChoice.isManual(.text) { media.addOption(":sub-language=\(subtitleLanguage)") }
         vlc.media = media
         if deinterlace == "off" {
             vlc.setDeinterlaceFilter(nil)
@@ -638,32 +746,86 @@ final class PlayerEngine: NSObject {
 
     // MARK: Modo da TV (frame rate e HDR)
 
-    #if os(tvOS)
-    /// Pede à TV a cadência (e o HDR) do canal. Só funciona com "Igualar conteúdo" ligado no Apple TV.
-    private func applyDisplayCriteria() {
-        guard controlsDisplay, let manager = displayManager else { return }
-        guard matchFrameRate, state == .playing else {
-            manager.preferredDisplayCriteria = nil
-            return
+    /// O canal começou a dar: quando se souber a cadência dele, a TV muda para ela (conforme o modo, ver AfrSession).
+    /// Sem medida ao fim de [afrMeasureMs], a cadência de recurso das Definições; sem ela, espera-se pela medida.
+    private func startAfr() {
+        afrTask?.cancel()
+        guard controlsDisplay, afrMode != Prefs.AfrMode.off, displayManager != nil else { return }
+        let since = Self.uptimeMs()
+        afrTask = Task { [weak self] in
+            var counter = FrameRate.Counter()
+            var usedFallback = false
+            while !Task.isCancelled {
+                guard let self, self.state == .playing else { return }
+                if let fps = self.measuredFps(&counter) {
+                    DebugLog.add("Player: frame rate \(fps) fps")
+                    self.matchDisplay(fps: fps)
+                    return
+                }
+                if !usedFallback, Self.uptimeMs() - since >= Self.afrMeasureMs {
+                    usedFallback = true
+                    if let fps = Prefs.AfrFallback.fps(self.afrFallback) {
+                        DebugLog.add("Player: frame rate unknown, using \(fps)")
+                        self.matchDisplay(fps: fps)
+                        return
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
         }
+    }
+
+    /// Mudou o modo nas Definições: desligado, a TV volta ao normal; ligado, vale já para o canal a dar.
+    private func afrModeChanged() {
+        afr.reset()
+        if afrMode == Prefs.AfrMode.off {
+            afrTask?.cancel()
+            clearDisplayCriteria()
+        } else if state == .playing {
+            startAfr()
+        }
+    }
+
+    /// A cadência do canal a dar, quando já se sabe (nil = ainda não). No leitor da Apple com HDR automático conta só
+    /// que já se sabe: o pedido à TV vem do próprio stream, com o HDR.
+    private func measuredFps(_ counter: inout FrameRate.Counter) -> Double? {
+        switch backend {
+        case .apple:
+            guard let item = avPlayer.currentItem else { return nil }
+            let track = item.tracks.first { $0.assetTrack?.mediaType == .video }
+            let fps = Double(track?.currentVideoFrameRate ?? 0)
+            return fps > 1 ? FrameRate.snap(fps) : nil
+        case .vlc:
+            // A que o stream diz (como no Android, a do formato ganha); sem ela, conta-se as imagens que o VLC mostra.
+            if let info = vlcVideoInfo, info.fps > 1 {
+                var fps = FrameRate.snap(info.fps)
+                // Emissões entrelaçadas (25/30 imagens) ficam a 50/60 com o desentrelaçamento "suave".
+                if deinterlace == "yadif2x", abs(fps - 25) < 0.5 || abs(fps - 29.97) < 0.1 || abs(fps - 30) < 0.1 { fps *= 2 }
+                return fps
+            }
+            guard hasPicture else { return nil }
+            return counter.add(ms: Self.uptimeMs(), frames: picturesShown)
+        }
+    }
+
+    #if os(tvOS)
+    /// Pede à TV a cadência [fps] (e, no leitor da Apple, o HDR do canal). Só funciona com "Igualar conteúdo" →
+    /// "Igualar a frame rate" ligado no Apple TV.
+    private func matchDisplay(fps: Double) {
+        guard controlsDisplay, let manager = displayManager, let target = afr.onFps(mode: afrMode, fps: fps) else { return }
         switch backend {
         case .apple:
             guard let item = avPlayer.currentItem else { return }
+            let size = item.presentationSize
             if hdr == "sdr" {
-                let track = item.tracks.first { $0.assetTrack?.mediaType == .video }
-                let fps = Double(track?.currentVideoFrameRate ?? 0)
-                let size = item.presentationSize
-                manager.preferredDisplayCriteria = Self.criteria(fps: fps, width: Int(size.width), height: Int(size.height))
+                manager.preferredDisplayCriteria = Self.criteria(fps: target, width: Int(size.width), height: Int(size.height))
             } else {
                 manager.preferredDisplayCriteria = item.asset.preferredDisplayCriteria
             }
         case .vlc:
             // O VLC desenha sempre em SDR: só a frame rate.
-            guard let info = vlcVideoInfo else { return }
-            var fps = info.fps
-            // Emissões entrelaçadas (25/30 imagens) ficam a 50/60 com o desentrelaçamento "suave".
-            if deinterlace == "yadif2x", abs(fps - 25) < 0.5 || abs(fps - 29.97) < 0.1 || abs(fps - 30) < 0.1 { fps *= 2 }
-            manager.preferredDisplayCriteria = Self.criteria(fps: fps, width: info.width, height: info.height)
+            let size = vlcVideoInfo
+            manager.preferredDisplayCriteria = Self.criteria(fps: target, width: size?.width ?? 1920, height: size?.height ?? 1080)
         }
     }
 
@@ -678,6 +840,9 @@ final class PlayerEngine: NSObject {
         return window.avDisplayManager
     }
 
+    /// "Igualar a frame rate" está ligado no Apple TV (sem ele a TV não muda de modo); nil se não se sabe.
+    var displayMatchingEnabled: Bool? { displayManager?.isDisplayCriteriaMatchingEnabled }
+
     /// Um pedido de modo SDR com esta frame rate.
     private static func criteria(fps: Double, width: Int, height: Int) -> AVDisplayCriteria? {
         guard fps > 1 else { return nil }
@@ -690,8 +855,10 @@ final class PlayerEngine: NSObject {
     }
     #else
     // O iPhone não muda o modo do ecrã.
-    private func applyDisplayCriteria() {}
+    private func matchDisplay(fps: Double) {}
     private func clearDisplayCriteria() {}
+    private var displayManager: AnyObject? { nil }
+    var displayMatchingEnabled: Bool? { nil }
     #endif
 }
 
@@ -756,28 +923,134 @@ extension PlayerEngine {
         return h > 0 ? "\(h)p" : nil
     }
 
-    /// Faixa surround por defeito (uma vez por canal, para não desfazer uma escolha manual).
-    fileprivate func chooseSurround() {
-        guard preferSurround, !surroundChosen, state == .playing else { return }
+    // MARK: Escolha automática das faixas
+
+    /// Uma faixa como a escolha automática a vê, com o id do motor (o do VLC, ou a posição no grupo da Apple).
+    private struct TrackOption {
+        let id: Int32
+        let name: String
+        let info: TrackInfo
+    }
+
+    /// O áudio e as legendas que faltam escolher nesta abertura (a língua preferida e o surround), cada um quando as
+    /// faixas dele aparecem. Uma escolha feita à mão no menu ([selectAudio], [selectSubtitle]) ganha às Definições e
+    /// volta a pôr-se ao reabrir o mesmo canal (catch-up, saltos, reconexões), até se mudar de canal.
+    fileprivate func chooseTracks() {
+        guard state == .playing else { return }
+        chooseAudio()
+        if subtitlesByLanguage { chooseSubtitle() }
+    }
+
+    private func chooseAudio() {
+        let options = audioOptions()
+        guard !options.isEmpty else { return }
+        if trackChoice.isManual(.audio) {
+            guard !manualApplied.contains(.audio), let m = manualAudio else { return }
+            manualApplied.insert(.audio)
+            let pick = options.first { $0.name == m.name } ?? options.first { m.code != nil && $0.info.code == m.code }
+            if let pick, !pick.info.selected { setAudio(pick.id) }
+            return
+        }
+        guard trackChoice.pending(.audio) else { return }
+        trackChoice.done(.audio)
+        let language = audioLanguage.isEmpty ? appLanguage : audioLanguage
+        if let i = TrackPick.audio(options.map(\.info), language: language, surround: preferSurround) { setAudio(options[i].id) }
+    }
+
+    private func chooseSubtitle() {
+        let options = subtitleOptions()
+        guard !options.isEmpty else { return }
+        if trackChoice.isManual(.text) {
+            guard !manualApplied.contains(.text) else { return }
+            manualApplied.insert(.text)
+            guard let m = manualSubtitle else {
+                if options.contains(where: { $0.info.selected }) { setSubtitle(-1) }
+                return
+            }
+            let pick = options.first { $0.name == m.name } ?? options.first { m.code != nil && $0.info.code == m.code }
+            if let pick, !pick.info.selected { setSubtitle(pick.id) }
+            return
+        }
+        guard trackChoice.pending(.text) else { return }
+        trackChoice.done(.text)
+        if let i = TrackPick.text(options.map(\.info), language: subtitleLanguage.isEmpty ? nil : subtitleLanguage), !options[i].info.selected {
+            setSubtitle(options[i].id)
+        }
+    }
+
+    /// Volta a escolher as faixas uns instantes depois de abrir (as faixas só se sabem quando o vídeo começa).
+    private func scheduleTrackChoice() {
+        criteriaTask?.cancel()
+        criteriaTask = Task { [weak self] in
+            for delay in [0.8, 2.5] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+                self?.chooseTracks()
+            }
+        }
+    }
+
+    /// Uma nova abertura do mesmo pedido (outra tentativa, uma reconexão, um salto no anel): as faixas escolhem-se
+    /// outra vez, menos as que se escolheram à mão neste canal (essas repõem-se).
+    private func resetTrackChoice() {
+        trackChoice.onOpen(openedKey ?? "")
+        manualApplied.removeAll()
+    }
+
+    private static let surroundTypes: Set<UInt32> = [0x6163_2D33, 0x6563_2D33] // 'ac-3', 'ec-3'
+
+    private func audioOptions() -> [TrackOption] {
         switch backend {
         case .vlc:
-            guard let tracks = vlc.media?.tracksInformation as? [[String: Any]] else { return }
-            let audio = tracks.filter { ($0[VLCMediaTracksInformationType] as? String) == VLCMediaTracksInformationTypeAudio }
-            guard !audio.isEmpty else { return }
-            surroundChosen = true
-            let best = audio.max { (($0[VLCMediaTracksInformationAudioChannelsNumber] as? NSNumber)?.intValue ?? 0) < (($1[VLCMediaTracksInformationAudioChannelsNumber] as? NSNumber)?.intValue ?? 0) }
-            if let best, ((best[VLCMediaTracksInformationAudioChannelsNumber] as? NSNumber)?.intValue ?? 0) > 2,
-               let id = (best[VLCMediaTracksInformationId] as? NSNumber)?.int32Value, id != vlc.currentAudioTrackIndex {
-                vlc.currentAudioTrackIndex = id
+            let names = Dictionary(audioTracks.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            let current = vlc.currentAudioTrackIndex
+            return vlcTracks(VLCMediaTracksInformationTypeAudio).map { t in
+                let name = names[t.id] ?? t.description ?? ""
+                return TrackOption(id: t.id, name: name, info: TrackInfo(language: t.language, label: name, channels: t.channels, selected: t.id == current))
             }
         case .apple:
-            guard let group = appleGroup(.audible), let item = avPlayer.currentItem else { return }
-            surroundChosen = true
-            let surround: Set<UInt32> = [0x6163_2D33, 0x6563_2D33] // 'ac-3', 'ec-3'
-            if let option = group.options.first(where: { $0.mediaSubTypes.contains { surround.contains($0.uint32Value) } }),
-               item.currentMediaSelection.selectedMediaOption(in: group) != option {
-                item.select(option, in: group)
+            guard let group = appleGroup(.audible), let item = avPlayer.currentItem else { return [] }
+            let selected = item.currentMediaSelection.selectedMediaOption(in: group)
+            return group.options.enumerated().map { i, o in
+                // O leitor da Apple não diz quantos canais tem cada faixa: Dolby (AC-3/E-AC-3) é o surround.
+                let surround = o.mediaSubTypes.contains { Self.surroundTypes.contains($0.uint32Value) }
+                return TrackOption(id: Int32(i), name: o.displayName,
+                                   info: TrackInfo(language: o.extendedLanguageTag ?? o.locale?.identifier, label: o.displayName,
+                                                   channels: surround ? 6 : 2, supported: o.isPlayable, selected: o == selected))
             }
+        }
+    }
+
+    private func subtitleOptions() -> [TrackOption] {
+        switch backend {
+        case .vlc:
+            let names = Dictionary(subtitleTracks.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            let current = vlc.currentVideoSubTitleIndex
+            return vlcTracks(VLCMediaTracksInformationTypeText).map { t in
+                let name = names[t.id] ?? t.description ?? ""
+                return TrackOption(id: t.id, name: name, info: TrackInfo(language: t.language, label: name, selected: t.id == current))
+            }
+        case .apple:
+            guard let group = appleGroup(.legible), let item = avPlayer.currentItem else { return [] }
+            let selected = item.currentMediaSelection.selectedMediaOption(in: group)
+            return group.options.enumerated().map { i, o in
+                TrackOption(id: Int32(i), name: o.displayName,
+                            info: TrackInfo(language: o.extendedLanguageTag ?? o.locale?.identifier, label: o.displayName,
+                                            supported: o.isPlayable, selected: o == selected,
+                                            forced: o.hasMediaCharacteristic(.containsOnlyForcedSubtitles)))
+            }
+        }
+    }
+
+    /// As faixas de [type] que o VLC conhece: o id, a língua, a descrição e (no áudio) os canais.
+    private func vlcTracks(_ type: String) -> [(id: Int32, language: String?, description: String?, channels: Int)] {
+        let infos = vlc.media?.tracksInformation as? [[String: Any]] ?? []
+        return infos.compactMap { t in
+            guard (t[VLCMediaTracksInformationType] as? String) == type,
+                  let id = (t[VLCMediaTracksInformationId] as? NSNumber)?.int32Value else { return nil }
+            return (id: id, language: t[VLCMediaTracksInformationLanguage] as? String,
+                    description: t[VLCMediaTracksInformationDescription] as? String,
+                    channels: (t[VLCMediaTracksInformationAudioChannelsNumber] as? NSNumber)?.intValue ?? 0)
         }
     }
 
@@ -873,7 +1146,15 @@ extension PlayerEngine {
         }
     }
 
+    /// O menu das faixas: a escolha ganha às Definições até mudar de canal.
     func selectAudio(_ id: Int32) {
+        trackChoice.onManual(.audio)
+        manualApplied.insert(.audio)
+        manualAudio = audioOptions().first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        setAudio(id)
+    }
+
+    private func setAudio(_ id: Int32) {
         switch backend {
         case .vlc: vlc.currentAudioTrackIndex = id
         case .apple:
@@ -904,7 +1185,15 @@ extension PlayerEngine {
         }
     }
 
+    /// O menu das legendas (-1 = desligadas): a escolha ganha às Definições até mudar de canal.
     func selectSubtitle(_ id: Int32) {
+        trackChoice.onManual(.text)
+        manualApplied.insert(.text)
+        manualSubtitle = id < 0 ? nil : subtitleOptions().first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        setSubtitle(id)
+    }
+
+    private func setSubtitle(_ id: Int32) {
         switch backend {
         case .vlc: vlc.currentVideoSubTitleIndex = id
         case .apple:
@@ -987,6 +1276,8 @@ extension PlayerEngine {
         hasPicture = false
         movingSince = nil
         startVLC(url, ring: true)
+        resetTrackChoice()
+        scheduleTrackChoice()
         // Se o VLC não voltar a dar, é como se o canal tivesse caído (volta a ligar, no direto).
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))

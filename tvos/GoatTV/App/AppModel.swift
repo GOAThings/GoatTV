@@ -162,10 +162,16 @@ final class AppModel {
             Task { @MainActor in self?.sessionEnded() }
         }
         loadReminders()
+        // Os nomes das línguas (para ler as faixas) montam-se uma vez, fora do ecrã: o primeiro canal já os encontra prontos.
+        Task.detached(priority: .utility) { _ = Languages.code("English") }
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
         // Pausar o direto: guarda-se só o programa que se está a ver.
         player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
+        player.onPlaying = { [weak self] in
+            self?.playbackError = nil
+            self?.playbackStatus = nil
+        }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
             guard let self, self.catchup != nil else { return false }
@@ -234,10 +240,8 @@ final class AppModel {
         player.retryNow()
     }
 
-    /// Um canal Xtream abriu num formato: fica a ser o preferido (como no Android).
+    /// Um canal Xtream só abriu no outro formato: fica a ser o preferido (como no Android).
     private func formatWorked(_ format: String) {
-        playbackError = nil
-        playbackStatus = nil
         guard content?.playlist.type == .xtream, catchup == nil, format != prefs.streamFormat else { return }
         setPref("stream_format", .string(format))
     }
@@ -550,6 +554,10 @@ final class AppModel {
         player.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
         player.aspect = prefs.aspect
         for engine in [player, secondPlayer] {
+            engine.zapDelayMs = prefs.zapDelayMs
+            engine.audioLanguage = prefs.audioLanguage
+            engine.subtitleLanguage = prefs.subtitleLanguage
+            engine.appLanguage = Self.isoLanguage(strings.lang)
             engine.freezeFrame = prefs.freezeFrame
             engine.preferSurround = prefs.surroundDefault
             engine.passthrough = prefs.audioPassthrough
@@ -559,7 +567,10 @@ final class AppModel {
             engine.hdr = prefs.hdr
         }
         secondPlayer.controlsDisplay = false
-        player.matchFrameRate = prefs.afr
+        // O segundo canal só escolhe o áudio (como no Android).
+        secondPlayer.subtitlesByLanguage = false
+        player.afrFallback = prefs.afrFallback
+        player.afrMode = prefs.afrMode
         // Pausar o direto: só no canal principal (o segundo abre o stream como sempre).
         player.timeshiftEnabled = prefs.timeshift
         Fonts.scale = CGFloat(Prefs.TextSize.scale(prefs.textSize)) * CGFloat(prefs.uiScale) / 100
@@ -567,9 +578,22 @@ final class AppModel {
 
     /// Muda uma definição da conta (nil repõe o padrão) e grava-a; vale também para as outras TVs.
     func setPref(_ key: String, _ value: JSON?) {
-        if let value { settings[key] = value } else { settings.removeValue(forKey: key) }
+        setPrefs([key: value])
+    }
+
+    /// Várias definições de uma vez (ex.: o modo do AFR, que são duas chaves), numa só gravação.
+    func setPrefs(_ values: [String: JSON?]) {
+        for (key, value) in values {
+            if let value { settings[key] = value } else { settings.removeValue(forKey: key) }
+        }
         applySettings()
         saveSettings()
+    }
+
+    /// O código ISO 639-1 de uma língua da app ("pt-PT" → "pt", "zh-CN" → "zh").
+    static func isoLanguage(_ lang: String) -> String? {
+        let code = String(lang.split(separator: "-").first ?? "").lowercased()
+        return code.isEmpty ? nil : code
     }
 
     // MARK: Organizar (Definições → Listas → lista)
@@ -999,7 +1023,8 @@ final class AppModel {
                                               allowedFormats: content.account?.allowedFormats ?? [])
             let stalker = loader.stalker
             let playlist = content.playlist
-            player.play(candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer, pausable: true,
+            player.play(candidates, channelKey: channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,
+                        referrer: channel.referrer, pausable: true,
                         linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
         }
         saveLast(channel, watched: false)
@@ -1076,17 +1101,20 @@ final class AppModel {
         let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
         if current?.key != channel.key {
             // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
-            let opens = content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone) } != nil
+            let opens = content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone,
+                                                            correctionMin: prefs.catchupOffsetMin) } != nil
             play(channel, from: groupFor(channel), opening: !opens)
         }
         startCatchup(cu)
     }
 
     private func startCatchup(_ cu: Catchup) {
-        guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone) else { return }
+        guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone,
+                                                         correctionMin: prefs.catchupOffsetMin) else { return }
         catchup = cu
         catchupBase = start.startMs
-        player.play(start.candidates, userAgent: cu.channel.userAgent ?? prefs.userAgent, referrer: cu.channel.referrer)
+        player.play(start.candidates, channelKey: cu.channel.key, live: false, userAgent: cu.channel.userAgent ?? prefs.userAgent,
+                    referrer: cu.channel.referrer)
     }
 
     /// Onde vai o catch-up, em ms desde o início do programa.
@@ -1225,9 +1253,16 @@ final class AppModel {
 
     /// As duas listas usam a mesma conta do fornecedor (a mesma lista, ou o mesmo servidor e utilizador).
     private func sameAccount(_ a: Playlist, _ b: Playlist) -> Bool {
-        a.id == b.id || (a.type == .xtream && b.type == .xtream &&
-            a.server?.trimmingCharacters(in: .whitespaces).lowercased() == b.server?.trimmingCharacters(in: .whitespaces).lowercased() &&
-            a.username == b.username)
+        // Como no Android: uma barra no fim do servidor ou espaços no utilizador não fazem de uma conta duas.
+        func server(_ p: Playlist) -> String? {
+            p.server.map { s in
+                var t = s.trimmingCharacters(in: .whitespaces)
+                while t.hasSuffix("/") { t.removeLast() }
+                return t.lowercased()
+            }
+        }
+        return a.id == b.id || (a.type == .xtream && b.type == .xtream && server(a) == server(b) &&
+            a.username?.trimmingCharacters(in: .whitespaces) == b.username?.trimmingCharacters(in: .whitespaces))
     }
 
     /// Pode-se ver o segundo canal de [playlist]? Da conta da lista principal só se o plano deixar 2+ ligações.
@@ -1277,7 +1312,8 @@ final class AppModel {
                                           allowedFormats: second.content.account?.allowedFormats ?? [])
         secondPlayer.reconnectSeconds = prefs.reconnectSeconds
         secondPlayer.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
-        secondPlayer.play(candidates, userAgent: second.channel.userAgent ?? prefs.userAgent, referrer: second.channel.referrer)
+        secondPlayer.play(candidates, channelKey: second.channel.key, live: true, userAgent: second.channel.userAgent ?? prefs.userAgent,
+                          referrer: second.channel.referrer)
     }
 
     /// ↑/↓ no segundo canal (dá a volta nas pontas, como o principal).
