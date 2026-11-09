@@ -65,6 +65,7 @@ internal fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: Strin
     val played = LocalOnPlayed.current
     var slot by rememberSaveable { mutableStateOf<Long?>(null) }
     val first = now - now % HALF_HOUR + HALF_HOUR
+    val rows = rememberRowState(vm)
     Column(Modifier.fillMaxSize()) {
         // Para trás, para o catch-up; "Agora" começa perto do meio do ecrã.
         LazyRow(state = rememberLazyListState(PAST_SLOTS - 3), contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 6.dp)) {
@@ -84,7 +85,7 @@ internal fun GuideList(vm: AppViewModel, channels: List<Channel>, groupId: Strin
         } else {
             LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = LocalBarSpace.current)) {
                 items(channels, key = { it.uid }) { channel ->
-                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, onPlay = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
+                    GuideRow(vm, channel, slot, now, channel.key == current.key && slot == null, rows, onPlay = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
                 }
             }
         }
@@ -106,11 +107,9 @@ private fun SlotChip(label: String, on: Boolean, onClick: () -> Unit) {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long, playing: Boolean, onPlay: () -> Unit, onLong: () -> Unit) {
+private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long, playing: Boolean, rows: RowState, onPlay: () -> Unit, onLong: () -> Unit) {
     val s = LocalStrings.current
     val accent = LocalAccent.current
-    val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val reminders by vm.reminders.collectAsStateWithLifecycle()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
     val at = slot ?: now
@@ -134,7 +133,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
             .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (prefs.showLogos) {
+        if (rows.showLogos) {
             Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
             Spacer(Modifier.width(14.dp))
         }
@@ -150,8 +149,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
                 }
             }
             if (next != null) {
-                reminders.size
-                val reminded = vm.hasReminder(channel, next)
+                val reminded = rows.reminded(channel, next)
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(s.next(formatTime(next.startMs)), color = ItvColors.TextFaint, fontSize = 12.5.sp, maxLines = 1)
                     Spacer(Modifier.width(7.dp))

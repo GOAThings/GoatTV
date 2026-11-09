@@ -546,7 +546,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
 internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobilePlayback, onGuide: () -> Unit, onPip: (() -> Unit)?, onOption: (PlayerOption) -> Unit) {
     val s = LocalStrings.current
     val catchup by vm.catchup.collectAsStateWithLifecycle()
-    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val rows = rememberRowState(vm)
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 4.dp),
@@ -557,8 +557,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         val ts = playback.timeshift
         LiveButton(catchup == null && !ts.shifted, behind = behindLabel(ts.behindMs).takeIf { catchup == null }) { if (catchup != null) vm.exitCatchup() else ts.goLive(playback.player) }
         ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
-        favorites.size
-        val favorite = vm.isFavorite(channel)
+        val favorite = rows.isFavorite(channel)
         ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) PhoneColors.FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
         PlayerOption.entries.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
@@ -589,11 +588,10 @@ internal fun NextUp(vm: AppViewModel, channel: Channel) {
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
-    val reminders by vm.reminders.collectAsStateWithLifecycle()
+    val rows = rememberRowState(vm)
     val current = entries.at(now)
     val next = entries.after(current, now) ?: return
-    reminders.size
-    val reminded = vm.hasReminder(channel, next)
+    val reminded = rows.reminded(channel, next)
     Row(
         Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 4.dp).fillMaxWidth().clip(PhoneShapes.List).background(PhoneColors.Card)
             .clickable { vm.toggleReminder(channel, next) }.padding(horizontal = 12.dp, vertical = 10.dp),

@@ -81,8 +81,10 @@ internal fun MobileHome(
             .filterNot { vm.isGroupLocked(it.categoryId) }
             .take(HOME_RECENTS)
     }
-    val groups = remember(data, favorites, unlocked) { vm.guideGroups().filter { it.id != SpecialCategory.RECENT } }
-    val locked = remember(data, unlocked) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    // As chaves são o que guideGroups() lê: grupos à vista, ordem, favoritos, recentes e o que está desbloqueado.
+    val groups = remember(data, favorites, prefs, recentKeys, unlocked) { vm.guideGroups().filter { it.id != SpecialCategory.RECENT } }
+    val locked = remember(data, unlocked, prefs) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = LocalBarSpace.current)) {

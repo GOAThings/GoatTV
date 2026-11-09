@@ -85,6 +85,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
         recentQueries = saveRecentSearch(context, q.trim())
     }
     val typed = query.trim().length >= 2
+    val rows = rememberRowState(vm)
     Column(Modifier.fillMaxSize()) {
         Text(s.search, color = ItvColors.Text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 10.dp))
         Field(s.searchHint, query, Modifier.padding(horizontal = 12.dp)) { query = it }
@@ -120,7 +121,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                 if (recents.isNotEmpty()) {
                     caption(s.searchNow)
                     items(recents, key = { "r" + it.uid }) { ch ->
-                        ChannelCard(vm, ch, false, onClick = { vm.play(ch, vm.groupFor(ch)); played() }, onLong = { onEpg(ch) })
+                        ChannelCard(vm, ch, false, rows, onClick = { vm.play(ch, vm.groupFor(ch)); played() }, onLong = { onEpg(ch) })
                     }
                 }
                 caption(s.groups)
@@ -147,7 +148,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
             if (filter != FILTER_PROGRAMMES && channels.isNotEmpty()) {
                 caption(s.searchChannels)
                 items(channels, key = { "c" + it.channel.uid }) { h ->
-                    ChannelCard(vm, h.channel, h.channel.key == current.key, onClick = { rememberQuery(query); vm.play(h.channel, vm.groupFor(h.channel)); played() }, onLong = { onEpg(h.channel) })
+                    ChannelCard(vm, h.channel, h.channel.key == current.key, rows, onClick = { rememberQuery(query); vm.play(h.channel, vm.groupFor(h.channel)); played() }, onLong = { onEpg(h.channel) })
                 }
             }
             if (filter != FILTER_CHANNELS) {
@@ -166,9 +167,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                     caption(s.searchLater)
                     items(later, key = { "l" + it.channel.uid + it.programme!!.startMs }) { h ->
                         val e = h.programme!!
-                        val reminders by vm.reminders.collectAsStateWithLifecycle()
-                        reminders.size
-                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, bell = vm.hasReminder(h.channel, e), onLong = { onEpg(h.channel) }) {
+                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, bell = rows.reminded(h.channel, e), onLong = { onEpg(h.channel) }) {
                             rememberQuery(query)
                             vm.toggleReminder(h.channel, e)
                         }

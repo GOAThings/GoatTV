@@ -63,17 +63,20 @@ internal fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = fa
     val selected by vm.selectedCategory.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
-    val groups = remember(content, favorites) { vm.guideGroups() }
-    var group by rememberSaveable { mutableStateOf(selected) }
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
     val unlocked by vm.unlocked.collectAsStateWithLifecycle()
-    val locked = remember(content, unlocked) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
+    // As chaves são o que guideGroups() lê: grupos à vista, ordem, favoritos, recentes e o que está desbloqueado.
+    val groups = remember(content, favorites, prefs, recents, unlocked) { vm.guideGroups() }
+    var group by rememberSaveable { mutableStateOf(selected) }
+    val locked = remember(content, unlocked, prefs) { vm.orderedGroups(includeHidden = false).filter { vm.isGroupLocked(it.id) } }
     var pinFor by remember { mutableStateOf<String?>(null) }
     // O grupo pode não estar à vista (ex.: "Todos" escondido): fica o do canal a dar, ou o primeiro.
     val shown = groups.firstOrNull { it.id == group }?.id
         ?: groups.firstOrNull { it.id == current.categoryId }?.id
         ?: groups.firstOrNull()?.id
         ?: SpecialCategory.ALL
-    val channels = remember(content, favorites, shown) { vm.channelsOf(shown) }
+    val channels = remember(content, favorites, prefs, recents, unlocked, shown) { vm.channelsOf(shown) }
     Column(Modifier.fillMaxSize()) {
         // O grupo em uso fica sempre à vista, mesmo com muitos grupos antes dele.
         val pills = rememberLazyListState()
@@ -123,21 +126,21 @@ internal fun ChannelList(vm: AppViewModel, channels: List<Channel>, groupId: Str
     }
     val list = rememberLazyListState()
     val played = LocalOnPlayed.current
+    val rows = rememberRowState(vm)
     LazyColumn(state = list, contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = LocalBarSpace.current)) {
         items(channels, key = { it.uid }) { channel ->
-            ChannelCard(vm, channel, channel.key == current.key, onClick = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
+            ChannelCard(vm, channel, channel.key == current.key, rows, onClick = { vm.play(channel, groupId); played() }, onLong = { onEpg(channel) })
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, found: EpgEntry? = null, onClick: () -> Unit, onLong: () -> Unit) {
+internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, rows: RowState, found: EpgEntry? = null, onClick: () -> Unit, onLong: () -> Unit) {
     val accent = LocalAccent.current.start
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
-    val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val programme = found ?: epg.at(now)?.takeIf { prefs.epgInList }
+    val programme = found ?: epg.at(now)?.takeIf { rows.epgInList }
     Row(
         Modifier
             .fillMaxWidth()
@@ -147,14 +150,14 @@ internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, f
             .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (prefs.showLogos) {
+        if (rows.showLogos) {
             Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
             Spacer(Modifier.width(14.dp))
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(channel.name, color = if (playing) accent else ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (prefs.showNumbers) {
+                if (rows.showNumbers) {
                     Spacer(Modifier.width(8.dp))
                     Text("${channel.num}", color = ItvColors.TextFaint.copy(alpha = 0.36f), fontSize = 13.sp)
                 }
