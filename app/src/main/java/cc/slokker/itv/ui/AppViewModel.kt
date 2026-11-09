@@ -491,11 +491,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _screen.value = Screen.Loading(I18n.s.loadingPlaylists)
                 val config = fetchConfig(null) ?: return@launch
                 c.cache.saveConfig(config)
-                applyConfig(config)
-                pendingLocalProfile?.let { localProfile ->
-                    pendingLocalProfile = null
-                    adoptLocalProfile(localProfile)
-                }
+                applyAccountConfig(config, keepSettingsIfMissing = false)
 
                 val playlists = playlists.value
                 if (playlists.isEmpty()) {
@@ -633,6 +629,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         config.user?.email?.let { _email.value = it }
         config.device?.name?.let { _deviceName.value = it }
         if (profile.applyConfig(config, keepSettingsIfMissing)) publishHome(locksChanged = true)
+    }
+
+    /**
+     * Uma config que acabou de chegar da conta. Se a TV acabou de passar de sem conta para conta, o perfil desta TV
+     * junta-se agora, venha a config do arranque ou de reler a conta (o arranque pela cache só relê).
+     */
+    private fun applyAccountConfig(config: ConfigResponse, keepSettingsIfMissing: Boolean) {
+        applyConfig(config, keepSettingsIfMissing)
+        pendingLocalProfile?.let { localProfile ->
+            pendingLocalProfile = null
+            adoptLocalProfile(localProfile)
+        }
     }
 
     /** O canal mudou aqui depois do que a conta diz (a gravação não chegou, ou a config é antiga): vale o daqui. */
@@ -1028,7 +1036,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (generation != sessionGeneration) return
         c.cache.saveConfig(config)
         if (generation != sessionGeneration) return
-        applyConfig(config, keepSettingsIfMissing = true)
+        applyAccountConfig(config, keepSettingsIfMissing = true)
         val playlists = profile.playlists.value
         val current = _content.value?.playlist ?: return
         val updated = playlists.firstOrNull { it.id == current.id }
