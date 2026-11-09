@@ -26,9 +26,11 @@ import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.ui.state.GuideController
+import cc.slokker.itv.ui.state.ParentalControl
 import cc.slokker.itv.ui.state.PlaybackState
 import cc.slokker.itv.ui.state.PlaylistController
 import cc.slokker.itv.ui.state.ProfileStore
+import cc.slokker.itv.ui.state.Reminders
 import cc.slokker.itv.ui.common.explainPlaylistError
 import android.app.Application
 import android.content.Context
@@ -228,8 +230,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Grupos bloqueados já desbloqueados com o PIN nesta sessão. */
-    private val _unlocked = MutableStateFlow<Set<String>>(emptySet())
-    val unlocked: StateFlow<Set<String>> = _unlocked.asStateFlow()
+    val unlocked: StateFlow<Set<String>> get() = parental.unlocked
 
     /** O canal a tocar, o grupo do zapping, o anterior, o catch-up e o segundo canal (ver PlaybackState). */
     private val playback = PlaybackState(::catalog, ::catalogFor, onTuned = ::scheduleSaveLast)
@@ -250,8 +251,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val sleepAt: StateFlow<Long?> = _sleepAt.asStateFlow()
 
     /** Lembretes de programas (só nesta TV). */
-    private val _reminders = MutableStateFlow<List<Reminder>>(emptyList())
-    val reminders: StateFlow<List<Reminder>> = _reminders.asStateFlow()
+    private val reminderList = Reminders(viewModelScope, c.cache, { content.value?.playlist?.id }, ::showToast)
+    val reminders: StateFlow<List<Reminder>> = reminderList.reminders
 
     /** Segundo canal no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
     val second: StateFlow<PlaybackState.SecondView?> = playback.second
@@ -270,8 +271,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Canal pedido por um link do ecrã inicial, à espera de a lista carregar: (playlistId, channelKey). */
     private var pendingLink: Pair<String, String>? = null
 
-    /** As Definições já foram desbloqueadas com o PIN nesta sessão. */
-    private var settingsUnlocked = false
+    /** O PIN, os grupos desbloqueados nesta sessão e as Definições desbloqueadas (ver ParentalControl). */
+    private val parental = ParentalControl(
+        prefs, profile::setPref,
+        attempts = {
+            val store = getApplication<Application>().getSharedPreferences("pin_attempts", Context.MODE_PRIVATE)
+            PinAttempts(store.getInt("failures", 0), store.getLong("last_failure_at", 0L)) { failures, at ->
+                store.edit { putInt("failures", failures).putLong("last_failure_at", at) }
+            }
+        },
+        onLocksChanged = { publishHome(locksChanged = true) },
+    )
 
     /** O guia: XMLTV da lista e o extra, o da conta e as associações, o desvio horário e os logótipos (ver GuideController). */
     private val guide = GuideController(viewModelScope, c.epg, c.backend, content, prefs, ::repository, refreshes, ::showToast)
@@ -333,8 +343,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            _reminders.value = c.cache.loadReminders().filter { it.startMs > now - REMINDER_GRACE_MS }
+            reminderList.load()
         }
         viewModelScope.launch {
             val session = c.session.load()
@@ -895,7 +904,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun catalog() = catalogFor(content.value)
 
     /** O mesmo para outra lista (a do segundo canal): as definições, favoritos e desbloqueios são os mesmos. */
-    private fun catalogFor(content: PlaylistContent?) = ChannelCatalog(content, prefs.value, favorites.value, recents.value, _unlocked.value)
+    private fun catalogFor(content: PlaylistContent?) = ChannelCatalog(content, prefs.value, favorites.value, recents.value, parental.unlocked.value)
 
     private fun groupNames() = I18n.s.let { GroupNames(it.favoritesStar, it.recents, it.all, it.others) }
 
@@ -976,54 +985,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun isGroupLocked(groupId: String): Boolean = catalog().isGroupLocked(groupId)
 
     /** Confere o PIN; se estiver certo, desbloqueia [groupId] até a app fechar. */
-    fun unlockGroup(groupId: String, pin: String): Boolean {
-        if (prefs.value.pinHash == null || !checkPin(pin)) return false
-        val playlistId = content.value?.playlist?.id ?: return true
-        _unlocked.value = _unlocked.value + "$playlistId:$groupId"
-        return true
-    }
+    fun unlockGroup(groupId: String, pin: String): Boolean = parental.unlockGroup(content.value?.playlist?.id, groupId, pin)
 
-    /** As tentativas erradas contam em todos os sítios que pedem o PIN, e continuam depois de fechar a app. */
-    private val pinAttempts by lazy {
-        val store = getApplication<Application>().getSharedPreferences("pin_attempts", Context.MODE_PRIVATE)
-        PinAttempts(store.getInt("failures", 0), store.getLong("last_failure_at", 0L)) { failures, at ->
-            store.edit { putInt("failures", failures).putLong("last_failure_at", at) }
-        }
-    }
-
-    fun checkPin(pin: String): Boolean {
-        val hash = prefs.value.pinHash ?: return true
-        return pinAttempts.check(System.currentTimeMillis(), Prefs.hashPin(pin) == hash)
-    }
+    fun checkPin(pin: String): Boolean = parental.checkPin(pin)
 
     /** O que dizer quando o PIN não entrou: [wrong], ou quanto falta para se poder tentar outra vez. */
-    fun pinRejected(wrong: String = I18n.s.wrongPin): String {
-        val wait = pinAttempts.waitMs(System.currentTimeMillis())
-        return when {
-            wait <= 0 -> wrong
-            wait < 60_000 -> I18n.s.pinWait("${(wait + 999) / 1000} s")
-            else -> I18n.s.pinWait("${(wait + 59_999) / 60_000} min")
-        }
-    }
+    fun pinRejected(wrong: String = I18n.s.wrongPin): String = parental.pinRejected(wrong)
 
     /** Terminar sessão pede o PIN, quando há um (é por aí que se saía para as listas desta TV sem ele). */
-    fun logoutNeedsPin(): Boolean = prefs.value.pinHash != null
+    fun logoutNeedsPin(): Boolean = parental.logoutNeedsPin()
 
     /** Define (ou remove, com null) o PIN parental. Sem PIN não há grupos bloqueados. */
-    fun setPin(pin: String?) {
-        setPref(Prefs.Key.PIN_HASH, pin?.let { Prefs.hashPin(it) })
-        if (pin == null) setPref(Prefs.Key.LOCKED_GROUPS, emptyList<String>())
-        _unlocked.value = emptySet()
-        pinAttempts.reset()
-        publishHome(locksChanged = true)
-    }
+    fun setPin(pin: String?) = parental.setPin(pin)
 
     fun toggleGroupLock(groupId: String) {
         val playlistId = content.value?.playlist?.id ?: return
-        val key = "$playlistId:$groupId"
-        val current = prefs.value.lockedGroups
-        setPref(Prefs.Key.LOCKED_GROUPS, (if (key in current) current - key else current + key).toList())
-        publishHome(locksChanged = true)
+        parental.toggleGroupLock(playlistId, groupId)
     }
 
     /** Muda uma definição da conta: String, Boolean, Int, lista de Strings, ou null para repor o padrão. */
@@ -1288,37 +1265,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (announce) showToast(minutes?.let { I18n.s.sleepSet(it) } ?: I18n.s.sleepOff)
     }
 
-    fun hasReminder(channel: Channel, entry: EpgEntry): Boolean {
-        val playlistId = content.value?.playlist?.id ?: return false
-        return _reminders.value.any { it.playlistId == playlistId && it.channelKey == channel.key && it.startMs == entry.startMs }
-    }
+    fun hasReminder(channel: Channel, entry: EpgEntry): Boolean = reminderList.has(channel, entry)
 
     /** Marca/desmarca o lembrete de um programa que ainda vai começar. */
-    fun toggleReminder(channel: Channel, entry: EpgEntry) {
-        val playlistId = content.value?.playlist?.id ?: return
-        val existing = _reminders.value.firstOrNull { it.playlistId == playlistId && it.channelKey == channel.key && it.startMs == entry.startMs }
-        _reminders.value = if (existing != null) {
-            showToast(I18n.s.reminderRemoved)
-            _reminders.value - existing
-        } else {
-            showToast(I18n.s.reminderSet(entry.title))
-            (_reminders.value + Reminder(playlistId, channel.key, channel.name, entry.title, entry.startMs)).sortedBy { it.startMs }
-        }
-        viewModelScope.launch { c.cache.saveReminders(_reminders.value) }
-    }
+    fun toggleReminder(channel: Channel, entry: EpgEntry) = reminderList.toggle(channel, entry)
 
     /** Lembrete a mostrar agora (o programa começa dentro de 1 min, ou começou há pouco). */
-    fun dueReminder(now: Long): Reminder? {
-        val playlistId = content.value?.playlist?.id ?: return null
-        return _reminders.value.firstOrNull {
-            it.playlistId == playlistId && it.startMs <= now + REMINDER_AHEAD_MS && it.startMs > now - REMINDER_GRACE_MS
-        }
-    }
+    fun dueReminder(now: Long): Reminder? = reminderList.due(now)
 
     /** O lembrete já foi mostrado: sai da lista (e, com [watch], muda para o canal). */
     fun consumeReminder(reminder: Reminder, watch: Boolean) {
-        _reminders.value = _reminders.value - reminder
-        viewModelScope.launch { c.cache.saveReminders(_reminders.value) }
+        reminderList.consume(reminder)
         if (!watch) return
         val content = content.value ?: return
         val channel = content.byKey[reminder.channelKey] ?: return
@@ -1475,13 +1432,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- PIN das Definições ------------------------------------------------------------------
 
-    fun settingsNeedPin(): Boolean = prefs.value.settingsPin && prefs.value.pinHash != null && !settingsUnlocked
+    fun settingsNeedPin(): Boolean = parental.settingsNeedPin()
 
-    fun unlockSettings(pin: String): Boolean {
-        if (!checkPin(pin)) return false
-        settingsUnlocked = true
-        return true
-    }
+    fun unlockSettings(pin: String): Boolean = parental.unlockSettings(pin)
 
     /** O fallback encontrou um formato que funciona: fica guardado na conta. */
     fun onFormatWorked(format: String) {
@@ -1595,8 +1548,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // O perfil: listas, favoritos, recentes, definições (e a cópia do servidor), desbloqueios e verificações.
         _local.value = false
         profile.reset()
-        _unlocked.value = emptySet()
-        settingsUnlocked = false
+        parental.reset()
         refreshes.clear()
         if (scope == Reset.PROFILE) return
 
@@ -1638,8 +1590,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         const val HOME_UPCOMING = 4
         const val MAX_RECENTS = 20
         const val MAX_SEARCH = 40
-        const val REMINDER_AHEAD_MS = 60_000L
-        const val REMINDER_GRACE_MS = 10 * 60_000L
         private val ACCENTS = Regex("\\p{Mn}+")
 
         /** De quanto em quanto tempo ver se a lista ou o guia já passaram do intervalo. */
