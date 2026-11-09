@@ -1568,11 +1568,15 @@ private struct MenuTab: View {
             section(s.t("Picture and sound", "Imagem e som")) {
                 pick(s.r("aspect"), "aspect", p.aspect, [("fit", s.r("aspect_fit")), ("zoom", s.r("aspect_zoom")), ("fill", s.r("aspect_fill"))])
                 toggle(s.r("surround_default"), "surround_default", p.surroundDefault)
+                pick(s.r("audio_language"), "audio_language", .string(p.audioLanguage), [(.string(""), s.r("auto"))] + phoneLanguageOptions)
+                pick(s.r("subtitle_language"), "subtitle_language", .string(p.subtitleLanguage), [(.string(""), s.r("subtitles_off"))] + phoneLanguageOptions)
             }
             section(s.t("Connection", "Ligação")) {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)
                 pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
                 toggle(s.r("timeshift"), "timeshift", p.timeshift)
+                pick(s.r("zap_delay"), "zap_delay_ms", .number(Double(p.zapDelayMs)),
+                     zapDelayOptions)
             }
             section(s.t("Advanced", "Avançado")) {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)
@@ -1599,6 +1603,8 @@ private struct MenuTab: View {
                 pick(s.t("Update TV guide", "Atualizar guia"), "epg_refresh_hours", .number(Double(p.epgRefreshHours)), refreshOptions)
                 pick(s.t("Update playlists", "Atualizar listas"), "playlist_refresh_hours", .number(Double(p.playlistRefreshHours)), refreshOptions)
                 pick(s.t("Time offset", "Desvio horário"), "epg_offset_min", .number(Double(p.epgOffsetMin)), stride(from: -180, through: 180, by: 30).map { (.number(Double($0)), $0 == 0 ? "0" : String(format: "%+d min", $0)) })
+                pick(s.r("catchup_offset"), "catchup_offset_min", .number(Double(p.catchupOffsetMin)),
+                     (-12...12).map { (h: Int) -> (JSON?, String) in (.number(Double(h * 60)), h == 0 ? "0" : String(format: "%+d h", h)) })
                 if model.hasAccount { MenuRow(s.t("Guide by country", "Guia por país"), chevron: true) { pickingGuideCountry = true } }
                 if model.hasAccount, !model.epgMappings.isEmpty {
                     MenuRow(confirmingEpgReset ? s.t("Press again to confirm", "Carrega outra vez para confirmar") : s.r("epg_reset_all")) {
@@ -1627,6 +1633,22 @@ private struct MenuTab: View {
                 }
             }
         }
+    }
+
+    /// O atraso ao mudar de canal: automático, desligado, 1 ou 2 s (como no Android).
+    private var zapDelayOptions: [(JSON?, String)] {
+        let s = model.strings
+        var list: [(JSON?, String)] = [(.number(Double(Prefs.ZapDelay.auto)), s.r("auto")), (.number(Double(Prefs.ZapDelay.off)), s.r("off"))]
+        for seconds in [1, 2] { list.append((.number(Double(seconds * 1_000)), s.r("seconds_short", "\(seconds)"))) }
+        return list
+    }
+
+    /// As línguas do áudio e das legendas, com o nome na língua da app e por ordem alfabética dela.
+    private var phoneLanguageOptions: [(JSON?, String)] {
+        let s = model.strings
+        return Languages.choices.map { (code: $0, name: Languages.displayName($0, locale: s.lang)) }
+            .sorted { $0.name.compare($1.name, locale: s.locale) == .orderedAscending }
+            .map { item -> (JSON?, String) in (.string(item.code), item.name) }
     }
 
     private func section<Rows: View>(_ title: String?, @ViewBuilder rows: () -> Rows) -> some View {

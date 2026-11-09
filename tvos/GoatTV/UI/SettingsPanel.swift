@@ -698,22 +698,27 @@ struct SettingsPanel: View {
             ]
 
         case .playback:
+            // A ordem do Android TV (SettingsCatalog); o desentrelaçamento é só do VLC no Apple TV.
+            // O AFR precisa de "Igualar a frame rate" ligado no Apple TV: desligado, a linha diz onde o ligar.
+            let afrHint = prefs.afrMode != Prefs.AfrMode.off && model.player.displayMatchingEnabled == false
+                ? s.t("Turn on Match Frame Rate in the Apple TV settings (Video and Audio → Match Content)",
+                      "Liga Igualar a frame rate nas definições do Apple TV (Vídeo e áudio → Igualar conteúdo)")
+                : s.r("afr_sub")
             return [
-                pickItem("stream_format"), pickItem("buffer"), pickItem("engine"), pickItem("decoder"), pickItem("aspect"),
-                pickItem("deinterlace"), pickItem("reconnect_seconds"),
-                .toggle("afr", s.t("Match frame rate", "Igualar a frame rate"), prefs.afr,
-                        subtitle: s.t("The TV switches to the channel's rate (needs Match Content on the Apple TV)",
-                                      "A TV muda para a cadência do canal (precisa de Igualar conteúdo no Apple TV)")) {
-                    model.setPref("afr", .bool($0))
-                },
-                pickItem("hdr"),
+                pickItem("stream_format"), pickItem("buffer"), pickItem("engine"), pickItem("decoder"), pickItem("deinterlace"),
+                pickItem("aspect"),
                 .toggle("freeze_frame", s.r("freeze_frame"), prefs.freezeFrame, subtitle: s.r("freeze_frame_sub")) {
                     model.setPref("freeze_frame", .bool($0))
                 },
                 .toggle("timeshift", s.r("timeshift"), prefs.timeshift, subtitle: s.r("timeshift_sub")) {
                     model.setPref("timeshift", .bool($0))
                 },
+                pickItem("reconnect_seconds"),
+                pickItem("afr", subtitle: afrHint),
+                pickItem("afr_fallback", subtitle: s.r("afr_fallback_sub")),
+                pickItem("hdr"),
                 .header("audio", s.t("Audio", "Áudio")),
+                pickItem("audio_language", subtitle: s.r("audio_language_sub")),
                 .toggle("audio_passthrough", s.t("Audio passthrough", "Passthrough de áudio"), prefs.audioPassthrough,
                         subtitle: s.t("Dolby and DTS go straight to the receiver or TV", "Dolby e DTS seguem para o recetor ou a TV")) {
                     model.setPref("audio_passthrough", .bool($0))
@@ -721,6 +726,8 @@ struct SettingsPanel: View {
                 .toggle("surround_default", s.r("surround_default"), prefs.surroundDefault, subtitle: s.r("surround_default_sub")) {
                     model.setPref("surround_default", .bool($0))
                 },
+                .header("hsubs", s.r("subtitles")),
+                pickItem("subtitle_language", subtitle: s.r("subtitle_language_sub")),
             ]
 
         case .zapping:
@@ -728,6 +735,7 @@ struct SettingsPanel: View {
                 pickItem("up_down"),
                 .toggle("reverse_zap", s.t("Reverse ↑/↓", "Inverter ↑/↓"), prefs.reverseZap,
                         subtitle: s.t("↑ goes to the next channel", "↑ passa para o canal seguinte")) { model.setPref("reverse_zap", .bool($0)) },
+                pickItem("zap_delay_ms", subtitle: s.r("zap_delay_sub")),
                 pickItem("info_seconds"),
                 pickItem("startup"),
                 pickItem("back_action"),
@@ -756,6 +764,7 @@ struct SettingsPanel: View {
             return [
                 pickItem("epg_refresh_hours"),
                 pickItem("epg_offset_min"),
+                pickItem("catchup_offset_min", subtitle: s.r("catchup_offset_sub")),
                 .toggle("epg_in_list", s.t("Current show in the list", "Programa atual na lista"), prefs.epgInList,
                         subtitle: s.t("What's on, on every channel", "O que está a dar em cada canal")) { model.setPref("epg_in_list", .bool($0)) },
             ]
@@ -964,7 +973,12 @@ struct SettingsPanel: View {
             return sp.options.indices.map { (i: Int) -> Item in
                 let option = sp.options[i]
                 return .check("o\(i)", option.label, option.value == sp.current, swatch: option.swatch) {
-                    model.setPref(key, option.value)
+                    // O AFR são duas chaves: "afr" (o ligado/desligado que as versões antigas leem) e o modo.
+                    if key == "afr" {
+                        model.setPrefs(Prefs.afrModeValues(option.value?.string ?? Prefs.AfrMode.off))
+                    } else {
+                        model.setPref(key, option.value)
+                    }
                     back()
                 }
             }
@@ -1300,10 +1314,18 @@ struct SettingsPanel: View {
         var swatch: AnyShapeStyle?
     }
 
-    private func pickItem(_ key: String) -> Item {
+    private func pickItem(_ key: String, subtitle: String? = nil) -> Item {
         let sp = spec(key)
         let label = sp.options.first { $0.value == sp.current }?.label
-        return .nav(key, sp.title, value: label, to: .pick(key))
+        return .nav(key, sp.title, value: label, subtitle: subtitle, to: .pick(key))
+    }
+
+    /// As línguas a escolher, com o nome na língua da app e por ordem alfabética dela (como no Android).
+    private func languageOptions() -> [Option] {
+        let locale = s.locale
+        return Languages.choices.map { (code: $0, name: Languages.displayName($0, locale: s.lang)) }
+            .sorted { $0.name.compare($1.name, locale: locale) == .orderedAscending }
+            .map { Option(value: .string($0.code), label: $0.name) }
     }
 
     private func spec(_ key: String) -> (title: String, options: [Option], current: JSON?) {
@@ -1410,6 +1432,29 @@ struct SettingsPanel: View {
             return (s.t("Update TV guide", "Atualizar guia"), Prefs.refreshChoices.map { o(n($0), refresh($0)) }, n(p.epgRefreshHours))
         case "playlist_refresh_hours":
             return (s.t("Update playlists", "Atualizar listas"), Prefs.refreshChoices.map { o(n($0), refresh($0)) }, n(p.playlistRefreshHours))
+        case "afr":
+            return (s.r("afr"),
+                    [o(.string(Prefs.AfrMode.off), s.r("off")), o(.string(Prefs.AfrMode.start), s.r("afr_on_start")),
+                     o(.string(Prefs.AfrMode.always), s.r("afr_always"))],
+                    .string(p.afrMode))
+        case "afr_fallback":
+            return (s.r("afr_fallback"),
+                    [o(.string(Prefs.AfrFallback.none), s.r("off")), o(.string(Prefs.AfrFallback.hz50), "50 Hz"),
+                     o(.string(Prefs.AfrFallback.hz5994), "59.94 Hz")],
+                    .string(p.afrFallback))
+        case "zap_delay_ms":
+            return (s.r("zap_delay"),
+                    [o(n(Prefs.ZapDelay.auto), s.r("auto")), o(n(Prefs.ZapDelay.off), s.r("off"))] + [1, 2].map { o(n($0 * 1_000), s.r("seconds_short", "\($0)")) },
+                    n(p.zapDelayMs))
+        case "audio_language":
+            return (s.r("audio_language"), [o(.string(""), s.r("auto"))] + languageOptions(), .string(p.audioLanguage))
+        case "subtitle_language":
+            return (s.r("subtitle_language"), [o(.string(""), s.r("subtitles_off"))] + languageOptions(), .string(p.subtitleLanguage))
+        case "catchup_offset_min":
+            let options = (-12...12).map { (h: Int) -> Option in
+                o(n(h * 60), h == 0 ? s.r("no_offset") : (h > 0 ? "+" : "−") + "\(abs(h)) h")
+            }
+            return (s.r("catchup_offset"), options, n(p.catchupOffsetMin))
         case "epg_offset_min":
             let options = stride(from: -180, through: 180, by: 30).map { (m: Int) -> Option in
                 let sign = m > 0 ? "+" : (m < 0 ? "−" : "")
