@@ -121,6 +121,36 @@ final class GoatTVUITests: XCTestCase {
         XCTAssertNil(behind(), "ainda atrás do direto depois de Voltar")
         XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "a barra ficou no ecrã no direto")
 
+        // Gravar agora (OK → Gravar): copia do anel desta ligação; o leitor e a gravação usam a mesma (o servidor conta as
+        // ligações e o workflow falha com mais de uma).
+        press(.select, wait: 2)
+        if focus("hud:record", .right) { press(.select, wait: 4) }
+        shot("rec-started")
+        XCTAssertTrue(app.staticTexts["REC"].waitForExistence(timeout: 5), "sem a cápsula REC")
+        press(.menu, wait: 10); shot("rec-watching")
+
+        // ↓ outro canal a gravar: o cartão "Estás a gravar"; Voltar fica a gravar neste canal.
+        press(.down, wait: 3); shot("rec-switch-card")
+        XCTAssertTrue(app.buttons["recording-back"].exists, "sem o cartão da gravação ao mudar de canal")
+        press(.menu, wait: 3); shot("rec-kept")
+        XCTAssertTrue(app.staticTexts["REC"].exists, "a gravação parou depois de Voltar")
+
+        // O painel das gravações (OK → Gravações) e ver a gravação, com a barra e o "GRAVADO".
+        press(.select, wait: 2)
+        if focus("hud:recordings", .right) { press(.select, wait: 3) }
+        shot("rec-panel")
+        press(.select, wait: 10); shot("rec-playback")
+        XCTAssertTrue(app.staticTexts["RECORDED"].exists, "a ver a gravação sem o \"RECORDED\"")
+        // Voltar: o direto do canal que se grava, pela mesma ligação.
+        press(.menu, wait: 10); shot("rec-back-live")
+        XCTAssertFalse(app.staticTexts["RECORDED"].exists, "ainda na gravação depois de Voltar")
+
+        // Parar a gravação (OK → Parar a gravação).
+        press(.select, wait: 2)
+        if focus("hud:record", .right) { press(.select, wait: 4) }
+        press(.menu, wait: 3); shot("rec-stopped")
+        XCTAssertFalse(app.staticTexts["REC"].exists, "a cápsula REC ficou depois de parar")
+
         // ↓ o canal HLS ao vivo: a janela do próprio leitor da Apple (sem disco).
         press(.down, wait: 25); shot("hls-live")
         XCTAssertNil(behind(), "HLS: atrás do direto sem se ter pausado")
