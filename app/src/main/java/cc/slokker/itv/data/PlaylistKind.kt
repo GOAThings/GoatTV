@@ -61,6 +61,13 @@ class PlaylistKind private constructor(
 /** A mesma lista do fornecedor que [other] (mesmo tipo e mesma origem, ver [PlaylistKind.sameSource]). */
 fun Playlist.sameSourceAs(other: Playlist): Boolean = type == other.type && type.kind.sameSource(this, other)
 
+/**
+ * As duas listas gastam as ligações da mesma conta do fornecedor: a mesma lista, ou a mesma origem num tipo que conta
+ * as ligações. Com a mesma regra de [sameSourceAs] (antes, "http://x/" e "http://x" contavam como contas diferentes).
+ */
+fun Playlist.sharesConnectionsWith(other: Playlist): Boolean =
+    id == other.id || (type.kind.knowsConnectionLimit && sameSourceAs(other))
+
 /** Um `when` exaustivo: um tipo novo não compila sem o seu [PlaylistKind]. */
 val PlaylistType.kind: PlaylistKind
     get() = when (this) {

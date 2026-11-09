@@ -39,6 +39,7 @@ import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.sameSourceAs
+import cc.slokker.itv.data.sharesConnectionsWith
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.SessionStore
@@ -805,7 +806,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _second.value?.let { sv ->
             // A lista principal passou a ser a da conta do segundo canal, e o plano só tem 1 ligação.
             val twoAllowed = !playlist.type.kind.knowsConnectionLimit || (loaded.account?.maxConnections ?: 0) >= 2
-            if (sameAccount(sv.content.playlist, playlist) && !twoAllowed) {
+            if (sv.content.playlist.sharesConnectionsWith(playlist) && !twoAllowed) {
                 _second.value = null
                 showToast(I18n.s.secondClosedSameAccount)
             }
@@ -1913,11 +1914,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Segundo canal -------------------------------------------------------------------------
 
-    /** As duas listas usam a mesma conta do fornecedor (a mesma lista, ou o mesmo servidor e utilizador). */
-    private fun sameAccount(a: Playlist, b: Playlist): Boolean =
-        a.id == b.id || (a.type == PlaylistType.XTREAM && b.type == PlaylistType.XTREAM &&
-            a.server?.trim()?.lowercase() == b.server?.trim()?.lowercase() && a.username == b.username)
-
     /**
      * Pode-se ver o segundo canal de [playlist]? Da conta da lista principal só se o plano deixar 2+ ligações
      * (nas M3U não se sabe: deixa-se tentar).
@@ -1926,7 +1922,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Um MAC é uma box: uma ligação de cada vez.
         if (playlist.type.kind.singleConnection) return false
         val main = _content.value ?: return true
-        if (!sameAccount(playlist, main.playlist)) return true
+        if (!playlist.sharesConnectionsWith(main.playlist)) return true
         if (!main.playlist.type.kind.knowsConnectionLimit) return true
         val limit = main.account?.maxConnections ?: return false
         return limit >= 2

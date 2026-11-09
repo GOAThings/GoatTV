@@ -66,6 +66,16 @@ class PlaylistKindTest {
         assertEquals("", m.get("epg_url").asString)
     }
 
+    @Test
+    fun `two playlists share connections with the same rule as same source`() {
+        // A barra no fim e os espaços no utilizador já não fazem parecer duas contas (o segundo canal abria uma 2.ª ligação).
+        assertTrue(xtream.sharesConnectionsWith(xtream.copy(id = "o", server = "http://x.example.com:8080/", username = "u ")))
+        assertFalse(xtream.sharesConnectionsWith(xtream.copy(id = "o", username = "v")))
+        // Nas M3U não se sabe: só a própria lista.
+        assertTrue(m3u.sharesConnectionsWith(m3u))
+        assertFalse(m3u.sharesConnectionsWith(m3u.copy(id = "o")))
+    }
+
     /** O relatório de erros tira estes valores do registo: um campo novo da lista sem entrar aqui vazava (30b926b). */
     @Test
     fun `every playlist field but id and name is a secret`() {
