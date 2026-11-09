@@ -1,4 +1,5 @@
 package cc.slokker.itv.ui.mobile
+
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
