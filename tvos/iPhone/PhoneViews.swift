@@ -248,6 +248,7 @@ struct PhoneMain: View {
     @State private var homePin = ""
     /// Áudio, legendas ou temporizador, cada um no seu botão (por baixo do vídeo).
     @State private var playerOption: PlayerOption?
+    @State private var showRecordings = PhoneMain.startRecordings
 
     /// Abriu-se um canal: sai do ecrã inicial.
     private func played() {
@@ -255,6 +256,14 @@ struct PhoneMain: View {
         home = false
         homeGroup = nil
         tab = .tv
+    }
+
+    private static var startRecordings: Bool {
+        #if DEBUG
+        return UserDefaults.standard.string(forKey: "PhoneTab") == "recordings"
+        #else
+        return false
+        #endif
     }
 
     private static var startTab: PhoneTab {
@@ -275,6 +284,7 @@ struct PhoneMain: View {
             if big {
                 // Ao alto, 16:9 com a largura toda; deitado, o ecrã todo.
                 VideoPane(fullscreen: landscape) { epgFor = model.current }
+                    .overlay(alignment: .topLeading) { PhoneRecBadge() }
                     .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
                     .frame(height: landscape ? nil : geo.size.width * 9 / (model.second == nil ? 16 : 8))
             }
@@ -313,7 +323,8 @@ struct PhoneMain: View {
                                 },
                                 onGroup: { homeGroup = $0 },
                                 onLockedGroup: { homePinFor = $0 },
-                                onSearch: { tab = .search }
+                                onSearch: { tab = .search },
+                                onRecordings: { showRecordings = true }
                             )
                         }
                     case .guide: ChannelsTab(epgFor: $epgFor, guide: true)
@@ -344,6 +355,25 @@ struct PhoneMain: View {
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0).environment(\.played, played) }
         .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0) }
+        .sheet(isPresented: $showRecordings) { PhoneRecordings().environment(\.played, played) }
+        // Mudar de canal com uma gravação a decorrer: o fornecedor só deixa uma ligação.
+        .alert(model.switchPrompt.map { model.strings.r("recording_switch_title", $0.title) } ?? "",
+               isPresented: Binding(get: { model.switchPrompt != nil }, set: { if !$0, model.switchPrompt != nil { model.answerSwitch(stop: false) } })) {
+            Button(model.strings.r("recording_stop_and_switch"), role: .destructive) { model.answerSwitch(stop: true) }
+            Button(model.strings.r("recording_keep"), role: .cancel) { model.answerSwitch(stop: false) }
+        } message: {
+            Text(model.strings.r("recording_switch_text"))
+        }
+        // Uma marcada noutro canal quase a começar: mudar para gravar, ou não gravar (sem resposta, muda à hora).
+        .alert(model.recordings.prompt.map { model.strings.r("recording_soon", $0.channelName) } ?? "",
+               isPresented: Binding(get: { model.recordings.prompt != nil && model.switchPrompt == nil }, set: { _ in })) {
+            if let r = model.recordings.prompt {
+                Button(model.strings.r("recording_switch_to", r.channelName)) { model.answerRecordingPrompt(r.id, switchChannel: true) }
+                Button(model.strings.r("recording_skip"), role: .cancel) { model.answerRecordingPrompt(r.id, switchChannel: false) }
+            }
+        } message: {
+            Text(model.recordings.prompt?.title ?? "")
+        }
         .environment(\.played, played)
         .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { homePinFor != nil }, set: { if !$0 { homePinFor = nil } })) {
             SecureField("PIN", text: $homePin).keyboardType(.numberPad)
@@ -1114,6 +1144,16 @@ private struct GuideSheet: View {
                             Spacer()
                             if catchup { Image(systemName: "gobackward") }
                             if future, model.hasReminder(channel, e) { Image(systemName: "bell.fill").foregroundStyle(Theme.sky) }
+                            // Gravar → gravar a série → desmarcar (como o botão do Android).
+                            if e.endMs > now {
+                                let mark = model.recordMark(channel, e)
+                                Button { model.cycleRecording(channel, e) } label: {
+                                    Image(systemName: mark == .series ? "record.circle.fill" : "record.circle")
+                                        .foregroundStyle(mark == .unmarked ? Theme.textFaint : Color.red)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(model.strings.r("record"))
+                            }
                         }
                     }
                 }
@@ -1588,6 +1628,10 @@ private struct MenuTab: View {
                     editingAgent = true
                 }
             }
+            section(s.r("recordings")) {
+                pick(s.r("recording_padding_before"), "record_padding_before_min", .number(Double(p.recordPaddingBeforeMin)), paddingOptions)
+                pick(s.r("recording_padding_after"), "record_padding_after_min", .number(Double(p.recordPaddingAfterMin)), paddingOptions)
+            }
         case .channels:
             section(nil) {
                 pick(s.r("on_startup"), "phone_startup", p.phoneStartup, startupOptions)
@@ -1633,6 +1677,12 @@ private struct MenuTab: View {
                 }
             }
         }
+    }
+
+    /// As margens das gravações: desligada ou 1, 2, 5, 10 min (como no Android).
+    private var paddingOptions: [(JSON?, String)] {
+        let s = model.strings
+        return Prefs.paddingOptions.map { m -> (JSON?, String) in (.number(Double(m)), m == 0 ? s.r("off") : s.r("minutes", "\(m)")) }
     }
 
     /// O atraso ao mudar de canal: automático, desligado, 1 ou 2 s (como no Android).

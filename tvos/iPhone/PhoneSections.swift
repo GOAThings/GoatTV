@@ -49,7 +49,8 @@ struct NowStrip: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Circle().fill(live ? Color.red : Color.white.opacity(0.6)).frame(width: 8, height: 8)
-                                Text(live ? s.r("player_live") : s.r("player_go_live")).font(.footnote.weight(.semibold))
+                                Text(live ? s.r("player_live") : (model.catchup?.recording != nil ? s.r("recordings_recorded") : s.r("player_go_live")))
+                                    .font(.footnote.weight(.semibold))
                                 if !live, model.catchup == nil {
                                     Text(behindLabel(ts.behindMs)).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Theme.textDim)
                                 }
@@ -61,6 +62,14 @@ struct NowStrip: View {
                         .disabled(live)
                         pill("calendar", s.r("tab_guide"), action: onGuide)
                         pill(favorite ? "star.fill" : "star", s.r("favorite"), tint: favorite ? Theme.hex(0xF5C04A) : Theme.text) { model.toggleFavorite(channel) }
+                        // Gravar o programa a dar (do anel da pausa do direto), ou parar a gravação deste canal.
+                        if model.catchup == nil {
+                            if model.recordingOf(channel) != nil {
+                                pill("stop.circle.fill", s.r("stop_recording"), tint: .red) { model.stopRecording(channel) }
+                            } else {
+                                pill("record.circle", s.r("record")) { model.recordNow(channel) }
+                            }
+                        }
                         ForEach(PlayerOption.allCases) { option in
                             // Com o temporizador ligado, o botão diz quanto falta.
                             let sleeping = option == .sleep ? model.sleepAt : nil

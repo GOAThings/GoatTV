@@ -21,6 +21,8 @@ struct PhoneHome: View {
     let onGroup: (String) -> Void
     let onLockedGroup: (ChannelGroup) -> Void
     let onSearch: () -> Void
+    /// As gravações (com um ponto vermelho enquanto grava).
+    let onRecordings: () -> Void
     @State private var page: Int? = 0
 
     var body: some View {
@@ -35,6 +37,15 @@ struct PhoneHome: View {
                         Text(model.content?.playlist.name ?? "").font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
                     }
                     Spacer()
+                    Button(action: onRecordings) {
+                        Image(systemName: "record.circle").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
+                            .frame(width: 38, height: 38).background(tileFill, in: Circle())
+                            .overlay(alignment: .topTrailing) {
+                                if !model.recordings.active.isEmpty { Circle().fill(Color.red).frame(width: 10, height: 10) }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(s.r("recordings"))
                     Button(action: onSearch) {
                         Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
                             .frame(width: 38, height: 38).background(tileFill, in: Circle())
