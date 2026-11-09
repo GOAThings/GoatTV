@@ -12,7 +12,10 @@ class PlaylistKind private constructor(
     val label: String,
     /** Pode ficar na conta GOAT (o site não guarda portais Stalker: expõe-nos como M3U). */
     val supportsAccount: Boolean,
-    /** O servidor guarda os programas para ver depois (Xtream com `tv_archive`). */
+    /**
+     * O servidor pode guardar os programas para ver depois: o Xtream (`tv_archive`) e o M3U (`catchup`…, ver
+     * M3uCatchup). Quais canais e quantos dias diz o [Channel.archiveDays].
+     */
     val supportsCatchup: Boolean,
     /** Há EPG curto pedido canal a canal (para os canais sem guia XMLTV). */
     val shortEpg: Boolean,
@@ -41,7 +44,7 @@ class PlaylistKind private constructor(
 
         val M3U = PlaylistKind(
             PlaylistType.M3U, "m3u", "M3U",
-            supportsAccount = true, supportsCatchup = false, shortEpg = false, linkAtPlayTime = false,
+            supportsAccount = true, supportsCatchup = true, shortEpg = false, linkAtPlayTime = false,
             singleConnection = false, knowsConnectionLimit = false, remembersFormat = false,
         ) { a, b -> a.url?.trim() == b.url?.trim() }
 

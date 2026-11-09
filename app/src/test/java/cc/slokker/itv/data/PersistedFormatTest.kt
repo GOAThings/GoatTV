@@ -141,6 +141,22 @@ class PersistedFormatTest {
         assertJsonEquals(fixture, readGz("playlist_p1.json.gz"))
     }
 
+    /** Os campos do catch-up das listas M3U (fase 6) são novos e opcionais: a lista de antes lê-se igual (acima). */
+    @Test
+    fun `cached m3u playlist keeps the catch-up fields`() = runBlocking {
+        val fixture = fixture("playlist_m3u.json")
+        writeGz("playlist_m1.json.gz", fixture)
+        val cache = CacheStore(context, gson)
+        val playlist = Playlist("m-1", PlaylistType.M3U, "Lista", url = "http://m3u.example.com/list.m3u")
+        val content = cache.loadPlaylist(playlist)!!
+        assertEquals(listOf(null, "default", "xc"), content.channels.map { it.catchupType })
+        assertEquals(listOf(0, 7, 3), content.channels.map { it.archiveDays })
+        assertEquals("http://archive.example.com/sic.ts?utc={utc}&lutc={lutc}", content.channels[1].catchupSource)
+        assertNull(content.channels[2].catchupSource)
+        cache.savePlaylist(content)
+        assertJsonEquals(fixture, readGz("playlist_m1.json.gz"))
+    }
+
     @Test
     fun `cached playlist from before fetchedAt counts as old`() = runBlocking {
         val old = JsonParser.parseString(fixture("playlist.json")).asJsonObject.apply { remove("fetchedAt") }

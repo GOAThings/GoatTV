@@ -1,5 +1,6 @@
 package cc.slokker.itv.data
 
+import cc.slokker.itv.data.m3u.M3uCatchup
 import cc.slokker.itv.data.xtream.XtreamSource
 
 /** Uma forma de abrir um canal. O player tenta-as por ordem (fallback ts ⇄ m3u8). */
@@ -54,17 +55,37 @@ private fun swapExtension(url: String, path: String, from: String, to: String): 
     path.dropLast(from.length) + to + url.substring(path.length)
 
 /**
- * Tentativas para ver [catchup] (só Xtream). O servidor trabalha ao minuto: pede-se a partir do minuto
- * da posição e devolve-se esse início em [CatchupStart.startMs], para o player saber onde está.
+ * Tentativas para ver [catchup] (Xtream e M3U; o Stalker pede o link ao portal, ver StalkerSource.archive). O Xtream
+ * trabalha ao minuto (e o M3U conforme o tipo, ver [M3uCatchup.precisionMs]): pede-se a partir do minuto (ou do
+ * segundo) da posição e devolve-se esse início em [CatchupStart.startMs], para o player saber onde está.
+ * [correctionMin] (Definições → Guia) soma-se só à hora pedida ao servidor: o vídeo que vem é o do programa.
  */
-fun catchupCandidates(playlist: Playlist, catchup: Catchup, timezone: String?): CatchupStart? {
-    val id = catchup.channel.streamId ?: return null
+fun catchupCandidates(
+    playlist: Playlist,
+    catchup: Catchup,
+    timezone: String?,
+    correctionMin: Int = 0,
+    nowMs: Long = System.currentTimeMillis(),
+): CatchupStart? {
     if (!playlist.type.kind.supportsCatchup) return null
     val wanted = catchup.startMs + catchup.positionMs
-    val start = wanted - Math.floorMod(wanted, 60_000L)
-    val minutes = ((catchup.endMs - start + 59_999) / 60_000).toInt().coerceAtLeast(1)
-    val urls = XtreamSource.catchupUrls(playlist, id, start, minutes, timezone)
-    return CatchupStart(start, urls.map { StreamCandidate(it, StreamFormat.TS) })
+    val shift = correctionMin * 60_000L
+    return when (playlist.type) {
+        PlaylistType.XTREAM -> {
+            val id = catchup.channel.streamId ?: return null
+            val start = wanted - Math.floorMod(wanted, 60_000L)
+            val minutes = ((catchup.endMs - start + 59_999) / 60_000).toInt().coerceAtLeast(1)
+            val urls = XtreamSource.catchupUrls(playlist, id, start + shift, minutes, timezone)
+            CatchupStart(start, urls.map { StreamCandidate(it, StreamFormat.TS) })
+        }
+        PlaylistType.M3U -> {
+            if (catchup.channel.catchupType == null) return null
+            val start = wanted - Math.floorMod(wanted, M3uCatchup.precisionMs(catchup.channel))
+            val candidates = M3uCatchup.candidates(catchup.channel, (start + shift) / 1000, (catchup.endMs + shift) / 1000, nowMs / 1000)
+            CatchupStart(start, candidates).takeIf { candidates.isNotEmpty() }
+        }
+        PlaylistType.STALKER -> null
+    }
 }
 
 class CatchupStart(val startMs: Long, val candidates: List<StreamCandidate>)

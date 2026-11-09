@@ -143,6 +143,13 @@ data class Channel(
     val epgId: String? = null,
     /** Dias de catch-up que o servidor guarda deste canal (0 = sem catch-up). */
     val archiveDays: Int = 0,
+    /**
+     * M3U: como se pede o catch-up (ver M3uCatchup: default, append, shift, flussonic, flussonic-ts, xc); null nos
+     * outros tipos, que têm a sua forma. Fica null nas listas guardadas antes desta versão (até se atualizarem).
+     */
+    val catchupType: String? = null,
+    /** M3U: o modelo do URL do catch-up (`catchup-source`, do canal ou do `#EXTM3U`), nos tipos default e append. */
+    val catchupSource: String? = null,
 )
 
 data class XtreamAccount(

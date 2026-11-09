@@ -21,6 +21,8 @@ object M3uParser {
         val groups = LinkedHashSet<String>()
         val usedKeys = HashSet<String>()
         var epgUrl: String? = null
+        // O `#EXTM3U` também pode dizer o catch-up de todos os canais (catchup, catchup-days, catchup-source…).
+        var header: Map<String, String> = emptyMap()
 
         var pending: Extinf? = null
         var group: String? = null
@@ -33,6 +35,7 @@ object M3uParser {
                 line.isEmpty() -> Unit
                 line.startsWith("#EXTM3U") -> {
                     val attrs = attributes(line)
+                    header = attrs
                     epgUrl = (attrs["x-tvg-url"] ?: attrs["url-tvg"])
                         ?.split(',')?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
                 }
@@ -68,6 +71,7 @@ object M3uParser {
                     usedKeys += key
 
                     val index = channels.size
+                    val catchup = M3uCatchup.spec(info.attrs, header, line)
                     channels += Channel(
                         uid = index,
                         key = key,
@@ -79,6 +83,9 @@ object M3uParser {
                         userAgent = userAgent,
                         referrer = referrer,
                         epgId = tvgId.ifEmpty { null },
+                        archiveDays = catchup?.days ?: 0,
+                        catchupType = catchup?.type,
+                        catchupSource = catchup?.source,
                     )
                 }
             }

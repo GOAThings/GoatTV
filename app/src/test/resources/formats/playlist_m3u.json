@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "playlist": {"id": "m-1", "type": "M3U", "name": "Lista", "url": "http://m3u.example.com/list.m3u"},
+  "categories": [{"id": "Notícias", "name": "Notícias"}],
+  "channels": [
+    {"uid": 0, "key": "rtp1.pt", "num": 1, "name": "RTP 1", "categoryId": "Notícias", "url": "http://live.example.com/rtp1.m3u8", "epgId": "rtp1.pt", "archiveDays": 0},
+    {"uid": 1, "key": "u0a1b2c3d4e5f", "num": 2, "name": "SIC", "categoryId": "Notícias", "url": "http://live.example.com/sic.ts", "archiveDays": 7, "catchupType": "default", "catchupSource": "http://archive.example.com/sic.ts?utc={utc}&lutc={lutc}"},
+    {"uid": 2, "key": "tvi.pt", "num": 3, "name": "TVI", "categoryId": "Notícias", "url": "http://panel.example.com/live/u/p/12.ts", "userAgent": "VLC/3.0", "epgId": "tvi.pt", "archiveDays": 3, "catchupType": "xc"}
+  ],
+  "guideUrl": "http://epg.example.com/guide.xml",
+  "fetchedAt": 1761300000000
+}
