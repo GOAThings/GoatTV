@@ -60,6 +60,8 @@ data class Prefs(
     // Mudança de canal
     val upDown: String = UpDown.ZAP,
     val reverseZap: Boolean = false,
+    /** O atraso ao mudar de canal, em ms ([ZapDelay]: automático, desligado ou um tempo fixo). */
+    val zapDelayMs: Int = ZapDelay.AUTO,
     val infoSeconds: Int = 4,
     val startup: String = Startup.LAST,
     /** Telemóvel: ao abrir, o ecrã inicial (recentes e grupos) ou já o último canal a dar. */
@@ -146,6 +148,7 @@ data class Prefs(
         const val CHANNEL_ORDER = "channel_order"
         const val UP_DOWN = "up_down"
         const val REVERSE_ZAP = "reverse_zap"
+        const val ZAP_DELAY = "zap_delay_ms"
         const val INFO_SECONDS = "info_seconds"
         const val STARTUP = "startup"
         const val PHONE_STARTUP = "phone_startup"
@@ -211,6 +214,12 @@ data class Prefs(
         const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill"
         val ALL = setOf(FIT, ZOOM, FILL)
     }
+    /** O atraso ao mudar de canal (ver ZapPacer): automático, desligado, ou sempre 1 ou 2 s (em ms). */
+    object ZapDelay {
+        const val AUTO = -1; const val OFF = 0
+        val ALL = setOf(AUTO, OFF, 1_000, 2_000)
+    }
+
     object UpDown {
         const val ZAP = "zap"; const val LIST = "list"
         val ALL = setOf(ZAP, LIST)
@@ -281,6 +290,7 @@ data class Prefs(
                 channelOrder = stringListMap(s, Key.CHANNEL_ORDER),
                 upDown = str(Key.UP_DOWN, d.upDown, UpDown.ALL),
                 reverseZap = bool(Key.REVERSE_ZAP, d.reverseZap),
+                zapDelayMs = int(Key.ZAP_DELAY, d.zapDelayMs).takeIf { it in ZapDelay.ALL } ?: d.zapDelayMs,
                 infoSeconds = int(Key.INFO_SECONDS, d.infoSeconds).coerceIn(0, 30),
                 startup = str(Key.STARTUP, d.startup, Startup.ALL),
                 phoneStartup = str(Key.PHONE_STARTUP, d.phoneStartup, PhoneStartup.ALL),

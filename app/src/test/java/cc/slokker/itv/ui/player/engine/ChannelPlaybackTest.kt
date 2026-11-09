@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.junit.After
@@ -414,7 +415,47 @@ class ChannelPlaybackTest {
         assertEquals(true, engine.lastOptions?.nearLive)
     }
 
-    // ---- Recusas "ocupado" ----
+    // ---- Atraso ao mudar de canal e recusas "ocupado" ----
+
+    private fun request(key: String) = PlaybackRequest(channel.copy(key = key, name = key), null, 0L, listOf(StreamCandidate("http://x/$key.ts", StreamFormat.TS)))
+
+    @Test
+    fun umaTeclaAbreJaAPassarCanaisSoAbreOndeSePara() {
+        val p = playback()
+        p.tuneNow(request("a"))
+        time.advance(5_000)
+        // Uma tecla: abre logo.
+        p.tuneNow(request("b"))
+        assertEquals("open http://x/b.ts", engine.log.last())
+        // Mais teclas seguidas (cada uma cancela a espera da anterior, como o LaunchedEffect): só abre a última.
+        time.advance(200)
+        val c = scope.launch { p.tune(request("c")) }
+        time.advance(200)
+        c.cancel()
+        scope.launch { p.tune(request("d")) }
+        time.advance(ZapPacer.SETTLE_MS - 1)
+        assertEquals("open http://x/b.ts", engine.log.last())
+        time.advance(1)
+        assertEquals(listOf("open http://x/a.ts", "open http://x/b.ts", "open http://x/d.ts"), engine.log)
+    }
+
+    @Test
+    fun oMesmoCanalOuOCatchUpNaoEsperam() {
+        host.prefs = Prefs(zapDelayMs = 2_000)
+        val p = playback()
+        p.tuneNow(request("a"))
+        // Outro player ou o mesmo canal outra vez (definições): abre logo.
+        p.tuneNow(request("a"))
+        assertEquals(2, engine.log.size)
+    }
+
+    @Test
+    fun atrasoDesligado() {
+        host.prefs = Prefs(zapDelayMs = Prefs.ZapDelay.OFF)
+        val p = playback()
+        listOf("a", "b", "c").forEach { p.tuneNow(request(it)) }
+        assertEquals(3, engine.log.size)
+    }
 
     @Test
     fun ocupadoNaoPassaAoOutroFormato() {

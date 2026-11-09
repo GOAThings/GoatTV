@@ -343,6 +343,9 @@
     <string name="info_on_zap">Информация при переключении</string>
     <string name="dont_show">Не показывать</string>
     <string name="seconds">%1$s с</string>
+    <string name="zap_delay">Задержка переключения</string>
+    <string name="zap_delay_sub">Авто: одно нажатие переключает сразу; при быстром листании канал откроется там, где вы остановитесь</string>
+    <string name="seconds_short">%1$s с</string>
     <string name="on_startup">При открытии приложения</string>
     <string name="startup_last">Последний канал</string>
     <string name="startup_list">Последний канал с открытым списком</string>

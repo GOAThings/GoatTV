@@ -343,6 +343,9 @@
     <string name="info_on_zap">Info saat ganti saluran</string>
     <string name="dont_show">Jangan tampilkan</string>
     <string name="seconds">%1$s detik</string>
+    <string name="zap_delay">Jeda ganti saluran</string>
+    <string name="zap_delay_sub">Otomatis: satu tekan langsung ganti; saat ganti cepat, saluran dibuka di tempat Anda berhenti</string>
+    <string name="seconds_short">%1$s dtk</string>
     <string name="on_startup">Saat aplikasi dibuka</string>
     <string name="startup_last">Saluran terakhir</string>
     <string name="startup_list">Saluran terakhir dengan daftar terbuka</string>

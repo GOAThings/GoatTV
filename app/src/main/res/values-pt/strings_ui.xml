@@ -343,6 +343,9 @@
     <string name="info_on_zap">Informação ao mudar de canal</string>
     <string name="dont_show">Não mostrar</string>
     <string name="seconds">%1$s segundos</string>
+    <string name="zap_delay">Atraso ao mudar de canal</string>
+    <string name="zap_delay_sub">Auto: uma tecla muda logo; a passar canais depressa, abre o canal onde parar</string>
+    <string name="seconds_short">%1$s s</string>
     <string name="on_startup">Ao abrir a app</string>
     <string name="startup_last">Último canal</string>
     <string name="startup_list">Último canal com a lista aberta</string>

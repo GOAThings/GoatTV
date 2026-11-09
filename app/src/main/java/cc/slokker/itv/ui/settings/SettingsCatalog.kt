@@ -151,6 +151,15 @@ object SettingsCatalog {
         read = { it.reverseZap },
         tv = Place(TvPage.ZAPPING, 20),
     )
+    /** Automático: uma tecla muda já; a passar canais depressa, abre o canal onde se parou (ver ZapPacer). */
+    val ZAP_DELAY = Setting.Choice(
+        Prefs.Key.ZAP_DELAY, { it.zapDelay },
+        options = { s -> listOf(Prefs.ZapDelay.AUTO to s.auto, Prefs.ZapDelay.OFF to s.off) + listOf(1, 2).map { it * 1_000 to s.secondsShort(it) } },
+        read = { it.prefs.zapDelayMs },
+        subtitle = { it.zapDelaySub },
+        tv = Place(TvPage.ZAPPING, 25),
+        phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.CONNECTION),
+    )
     val INFO_SECONDS = Setting.Choice(
         Prefs.Key.INFO_SECONDS, { it.infoOnZap },
         options = { s -> listOf(0 to s.dontShow) + listOf(3, 4, 6, 10).map { it to s.seconds(it) } },
@@ -297,7 +306,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, HDR, PASSTHROUGH, SURROUND,
-        AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, EPG_IN_LIST,
     )

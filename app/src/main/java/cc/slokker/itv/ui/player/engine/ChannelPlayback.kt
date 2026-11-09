@@ -98,6 +98,7 @@ internal class ChannelPlayback(
 
     private var retries = 0
     private var linkFresh = false
+    private val pacer = ZapPacer()
     private var retryJob: Job? = null
     private var linkJob: Job? = null
     private var tickJob: Job? = null
@@ -176,8 +177,19 @@ internal class ChannelPlayback(
     /**
      * Novo canal (ou outro ponto do catch-up, ou um player novo): guarda a última imagem e recomeça pelas
      * tentativas na ordem do formato preferido. Num efeito: espera pela imagem antes de abrir.
+     *
+     * Outro canal em direto passa pelo atraso ao mudar de canal ([ZapPacer]): a passar canais depressa, espera aqui
+     * (o canal anterior continua a dar) e uma mudança nova pelo meio cancela o efeito, e com ele esta espera.
      */
     suspend fun tune(request: PlaybackRequest) {
+        val previous = this.request
+        if (request.live && previous != null && previous.channel.key != request.channel.key) {
+            val pause = pacer.delayFor(now(), host.prefs.zapDelayMs)
+            if (pause > 0) {
+                ZapTrace.mark("W", "${pause}ms")
+                wait(pause)
+            }
+        }
         ZapTrace.tune(request.channel.name)
         if (ready) freezeCapture?.invoke()?.let { freeze = it }
         ZapTrace.mark("F")

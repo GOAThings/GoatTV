@@ -343,6 +343,9 @@
     <string name="info_on_zap">Info al cambio canale</string>
     <string name="dont_show">Non mostrare</string>
     <string name="seconds">%1$s secondi</string>
+    <string name="zap_delay">Ritardo cambio canale</string>
+    <string name="zap_delay_sub">Auto: una pressione cambia subito; scorrendo i canali velocemente, si apre il canale su cui ti fermi</string>
+    <string name="seconds_short">%1$s s</string>
     <string name="on_startup">All\'apertura dell\'app</string>
     <string name="startup_last">Ultimo canale</string>
     <string name="startup_list">Ultimo canale con l\'elenco aperto</string>

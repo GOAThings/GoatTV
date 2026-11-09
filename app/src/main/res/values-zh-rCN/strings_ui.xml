@@ -343,6 +343,9 @@
     <string name="info_on_zap">切换时显示信息</string>
     <string name="dont_show">不显示</string>
     <string name="seconds">%1$s 秒</string>
+    <string name="zap_delay">换台延迟</string>
+    <string name="zap_delay_sub">自动：按一次立即切换；快速换台时，在停下的频道打开</string>
+    <string name="seconds_short">%1$s 秒</string>
     <string name="on_startup">应用打开时</string>
     <string name="startup_last">上次的频道</string>
     <string name="startup_list">上次的频道并打开列表</string>

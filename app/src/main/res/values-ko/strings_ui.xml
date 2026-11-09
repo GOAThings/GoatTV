@@ -343,6 +343,9 @@
     <string name="info_on_zap">전환할 때 정보 표시</string>
     <string name="dont_show">표시 안 함</string>
     <string name="seconds">%1$s초</string>
+    <string name="zap_delay">채널 전환 지연</string>
+    <string name="zap_delay_sub">자동: 한 번 누르면 바로 바뀌고, 빠르게 넘기면 멈춘 채널이 열려요</string>
+    <string name="seconds_short">%1$s초</string>
     <string name="on_startup">앱을 열 때</string>
     <string name="startup_last">마지막 채널</string>
     <string name="startup_list">목록이 열린 마지막 채널</string>

@@ -343,6 +343,9 @@
     <string name="info_on_zap">المعلومات عند التبديل</string>
     <string name="dont_show">عدم العرض</string>
     <string name="seconds">%1$s ثوانٍ</string>
+    <string name="zap_delay">تأخير تبديل القناة</string>
+    <string name="zap_delay_sub">تلقائي: ضغطة واحدة تبدّل فورًا؛ عند التنقل السريع تُفتح القناة التي تتوقف عندها</string>
+    <string name="seconds_short">%1$s ث</string>
     <string name="on_startup">عند فتح التطبيق</string>
     <string name="startup_last">آخر قناة</string>
     <string name="startup_list">آخر قناة مع فتح القائمة</string>

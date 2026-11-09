@@ -61,7 +61,7 @@ class SettingsCatalogTest {
             tv(TvPage.PLAYBACK),
         )
         assertEquals(listOf(TvSection.MAIN to listOf(k.AUTO_START, k.EXIT_CONFIRM, k.USER_AGENT)), tv(TvPage.GENERAL))
-        assertEquals(listOf(TvSection.MAIN to listOf(k.UP_DOWN, k.REVERSE_ZAP, k.INFO_SECONDS, k.STARTUP, k.BACK_ACTION)), tv(TvPage.ZAPPING))
+        assertEquals(listOf(TvSection.MAIN to listOf(k.UP_DOWN, k.REVERSE_ZAP, k.ZAP_DELAY, k.INFO_SECONDS, k.STARTUP, k.BACK_ACTION)), tv(TvPage.ZAPPING))
         assertEquals(
             listOf(
                 TvSection.LANGUAGE_TEXT to listOf(k.LANGUAGE, k.UI_SCALE, k.TEXT_SIZE),
@@ -79,7 +79,7 @@ class SettingsCatalogTest {
         assertEquals(
             listOf(
                 PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED),
-                PhoneSection.CONNECTION to listOf(k.BUFFER, k.RECONNECT_SECONDS, k.TIMESHIFT),
+                PhoneSection.CONNECTION to listOf(k.BUFFER, k.RECONNECT_SECONDS, k.TIMESHIFT, k.ZAP_DELAY),
                 PhoneSection.ADVANCED to listOf("format", k.ENGINE, k.DECODER, k.AUDIO_DECODER, k.USER_AGENT),
             ),
             phone(PhonePage.PLAYBACK),
@@ -97,6 +97,8 @@ class SettingsCatalogTest {
         val tvOnly = SettingsCatalog.ALL.filter { it.phone == null }.map { it.key }.toSet()
         val phoneOnly = SettingsCatalog.ALL.filter { it.tv == null }.map { it.key }.toSet()
         assertTrue(Prefs.Key.AFR in tvOnly && Prefs.Key.HDR in tvOnly && Prefs.Key.UI_SCALE in tvOnly)
+        // O atraso ao mudar de canal vale nos dois (o telemóvel também muda de canal a deslizar).
+        assertTrue(SettingsCatalog.ZAP_DELAY.tv != null && SettingsCatalog.ZAP_DELAY.phone != null)
         assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)
     }
 

@@ -220,6 +220,7 @@ class PersistedFormatTest {
         "channelOrder" to (Prefs.Key.CHANNEL_ORDER to mapOf("p1:1" to listOf("102", "101"))),
         "upDown" to (Prefs.Key.UP_DOWN to Prefs.UpDown.LIST),
         "reverseZap" to (Prefs.Key.REVERSE_ZAP to true),
+        "zapDelayMs" to (Prefs.Key.ZAP_DELAY to 1_000),
         "infoSeconds" to (Prefs.Key.INFO_SECONDS to 8),
         "startup" to (Prefs.Key.STARTUP to Prefs.Startup.LIST),
         "phoneStartup" to (Prefs.Key.PHONE_STARTUP to Prefs.PhoneStartup.LAST),

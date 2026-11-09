@@ -343,6 +343,9 @@
     <string name="info_on_zap">Infos beim Umschalten</string>
     <string name="dont_show">Nicht anzeigen</string>
     <string name="seconds">%1$s Sekunden</string>
+    <string name="zap_delay">Verzögerung beim Umschalten</string>
+    <string name="zap_delay_sub">Auto: Ein Tastendruck schaltet sofort um; beim schnellen Durchschalten öffnet sich der Sender, bei dem du stoppst</string>
+    <string name="seconds_short">%1$s s</string>
     <string name="on_startup">Beim Öffnen der App</string>
     <string name="startup_last">Letzter Sender</string>
     <string name="startup_list">Letzter Sender mit geöffneter Liste</string>

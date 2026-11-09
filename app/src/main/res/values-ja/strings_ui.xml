@@ -343,6 +343,9 @@
     <string name="info_on_zap">切り替え時の情報表示</string>
     <string name="dont_show">表示しない</string>
     <string name="seconds">%1$s 秒</string>
+    <string name="zap_delay">チャンネル切り替えの遅延</string>
+    <string name="zap_delay_sub">自動：1回押すとすぐに切り替え、素早く送ると止めたチャンネルで開きます</string>
+    <string name="seconds_short">%1$s 秒</string>
     <string name="on_startup">アプリを開いたとき</string>
     <string name="startup_last">最後のチャンネル</string>
     <string name="startup_list">最後のチャンネルを一覧付きで</string>

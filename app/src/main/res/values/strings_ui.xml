@@ -344,6 +344,9 @@
     <string name="info_on_zap">Info when switching</string>
     <string name="dont_show">Don\'t show</string>
     <string name="seconds">%1$s seconds</string>
+    <string name="zap_delay">Channel switch delay</string>
+    <string name="zap_delay_sub">Auto: one press switches at once; when flipping fast, the channel opens where you stop</string>
+    <string name="seconds_short">%1$s s</string>
     <string name="on_startup">When the app opens</string>
     <string name="startup_last">Last channel</string>
     <string name="startup_list">Last channel with the list open</string>

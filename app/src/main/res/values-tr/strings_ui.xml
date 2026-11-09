@@ -343,6 +343,9 @@
     <string name="info_on_zap">Kanal değiştirirken bilgi</string>
     <string name="dont_show">Gösterme</string>
     <string name="seconds">%1$s saniye</string>
+    <string name="zap_delay">Kanal değiştirme gecikmesi</string>
+    <string name="zap_delay_sub">Otomatik: tek basış hemen değiştirir; hızlı geçerken durduğunuz kanal açılır</string>
+    <string name="seconds_short">%1$s sn</string>
     <string name="on_startup">Uygulama açıldığında</string>
     <string name="startup_last">Son kanal</string>
     <string name="startup_list">Liste açık şekilde son kanal</string>

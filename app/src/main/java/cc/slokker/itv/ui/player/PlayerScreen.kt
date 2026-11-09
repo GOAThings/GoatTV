@@ -289,11 +289,12 @@ fun PlayerScreen(vm: AppViewModel) {
     // Novo canal: congela a última imagem e recomeça pelas tentativas na ordem do formato preferido.
     // Chaves estáveis: a lista atualizada por trás (mesmo servidor e canal) não reinicia o stream.
     // Em catch-up o mesmo: cada recuo/avanço é um pedido novo ao servidor a partir dessa posição.
+    // A informação do canal aparece antes de o abrir: a passar canais depressa (atraso ao mudar de canal) acompanha
+    // cada tecla, e o canal só abre quando se pára.
     LaunchedEffect(current.key, data.playlist, player, catchup) {
         val cu = catchup
         catchupPosition = cu?.positionMs ?: 0L
         seek.reset()
-        playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
         when {
             cu != null -> {
                 infoVisible = false
@@ -302,6 +303,7 @@ fun PlayerScreen(vm: AppViewModel) {
             prefs.infoSeconds > 0 -> showInfo()
             else -> infoVisible = false
         }
+        playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
     }
 
     // Posição no catch-up (para a barra).

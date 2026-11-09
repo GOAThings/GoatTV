@@ -343,6 +343,9 @@
     <string name="info_on_zap">Infos au changement de chaîne</string>
     <string name="dont_show">Ne pas afficher</string>
     <string name="seconds">%1$s secondes</string>
+    <string name="zap_delay">Délai de changement de chaîne</string>
+    <string name="zap_delay_sub">Auto : un appui change tout de suite ; en zappant vite, la chaîne s\'ouvre là où vous vous arrêtez</string>
+    <string name="seconds_short">%1$s s</string>
     <string name="on_startup">À l\'ouverture de l\'app</string>
     <string name="startup_last">Dernière chaîne</string>
     <string name="startup_list">Dernière chaîne avec la liste ouverte</string>

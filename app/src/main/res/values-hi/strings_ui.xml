@@ -343,6 +343,9 @@
     <string name="info_on_zap">चैनल बदलने पर जानकारी</string>
     <string name="dont_show">न दिखाएँ</string>
     <string name="seconds">%1$s सेकंड</string>
+    <string name="zap_delay">चैनल बदलने में देरी</string>
+    <string name="zap_delay_sub">ऑटो: एक बार दबाने पर तुरंत बदलता है; तेज़ी से बदलते समय, जहाँ रुकें वही चैनल खुलता है</string>
+    <string name="seconds_short">%1$s सेकंड</string>
     <string name="on_startup">ऐप खुलने पर</string>
     <string name="startup_last">आखिरी चैनल</string>
     <string name="startup_list">सूची खुली रखकर आखिरी चैनल</string>
