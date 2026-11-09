@@ -32,6 +32,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cc.slokker.itv.ItvApp
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.ChannelCatalog
+import cc.slokker.itv.data.GroupNames
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
@@ -1137,55 +1139,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Canais e grupos ---------------------------------------------------------------------------
 
-    fun channelsOf(categoryId: String): List<Channel> {
-        val content = _content.value ?: return emptyList()
-        val list = when (categoryId) {
-            // Os canais de grupos bloqueados não aparecem em "Todos" nem nos favoritos; os escondidos em lado nenhum.
-            SpecialCategory.ALL -> content.channels.filter(::isVisible)
-            SpecialCategory.FAVORITES -> _favorites.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
-            // Pela ordem em que foram vistos (não se ordenam).
-            SpecialCategory.RECENT -> return _recents.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
-            // Um grupo com ordem escolhida fica por essa ordem (mesmo com "Ordenar por nome").
-            else -> {
-                val ordered = orderedChannels(categoryId, includeHidden = false)
-                if (hasChannelOrder(categoryId)) return ordered
-                ordered
-            }
-        }
-        return if (_prefs.value.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
-    }
+    /** O que se vê da lista aberta neste momento (ver ChannelCatalog). */
+    private fun catalog() = ChannelCatalog(_content.value, _prefs.value, _favorites.value, _recents.value, _unlocked.value)
 
-    /**
-     * O canal da lista aberta pode aparecer e abrir-se aqui: nem o grupo bloqueado (e por desbloquear nesta sessão),
-     * nem o grupo ou o canal escondidos. A mesma regra em "Todos", favoritos, recentes, pesquisa e números.
-     */
-    private fun isVisible(channel: Channel): Boolean =
-        !isGroupLocked(channel.categoryId) && !isGroupHidden(channel.categoryId) && !isChannelHidden(channel)
+    private fun groupNames() = I18n.s.let { GroupNames(it.favoritesStar, it.recents, it.all, it.others) }
+
+    fun channelsOf(categoryId: String): List<Channel> = catalog().channelsOf(categoryId)
+
+    private fun isVisible(channel: Channel): Boolean = catalog().isVisible(channel)
 
     // ---- Canais: esconder e reordenar (por grupo) --------------------------------------------
 
-    fun isChannelHidden(channel: Channel): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        return _prefs.value.isChannelHidden(playlistId, channel.key)
-    }
+    fun isChannelHidden(channel: Channel): Boolean = catalog().isChannelHidden(channel)
 
-    private fun channelOrderKey(groupId: String): String? = _content.value?.playlist?.id?.let { "$it:$groupId" }
+    private fun channelOrderKey(groupId: String): String? = catalog().channelOrderKey(groupId)
 
-    fun hasChannelOrder(groupId: String): Boolean = channelOrderKey(groupId)?.let { it in _prefs.value.channelOrder } == true
+    fun hasChannelOrder(groupId: String): Boolean = catalog().hasChannelOrder(groupId)
 
-    /** Canais do grupo pela ordem escolhida (os novos ficam no fim, pela ordem da lista). */
-    fun orderedChannels(groupId: String, includeHidden: Boolean): List<Channel> {
-        val content = _content.value ?: return emptyList()
-        val list = content.byCategory[groupId].orEmpty()
-        val order = channelOrderKey(groupId)?.let { _prefs.value.channelOrder[it] }.orEmpty()
-        val ordered = if (order.isEmpty()) {
-            list
-        } else {
-            val position = order.withIndex().associate { (i, key) -> key to i }
-            list.withIndex().sortedBy { (i, ch) -> position[ch.key] ?: (order.size + i) }.map { it.value }
-        }
-        return if (includeHidden) ordered else ordered.filterNot { isChannelHidden(it) }
-    }
+    fun orderedChannels(groupId: String, includeHidden: Boolean): List<Channel> = catalog().orderedChannels(groupId, includeHidden)
 
     fun setChannelHidden(channel: Channel, hidden: Boolean) {
         val playlistId = _content.value?.playlist?.id ?: return
@@ -1221,30 +1192,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Grupos: esconder e reordenar ------------------------------------------------------
 
-    fun isGroupHidden(groupId: String): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        return _prefs.value.isHidden(playlistId, groupId)
-    }
+    fun isGroupHidden(groupId: String): Boolean = catalog().isGroupHidden(groupId)
 
-    /** Grupos da lista atual pela ordem escolhida (os novos ficam no fim, pela ordem da lista). */
-    fun orderedGroups(includeHidden: Boolean): List<Category> {
-        val content = _content.value ?: return emptyList()
-        return content.orderedCategories(_prefs.value.groupOrder[content.playlist.id].orEmpty())
-            .filter { includeHidden || !isGroupHidden(it.id) }
-    }
+    fun orderedGroups(includeHidden: Boolean): List<Category> = catalog().orderedGroups(includeHidden)
 
-    /** Grupos que o guia percorre (← →): os especiais visíveis e os normais sem os escondidos nem bloqueados. */
-    fun guideGroups(): List<Category> {
-        val s = I18n.s
-        val p = _prefs.value
-        return listOfNotNull(
-            Category(SpecialCategory.FAVORITES, s.favoritesStar).takeIf { p.showFavoritesGroup && channelsOf(SpecialCategory.FAVORITES).isNotEmpty() },
-            Category(SpecialCategory.RECENT, s.recents).takeIf { p.showRecentGroup && channelsOf(SpecialCategory.RECENT).isNotEmpty() },
-            Category(SpecialCategory.ALL, s.all),
-        ) + orderedGroups(includeHidden = false)
-            .filterNot { isGroupLocked(it.id) }
-            .map { if (it.id == PlaylistContent.OTHERS) it.copy(name = s.others) else it }
-    }
+    fun guideGroups(): List<Category> = catalog().guideGroups(groupNames())
 
     fun setGroupHidden(groupId: String, hidden: Boolean) {
         val playlistId = _content.value?.playlist?.id ?: return
@@ -1264,14 +1216,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         setPref(Prefs.Key.GROUP_ORDER, _prefs.value.groupOrder + (playlistId to ids))
     }
 
-    /** Bloqueado pelo controlo parental e ainda não desbloqueado nesta sessão. */
-    /** O grupo está marcado como bloqueado, mesmo que já tenha sido desbloqueado com o PIN nesta sessão. */
-    fun isGroupLockedSetting(groupId: String): Boolean = _content.value?.let { "${it.playlist.id}:$groupId" in _prefs.value.lockedGroups } == true
+    fun isGroupLockedSetting(groupId: String): Boolean = catalog().isGroupLockedSetting(groupId)
 
-    fun isGroupLocked(groupId: String): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        return _prefs.value.isLocked(playlistId, groupId) && "$playlistId:$groupId" !in _unlocked.value
-    }
+    fun isGroupLocked(groupId: String): Boolean = catalog().isGroupLocked(groupId)
 
     /** Confere o PIN; se estiver certo, desbloqueia [groupId] até a app fechar. */
     fun unlockGroup(groupId: String, pin: String): Boolean {
@@ -1332,10 +1279,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         saveSettings()
     }
 
-    fun isFavorite(channel: Channel): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
-        return channel.key in _favorites.value[playlistId].orEmpty()
-    }
+    fun isFavorite(channel: Channel): Boolean = catalog().isFavorite(channel)
 
     /** Adiciona/remove dos favoritos e grava logo na conta. */
     fun toggleFavorite(channel: Channel) {
@@ -1781,8 +1725,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return if (channelsOf(selected).any { it.uid == channel.uid }) selected else channel.categoryId
     }
 
-    /** Canal com o número [n] (teclas numéricas do comando). Os bloqueados e os escondidos (canal ou grupo) não contam. */
-    fun channelByNumber(n: Int): Channel? = _content.value?.channels?.firstOrNull { it.num == n && isVisible(it) }
+    fun channelByNumber(n: Int): Channel? = catalog().channelByNumber(n)
 
     fun playNumber(n: Int): Boolean {
         val channel = channelByNumber(n) ?: return false
