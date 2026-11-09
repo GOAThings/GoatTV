@@ -6,7 +6,7 @@ import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
-import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.catchupCandidates
@@ -81,7 +81,7 @@ internal class PlaybackRequest(
             val archive = catchup?.let { catchupCandidates(content.playlist, it, content.account?.timezone) }
             if (catchup != null && archive != null) return PlaybackRequest(channel, catchup, archive.startMs, archive.candidates)
             val playlist = content.playlist
-            if (playlist.type == PlaylistType.STALKER && stalkerLinks != null) {
+            if (playlist.type.kind.linkAtPlayTime && stalkerLinks != null) {
                 return PlaybackRequest(channel, null, 0L, emptyList(), freshLinks = { stalkerLinks(playlist, channel) })
             }
             return PlaybackRequest(channel, null, 0L, streamCandidates(playlist, channel, streamFormat, content.account?.allowedFormats.orEmpty()))

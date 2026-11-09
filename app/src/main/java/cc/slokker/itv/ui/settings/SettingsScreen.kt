@@ -125,6 +125,7 @@ import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
@@ -1576,11 +1577,7 @@ private fun requestOverlayPermission(context: Context) {
     runCatching { context.startActivity(intent) }
 }
 
-private fun typeLabel(type: PlaylistType) = when (type) {
-    PlaylistType.XTREAM -> "Xtream"
-    PlaylistType.M3U -> "M3U"
-    PlaylistType.STALKER -> "Stalker"
-}
+private fun typeLabel(type: PlaylistType) = type.kind.label
 
 /** Linha que está a carregar da rede (ver o `key` em SettingsContent). */
 private const val LOADING_KEY = "loading"

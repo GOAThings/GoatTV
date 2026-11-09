@@ -106,6 +106,7 @@ import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SpecialCategory
@@ -1270,11 +1271,7 @@ fun MobileMenu(vm: AppViewModel) {
                 Text(s.settings, color = ItvColors.Text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 6.dp))
                 // A lista em uso em destaque, como o canal atual nas Definições da TV; as outras por baixo.
                 content?.let { c ->
-                    val type = when (c.playlist.type) {
-                        PlaylistType.XTREAM -> "Xtream"
-                        PlaylistType.STALKER -> "Stalker"
-                        else -> "M3U"
-                    }
+                    val type = c.playlist.type.kind.label
                     PlaylistCard(c.playlist.name, "$type · ${s.groupChannels(c.channels.size)}")
                 }
                 val others = playlists.filter { it.id != content?.playlist?.id }

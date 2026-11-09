@@ -37,6 +37,8 @@ import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
+import cc.slokker.itv.data.sameSourceAs
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.SessionStore
@@ -533,7 +535,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun adoptLocalProfile(local: ConfigResponse) {
         val localPlaylists = local.playlists.orEmpty().mapNotNull { it.toPlaylist() }
-        val ids = localPlaylists.mapNotNull { lp -> _playlists.value.firstOrNull { sameSource(it, lp) }?.let { lp.id to it.id } }.toMap()
+        val ids = localPlaylists.mapNotNull { lp -> _playlists.value.firstOrNull { it.sameSourceAs(lp) }?.let { lp.id to it.id } }.toMap()
         // Os ids das listas locais são únicos ("local…"): trocá-los no JSON muda favoritos, grupos e recentes de uma vez.
         fun remap(json: JsonElement?): JsonObject? {
             val obj = json as? JsonObject ?: return null
@@ -802,7 +804,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val playlist = loaded.playlist
         _second.value?.let { sv ->
             // A lista principal passou a ser a da conta do segundo canal, e o plano só tem 1 ligação.
-            val twoAllowed = playlist.type != PlaylistType.XTREAM || (loaded.account?.maxConnections ?: 0) >= 2
+            val twoAllowed = !playlist.type.kind.knowsConnectionLimit || (loaded.account?.maxConnections ?: 0) >= 2
             if (sameAccount(sv.content.playlist, playlist) && !twoAllowed) {
                 _second.value = null
                 showToast(I18n.s.secondClosedSameAccount)
@@ -1375,7 +1377,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun xtreamConnections(): Pair<Int, Int>? {
         val content = _content.value ?: return null
-        if (content.playlist.type != PlaylistType.XTREAM) return null
+        if (!content.playlist.type.kind.knowsConnectionLimit) return null
         return c.xtream.connections(content.playlist)
     }
 
@@ -1831,7 +1833,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O servidor ainda guarda [entry] de [channel]? (Xtream com `tv_archive`, dentro dos dias que guarda.) */
     fun canCatchup(channel: Channel, entry: EpgEntry): Boolean {
         val content = _content.value ?: return false
-        if (content.playlist.type != PlaylistType.XTREAM || channel.archiveDays <= 0) return false
+        if (!content.playlist.type.kind.supportsCatchup || channel.archiveDays <= 0) return false
         val now = System.currentTimeMillis()
         return entry.startMs < now - Catchup.MIN_AGE_MS && entry.startMs > now - channel.archiveDays * 86_400_000L
     }
@@ -1920,10 +1922,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun secondAllowed(playlist: Playlist): Boolean {
         // Um MAC é uma box: uma ligação de cada vez.
-        if (playlist.type == PlaylistType.STALKER) return false
+        if (playlist.type.kind.singleConnection) return false
         val main = _content.value ?: return true
         if (!sameAccount(playlist, main.playlist)) return true
-        if (main.playlist.type != PlaylistType.XTREAM) return true
+        if (!main.playlist.type.kind.knowsConnectionLimit) return true
         val limit = main.account?.maxConnections ?: return false
         return limit >= 2
     }
@@ -2033,7 +2035,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _report.value = try {
                 val playlists = _playlists.value
                 val header = "GoatTV ${BuildConfig.VERSION_NAME} · ${BugReport.device}\n" +
-                    "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.name.lowercase() }.ifEmpty { "none" }}" +
+                    "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.kind.wireName }.ifEmpty { "none" }}" +
                     (if (c.testMode) " · test mode" else "")
                 val secrets = playlists.flatMap { listOfNotNull(it.server, it.username, it.password, it.url, it.epgUrl, it.serial, it.deviceId, it.deviceId2, it.signature) } +
                     (playlists.flatMap { listOfNotNull(it.server, it.url, it.epgUrl) } + listOfNotNull(_content.value?.guideUrl)).mapNotNull(BugReport::hostOf) +
@@ -2104,7 +2106,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** O fallback encontrou um formato que funciona: fica guardado na conta. */
     fun onFormatWorked(format: String) {
-        if (_content.value?.playlist?.type != PlaylistType.XTREAM) return
+        if (_content.value?.playlist?.type?.kind?.remembersFormat != true) return
         if (format != _streamFormat.value) setStreamFormat(format)
     }
 
@@ -2414,14 +2416,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         /** Id de uma lista desta TV (sem conta). */
         fun newLocalId(): String = "local" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
-
-        /** A mesma lista do fornecedor (para passar favoritos de uma lista desta TV para a da conta). */
-        fun sameSource(a: Playlist, b: Playlist): Boolean = a.type == b.type && when (a.type) {
-            PlaylistType.XTREAM -> a.server?.trim()?.trimEnd('/')?.lowercase() == b.server?.trim()?.trimEnd('/')?.lowercase() &&
-                a.username?.trim() == b.username?.trim()
-            PlaylistType.M3U -> a.url?.trim() == b.url?.trim()
-            PlaylistType.STALKER -> a.server?.trim()?.lowercase() == b.server?.trim()?.lowercase() && a.username == b.username
-        }
 
         fun parseFavorites(json: JsonElement?): Map<String, List<String>> {
             if (json == null || !json.isJsonObject) return emptyMap()

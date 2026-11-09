@@ -25,7 +25,7 @@ fun streamCandidates(
     }
 
     // O link pede-se ao portal ao abrir o canal (StalkerSource.candidates).
-    if (playlist.type == PlaylistType.STALKER) return emptyList()
+    if (playlist.type.kind.linkAtPlayTime) return emptyList()
 
     if (playlist.type == PlaylistType.XTREAM) {
         val id = channel.streamId ?: return emptyList()
@@ -59,7 +59,7 @@ private fun swapExtension(url: String, path: String, from: String, to: String): 
  */
 fun catchupCandidates(playlist: Playlist, catchup: Catchup, timezone: String?): CatchupStart? {
     val id = catchup.channel.streamId ?: return null
-    if (playlist.type != PlaylistType.XTREAM) return null
+    if (!playlist.type.kind.supportsCatchup) return null
     val wanted = catchup.startMs + catchup.positionMs
     val start = wanted - Math.floorMod(wanted, 60_000L)
     val minutes = ((catchup.endMs - start + 59_999) / 60_000).toInt().coerceAtLeast(1)

@@ -74,7 +74,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
-import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.SpecialCategory
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ChannelLogo
@@ -604,11 +604,7 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
                 onClick = { onPick(p) },
                 selected = p.id == current,
                 title = p.name,
-                subtitle = when (p.type) {
-                    PlaylistType.XTREAM -> "Xtream"
-                    PlaylistType.M3U -> "M3U"
-                    PlaylistType.STALKER -> "Stalker"
-                },
+                subtitle = p.type.kind.label,
                 trailing = if (p.id == current) { { Text("✓", color = LocalAccent.current.start) } } else null,
                 modifier = if (p.id == current) Modifier.focusRequester(focus) else Modifier,
             )

@@ -224,7 +224,7 @@ class EpgRepository(
             val now = System.currentTimeMillis()
             ready.entriesFor(channel).filter { it.endMs > now }.takeIf { it.isNotEmpty() }?.let { return it }
         }
-        if (playlist.type == PlaylistType.M3U) return emptyList()
+        if (!playlist.type.kind.shortEpg) return emptyList()
         val streamId = channel.streamId ?: return emptyList()
         cached(playlist, channel)?.let { return it }
         return try {

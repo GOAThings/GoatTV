@@ -4,7 +4,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import cc.slokker.itv.data.PlaylistContent
-import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SourceException
 import cc.slokker.itv.ui.i18n.Strings
@@ -46,7 +46,7 @@ fun explainPlaybackError(
     format: String?,
 ): ErrorInfo {
     val isNetwork = error.errorCode in 2000..2999
-    val isXtream = data.playlist.type == PlaylistType.XTREAM
+    val isXtream = data.playlist.type.kind.knowsConnectionLimit
     val httpCode = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
     val limit = connections?.second ?: data.account?.maxConnections
     val mime = (error.cause as? MediaCodecRenderer.DecoderInitializationException)?.mimeType
@@ -71,7 +71,7 @@ fun explainPlaybackError(
 
 /** O servidor Xtream diz que todas as ligações da conta estão em uso. */
 fun isAccountBusy(data: PlaylistContent, connections: Pair<Int, Int>?): Boolean =
-    data.playlist.type == PlaylistType.XTREAM && connections != null && connections.first >= connections.second
+    data.playlist.type.kind.knowsConnectionLimit && connections != null && connections.first >= connections.second
 
 private fun ErrorInfo.withDetail(s: Strings, e: Throwable): ErrorInfo =
     if (detail != null) this else copy(detail = s.technical(e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")))
