@@ -93,6 +93,11 @@ enum CoreTests {
         ("trackPickSurround", trackPickSurround),
         ("trackPickSubtitles", trackPickSubtitles),
         ("trackChoiceKeepsAManualPick", trackChoiceKeepsAManualPick),
+        ("m3uCatchupAttributes", m3uCatchupAttributes),
+        ("m3uCatchupAliasesAndRefusals", m3uCatchupAliasesAndRefusals),
+        ("m3uCatchupUrls", m3uCatchupUrls),
+        ("m3uCatchupFormats", m3uCatchupFormats),
+        ("m3uCatchupRequest", m3uCatchupRequest),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.

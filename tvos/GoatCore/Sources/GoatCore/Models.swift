@@ -106,12 +106,16 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
     public var epgId: String?
     /// Dias de catch-up que o servidor guarda (0 = sem catch-up).
     public var archiveDays: Int
+    /// M3U: o tipo de catch-up (ver M3uCatchup) e o modelo do URL; nil sem catch-up (e nas listas guardadas antes
+    /// desta versão, que o ganham na próxima atualização da lista).
+    public var catchupType: String?
+    public var catchupSource: String?
 
     public var id: Int { uid }
 
     public init(uid: Int, key: String, num: Int, name: String, logo: String?, categoryId: String,
                 streamId: String? = nil, url: String? = nil, userAgent: String? = nil, referrer: String? = nil,
-                epgId: String? = nil, archiveDays: Int = 0) {
+                epgId: String? = nil, archiveDays: Int = 0, catchupType: String? = nil, catchupSource: String? = nil) {
         self.uid = uid
         self.key = key
         self.num = num
@@ -124,6 +128,8 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
         self.referrer = referrer
         self.epgId = epgId
         self.archiveDays = archiveDays
+        self.catchupType = catchupType
+        self.catchupSource = catchupSource
     }
 }
 

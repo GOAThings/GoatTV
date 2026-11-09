@@ -15,6 +15,8 @@ public enum M3UParser {
         var seenGroups = Set<String>()
         var usedKeys = Set<String>()
         var epgUrl: String?
+        // O `#EXTM3U` também pode dizer o catch-up de todos os canais (catchup, catchup-days, catchup-source…).
+        var header: [String: String] = [:]
 
         var pending: (attrs: [String: String], name: String)?
         var group: String?
@@ -27,6 +29,7 @@ public enum M3UParser {
             if line.isEmpty { return }
             if line.hasPrefix("#EXTM3U") {
                 let attrs = attributes(Substring(line))
+                header = attrs
                 if let tvg = attrs["x-tvg-url"] ?? attrs["url-tvg"],
                    let first = tvg.split(separator: ",").first?.trimmingCharacters(in: .whitespaces), !first.isEmpty {
                     epgUrl = first
@@ -71,9 +74,11 @@ public enum M3UParser {
                 if name.isEmpty { name = info.attrs["tvg-name"] ?? "" }
                 if name.isEmpty { name = channelName(index + 1) }
                 let logo = info.attrs["tvg-logo"].flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+                let catchup = M3uCatchup.spec(info.attrs, header: header, url: line)
                 channels.append(Channel(
                     uid: index, key: key, num: index + 1, name: name, logo: logo, categoryId: category,
-                    url: line, userAgent: userAgent, referrer: referrer, epgId: tvgId.isEmpty ? nil : tvgId
+                    url: line, userAgent: userAgent, referrer: referrer, epgId: tvgId.isEmpty ? nil : tvgId,
+                    archiveDays: catchup?.days ?? 0, catchupType: catchup?.type, catchupSource: catchup?.source
                 ))
             }
         }
