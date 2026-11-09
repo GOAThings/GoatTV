@@ -60,6 +60,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.after
 
 /**
  * Logo da app, como no banner: "TV" grande no gradiente da marca e "GOAT" por cima, mais pequeno,
@@ -190,8 +192,8 @@ fun formatTime(ms: Long): String = timeFormat.format(Date(ms))
 /** "Agora" com barra de progresso e "A seguir". */
 @Composable
 fun NowNext(epg: List<EpgEntry>, now: Long, modifier: Modifier = Modifier, compact: Boolean = false) {
-    val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
-    val next = epg.firstOrNull { it.startMs >= (current?.endMs ?: now) }
+    val current = epg.at(now)
+    val next = epg.after(current, now)
     Column(modifier) {
         if (current == null && next == null) {
             Text(LocalStrings.current.noGuide, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)

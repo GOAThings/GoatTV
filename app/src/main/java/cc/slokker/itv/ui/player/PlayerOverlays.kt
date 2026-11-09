@@ -96,6 +96,9 @@ import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.after
+import cc.slokker.itv.data.minutesLeft
 
 /**
  * Barra "a ver agora" em baixo, sem cartão de vidro: o vídeo escurece em baixo e por cima ficam o logótipo, o programa
@@ -115,8 +118,8 @@ internal fun NowPlayingBar(
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val isFavorite = channel.key in favorites[data.playlist.id].orEmpty()
-    val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
-    val next = epg.firstOrNull { it.startMs >= (current?.endMs ?: now) }
+    val current = epg.at(now)
+    val next = epg.after(current, now)
     val s = LocalStrings.current
 
     Column(
@@ -187,7 +190,7 @@ internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle
 @Composable
 internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = Modifier, bar: Boolean = true) {
     val style = MaterialTheme.typography.bodySmall.copy(shadow = TextShadow).tabular
-    val left = ((current.endMs - now) / 60_000 + 1).toInt()
+    val left = current.minutesLeft(now)
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text("${formatTime(current.startMs)} — ${formatTime(current.endMs)}", style = style)
         if (bar) ProgressBar(current.progress(now), Modifier.padding(horizontal = 12.dp).width(56.dp)) else Text("  ·  ", style = style)
@@ -334,7 +337,7 @@ internal fun ZapCard(channel: Channel, vm: AppViewModel) {
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
+    val current = epg.at(now)
 
     // O ecrã todo, com o canto de baixo à esquerda escurecido: uma elipse que desvanece até meio do ecrã (antes era
     // desenhada só à volta do cartão e acabava de repente).

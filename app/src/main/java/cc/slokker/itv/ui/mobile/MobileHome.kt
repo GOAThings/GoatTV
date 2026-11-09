@@ -54,6 +54,8 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import java.util.Calendar
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.minutesLeft
 
 /**
  * O ecrã inicial do telemóvel (a app já não abre a dar o último canal): os canais vistos há pouco em cartões
@@ -146,7 +148,7 @@ private fun ContinueCard(vm: AppViewModel, channel: Channel, first: Boolean, onC
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
+    val current = epg.at(now)
     Box(
         Modifier
             .fillMaxWidth()
@@ -197,7 +199,7 @@ private fun ContinueCard(vm: AppViewModel, channel: Channel, first: Boolean, onC
                         Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))) {
                             Box(Modifier.fillMaxWidth(current.progress(now)).height(3.dp).background(accent.brush))
                         }
-                        val left = ((current.endMs - now) / 60_000 + 1).toInt()
+                        val left = current.minutesLeft(now)
                         Text(
                             "${formatTime(current.startMs)} – ${formatTime(current.endMs)} · ${s.minutesLeft(left)}",
                             color = ItvColors.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -242,7 +244,7 @@ internal fun MiniPlayer(vm: AppViewModel, channel: Channel, playback: MobilePlay
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val current = remember(epg, now, channel.key) { vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    val current = remember(epg, now, channel.key) { vm.programmes(channel, epg).at(now) }
     Box(
         modifier
             .fillMaxWidth()
@@ -263,7 +265,7 @@ internal fun MiniPlayer(vm: AppViewModel, channel: Channel, playback: MobilePlay
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(channel.name, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val sub = current?.let { "${it.title} · ${s.minutesLeft(((it.endMs - now) / 60_000 + 1).toInt())}" }
+                val sub = current?.let { "${it.title} · ${s.minutesLeft(it.minutesLeft(now))}" }
                 if (sub != null) Text(sub, color = ItvColors.TextDim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Icon(

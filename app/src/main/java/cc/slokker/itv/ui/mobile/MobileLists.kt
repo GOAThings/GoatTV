@@ -65,6 +65,8 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.common.dayLabel
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.isOn
 
 /**
  * Procurar: antes de escrever, as pesquisas recentes, o que está a dar nos canais vistos há pouco e os grupos;
@@ -139,7 +141,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                 return@LazyColumn
             }
             val channels = hits.filter { it.programme == null }
-            val live = hits.filter { h -> h.programme?.let { it.startMs <= now && it.endMs > now } == true }
+            val live = hits.filter { h -> h.programme?.isOn(now) == true }
             val later = hits.filter { h -> h.programme?.let { it.startMs > now } == true }
             val past = hits.filter { h -> h.programme?.let { it.endMs <= now } == true }
             if (filter != FILTER_PROGRAMMES && channels.isNotEmpty()) {
@@ -309,7 +311,7 @@ private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, o
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val entry: EpgEntry? = epg.firstOrNull { it.startMs <= now && it.endMs > now }
+    val entry: EpgEntry? = epg.at(now)
     Column(Modifier.clip(RoundedCornerShape(16.dp)).background(CardFill).combinedClickable(onClick = onClick, onLongClick = onLong)) {
         Box(
             Modifier.fillMaxWidth().height(92.dp).background(

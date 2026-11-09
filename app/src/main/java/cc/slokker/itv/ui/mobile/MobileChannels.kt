@@ -56,6 +56,7 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.theme.tabular
 import androidx.tv.material3.LocalTextStyle
+import cc.slokker.itv.data.at
 
 @Composable
 internal fun ChannelsTab(vm: AppViewModel, current: Channel, guide: Boolean = false, onEpg: (Channel) -> Unit) {
@@ -136,7 +137,7 @@ internal fun ChannelCard(vm: AppViewModel, channel: Channel, playing: Boolean, f
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    val programme = found ?: epg.firstOrNull { it.startMs <= now && it.endMs > now }?.takeIf { prefs.epgInList }
+    val programme = found ?: epg.at(now)?.takeIf { prefs.epgInList }
     Row(
         Modifier
             .fillMaxWidth()
@@ -178,7 +179,7 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
     val played = LocalOnPlayed.current
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
-    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg.distinctBy { it.startMs } } }
+    val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
     val reminders by vm.reminders.collectAsStateWithLifecycle()
     val list = rememberLazyListState()
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).

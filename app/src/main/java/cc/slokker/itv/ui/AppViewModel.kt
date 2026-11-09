@@ -76,6 +76,9 @@ import cc.slokker.itv.BuildConfig
 import cc.slokker.itv.data.BugReport
 import retrofit2.HttpException
 import java.io.IOException
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.after
+import cc.slokker.itv.data.isOn
 
 /** Estado das atualizações da app. */
 sealed interface UpdateState {
@@ -1128,9 +1131,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (!phoneReady()) return null
         val channel = playback.playing.value?.key?.let(::phoneChannel) ?: return PhoneChannelList.nowJson(null, null, null)
         val now = System.currentTimeMillis()
-        val epg = guideEntries(channel).ifEmpty { cachedEpg(channel) }
-        val current = epg.firstOrNull { it.startMs <= now && it.endMs > now }
-        val next = epg.firstOrNull { it.startMs >= (current?.endMs ?: now) }
+        val epg = programmes(channel, cachedEpg(channel))
+        val current = epg.at(now)
+        val next = epg.after(current, now)
         return PhoneChannelList.nowJson(channel.key, current, next)
     }
 
@@ -1154,7 +1157,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // O launcher mostra o mesmo logótipo que a app.
             val logo = channelLogos.value[ch.key]
             val guide = guideEntries(ch)
-            val current = guide.indexOfFirst { it.startMs <= now && it.endMs > now }
+            val current = guide.indexOfFirst { it.isOn(now) }
             HomeItem(
                 if (logo != null) ch.copy(logo = logo) else ch,
                 content.playlist.id,
@@ -1207,8 +1210,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Programas do canal para a grelha (passado incluído), com o desvio horário das definições. */
     fun guideEntries(channel: Channel): List<EpgEntry> = guide.guideEntries(channel)
 
-    /** Quando começou o programa do guia de [channel] que dá às [wallMs], ou null (sem guia para essa hora). */
-    fun programmeStartAt(channel: Channel, wallMs: Long): Long? = guide.programmeStartAt(channel, wallMs)
+    /** Os programas a mostrar de [channel]: o guia, ou o EPG curto [shortEpg] já carregado (ver data/Programmes). */
+    fun programmes(channel: Channel, shortEpg: List<EpgEntry>): List<EpgEntry> =
+        cc.slokker.itv.data.programmes(guideEntries(channel), shortEpg)
 
     // ---- Catch-up ----------------------------------------------------------------------------
 

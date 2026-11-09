@@ -10,6 +10,7 @@ import cc.slokker.itv.ui.common.explainPlaybackError
 import cc.slokker.itv.ui.common.isAccountBusy
 import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.i18n.Strings
+import cc.slokker.itv.data.at
 
 /** O canal principal (TV e telemóvel): as definições, o catch-up e o formato da conta são os do [vm]. */
 internal class AppPlaybackHost(
@@ -23,7 +24,7 @@ internal class AppPlaybackHost(
     override fun exitCatchup() = vm.exitCatchup()
     override fun seekCatchup(positionMs: Long) = vm.seekCatchup(positionMs)
     override fun onVlcFallback() = vm.showToast(I18n.s.usingVlc)
-    override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.programmeStartAt(channel, wallMs)
+    override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()

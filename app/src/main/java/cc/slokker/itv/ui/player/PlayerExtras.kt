@@ -72,6 +72,7 @@ import kotlinx.coroutines.withContext
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 import cc.slokker.itv.ui.common.formatDuration
+import cc.slokker.itv.data.minutesLeft
 
 /** Pesquisa de canais e programas, encostada à esquerda (como os painéis). */
 @Composable
@@ -326,7 +327,7 @@ internal fun SleepPicker(current: Long?, onPick: (Int?) -> Unit, modifier: Modif
     ) {
         Text(s.sleepTimer, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
         current?.let {
-            Text(s.sleepRemaining(((it - now) / 60_000 + 1).toInt()), color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+            Text(s.sleepRemaining(minutesLeft(it, now)), color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
         }
         val options = listOf<Int?>(null, 15, 30, 45, 60, 90, 120)
         options.forEachIndexed { i, minutes ->

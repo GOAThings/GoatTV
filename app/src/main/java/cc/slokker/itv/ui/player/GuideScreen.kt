@@ -106,6 +106,8 @@ import java.util.Calendar
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 import cc.slokker.itv.ui.common.dayLabel
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.isOn
 
 /** Onde fica a pré-visualização do canal enquanto o guia está aberto (o vídeo encolhe para aqui). */
 /** A informação do programa escolhido, entre os grupos e a grelha. */
@@ -188,7 +190,7 @@ internal fun TvGuide(
 
     /** O bloco na hora [t] da linha: o programa, ou o intervalo vazio até à meia hora seguinte. */
     fun slotAt(entries: List<EpgEntry>, t: Long): Slot {
-        entries.firstOrNull { it.startMs <= t && it.endMs > t }?.let { return Slot(it, it.startMs, it.endMs) }
+        entries.at(t)?.let { return Slot(it, it.startMs, it.endMs) }
         val half = floorHalfHour(t)
         val prevEnd = entries.lastOrNull { it.endMs <= t }?.endMs ?: Long.MIN_VALUE
         val nextStart = entries.firstOrNull { it.startMs > t }?.startMs ?: Long.MAX_VALUE
@@ -221,7 +223,7 @@ internal fun TvGuide(
         val e = slot.entry
         val t = System.currentTimeMillis()
         when {
-            e == null || (e.startMs <= t && e.endMs > t) -> onPlay(ch, group)
+            e == null || e.isOn(t) -> onPlay(ch, group)
             e.startMs > t -> vm.toggleReminder(ch, e)
             vm.canCatchup(ch, e) -> onCatchup(ch, e)
             else -> vm.showToast(s.noCatchup)
@@ -499,7 +501,7 @@ private fun GroupTabs(groups: List<Pair<String, String>>, selected: String, focu
 @Composable
 private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean) {
     val e = slot.entry
-    val live = e == null || (e.startMs <= now && e.endMs > now)
+    val live = e == null || e.isOn(now)
     Row(verticalAlignment = Alignment.Bottom) {
         if (showLogos) {
             HudLogo(channel, Modifier.size(width = 104.dp, height = 60.dp))
@@ -687,7 +689,7 @@ private fun GuideTimeline(
                 add(
                     Cell(
                         e.title, e.startMs.takeIf { it >= windowStart }, maxOf(e.startMs, windowStart), minOf(e.endMs, windowEnd),
-                        past, live = e.startMs <= now && e.endMs > now, selected = selectedSlot?.entry == e, icon = icon,
+                        past, live = e.isOn(now), selected = selectedSlot?.entry == e, icon = icon,
                         entryStart = e.startMs, entryEnd = e.endMs,
                     ),
                 )

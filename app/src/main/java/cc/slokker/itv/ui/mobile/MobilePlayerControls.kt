@@ -90,6 +90,9 @@ import androidx.tv.material3.LocalTextStyle
 import cc.slokker.itv.ui.player.engine.titleCard
 import cc.slokker.itv.ui.player.engine.status
 import cc.slokker.itv.ui.common.formatDuration
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.after
+import cc.slokker.itv.data.minutesLeft
 
 @Composable
 internal fun VideoArea(
@@ -108,7 +111,7 @@ internal fun VideoArea(
     var scrub by remember { mutableStateOf<Float?>(null) }
     var tick by remember { mutableStateOf(0) }
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val liveEntry = { now: Long -> vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs <= now && it.endMs > now } }
+    val liveEntry = { now: Long -> vm.programmes(channel, epg).at(now) }
     val ts = playback.timeshift
     // Em direto, as posições contam-se desde o início do programa a dar (ou desde agora, sem guia).
     fun liveBase(now: Long) = liveEntry(now)?.startMs ?: now
@@ -312,7 +315,7 @@ internal fun VideoArea(
                 val cu = catchup
                 val entry = if (cu == null) liveEntry(now) else null
                 val programme = cu?.let { EpgEntry(it.title, it.startMs, it.endMs) } ?: entry
-                val next = if (cu == null) vm.guideEntries(channel).ifEmpty { epg }.firstOrNull { it.startMs >= (entry?.endMs ?: now) } else null
+                val next = if (cu == null) vm.programmes(channel, epg).after(entry, now) else null
                 Row(verticalAlignment = Alignment.Bottom) {
                     HudLogo(channel, Modifier.size(if (fullscreen) 92.dp else 56.dp, if (fullscreen) 52.dp else 32.dp))
                     Spacer(Modifier.width(if (fullscreen) 16.dp else 10.dp))
@@ -328,7 +331,7 @@ internal fun VideoArea(
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         if (programme != null) {
-                            val left = if (cu == null) " · " + s.minutesLeft(((programme.endMs - now) / 60_000 + 1).toInt()) else ""
+                            val left = if (cu == null) " · " + s.minutesLeft(programme.minutesLeft(now)) else ""
                             Text("${formatTime(programme.startMs)} — ${formatTime(programme.endMs)}$left", color = ItvColors.TextDim, fontSize = if (fullscreen) 13.sp else 12.sp, maxLines = 1)
                         }
                     }
@@ -523,7 +526,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                         }
                     }
                 }
-                PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(((it - System.currentTimeMillis()) / 60_000 + 1).toInt()) } ?: s.sleepTimer) {
+                PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer) {
                     MenuRow(s.subtitlesOff, null, checked = sleepAt == null) {
                         vm.setSleepTimer(null)
                         onClose()
@@ -561,7 +564,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }
         PlayerOption.entries.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
-            val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${((sleepAt!! - System.currentTimeMillis()) / 60_000 + 1)} min" else option.label()
+            val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
             ActionPill(option.icon, label, tint = if (option == PlayerOption.SLEEP && sleepAt != null) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
         }
         onPip?.let { ActionPill(ItvIcons.Pip, "PiP", onClick = it) }
@@ -587,10 +590,10 @@ internal fun NextUp(vm: AppViewModel, channel: Channel) {
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg } }
+    val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
     val reminders by vm.reminders.collectAsStateWithLifecycle()
-    val current = entries.firstOrNull { it.startMs <= now && it.endMs > now }
-    val next = entries.firstOrNull { it.startMs >= (current?.endMs ?: now) } ?: return
+    val current = entries.at(now)
+    val next = entries.after(current, now) ?: return
     reminders.size
     val reminded = vm.hasReminder(channel, next)
     Row(

@@ -97,6 +97,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.data.at
 
 /** Painel de vidro encostado à esquerda; canais e grupos trocam no mesmo sítio. */
 @Composable
@@ -208,8 +209,7 @@ private val LIST_LOGO_SIZE = 34.dp
 private fun List<EpgEntry>.currentTitle(): String? = current()?.title
 
 private fun List<EpgEntry>.current(): EpgEntry? {
-    val now = System.currentTimeMillis()
-    return firstOrNull { it.startMs <= now && it.endMs > now }
+    return at(System.currentTimeMillis())
 }
 
 /** Aplica o "Tamanho do texto" das definições só dentro dos painéis. */

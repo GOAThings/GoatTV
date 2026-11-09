@@ -5,6 +5,7 @@ import cc.slokker.itv.data.CacheStore
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
+import cc.slokker.itv.data.at
 import cc.slokker.itv.data.EpgRepository
 import cc.slokker.itv.data.LocalProfile
 import cc.slokker.itv.data.LocalStore
@@ -103,7 +104,7 @@ class GuideControllerTest {
         val shifted = guide.guideEntries(rtp).single()
         assertEquals(telejornal.startMs + 3_600_000L, shifted.startMs)
         assertEquals(telejornal.endMs + 3_600_000L, shifted.endMs)
-        assertEquals(shifted.startMs, guide.programmeStartAt(rtp, shifted.startMs + 1))
+        assertEquals(shifted, guide.guideEntries(rtp).at(shifted.startMs + 1))
         assertEquals(emptyList<EpgEntry>(), guide.guideEntries(sic))
         // Uma lista acabada de abrir não volta a descarregar o guia (ainda está no intervalo).
         assertTrue(tracker.isChecked(RefreshTracker.Slot.GUIDE, "p1").not())

@@ -50,6 +50,10 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import cc.slokker.itv.data.at
+import cc.slokker.itv.data.after
+import cc.slokker.itv.data.isOn
+import cc.slokker.itv.data.minutesLeft
 
 /**
  * O guia do telemóvel: o que dá em cada canal à hora escolhida (Agora, ou de meia em meia hora para trás, para o
@@ -109,11 +113,11 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val reminders by vm.reminders.collectAsStateWithLifecycle()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
-    val entries = remember(epg, channel.key) { vm.guideEntries(channel).ifEmpty { epg.distinctBy { it.startMs } } }
+    val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
     val at = slot ?: now
-    val entry = entries.firstOrNull { it.startMs <= at && it.endMs > at }
-    val next = entries.firstOrNull { it.startMs >= (entry?.endMs ?: at) }
-    val live = entry != null && entry.startMs <= now && entry.endMs > now
+    val entry = entries.at(at)
+    val next = entries.after(entry, at)
+    val live = entry != null && entry.isOn(now)
     val catchup = slot != null && entry != null && entry.endMs <= now && vm.canCatchup(channel, entry)
     val played = LocalOnPlayed.current
     Row(
@@ -138,7 +142,7 @@ private fun GuideRow(vm: AppViewModel, channel: Channel, slot: Long?, now: Long,
         Column(Modifier.weight(1f)) {
             Text(entry?.title ?: channel.name, color = if (playing) accent.start else ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val times = entry?.let { e ->
-                "${formatTime(e.startMs)} – ${formatTime(e.endMs)}" + if (live) " · ${s.minutesLeft(((e.endMs - now) / 60_000 + 1).toInt())}" else ""
+                "${formatTime(e.startMs)} – ${formatTime(e.endMs)}" + if (live) " · ${s.minutesLeft(e.minutesLeft(now))}" else ""
             }
             Text(times ?: s.noGuide, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (live) {

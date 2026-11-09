@@ -111,6 +111,7 @@ import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
 import cc.slokker.itv.ui.player.engine.AppPlaybackHost
 import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.data.minutesLeft
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -1056,7 +1057,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         GlassChipButton(
                             ItvIcons.Sleep,
-                            sleepAt?.let { s.sleepRemaining(((it - System.currentTimeMillis()) / 60_000 + 1).toInt()) } ?: s.sleepTimer,
+                            sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer,
                             { showSleep = true },
                         )
                     }

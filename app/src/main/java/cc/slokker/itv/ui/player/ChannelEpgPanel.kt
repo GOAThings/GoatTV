@@ -52,6 +52,7 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 import cc.slokker.itv.ui.common.dayLabel
+import cc.slokker.itv.data.isOn
 
 /**
  * EPG de um canal, ao lado da lista de canais (→ na lista): os programas por ordem, com o atual em foco.
@@ -86,7 +87,7 @@ internal fun ChannelEpgPanel(
     fun act(e: EpgEntry) {
         val t = System.currentTimeMillis()
         when {
-            e.startMs <= t && e.endMs > t -> onPlay(channel)
+            e.isOn(t) -> onPlay(channel)
             e.startMs > t -> vm.toggleReminder(channel, e)
             vm.canCatchup(channel, e) -> onCatchup(channel, e)
             else -> vm.showToast(s.noCatchup)
@@ -145,7 +146,7 @@ internal fun ChannelEpgPanel(
                 if (i == 0 || dayLabel(s, shown[i - 1].startMs) != dayLabel(s, e.startMs)) {
                     SectionLabel(dayLabel(s, e.startMs))
                 }
-                val live = e.startMs <= now && e.endMs > now
+                val live = e.isOn(now)
                 val icon = when {
                     e.startMs > now && reminders.isNotEmpty() && vm.hasReminder(channel, e) -> ItvIcons.Bell
                     e.endMs <= now && vm.canCatchup(channel, e) -> ItvIcons.History

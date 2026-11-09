@@ -182,10 +182,6 @@ class GuideController(
         return (epg.guideEntries(content.playlist, channel) ?: epg.cached(content.playlist, channel).orEmpty()).distinctBy { it.startMs }.shifted()
     }
 
-    /** Quando começou o programa do guia de [channel] que dá às [wallMs], ou null (sem guia para essa hora). */
-    fun programmeStartAt(channel: Channel, wallMs: Long): Long? =
-        guideEntries(channel).firstOrNull { it.startMs <= wallMs && it.endMs > wallMs }?.startMs
-
     // ---- Guia da conta: trocar o guia de um canal ----------------------------------------------
     // Só com conta. Dados do IPTV-EPG.org no servidor da conta (ver EpgRepository.openAccount).
 
