@@ -98,6 +98,8 @@ enum CoreTests {
         ("m3uCatchupUrls", m3uCatchupUrls),
         ("m3uCatchupFormats", m3uCatchupFormats),
         ("m3uCatchupRequest", m3uCatchupRequest),
+        ("stalkerArchiveDays", stalkerArchiveDays),
+        ("stalkerArchivePicksThePortalProgrammeWhenTimesDrift", stalkerArchivePicksThePortalProgrammeWhenTimesDrift),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.

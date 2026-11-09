@@ -154,6 +154,8 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var programmeStart: ((Int64) -> Int64?)?
     /// O que se está a abrir é o direto (não o catch-up): pode ir pelo anel.
     @ObservationIgnored private var pausable = false
+    /// Onde começar dentro do vídeo pedido (ms; 0 = no início).
+    @ObservationIgnored private var openStartMs: Int64 = 0
     @ObservationIgnored private var timeshiftTicker: Task<Void, Never>?
     /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ms), contado no relógio enquanto está a dar com
     /// imagem: o tempo do próprio VLC segue o PCR do emissor, que pode saltar (codificador reiniciado, canais feitos de
@@ -257,8 +259,9 @@ final class PlayerEngine: NSObject {
     /// estava a dar pára (fica a última imagem) e larga a ligação, para o fornecedor a libertar enquanto se escolhe; só
     /// abre onde se parar, e uma mudança nova pelo meio cancela a espera. Voltar ao canal que ainda está a dar (a mesma
     /// lista outra vez, a lista que deu a volta) não abre nada.
+    /// [startMs]: abrir já tanto depois do início do vídeo (o catch-up do Stalker, que é a gravação do programa todo).
     func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
-              pausable: Bool = false, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+              pausable: Bool = false, startMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         let same = openedKey == channelKey
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
         let zap = live && openedKey != nil && (!same || held)
@@ -279,6 +282,7 @@ final class PlayerEngine: NSObject {
         afrTask?.cancel()
         self.linkResolver = linkResolver
         self.pausable = pausable
+        openStartMs = max(0, startMs)
         retry?.cancel()
         pendingStart?.cancel()
         positionValid = false
@@ -519,7 +523,8 @@ final class PlayerEngine: NSObject {
         }
         state = .failed
         hideFreeze()
-        let again = reconnectSeconds > 0 && retries < Self.maxStartRetries
+        // Sem nada para abrir (o catch-up do Stalker sem gravação deste programa): diz-se, sem voltar a tentar.
+        let again = reconnectSeconds > 0 && retries < Self.maxStartRetries && (!attempts.isEmpty || linkResolver != nil)
         if again { retries += 1 }
         onFailed?()
         if again { scheduleRetry() }
@@ -602,6 +607,7 @@ final class PlayerEngine: NSObject {
             media.addOption(":http-user-agent=\(userAgent)")
             if let referrer, !referrer.isEmpty { media.addOption(":http-referrer=\(referrer)") }
             media.addOption(":http-reconnect")
+            if openStartMs > 0 { media.addOption(":start-time=\(Double(openStartMs) / 1000)") }
         }
         if softwareDecoder { media.addOption(":codec=avcodec") }
         // A língua preferida (o libVLC entende ISO 639-1 e 639-2); as etiquetas e o surround escolhem-se depois
@@ -731,7 +737,11 @@ final class PlayerEngine: NSObject {
     }
 
     private func appleStatus(_ item: AVPlayerItem) {
-        guard backend == .apple, item === avPlayer.currentItem, item.status == .failed else { return }
+        guard backend == .apple, item === avPlayer.currentItem else { return }
+        if item.status == .readyToPlay, openStartMs > 0, !item.duration.isIndefinite {
+            item.seek(to: CMTime(value: openStartMs, timescale: 1000), completionHandler: nil)
+        }
+        guard item.status == .failed else { return }
         lastHTTPStatus = appleHTTPStatus
         DebugLog.add("Player: AVPlayer item failed: \(item.error.map { "\($0)" } ?? "-")")
         next()

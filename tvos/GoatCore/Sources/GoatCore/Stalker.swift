@@ -118,10 +118,61 @@ public enum Stalker {
                 name: c["name"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed } ?? channelName(id),
                 logo: logo.flatMap { $0.contains("://") ? $0 : $0.hasPrefix("/") ? commandURL($0, portal: endpoint) : nil },
                 categoryId: c["tv_genre_id"]?.text ?? "", streamId: id, url: cmd, userAgent: userAgent,
-                epgId: c["xmltv_id"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed }
+                epgId: c["xmltv_id"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed },
+                archiveDays: archiveDays(c)
             ))
         }
         return result
+    }
+
+    /// Dias de arquivo de um canal (como no Android): o portal marca-o (`tv_archive`, `enable_tv_archive` ou
+    /// `archive` a 1) e diz `tv_archive_duration`, que nuns portais vem em horas (o Ministra traz 168, uma semana) e
+    /// noutros em dias. Como o QiTV e o E2iPlayer: mais de 31, ou um múltiplo de 24, são horas; marcado sem duração,
+    /// uma semana.
+    public static func archiveDays(_ c: JSON) -> Int {
+        let marked = ["tv_archive", "enable_tv_archive", "archive"].contains { key in
+            let t = c[key]?.text
+            return t == "1" || t?.lowercased() == "true"
+        }
+        guard marked else { return 0 }
+        guard let value = c["tv_archive_duration"]?.text.flatMap({ Double($0.trimmed) }), value.isFinite, value > 0 else { return 7 }
+        let days = value > 31 || value.truncatingRemainder(dividingBy: 24) == 0 ? (value / 24).rounded(.up) : value.rounded(.up)
+        return min(31, max(1, Int(days)))
+    }
+
+    /// Um programa da tabela do portal com gravação.
+    public struct ArchiveProgramme: Equatable, Sendable {
+        public var id: String
+        public var startMs: Int64
+        public var stopMs: Int64
+    }
+
+    /// Uma linha da tabela do portal com gravação (sem `mark_archive` 0) e id, ou nil.
+    static func recorded(_ row: JSON) -> ArchiveProgramme? {
+        guard let start = row["start_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }),
+              let stopSeconds = row["stop_timestamp"]?.text.flatMap({ Int64($0) }), stopSeconds > 0,
+              let stop = SafeInput.epochMs(seconds: stopSeconds), stop > start, row["mark_archive"]?.text != "0",
+              let id = row["id"]?.text ?? row["real_id"]?.text else { return nil }
+        return ArchiveProgramme(id: id, startMs: start, stopMs: stop)
+    }
+
+    /// Até quanto o início de um programa pode variar entre o guia XMLTV e a tabela do portal.
+    static let driftMs: Int64 = 5 * 60_000
+
+    /// O programa do portal para o do guia ([startMs]–[endMs]) às [wantedMs]: o que dá a essa hora ou começa até
+    /// [driftMs] depois, o que mais se sobrepõe ao do guia. Assim, se o guia diz 20:00 e o portal 20:01, abrir o
+    /// programa desde o início dá a gravação dele e não o último minuto do anterior.
+    static func matching(_ rows: [ArchiveProgramme], wantedMs: Int64, startMs: Int64, endMs: Int64) -> ArchiveProgramme? {
+        let near = rows.filter { ($0.startMs <= wantedMs && wantedMs < $0.stopMs) || ($0.startMs > wantedMs && $0.startMs <= wantedMs + driftMs) }
+        func overlap(_ p: ArchiveProgramme) -> Int64 { min(p.stopMs, endMs) - max(p.startMs, startMs) }
+        // Como o maxWith do Kotlin: em empate fica a primeira; a seguir, a que já dá às [wantedMs].
+        var best: ArchiveProgramme?
+        for p in near {
+            guard let b = best else { best = p; continue }
+            let (op, ob) = (overlap(p), overlap(b))
+            if op > ob || (op == ob && (p.startMs <= wantedMs) && !(b.startMs <= wantedMs)) { best = p }
+        }
+        return best
     }
 }
 
@@ -178,6 +229,55 @@ public actor StalkerClient {
             link = answer
         }
         return [Stalker.candidate(Stalker.commandURL(link, portal: session.endpoint))]
+    }
+
+    /// Onde a gravação de um programa começa (ms desde 1970) e como abri-la.
+    public struct Recording: Sendable {
+        public var startMs: Int64
+        public var candidate: StreamCandidate
+    }
+
+    /// A gravação do programa [startMs]–[endMs] de [channel] (visto às [wantedMs]), no arquivo do portal: o portal não
+    /// faz URLs com horas, dá o link da gravação de um programa do seu guia (`type=tv_archive&action=create_link`, com
+    /// o comando `auto /media/<id do programa>.mpg`). O id procura-se na tabela do dia (`get_simple_data_table`).
+    /// nil sem gravação, ou se o portal não respondeu.
+    public func archive(_ playlist: Playlist, channel: Channel, wantedMs: Int64, startMs: Int64, endMs: Int64) async -> Recording? {
+        guard let id = channel.streamId,
+              let programme = try? await recordingAt(playlist, channelId: id, wantedMs: wantedMs, startMs: startMs, endMs: endMs),
+              let js = try? await api(playlist, "tv_archive", "create_link", [("cmd", "auto /media/\(programme.id).mpg"), ("series", ""),
+                                                                              ("forced_storage", ""), ("disable_ad", "0"), ("download", "0")]) else { return nil }
+        // "nothing_to_play" (ou outro erro) e um comando vazio: não há gravação.
+        if js["error"]?.text.map({ !$0.isEmpty }) == true { return nil }
+        guard let cmd = js["cmd"]?.text, !cmd.isEmpty else { return nil }
+        let url = Stalker.commandURL(cmd, portal: (try? await session(playlist))?.endpoint ?? "")
+        guard url.hasPrefix("http://") || url.hasPrefix("https://") else { return nil }
+        return Recording(startMs: programme.startMs, candidate: Stalker.candidate(url))
+    }
+
+    /// A tabela do dia vem às páginas (de 10, nos portais Ministra): um dia cheio cabe em 30.
+    private static let maxEpgPages = 30
+
+    /// O programa da tabela do portal que corresponde ao do guia, visto às [wantedMs] (o dia vem no fuso deste
+    /// aparelho, que vai na cookie). Perto da meia-noite, o programa pode estar na tabela do dia anterior.
+    private func recordingAt(_ playlist: Playlist, channelId: String, wantedMs: Int64, startMs: Int64, endMs: Int64) async throws -> Stalker.ArchiveProgramme? {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.timeZone = .current
+        format.dateFormat = "yyyy-MM-dd"
+        for dayMs in [wantedMs, wantedMs - 86_400_000] {
+            let date = format.string(from: Date(timeIntervalSince1970: Double(dayMs) / 1000))
+            var rows: [Stalker.ArchiveProgramme] = []
+            for page in 1...Self.maxEpgPages {
+                let js = try await api(playlist, "epg", "get_simple_data_table", [("ch_id", channelId), ("date", date), ("p", String(page))])
+                let list = js["data"]?.array ?? js.array ?? []
+                rows += list.compactMap(Stalker.recorded)
+                let total = js["total_items"]?.text.flatMap { Int($0) } ?? 0
+                let perPage = js["max_page_items"]?.text.flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil } ?? list.count
+                if list.isEmpty || page * perPage >= total { break }
+            }
+            if let found = Stalker.matching(rows, wantedMs: wantedMs, startMs: startMs, endMs: endMs) { return found }
+        }
+        return nil
     }
 
     public func shortEpg(_ playlist: Playlist, streamId: String, size: Int = 4) async throws -> [EpgEntry] {

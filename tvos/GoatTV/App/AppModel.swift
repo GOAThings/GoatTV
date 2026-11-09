@@ -77,6 +77,7 @@ final class AppModel {
     private(set) var catchup: Catchup?
     /// O início (ms desde 1970) do que se pediu ao servidor no catch-up: a posição é isto + o tempo do vídeo.
     @ObservationIgnored private var catchupBase: Int64 = 0
+    @ObservationIgnored private var stalkerArchiveTask: Task<Void, Never>?
     /// Lembretes de programas que ainda vão começar (só nesta TV).
     private(set) var reminders: [Reminder] = []
     /// Quando o temporizador desliga (nil = desligado).
@@ -1101,7 +1102,7 @@ final class AppModel {
         let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
         if current?.key != channel.key {
             // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
-            let opens = content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone,
+            let opens = content.map { $0.playlist.type == .stalker } == true || content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone,
                                                             correctionMin: prefs.catchupOffsetMin) } != nil
             play(channel, from: groupFor(channel), opening: !opens)
         }
@@ -1109,12 +1110,38 @@ final class AppModel {
     }
 
     private func startCatchup(_ cu: Catchup) {
+        if content?.playlist.type == .stalker { return startStalkerCatchup(cu) }
         guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone,
                                                          correctionMin: prefs.catchupOffsetMin) else { return }
         catchup = cu
         catchupBase = start.startMs
         player.play(start.candidates, channelKey: cu.channel.key, live: false, userAgent: cu.channel.userAgent ?? prefs.userAgent,
                     referrer: cu.channel.referrer)
+    }
+
+    /// Stalker: o portal dá a gravação do programa todo (pela tabela do dia, ver StalkerClient.archive): abre-se nela, já
+    /// no ponto pedido. Sem gravação, o cartão de erro do catch-up (sem voltar a tentar sozinho).
+    private func startStalkerCatchup(_ cu: Catchup) {
+        guard let content else { return }
+        catchup = cu
+        catchupBase = cu.startMs
+        let playlist = content.playlist
+        let stalker = loader.stalker
+        let wanted = cu.startMs + cu.positionMs
+        let generation = sessionGeneration
+        stalkerArchiveTask?.cancel()
+        stalkerArchiveTask = Task { [weak self] in
+            let recording = await stalker.archive(playlist, channel: cu.channel, wantedMs: wanted, startMs: cu.startMs, endMs: cu.endMs)
+            guard !Task.isCancelled, let self, self.sessionGeneration == generation, self.catchup == cu else { return }
+            if let recording {
+                self.catchupBase = recording.startMs
+                self.player.play([recording.candidate], channelKey: cu.channel.key, live: false, userAgent: cu.channel.userAgent ?? Stalker.userAgent,
+                                 referrer: cu.channel.referrer, startMs: max(0, wanted - recording.startMs))
+            } else {
+                DebugLog.add("Catch-up: the portal has no recording of this programme")
+                self.player.play([], channelKey: cu.channel.key, live: false, userAgent: nil, referrer: nil)
+            }
+        }
     }
 
     /// Onde vai o catch-up, em ms desde o início do programa.

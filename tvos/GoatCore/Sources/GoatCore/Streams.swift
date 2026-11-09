@@ -64,14 +64,13 @@ public struct Catchup: Equatable, Sendable {
 
     public var durationMs: Int64 { endMs - startMs }
 
-    /// O programa ainda está no arquivo do servidor? (Xtream com `tv_archive`, M3U com `catchup`, dentro dos dias
-    /// que guarda, e pelo menos 2 minutos depois de começar.)
+    /// O programa ainda está no arquivo do servidor? (Xtream com `tv_archive`, M3U com `catchup`, Stalker com o
+    /// arquivo do portal, dentro dos dias que guarda, e pelo menos 2 minutos depois de começar.)
     public static func available(playlist: Playlist, channel: Channel, entry: EpgEntry, now: Int64 = nowMs()) -> Bool {
         guard channel.archiveDays > 0 else { return false }
         switch playlist.type {
-        case .xtream: break
+        case .xtream, .stalker: break
         case .m3u: guard channel.catchupType != nil else { return false }
-        default: return false
         }
         // O valor pode vir de uma cópia em cache, de antes de ser limitado ao ler a lista.
         return entry.startMs < now - minAgeMs && entry.startMs > now - Int64(min(channel.archiveDays, SafeInput.maxArchiveDays)) * 86_400_000

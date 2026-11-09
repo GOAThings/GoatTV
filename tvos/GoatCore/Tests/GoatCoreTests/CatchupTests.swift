@@ -153,3 +153,42 @@ extension CoreTests {
         try expect(Catchup.available(playlist: m3u, channel: old, entry: entry, now: cuNow * 1000), false)
     }
 }
+
+/// O arquivo do Stalker: os mesmos casos do GoatTV Android (StalkerTest).
+extension CoreTests {
+    static func stalkerArchiveDays() throws {
+        func days(_ fields: [String: JSON]) -> Int { Stalker.archiveDays(.object(fields)) }
+        try expect(days(["tv_archive_duration": 168]), 0)
+        try expect(days(["tv_archive": "0", "tv_archive_duration": 168]), 0)
+        try expect(days(["tv_archive": 1, "tv_archive_duration": 168]), 7)
+        try expect(days(["enable_tv_archive": "1", "tv_archive_duration": "168"]), 7)
+        try expect(days(["archive": "1", "tv_archive_duration": "24"]), 1)
+        try expect(days(["tv_archive": "1", "tv_archive_duration": "3"]), 3)
+        try expect(days(["tv_archive": "1", "tv_archive_duration": "72"]), 3)
+        try expect(days(["tv_archive": "1", "tv_archive_duration": "36"]), 2)
+        // Marcado sem duração: uma semana (o padrão do Ministra).
+        try expect(days(["tv_archive": "1"]), 7)
+        // Os canais lidos do portal trazem os dias, e o guia passa a mostrar o catch-up deles.
+        let channels = Stalker.parseChannels([.object(["id": "42", "cmd": "ffrt http://localhost/ch/42", "tv_archive": "1", "tv_archive_duration": "168"])],
+                                             endpoint: "http://portal.example.com/stalker_portal/server/load.php", channelName: { $0 })
+        try expect(channels.first?.archiveDays, 7)
+    }
+
+    static func stalkerArchivePicksThePortalProgrammeWhenTimesDrift() throws {
+        let t0: Int64 = 1_794_160_800
+        // O portal diz que o segundo programa começa um minuto depois do que diz o guia.
+        let rows = [
+            JSON.object(["id": "1", "start_timestamp": .number(Double(t0)), "stop_timestamp": .number(Double(t0 + 1860)), "mark_archive": 1]),
+            JSON.object(["id": "2", "start_timestamp": .number(Double(t0 + 1860)), "stop_timestamp": .number(Double(t0 + 5400)), "mark_archive": 1]),
+            JSON.object(["id": "3", "start_timestamp": .number(Double(t0 + 5400)), "stop_timestamp": .number(Double(t0 + 7200)), "mark_archive": "0"]),
+        ].compactMap(Stalker.recorded)
+        try expect(rows.map(\.id), ["1", "2"])
+        // Do início (o guia diz t0 + 1800): a gravação do segundo, não o último minuto do primeiro.
+        let fromStart = Stalker.matching(rows, wantedMs: (t0 + 1800) * 1000, startMs: (t0 + 1800) * 1000, endMs: (t0 + 5400) * 1000)
+        try expect(fromStart?.id, "2")
+        try expect(fromStart?.startMs, (t0 + 1860) * 1000)
+        let middle = Stalker.matching(rows, wantedMs: (t0 + 3000) * 1000, startMs: (t0 + 1800) * 1000, endMs: (t0 + 5400) * 1000)
+        try expect(middle?.id, "2")
+        try expect(Stalker.matching(rows, wantedMs: (t0 + 9000) * 1000, startMs: (t0 + 9000) * 1000, endMs: (t0 + 9600) * 1000) == nil, true)
+    }
+}
