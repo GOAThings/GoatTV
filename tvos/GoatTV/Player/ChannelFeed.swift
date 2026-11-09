@@ -48,9 +48,9 @@ final class ChannelFeed {
     /// Abre [url] num anel novo, segura por [holder]. Fecha antes a que estiver aberta. nil sem espaço para o anel.
     /// [maxBytes]: o tamanho máximo do anel (o da pausa do direto, ou um pequeno para uma gravação sem ninguém a ver).
     static func open(_ url: URL, userAgent: String, referrer: String?, reconnectSeconds: Int, holder: Holder,
-                     maxBytes: Int64 = Timeshift.maxBytes) -> ChannelFeed? {
+                     maxBytes: Int64? = nil) -> ChannelFeed? {
         current?.close()
-        guard let capacity = capacity(maxBytes) else { return nil }
+        guard let capacity = capacity(maxBytes ?? Timeshift.maxBytes) else { return nil }
         generation += 1
         let ring: TimeshiftRing
         do {

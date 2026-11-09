@@ -5,6 +5,11 @@ public struct StreamCandidate: Equatable, Sendable {
     public var url: String
     public var format: String
     public var isHLS: Bool { format == StreamFormat.hls }
+
+    public init(url: String, format: String) {
+        self.url = url
+        self.format = format
+    }
 }
 
 /// Tentativas para [channel], como no Android. [preferred] é o `stream_format` da conta (nil = automático);
