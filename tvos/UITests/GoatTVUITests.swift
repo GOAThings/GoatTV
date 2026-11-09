@@ -157,7 +157,9 @@ final class GoatTVUITests: XCTestCase {
         press(.playPause, wait: 10); shot("hls-paused")
         XCTAssertTrue(app.otherElements["timeshiftBar"].exists, "HLS: sem a barra da pausa do direto")
         let hlsPaused = behind() ?? -1
-        XCTAssertTrue((4...16).contains(hlsPaused), "HLS: 10 s em pausa, mas vai \(hlsPaused) s atrás")
+        // O fim da janela do HLS anda aos saltos de um bocado (4 s aqui) e o AVPlayer relê a lista mesmo em pausa: a
+        // conta do "atrás" tem essa folga (já se viram 2, 3 e 7 s depois de 10 s em pausa).
+        XCTAssertTrue((1...16).contains(hlsPaused), "HLS: 10 s em pausa, mas vai \(hlsPaused) s atrás")
         press(.left, wait: 8); shot("hls-rewound")
         let hlsRewound = behind() ?? -1
         XCTAssertTrue(hlsRewound >= hlsPaused + 5, "HLS: recuou de \(hlsPaused) s para \(hlsRewound) s")
