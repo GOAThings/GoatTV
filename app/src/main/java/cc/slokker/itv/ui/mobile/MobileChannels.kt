@@ -183,7 +183,8 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     val now = rememberNow()
     val entries = remember(epg, channel.key) { vm.programmes(channel, epg) }
-    val reminders by vm.reminders.collectAsStateWithLifecycle()
+    // A estrela e os sinos seguem os favoritos e os lembretes (lidos aqui, não do ViewModel linha a linha).
+    val rows = rememberRowState(vm)
     val list = rememberLazyListState()
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).
     LaunchedEffect(entries) { entries.indexOfFirst { it.endMs > now }.takeIf { it > 0 }?.let { list.scrollToItem(it) } }
@@ -196,7 +197,7 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(channel.name, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                ControlButton(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel) }
+                ControlButton(if (rows.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel) }
                 ControlButton(ItvIcons.Close, onClick = onClose)
             }
             if (vm.epgPickerAvailable) {
@@ -212,7 +213,6 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
             if (entries.isEmpty()) Text(s.noGuide, color = ItvColors.TextFaint, fontSize = 15.sp)
             LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(entries, key = { it.startMs }) { e ->
-                    reminders.size
                     val catchup = vm.canCatchup(channel, e)
                     val future = e.startMs > now
                     Row(
@@ -231,7 +231,7 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
                         Text(e.title, color = if (e.endMs <= now) ItvColors.TextFaint else if (future) ItvColors.TextDim else ItvColors.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         when {
                             catchup -> Icon(ItvIcons.Replay, s.watchCatchup, tint = ItvColors.TextDim, modifier = Modifier.size(18.dp))
-                            future && vm.hasReminder(channel, e) -> Icon(ItvIcons.Bell, s.removeReminder, tint = LocalAccent.current.start, modifier = Modifier.size(18.dp))
+                            future && rows.reminded(channel, e) -> Icon(ItvIcons.Bell, s.removeReminder, tint = LocalAccent.current.start, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
