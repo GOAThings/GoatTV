@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">खाता खाली है, इसलिए समस्या इस चैनल में है: यह बंद हो सकता है या आपके प्लान में शामिल नहीं हो सकता।</string>
     <string name="err_channel_refused_3">कोई दूसरा चैनल आज़माएँ; अगर वह चलता है, तो इस चैनल में प्रदाता की तरफ़ से समस्या है।</string>
     <string name="err_channel_refused_4">कुछ मिनट बाद यह चैनल फिर से आज़माएँ।</string>
-    <string name="err_channel_refused_5">अगर कोई भी चैनल नहीं खुलता, तो प्रदाता से अपना सब्सक्रिप्शन जाँचें।</string>
+    <string name="err_channel_refused_5">अगर कोई भी चैनल नहीं खुलता, तो प्रदाता से पुष्टि करें कि आपका सब्सक्रिप्शन सक्रिय है और आपके देश में अनुमत है।</string>
     <string name="err_channel_gone">यह चैनल अब मौजूद नहीं है</string>
     <string name="err_channel_gone_2">प्रदाता ने चैनल हटा दिया या बदल दिया, पर सेव की गई प्लेलिस्ट में यह अब भी है।</string>
     <string name="err_channel_gone_3">%1$s → इस्तेमाल में प्लेलिस्ट → %2$s में चैनल रीलोड करें।</string>

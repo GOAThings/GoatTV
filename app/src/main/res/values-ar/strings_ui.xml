@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">الحساب غير مشغول، لذا فالمشكلة في هذه القناة: ربما تكون متوقفة أو غير مشمولة في اشتراكك.</string>
     <string name="err_channel_refused_3">جرّب قناة أخرى، فإن عملت فالمشكلة في هذه القناة لدى المزوّد.</string>
     <string name="err_channel_refused_4">جرّب هذه القناة مرة أخرى بعد بضع دقائق.</string>
-    <string name="err_channel_refused_5">إذا لم تُفتح أي قناة، فتحقق من اشتراكك مع المزوّد.</string>
+    <string name="err_channel_refused_5">إذا لم تُفتح أي قناة، فتأكد من المزوّد أن اشتراكك فعّال ومسموح به في بلدك.</string>
     <string name="err_channel_gone">لم تعد هذه القناة موجودة</string>
     <string name="err_channel_gone_2">أزال المزوّد القناة أو نقلها، لكن قائمة التشغيل المحفوظة لا تزال تحتوي عليها.</string>
     <string name="err_channel_gone_3">أعد تحميل القنوات في %1$s ← قائمة التشغيل المستخدمة ← %2$s.</string>

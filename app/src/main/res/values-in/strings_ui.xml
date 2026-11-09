@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">Akun sedang tidak dipakai, jadi masalahnya ada di saluran ini: mungkin sedang down atau tidak termasuk paket Anda.</string>
     <string name="err_channel_refused_3">Coba saluran lain; jika berhasil, saluran ini bermasalah di sisi penyedia.</string>
     <string name="err_channel_refused_4">Coba saluran ini lagi dalam beberapa menit.</string>
-    <string name="err_channel_refused_5">Jika tidak ada saluran yang terbuka, periksa langganan Anda ke penyedia.</string>
+    <string name="err_channel_refused_5">Jika tidak ada saluran yang terbuka, pastikan ke penyedia bahwa langganan Anda aktif dan diizinkan di negara Anda.</string>
     <string name="err_channel_gone">Saluran ini sudah tidak ada</string>
     <string name="err_channel_gone_2">Penyedia menghapus atau memindahkan saluran ini, tetapi playlist yang tersimpan masih memuatnya.</string>
     <string name="err_channel_gone_3">Muat ulang saluran di %1$s → playlist yang dipakai → %2$s.</string>

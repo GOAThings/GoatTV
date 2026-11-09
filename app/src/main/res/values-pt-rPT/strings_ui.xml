@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">A conta está livre, por isso o problema é deste canal: pode estar em baixo ou não fazer parte do teu plano.</string>
     <string name="err_channel_refused_3">Experimenta outro canal; se esse abrir, este está com problemas do lado do fornecedor.</string>
     <string name="err_channel_refused_4">Tenta este canal outra vez daqui a uns minutos.</string>
-    <string name="err_channel_refused_5">Se nenhum canal abrir, confirma a subscrição com o fornecedor.</string>
+    <string name="err_channel_refused_5">Se nenhum canal abrir, confirma com o fornecedor que a subscrição está ativa e é permitida no teu país.</string>
     <string name="err_channel_gone">Este canal já não existe</string>
     <string name="err_channel_gone_2">O fornecedor removeu ou mudou o canal, e a lista guardada ainda o tem.</string>
     <string name="err_channel_gone_3">Recarrega os canais em %1$s → a lista em uso → %2$s.</string>

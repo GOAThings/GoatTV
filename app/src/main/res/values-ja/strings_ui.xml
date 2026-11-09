@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">アカウントは空いているため、問題はこのチャンネルにあります。停止中か、プランに含まれていない可能性があります。</string>
     <string name="err_channel_refused_3">別のチャンネルをお試しください。そちらが映る場合は、プロバイダ側でこのチャンネルに問題があります。</string>
     <string name="err_channel_refused_4">数分後にこのチャンネルをもう一度お試しください。</string>
-    <string name="err_channel_refused_5">どのチャンネルも開かない場合は、プロバイダにサブスクリプションを確認してください。</string>
+    <string name="err_channel_refused_5">どのチャンネルも開かない場合は、サブスクリプションが有効で、お住まいの国で利用できるかプロバイダに確認してください。</string>
     <string name="err_channel_gone">このチャンネルはもう存在しません</string>
     <string name="err_channel_gone_2">プロバイダがチャンネルを削除または移動しましたが、保存されたプレイリストにはまだ残っています。</string>
     <string name="err_channel_gone_3">%1$s → 使用中のプレイリスト → %2$s でチャンネルを再読み込みしてください。</string>

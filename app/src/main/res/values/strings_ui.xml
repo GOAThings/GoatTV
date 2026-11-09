@@ -224,7 +224,7 @@
     <string name="err_channel_refused_2">The account is free, so the problem is this channel: it may be down or not part of your plan.</string>
     <string name="err_channel_refused_3">Try another channel; if that one works, this one has a problem on the provider\'s side.</string>
     <string name="err_channel_refused_4">Try this channel again in a few minutes.</string>
-    <string name="err_channel_refused_5">If no channel opens, check your subscription with the provider.</string>
+    <string name="err_channel_refused_5">If no channel opens, check with the provider that your subscription is active and allowed in your country.</string>
     <string name="err_channel_gone">This channel no longer exists</string>
     <string name="err_channel_gone_2">The provider removed or moved the channel, but the saved playlist still has it.</string>
     <string name="err_channel_gone_3">Reload the channels in %1$s → the playlist in use → %2$s.</string>

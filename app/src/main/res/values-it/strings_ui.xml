@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">L\'account è libero, quindi il problema è questo canale: potrebbe essere fuori servizio o non far parte del tuo piano.</string>
     <string name="err_channel_refused_3">Prova un altro canale; se quello funziona, questo ha un problema lato provider.</string>
     <string name="err_channel_refused_4">Riprova questo canale tra qualche minuto.</string>
-    <string name="err_channel_refused_5">Se nessun canale si apre, verifica l\'abbonamento con il provider.</string>
+    <string name="err_channel_refused_5">Se nessun canale si apre, verifica con il provider che l\'abbonamento sia attivo e consentito nel tuo paese.</string>
     <string name="err_channel_gone">Questo canale non esiste più</string>
     <string name="err_channel_gone_2">Il provider ha rimosso o spostato il canale, ma la playlist salvata lo contiene ancora.</string>
     <string name="err_channel_gone_3">Ricarica i canali in %1$s → la playlist in uso → %2$s.</string>

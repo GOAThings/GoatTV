@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">账户空闲，因此问题出在此频道：它可能已停播或不在你的套餐内。</string>
     <string name="err_channel_refused_3">试试其他频道；如果其他频道正常，则是服务商这边的此频道有问题。</string>
     <string name="err_channel_refused_4">几分钟后再试此频道。</string>
-    <string name="err_channel_refused_5">如果所有频道都打不开，请向服务商确认订阅状态。</string>
+    <string name="err_channel_refused_5">如果所有频道都打不开，请向服务商确认订阅有效且允许在您所在的国家/地区使用。</string>
     <string name="err_channel_gone">此频道已不存在</string>
     <string name="err_channel_gone_2">服务商已删除或移动了此频道，但保存的播放列表中仍有它。</string>
     <string name="err_channel_gone_3">在 %1$s → 当前使用的播放列表 → %2$s 中重新加载频道。</string>

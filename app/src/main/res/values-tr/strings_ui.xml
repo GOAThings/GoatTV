@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">Hesap boşta, yani sorun bu kanalda: kanal çökmüş olabilir ya da paketinize dahil değildir.</string>
     <string name="err_channel_refused_3">Başka bir kanal deneyin; o çalışıyorsa bu kanalın sağlayıcı tarafında bir sorunu var.</string>
     <string name="err_channel_refused_4">Bu kanalı birkaç dakika sonra tekrar deneyin.</string>
-    <string name="err_channel_refused_5">Hiçbir kanal açılmıyorsa aboneliğinizi sağlayıcıyla kontrol edin.</string>
+    <string name="err_channel_refused_5">Hiçbir kanal açılmıyorsa aboneliğinizin etkin olduğunu ve ülkenizde izin verildiğini sağlayıcıyla doğrulayın.</string>
     <string name="err_channel_gone">Bu kanal artık yok</string>
     <string name="err_channel_gone_2">Sağlayıcı kanalı kaldırdı veya taşıdı ama kayıtlı oynatma listesinde hâlâ var.</string>
     <string name="err_channel_gone_3">Kanalları yeniden yükleyin: %1$s → kullanılan oynatma listesi → %2$s.</string>

@@ -466,6 +466,7 @@ private struct VideoPane: View {
     @State private var touched = 0
     @State private var focusSecond = false
     @State private var pickingSecond = false
+    @State private var explaining = false
 
     /// Um vídeo. O vídeo é uma vista UIKit: sem desligar os toques, fica com eles e os gestos nem sempre os recebem.
     /// Com dois canais, tocar no que está em silêncio passa-lhe o som.
@@ -506,9 +507,8 @@ private struct VideoPane: View {
                 }
             }
             .ignoresSafeArea(edges: fullscreen ? .all : [])
-            // Enquanto ainda vai tentar outra vez, não há erro para mostrar.
-            if let error = model.playbackError, model.player.retries >= PlayerEngine.maxStartRetries || model.prefs.reconnectSeconds == 0 {
-                Text(error.title).font(.subheadline).multilineTextAlignment(.center).padding()
+            if model.playbackError != nil, model.player.state == .failed {
+                // O erro explicado fica por cima de tudo (mais abaixo): aqui não há nada a carregar.
             } else if !controls, model.player.frozen || (model.player.state == .playing && !model.player.hasPicture) {
                 ProgressView().tint(.white)
             } else if !controls, model.player.state != .playing, model.player.reconnects == 0, let current = model.current {
@@ -519,6 +519,11 @@ private struct VideoPane: View {
                 }
             }
             if controls { overlay }
+            // Não abriu: o erro explicado logo à primeira falha (como na TV), com a tentativa seguinte por baixo. Antes
+            // só aparecia o título ao fim de todas as tentativas, e até lá parecia que estava a carregar.
+            if let error = model.playbackError, model.player.state == .failed {
+                PlaybackErrorCard(info: error, status: model.playbackStatus) { explaining = true }
+            }
             // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
             if model.player.reconnects > 0, let current = model.current {
                 VStack {
@@ -557,6 +562,9 @@ private struct VideoPane: View {
         }
         .sheet(item: $option) {
             PlayerOptionsSheet(player: model.second != nil && focusSecond ? model.secondPlayer : model.player, option: $0)
+        }
+        .sheet(isPresented: $explaining) {
+            if let error = model.playbackError { PlaybackErrorSheet(info: error) { explaining = false } }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             PhoneOrientation.deviceMoved()
@@ -862,6 +870,81 @@ private struct VideoPane: View {
 }
 
 /// A barra de progresso do leitor, para arrastar.
+/// O canal não abriu: o que se passou e a causa por cima do vídeo, com "Tentar de novo" e "Como resolver".
+private struct PlaybackErrorCard: View {
+    @Environment(AppModel.self) private var model
+    let info: ErrorInfo
+    let status: String?
+    let onExplain: () -> Void
+
+    var body: some View {
+        let s = model.strings
+        VStack(spacing: 6) {
+            Text(info.title).font(.subheadline.weight(.semibold)).multilineTextAlignment(.center).lineLimit(2)
+            if let cause = info.cause {
+                Text(cause).font(.caption).foregroundStyle(Theme.textDim).multilineTextAlignment(.center).lineLimit(3)
+            }
+            if let status { Text(status).font(.caption).foregroundStyle(Theme.textFaint) }
+            HStack(spacing: 10) {
+                Button(s.r("retry")) { model.retryPlayback() }
+                    .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(Theme.accent(model.prefs.accent), in: Capsule())
+                if !info.fixes.isEmpty {
+                    Button(s.r("how_to_fix"), action: onExplain)
+                        .font(.footnote.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Color.white.opacity(0.14), in: Capsule())
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .padding(14)
+        .frame(maxWidth: 420)
+        .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 16)
+    }
+}
+
+/// "Como resolver": o erro por inteiro, com os passos e o código técnico (o que a TV mostra no ecrã do erro).
+private struct PlaybackErrorSheet: View {
+    @Environment(AppModel.self) private var model
+    let info: ErrorInfo
+    let onClose: () -> Void
+
+    var body: some View {
+        let s = model.strings
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(info.title).font(.title3.bold())
+                if let cause = info.cause { Text(cause).foregroundStyle(Theme.textDim) }
+                Text(s.r("how_to_fix").uppercased()).font(.caption.weight(.bold)).foregroundStyle(Theme.textFaint).padding(.top, 8)
+                ForEach(Array(info.fixes.enumerated()), id: \.offset) { i, fix in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("\(i + 1)").font(.footnote.weight(.semibold))
+                            .frame(width: 24, height: 24)
+                            .background(Color.white.opacity(0.10), in: Circle())
+                        Text(fix).font(.subheadline)
+                    }
+                }
+                if let detail = info.detail { Text(detail).font(.caption).foregroundStyle(Theme.textFaint).padding(.top, 8) }
+                Button(s.r("retry")) { onClose(); model.retryPlayback() }
+                    .font(.headline).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(Theme.accent(model.prefs.accent), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .buttonStyle(.plain)
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+        }
+        .foregroundStyle(Theme.text)
+        .background(Theme.background)
+        .presentationDetents([.medium, .large])
+    }
+}
+
 private struct PlayerBar: View {
     @Environment(AppModel.self) private var model
     let progress: Double
@@ -1586,6 +1669,12 @@ private struct MenuTab: View {
                 MenuRow(s.r("logout"), value: model.email.map(phoneMaskEmail)) {
                     if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
                 }
+            } else {
+                // Sem conta: ligar a conta passa as definições deste telemóvel para lá e sincroniza tudo.
+                Button { model.connectAccount() } label: {
+                    MenuRowLabel(title: s.r("connect_account"), icon: "person.crop.circle", chevron: true)
+                }
+                .buttonStyle(.plain)
             }
         }
         Text("GoatTV \(model.appVersion)").font(.caption).foregroundStyle(Theme.textFaint).frame(maxWidth: .infinity).padding(.top, 4)

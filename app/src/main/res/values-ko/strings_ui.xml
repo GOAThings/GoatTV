@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">계정은 사용 가능하므로 이 채널에 문제가 있어요. 채널이 중단되었거나 요금제에 포함되지 않았을 수 있어요.</string>
     <string name="err_channel_refused_3">다른 채널을 시도해 보세요. 그 채널이 작동하면 이 채널은 제공업체 쪽에 문제가 있는 거예요.</string>
     <string name="err_channel_refused_4">몇 분 후 이 채널을 다시 시도하세요.</string>
-    <string name="err_channel_refused_5">어떤 채널도 열리지 않으면 제공업체에 구독 상태를 확인하세요.</string>
+    <string name="err_channel_refused_5">어떤 채널도 열리지 않으면 구독이 유효한지, 현재 국가에서 사용할 수 있는지 제공업체에 확인하세요.</string>
     <string name="err_channel_gone">이 채널은 더 이상 존재하지 않아요</string>
     <string name="err_channel_gone_2">제공업체가 채널을 삭제하거나 옮겼지만 저장된 재생목록에는 아직 남아 있어요.</string>
     <string name="err_channel_gone_3">%1$s → 사용 중인 재생목록 → %2$s에서 채널을 다시 불러오세요.</string>

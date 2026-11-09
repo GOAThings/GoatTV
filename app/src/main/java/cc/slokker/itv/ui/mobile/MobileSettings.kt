@@ -160,6 +160,8 @@ fun MobileMenu(vm: AppViewModel) {
                         MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
                     }
                     if (!local) MenuRow(s.logout, email?.let(::maskEmail), ItvIcons.Account) { if (vm.logoutNeedsPin()) logoutGate = true else vm.logoutThisTv() }
+                    // Sem conta: ligar a conta passa as definições deste telemóvel para lá e sincroniza tudo.
+                    else MenuRow(s.connectAccount, null, ItvIcons.Account, chevron = true, onClick = vm::connectAccount)
                     when (val u = update) {
                         is UpdateState.Available -> MenuRow(u.release.version, null, ItvIcons.Update, onClick = vm::installUpdate)
                         is UpdateState.Downloading -> MenuRow(u.release.version, "${(u.progress * 100).toInt()}%", ItvIcons.Update) { }

@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">Le compte est libre, le problème vient donc de cette chaîne : elle est peut-être en panne ou hors de votre abonnement.</string>
     <string name="err_channel_refused_3">Essayez une autre chaîne ; si elle fonctionne, celle-ci a un problème chez le fournisseur.</string>
     <string name="err_channel_refused_4">Réessayez cette chaîne dans quelques minutes.</string>
-    <string name="err_channel_refused_5">Si aucune chaîne ne s\'ouvre, vérifiez votre abonnement auprès du fournisseur.</string>
+    <string name="err_channel_refused_5">Si aucune chaîne ne s\'ouvre, vérifiez auprès du fournisseur que votre abonnement est actif et autorisé dans votre pays.</string>
     <string name="err_channel_gone">Cette chaîne n\'existe plus</string>
     <string name="err_channel_gone_2">Le fournisseur a supprimé ou déplacé la chaîne, mais la playlist enregistrée la contient encore.</string>
     <string name="err_channel_gone_3">Rechargez les chaînes dans %1$s → la playlist utilisée → %2$s.</string>

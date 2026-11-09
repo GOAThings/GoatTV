@@ -223,7 +223,7 @@
     <string name="err_channel_refused_2">Das Konto ist frei, also liegt es an diesem Sender: Er ist vielleicht ausgefallen oder nicht in deinem Abo enthalten.</string>
     <string name="err_channel_refused_3">Versuch einen anderen Sender; wenn der funktioniert, hat dieser ein Problem beim Anbieter.</string>
     <string name="err_channel_refused_4">Versuch diesen Sender in ein paar Minuten erneut.</string>
-    <string name="err_channel_refused_5">Wenn sich kein Sender öffnet, prüfe dein Abo beim Anbieter.</string>
+    <string name="err_channel_refused_5">Wenn sich kein Sender öffnet, frag beim Anbieter nach, ob dein Abo aktiv und in deinem Land zugelassen ist.</string>
     <string name="err_channel_gone">Diesen Sender gibt es nicht mehr</string>
     <string name="err_channel_gone_2">Der Anbieter hat den Sender entfernt oder verschoben, aber die gespeicherte Playlist enthält ihn noch.</string>
     <string name="err_channel_gone_3">Lade die Sender neu unter %1$s → die genutzte Playlist → %2$s.</string>
