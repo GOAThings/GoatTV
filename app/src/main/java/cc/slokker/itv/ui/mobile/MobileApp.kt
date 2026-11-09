@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,15 +54,12 @@ import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Reminder
-import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.delay
-
-private enum class Tab { Tv, Guide, Favorites, Search, Menu }
 
 /** Chamado depois de abrir um canal a partir de uma lista: no ecrã inicial, passa a mostrar o vídeo. */
 internal val LocalOnPlayed = staticCompositionLocalOf<() -> Unit> { {} }
@@ -75,22 +73,19 @@ fun MobileMain(vm: AppViewModel) {
     val streamFormat by vm.streamFormat.collectAsStateWithLifecycle()
     val current = channel ?: return
     val data = content ?: return
-    var tab by rememberSaveable { mutableStateOf(Tab.Tv) }
-    val settings = tab == Tab.Menu
-    // Ao abrir, o ecrã inicial (recentes e grupos) sem nada a dar; o vídeo só aparece quando se escolhe um canal.
-    var home by rememberSaveable { mutableStateOf(prefs.phoneStartup == Prefs.PhoneStartup.HOME) }
-    var stopped by rememberSaveable { mutableStateOf(prefs.phoneStartup == Prefs.PhoneStartup.HOME) }
-    var homeGroup by rememberSaveable { mutableStateOf<String?>(null) }
+    // Ao abrir, o ecrã inicial (recentes e grupos) sem nada a dar, ou já o último canal (ver PhoneNav).
+    var nav by rememberSaveable(stateSaver = PhoneNavSaver) { mutableStateOf(PhoneNav.start(prefs.phoneStartup)) }
+    val tab = nav.tab
     var homePinFor by remember { mutableStateOf<String?>(null) }
     // A dar: em grande no separador TV, ou no mini-leitor por cima dos separadores (no início, no guia...).
-    val video = !settings && !stopped
-    val big = video && tab == Tab.Tv && !home
+    val video = nav.video
+    val big = nav.big
     val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = video)
     val activity = LocalContext.current as? Activity
     val main = activity as? MainActivity
     val pip = main?.inPip == true
-    val landscape = video && (pip || (big && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE))
-    val mini = video && !big && !landscape
+    val landscape = nav.fullscreen(pip, rotated = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    val mini = nav.mini(landscape)
     val pipAction = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null
     // Nas Definições o canal está fechado: não há nada para levar para a janela pequena.
     val pipOnLeave = prefs.pipEnabled && video
@@ -102,7 +97,7 @@ fun MobileMain(vm: AppViewModel) {
     var shownKey by remember { mutableStateOf(current.key) }
     if (shownKey != current.key) {
         shownKey = current.key
-        if (settings) tab = Tab.Tv
+        nav = nav.channelChanged()
     }
     var epgFor by remember { mutableStateOf<Channel?>(null) }
     var epgPick by remember { mutableStateOf<Pair<Channel, Boolean>?>(null) }
@@ -139,24 +134,18 @@ fun MobileMain(vm: AppViewModel) {
 
     FullscreenBars(landscape)
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
-    BackHandler(landscape || showingOptions || epgFor != null || tab != Tab.Tv || homeGroup != null || !home) {
-        when {
-            showingOptions -> options = null
-            landscape -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            epgFor != null -> epgFor = null
-            tab != Tab.Tv -> tab = Tab.Tv
-            homeGroup != null -> homeGroup = null
-            // Do canal volta-se ao ecrã inicial (o canal continua no mini-leitor).
-            else -> home = true
+    val back = nav.back(optionsOpen = showingOptions, fullscreen = landscape, epgOpen = epgFor != null)
+    BackHandler(back != null) {
+        when (back) {
+            PhoneBack.CLOSE_OPTIONS -> options = null
+            PhoneBack.LEAVE_FULLSCREEN -> activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            PhoneBack.CLOSE_EPG -> epgFor = null
+            null -> Unit
+            else -> nav = nav.after(back)
         }
     }
     // Quem abre um canal (listas, guia, procura, catch-up) sai do ecrã inicial.
-    val played: () -> Unit = {
-        stopped = false
-        home = false
-        homeGroup = null
-        tab = Tab.Tv
-    }
+    val played: () -> Unit = { nav = nav.played() }
 
     CompositionLocalProvider(LocalOnPlayed provides played, LocalBarSpace provides if (mini) BAR_SPACE + MINI_SPACE else BAR_SPACE) {
         Column(Modifier.fillMaxSize().background(ItvColors.Background)) {
@@ -184,15 +173,15 @@ fun MobileMain(vm: AppViewModel) {
             if (!landscape) {
                 Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
                     when (tab) {
-                        Tab.Tv -> when {
-                            !home -> Column(Modifier.fillMaxSize()) {
+                        PhoneTab.Tv -> when {
+                            !nav.home -> Column(Modifier.fillMaxSize()) {
                                 PlayerActions(vm, current, playback, onGuide = { epgFor = current }, onPip = pipAction, onOption = { options = it })
                                 NextUp(vm, current)
                                 ChannelsTab(vm, current) { epgFor = it }
                             }
-                            homeGroup != null -> homeGroup?.let { id ->
+                            nav.homeGroup != null -> nav.homeGroup?.let { id ->
                                 Column(Modifier.fillMaxSize()) {
-                                    PageHeader(vm.guideGroups().firstOrNull { it.id == id }?.name?.ifBlank { null } ?: data.categoryName(id), "TV") { homeGroup = null }
+                                    PageHeader(vm.guideGroups().firstOrNull { it.id == id }?.name?.ifBlank { null } ?: data.categoryName(id), "TV") { nav = nav.closeGroup() }
                                     ChannelList(vm, vm.channelsOf(id), id, current) { epgFor = it }
                                 }
                             }
@@ -202,19 +191,15 @@ fun MobileMain(vm: AppViewModel) {
                                     vm.play(ch, if (ch.key == current.key) vm.selectedCategory.value else vm.groupFor(ch))
                                     played()
                                 },
-                                onGroup = { homeGroup = it },
+                                onGroup = { nav = nav.openGroup(it) },
                                 onLockedGroup = { homePinFor = it },
-                                onSearch = { tab = Tab.Search },
+                                onSearch = { nav = nav.tabTapped(PhoneTab.Search) },
                             )
                         }
-                        Tab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
-                        Tab.Favorites -> PhoneFavorites(vm, current) { epgFor = it }
-                        Tab.Search -> PhoneSearch(vm, current, onEpg = { epgFor = it }) { id ->
-                            tab = Tab.Tv
-                            home = true
-                            homeGroup = id
-                        }
-                        Tab.Menu -> MobileMenu(vm)
+                        PhoneTab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }
+                        PhoneTab.Favorites -> PhoneFavorites(vm, current) { epgFor = it }
+                        PhoneTab.Search -> PhoneSearch(vm, current, onEpg = { epgFor = it }) { id -> nav = nav.groupFromSearch(id) }
+                        PhoneTab.Menu -> MobileMenu(vm)
                     }
                     // A barra fica colada ao fundo do ecrã, por cima da lista (com o mini-leitor por cima dela, se há um
                     // canal a dar fora do ecrã do canal). Tocar em "TV" já na TV volta ao início.
@@ -222,21 +207,12 @@ fun MobileMain(vm: AppViewModel) {
                         if (mini) {
                             MiniPlayer(
                                 vm, current, playback,
-                                onOpen = {
-                                    tab = Tab.Tv
-                                    home = false
-                                },
-                                onClose = { stopped = true },
+                                onOpen = { nav = nav.openPlayer() },
+                                onClose = { nav = nav.closePlayer() },
                                 modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
                             )
                         }
-                        BottomBar(tab) {
-                            if (it == Tab.Tv && tab == Tab.Tv) {
-                                home = true
-                                homeGroup = null
-                            }
-                            tab = it
-                        }
+                        BottomBar(tab) { nav = nav.tabTapped(it) }
                     }
                     epgFor?.let { channel ->
                         EpgSheet(vm, channel, onPick = { logo -> epgPick = channel to logo }) { epgFor = null }
@@ -254,7 +230,7 @@ fun MobileMain(vm: AppViewModel) {
     options?.let { if (!pip) PlayerOptionsSheet(vm, playback, it) { options = null } }
     homePinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { homePinFor = null }, rejected = vm::pinRejected) { pin ->
-            vm.unlockGroup(id, pin).also { if (it) { homeGroup = id; homePinFor = null } }
+            vm.unlockGroup(id, pin).also { if (it) { nav = nav.openGroup(id); homePinFor = null } }
         }
     }
     var reminder by remember { mutableStateOf<Reminder?>(null) }
@@ -295,16 +271,16 @@ private fun FullscreenBars(fullscreen: Boolean) {
 }
 
 @Composable
-private fun BottomBar(tab: Tab, modifier: Modifier = Modifier, onTab: (Tab) -> Unit) {
+private fun BottomBar(tab: PhoneTab, modifier: Modifier = Modifier, onTab: (PhoneTab) -> Unit) {
     val s = LocalStrings.current
     Column(modifier.fillMaxWidth().background(PhoneColors.TabBar).navigationBarsPadding()) {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.1f)))
         Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp)) {
-            BarItem("TV", ItvIcons.Guide, tab == Tab.Tv) { onTab(Tab.Tv) }
-            BarItem(s.tabGuide, ItvIcons.Calendar, tab == Tab.Guide) { onTab(Tab.Guide) }
-            BarItem(s.favorites, ItvIcons.Star, tab == Tab.Favorites) { onTab(Tab.Favorites) }
-            BarItem(s.search, ItvIcons.Search, tab == Tab.Search) { onTab(Tab.Search) }
-            BarItem(s.settings, ItvIcons.Settings, tab == Tab.Menu) { onTab(Tab.Menu) }
+            BarItem("TV", ItvIcons.Guide, tab == PhoneTab.Tv) { onTab(PhoneTab.Tv) }
+            BarItem(s.tabGuide, ItvIcons.Calendar, tab == PhoneTab.Guide) { onTab(PhoneTab.Guide) }
+            BarItem(s.favorites, ItvIcons.Star, tab == PhoneTab.Favorites) { onTab(PhoneTab.Favorites) }
+            BarItem(s.search, ItvIcons.Search, tab == PhoneTab.Search) { onTab(PhoneTab.Search) }
+            BarItem(s.settings, ItvIcons.Settings, tab == PhoneTab.Menu) { onTab(PhoneTab.Menu) }
         }
     }
 }
@@ -323,6 +299,9 @@ private fun androidx.compose.foundation.layout.RowScope.BarItem(label: String, i
 
 private val BAR_SPACE = 92.dp
 private val MINI_SPACE = 70.dp
+
+/** Guarda o [PhoneNav] ao rodar e quando a app vai para trás. */
+private val PhoneNavSaver = listSaver<PhoneNav, Any?>({ it.toList() }, { PhoneNav.fromList(it) })
 
 /** O espaço por baixo das listas: a barra dos separadores e, quando há, o mini-leitor. */
 internal val LocalBarSpace = compositionLocalOf { BAR_SPACE }
