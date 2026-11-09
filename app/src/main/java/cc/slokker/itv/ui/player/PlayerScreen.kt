@@ -194,14 +194,10 @@ fun PlayerScreen(vm: AppViewModel) {
     var reminder by remember { mutableStateOf<Reminder?>(null) }
     /** Segundos até o temporizador parar a app (null = sem aviso). */
     var sleepWarning by remember { mutableStateOf<Int?>(null) }
-    // Catch-up: posição, recuo/avanço por confirmar, pausa.
+    /** Catch-up: onde vai o vídeo (ms desde o início do programa), para a barra. */
     var catchupPosition by remember { mutableLongStateOf(0L) }
-    var pendingSeek by remember { mutableStateOf<Long?>(null) }
-    var paused by remember { mutableStateOf(false) }
-    var catchupBarToken by remember { mutableIntStateOf(0) }
-    var catchupBarVisible by remember { mutableStateOf(false) }
-    /** Pausa do direto: o salto por confirmar, em ms atrás do direto (← → somam-se, como no catch-up). */
-    var tsPending by remember { mutableStateOf<Long?>(null) }
+    /** Pausar, recuar e avançar, o mesmo no catch-up e na pausa do direto (ver TvSeek). */
+    val seek = remember { TvSeek() }
     // Segundo canal (imagem na imagem / dividido).
     val second by vm.second.collectAsStateWithLifecycle()
     var dualLayout by remember { mutableStateOf(DualLayout.PIP) }
@@ -226,7 +222,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val updateBusy = update is UpdateState.Downloading || update is UpdateState.Installing
     val showUpdate = updateNotice != null && (update is UpdateState.Available || updateBusy) && (
         updateBusy || panel == Panel.None && !showSettings && !overlayOpen && pinFor == null && reminder == null &&
-            sleepWarning == null && catchup == null && !(timeshift.available && (paused || !timeshift.atLive)) && !(infoVisible && infoFull)
+            sleepWarning == null && catchup == null && !(timeshift.available && (seek.paused || !timeshift.atLive)) && !(infoVisible && infoFull)
         )
     var updateHold by remember { mutableFloatStateOf(0f) }
     var updateHidesIn by remember { mutableIntStateOf(UPDATE_CARD_SECONDS) }
@@ -244,42 +240,37 @@ fun PlayerScreen(vm: AppViewModel) {
 
     fun zap(delta: Int) = vm.zap(if (prefs.reverseZap) -delta else delta)
 
-    fun showCatchupBar() {
-        catchupBarVisible = true
-        catchupBarToken++
+    /** O catch-up: ← → somam um minuto; cada salto é um pedido novo ao servidor a partir dessa posição. */
+    val archive = catchup?.let { cu ->
+        SeekTarget.archive(
+            position = { catchupPosition }, durationMs = cu.durationMs, stepMs = SEEK_STEP_MS,
+            onSeek = vm::seekCatchup, onPause = player::pause, onPlay = player::play, onExit = vm::exitCatchup,
+        )
     }
+
+    /** A pausa do direto: ← → somam 10 s atrás do direto; o salto é no disco (recomeça o player nesse ponto do anel). */
+    val ring = SeekTarget.ring(
+        behind = { timeshift.behindMs }, window = { timeshift.windowMs }, stepMs = TIMESHIFT_STEP_MS,
+        onSeek = { timeshift.seekBehind(player, it) }, onPause = player::pause, onResume = { timeshift.resume(player) },
+        onLive = { timeshift.goLive(player) },
+    )
+    val latestSeekTarget by rememberUpdatedState(archive ?: ring)
 
     /** A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal). */
     fun tsActive() = catchup == null && second == null && timeshift.available
 
     /** Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up. */
-    fun tsShifted() = tsActive() && (paused || !timeshift.atLive || tsPending != null)
+    fun tsShifted() = tsActive() && (seek.paused || !timeshift.atLive || seek.pending != null)
 
     fun tsToggle() {
-        if (paused) {
-            paused = false
-            timeshift.resume(player)
-        } else {
-            paused = true
-            player.pause()
-        }
         infoVisible = false
-        showCatchupBar()
+        seek.togglePause(ring)
     }
 
-    /** Recua (negativo) ou avança [deltaMs]; o salto só se faz quando se pára de carregar. */
-    fun tsSeek(deltaMs: Long) {
-        val from = tsPending ?: timeshift.behindMs
-        tsPending = (from - deltaMs).coerceIn(0L, timeshift.windowMs)
+    /** Recua ou avança um passo; o salto só se faz quando se pára de carregar. */
+    fun tsSeek(forward: Boolean) {
         infoVisible = false
-        showCatchupBar()
-    }
-
-    fun tsGoLive() {
-        paused = false
-        tsPending = null
-        timeshift.goLive(player)
-        catchupBarVisible = false
+        seek.step(ring, forward)
     }
 
     fun openChannels() {
@@ -308,14 +299,12 @@ fun PlayerScreen(vm: AppViewModel) {
     LaunchedEffect(current.key, data.playlist, player, catchup) {
         val cu = catchup
         catchupPosition = cu?.positionMs ?: 0L
-        pendingSeek = null
-        tsPending = null
-        paused = false
+        seek.reset()
         playback.tune(PlaybackRequest.of(data, current, cu, streamFormat, vm::stalkerCandidates))
         when {
             cu != null -> {
                 infoVisible = false
-                showCatchupBar()
+                seek.showBar()
             }
             prefs.infoSeconds > 0 -> showInfo()
             else -> infoVisible = false
@@ -330,27 +319,18 @@ fun PlayerScreen(vm: AppViewModel) {
         }
     }
 
-    // A barra do catch-up esconde-se uns segundos depois da última tecla (fica enquanto está em pausa).
-    LaunchedEffect(catchupBarToken, paused) {
-        if (paused) return@LaunchedEffect
+    // A barra (do catch-up ou da pausa) esconde-se uns segundos depois da última tecla (fica enquanto está em pausa).
+    LaunchedEffect(seek.barToken, seek.paused) {
+        if (seek.paused) return@LaunchedEffect
         delay(CATCHUP_BAR_MS)
-        catchupBarVisible = false
+        seek.barVisible = false
     }
 
-    // ← → no catch-up somam minutos; o pedido ao servidor só se faz quando se pára de carregar.
-    LaunchedEffect(pendingSeek) {
-        val target = pendingSeek ?: return@LaunchedEffect
+    // ← → somam-se; o salto só se faz quando se pára de carregar.
+    LaunchedEffect(seek.pending) {
+        val target = seek.pending ?: return@LaunchedEffect
         delay(SEEK_COMMIT_MS)
-        vm.seekCatchup(target)
-    }
-
-    // Na pausa do direto o mesmo, mas o salto é no disco (recomeça o player nesse ponto do anel).
-    LaunchedEffect(tsPending) {
-        val target = tsPending ?: return@LaunchedEffect
-        delay(SEEK_COMMIT_MS)
-        paused = false
-        timeshift.seekBehind(player, target)
-        tsPending = null
+        seek.commit(latestSeekTarget, target)
     }
 
     // Cada player na sua imagem. Ao trocar, primeiro larga-se a imagem antiga (dois players não podem partilhar uma).
@@ -428,8 +408,7 @@ fun PlayerScreen(vm: AppViewModel) {
             // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
             vm.closeSecond()
             playback.stop()
-            paused = false
-            tsPending = null
+            seek.reset()
             frameRateMatcher?.restore()
             vm.flushLastChannel()
         }
@@ -637,7 +616,7 @@ fun PlayerScreen(vm: AppViewModel) {
             panel != Panel.None -> panel = Panel.None
             infoVisible && playback.failure == null -> infoVisible = false
             catchup != null -> vm.exitCatchup()
-            tsShifted() -> tsGoLive()
+            tsShifted() -> seek.goLive(ring)
             second != null -> vm.closeSecond()
             prefs.backAction == Prefs.BackAction.GUIDE && now - lastBack >= 2_500 -> {
                 showGuide = true
@@ -770,36 +749,32 @@ fun PlayerScreen(vm: AppViewModel) {
                                 vm.exitCatchup(); return@onKeyEvent true
                             }
                             if (tsShifted()) {
-                                tsGoLive(); return@onKeyEvent true
+                                seek.goLive(ring); return@onKeyEvent true
                             }
                         }
                     }
                     // Catch-up: ← → recuam/avançam 1 minuto, OK pausa.
-                    if (catchup != null) {
-                        val cu = catchup!!
+                    if (archive != null) {
                         when (code) {
                             AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
                             AndroidKeyEvent.KEYCODE_DPAD_RIGHT, AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                                 val back = code == AndroidKeyEvent.KEYCODE_DPAD_LEFT || code == AndroidKeyEvent.KEYCODE_MEDIA_REWIND
-                                val from = pendingSeek ?: catchupPosition
-                                pendingSeek = (from + if (back) -SEEK_STEP_MS else SEEK_STEP_MS).coerceIn(0L, cu.durationMs)
-                                showCatchupBar()
+                                seek.step(archive, forward = !back)
                                 return@onKeyEvent true
                             }
                             // No catch-up as setas não mudam de canal (é um programa gravado): só mostram a barra.
                             AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                showCatchupBar()
+                                seek.showBar()
                                 return@onKeyEvent true
                             }
                             AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER,
                             AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, AndroidKeyEvent.KEYCODE_MEDIA_PLAY, AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
                                 if (playback.failure != null) {
                                     playback.retry()
+                                    seek.showBar()
                                 } else {
-                                    paused = !paused
-                                    if (paused) player.pause() else player.play()
+                                    seek.togglePause(archive)
                                 }
-                                showCatchupBar()
                                 return@onKeyEvent true
                             }
                         }
@@ -810,26 +785,26 @@ fun PlayerScreen(vm: AppViewModel) {
                         val shifted = tsShifted()
                         when (code) {
                             AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, AndroidKeyEvent.KEYCODE_MEDIA_PLAY, AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                                val already = (code == AndroidKeyEvent.KEYCODE_MEDIA_PLAY && !paused) || (code == AndroidKeyEvent.KEYCODE_MEDIA_PAUSE && paused)
-                                if (already) showCatchupBar() else tsToggle()
+                                val already = (code == AndroidKeyEvent.KEYCODE_MEDIA_PLAY && !seek.paused) || (code == AndroidKeyEvent.KEYCODE_MEDIA_PAUSE && seek.paused)
+                                if (already) seek.showBar() else tsToggle()
                                 return@onKeyEvent true
                             }
                             AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> {
-                                tsSeek(-TIMESHIFT_STEP_MS); return@onKeyEvent true
+                                tsSeek(forward = false); return@onKeyEvent true
                             }
                             AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                                if (shifted) tsSeek(TIMESHIFT_STEP_MS)
+                                if (shifted) tsSeek(forward = true)
                                 return@onKeyEvent true
                             }
                         }
                         if (shifted) {
                             when (code) {
                                 AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                    tsSeek(if (code == AndroidKeyEvent.KEYCODE_DPAD_LEFT) -TIMESHIFT_STEP_MS else TIMESHIFT_STEP_MS)
+                                    tsSeek(forward = code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT)
                                     return@onKeyEvent true
                                 }
                                 AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
-                                    showCatchupBar(); return@onKeyEvent true
+                                    seek.showBar(); return@onKeyEvent true
                                 }
                                 AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                     tsToggle(); return@onKeyEvent true
@@ -1090,30 +1065,30 @@ fun PlayerScreen(vm: AppViewModel) {
             catchup?.let { cu ->
                 if (!showGuide) {
                     AnimatedVisibility(
-                        visible = catchupBarVisible || paused || pendingSeek != null,
+                        visible = seek.barVisible || seek.paused || seek.pending != null,
                         modifier = Modifier.align(Alignment.BottomCenter),
                         enter = fadeIn() + slideInVertically { it / 3 },
                         exit = fadeOut() + slideOutVertically { it / 3 },
                     ) {
-                        CatchupBar(cu, catchupPosition, pendingSeek, paused)
+                        CatchupBar(cu, catchupPosition, seek.pending, seek.paused)
                     }
-                    if (playback.ready || playback.failure != null) CatchupPill(paused, Modifier.align(Alignment.TopEnd))
+                    if (playback.ready || playback.failure != null) CatchupPill(seek.paused, Modifier.align(Alignment.TopEnd))
                 }
             }
 
             if (tsActive() && !showGuide) {
                 val shifted = tsShifted()
                 AnimatedVisibility(
-                    visible = (shifted && catchupBarVisible) || paused || tsPending != null,
+                    visible = (shifted && seek.barVisible) || seek.paused || seek.pending != null,
                     modifier = Modifier.align(Alignment.BottomCenter),
                     enter = fadeIn() + slideInVertically { it / 3 },
                     exit = fadeOut() + slideOutVertically { it / 3 },
                 ) {
-                    TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, tsPending, paused, timeshift.atLive)
+                    TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, seek.pending, seek.paused, timeshift.atLive)
                 }
                 // Atrás do direto, a cápsula no canto diz quanto (como a do catch-up).
                 if (shifted && playback.ready && playback.failure == null) {
-                    CatchupPill(paused, Modifier.align(Alignment.TopEnd), label = behindLabel(tsPending ?: timeshift.behindMs))
+                    CatchupPill(seek.paused, Modifier.align(Alignment.TopEnd), label = behindLabel(seek.pending ?: timeshift.behindMs))
                 }
             }
 
@@ -1332,7 +1307,6 @@ private const val SEEK_STEP_MS = 60_000L
 private const val SEEK_COMMIT_MS = 900L
 /** Pausa do direto: cada ← → (ou ⏪ ⏩) recua/avança isto. */
 private const val TIMESHIFT_STEP_MS = 10_000L
-private const val TIMESHIFT_TICK_MS = 500L
 private const val NUMBER_COMMIT_MS = 1_500L
 private const val SLEEP_WARNING_MS = 60_000L
 private const val REMINDER_CARD_MS = 45_000L
