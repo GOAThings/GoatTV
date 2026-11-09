@@ -47,8 +47,9 @@ internal class ChannelPlayback(
     private val net: NetMonitor? = null,
     private val now: () -> Long = SystemClock::elapsedRealtime,
     private val wait: suspend (Long) -> Unit = { delay(it) },
+    /** As ligações deste player (o da lista principal é partilhado com as gravações, ver [StreamGate.MAIN]). */
+    val gate: StreamGate = StreamGate(),
 ) {
-    val gate = StreamGate()
     private var engine: StreamEngine? = null
 
     /** O player atual (muda quando se recria: definições, ou o VLC para este canal). */
@@ -316,9 +317,15 @@ internal class ChannelPlayback(
         failure = null
         ready = false
         val prefs = host.prefs
-        // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes.
-        val ring = policy.timeshift && timeshift != null && prefs.timeshift && req.live && engine.supportsRing
-        if (!ring) timeshift?.clear()
+        // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes;
+        // uma gravação deste canal também abre pelo anel, para o player ler a ligação dela.
+        val ring = policy.timeshift && timeshift != null && (prefs.timeshift || host.recordingUses(candidate)) && req.live && engine.supportsRing
+        when {
+            ring -> Unit
+            // Uma gravação no disco não liga ao fornecedor: a gravação que esteja a decorrer continua.
+            candidate.isLocal -> timeshift?.clear()
+            else -> timeshift?.yieldConnection()
+        }
         ZapTrace.mark("O", "${candidate.format} #$index${if (ring) " ring" else ""}")
         engine.open(
             candidate, req.channel,

@@ -155,6 +155,9 @@ internal interface PlaybackHost {
 
     /** Quando começou o programa de [channel] que dá às [wallMs] (o anel da pausa guarda só esse). */
     fun programmeStartAt(channel: Channel, wallMs: Long): Long?
+
+    /** Uma gravação está a usar a ligação de [candidate]: o player abre pelo anel dela (mesmo sem a pausa do direto). */
+    fun recordingUses(candidate: StreamCandidate): Boolean = false
 }
 
 /** Como abrir uma tentativa (ver [loadStream]). */

@@ -20,6 +20,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -269,10 +270,16 @@ internal fun Player.loadStream(
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is ExoPlayer -> {
+            // Uma gravação no disco (ver Recordings): lê-se o ficheiro, sem ligação ao fornecedor.
+            if (candidate.isLocal) {
+                val source = ProgressiveMediaSource.Factory(FileDataSource.Factory(), tsExtractors()).createMediaSource(MediaItem.fromUri(candidate.url))
+                if (startMs > 0) setMediaSource(source, startMs) else setMediaSource(source)
+                return
+            }
             val direct = httpFactory(channel, userAgent, transfer)
             // Uma ligação de cada vez: a desta tentativa só abre depois de fechar a anterior (ver StreamGate).
             val http = gate?.factory(direct, exclusive = !candidate.isHls) ?: direct
-            val source = timeshift?.open(candidate, http, tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http)
+            val source = timeshift?.open(candidate, direct, gate ?: StreamGate(), tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http)
             if (startMs > 0) setMediaSource(source, startMs) else setMediaSource(source)
         }
     }
@@ -314,15 +321,19 @@ internal const val FREEZE_HEIGHT = 720
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
 
 /** A ligação HTTP ao servidor do canal. */
-private fun httpFactory(channel: Channel?, userAgent: String, transfer: TransferListener?): DefaultHttpDataSource.Factory {
+private fun httpFactory(channel: Channel?, userAgent: String, transfer: TransferListener?): DefaultHttpDataSource.Factory =
+    providerHttp(channel?.userAgent ?: userAgent, channel?.referrer, transfer)
+
+/** A ligação HTTP a um servidor IPTV com [userAgent] e [referrer] (também a das gravações sem player). */
+internal fun providerHttp(userAgent: String, referrer: String?, transfer: TransferListener? = null): DefaultHttpDataSource.Factory {
     // Muitos servidores redirecionam de http para https ou para outro host.
     val http = DefaultHttpDataSource.Factory()
-        .setUserAgent(SafeInput.stripControl(channel?.userAgent ?: userAgent))
+        .setUserAgent(SafeInput.stripControl(userAgent))
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(20_000)
         .setTransferListener(transfer)
-    channel?.referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
+    referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
     return http
 }
 

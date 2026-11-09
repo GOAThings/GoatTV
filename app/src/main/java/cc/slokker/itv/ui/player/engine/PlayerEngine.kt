@@ -169,6 +169,8 @@ internal fun rememberChannelPlayback(
             policy, scope, host,
             timeshift = if (policy.timeshift) Timeshift(context) else null,
             net = net.takeIf { policy.diagnostics },
+            // A lista principal partilha o portão com as gravações; o segundo canal (outra conta) tem o seu.
+            gate = if (policy.timeshift) StreamGate.MAIN else StreamGate(),
         ).also { it.freezeCapture = { latestCapture() } }
     }
     val build = PlayerBuild.of(prefs, playback.engineFor(channelKey, prefs.engine), policy.passthrough)

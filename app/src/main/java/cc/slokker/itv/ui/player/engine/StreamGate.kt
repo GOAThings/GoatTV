@@ -151,12 +151,18 @@ internal class StreamGate(
         }
     }
 
-    private companion object {
-        const val TAG = "StreamGate"
+    companion object {
+        private const val TAG = "StreamGate"
+
+        /**
+         * O portão da lista principal: o mesmo para o player da TV, o do telemóvel e as gravações (que continuam com a
+         * app em segundo plano). O segundo canal (outra conta) tem o seu.
+         */
+        val MAIN = StreamGate()
 
         /** Como o gravador da pausa do direto (Timeshift): 0,8 s para fechar sozinha, 3 s no máximo. */
-        const val GRACE_MS = 800L
-        const val MAX_WAIT_MS = 3_000L
-        const val POLL_MS = 50L
+        private const val GRACE_MS = 800L
+        private const val MAX_WAIT_MS = 3_000L
+        private const val POLL_MS = 50L
     }
 }

@@ -4,10 +4,6 @@ package cc.slokker.itv.ui.player
 
 import android.content.Context
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -30,29 +26,21 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.ExtractorsFactory
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.TimeshiftRing
-import cc.slokker.itv.ui.player.engine.OpenRetry
-import cc.slokker.itv.ui.player.engine.ZapTrace
-import java.io.File
-import java.io.IOException
+import cc.slokker.itv.ui.player.engine.StreamGate
 import java.io.InterruptedIOException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * "Pausar o direto": pausar, recuar e voltar ao direto em qualquer canal, mesmo sem catch-up no servidor.
  *
- * Streams .ts (o normal no Xtream): a única ligação ao servidor passa a ser a do [Recorder], que escreve tudo
+ * Streams .ts (o normal no Xtream): a única ligação ao servidor passa a ser a do [ChannelFeed], que escreve tudo
  * num anel em disco ([TimeshiftRing], na cache da app); o ExoPlayer lê do anel ([RingDataSource]) e nunca abre
- * uma ligação sua — o fornecedor só deixa uma de cada vez. Em direto o player lê logo atrás da escrita; em pausa
+ * uma ligação sua — o fornecedor só deixa uma de cada vez. Uma gravação pode segurar a mesma ligação: ao sair, o
+ * player larga-a mas ela continua, e ao voltar ao canal o player volta a ler do mesmo anel. Em direto o player lê logo atrás da escrita; em pausa
  * a escrita continua. Recuar ou avançar é recomeçar o player noutro ponto do anel (o TS ao vivo não tem índice
  * para o ExoPlayer saltar sozinho); o índice do anel diz onde fica cada instante.
  *
  * Guarda-se só o programa que se está a ver (pelo guia): ao passar para o seguinte, o anterior sai do anel; ao
- * mudar de canal ou sair, o anel é apagado. Sem guia, os últimos [NO_EPG_AGE_MS].
+ * mudar de canal ou sair, o anel é apagado (a não ser que uma gravação ainda o use). Sem guia, os últimos [NO_EPG_AGE_MS].
  *
  * HLS (.m3u8): cada bocado é um pedido à parte e a lista do servidor já guarda uns segundos ou minutos; usa-se
  * essa janela do próprio ExoPlayer (sem disco), quando tem pelo menos [HLS_MIN_WINDOW_MS].
@@ -62,10 +50,8 @@ import java.util.concurrent.atomic.AtomicLong
  */
 @Stable
 internal class Timeshift(context: Context) {
-    private val dir = File(context.applicationContext.cacheDir, "timeshift")
-    private val main = Handler(Looper.getMainLooper())
+    private val dir = ChannelFeed.dir(context)
     private var session: Session? = null
-    private var lastRecorder: Recorder? = null
     private var hls = false
     private val window = Timeline.Window()
 
@@ -109,36 +95,41 @@ internal class Timeshift(context: Context) {
     /** Com o anel: o tempo de vídeo já gravado (para a página Ligação medir o que chega do servidor); senão null. */
     val recordedMs: Long? get() = session?.takeIf { !it.notTs && it.ring.isTs == true }?.ring?.liveMediaMs
 
+    /** A ligação (e o anel) do canal a dar, quando é pelo anel e é mesmo TS (para gravar). */
+    val feed: ChannelFeed? get() = session?.takeIf { !it.notTs && it.ring.isTs == true }?.feed
+
     /**
      * Abre [candidate] pelo anel e devolve a fonte para o ExoPlayer, ou null para abrir como sempre (HLS, pouco
-     * espaço livre). [reconnectMs]: de quanto em quanto tempo o gravador volta a ligar se a ligação cair (0 = não).
+     * espaço livre). [direct]: a ligação HTTP ao servidor, que passa pelo [gate]. [reconnectMs]: de quanto em quanto
+     * tempo a ligação volta a ligar se cair (0 = não). Se uma gravação ainda tem este canal aberto, o player volta a
+     * esse anel (perto do direto), sem abrir outra ligação.
      */
-    fun open(candidate: StreamCandidate, upstream: DataSource.Factory, extractors: ExtractorsFactory, reconnectMs: Long): MediaSource? {
+    fun open(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, extractors: ExtractorsFactory, reconnectMs: Long): MediaSource? {
         clear()
         if (candidate.isHls) {
             hls = true
             return null
         }
-        val generation = GENERATION.incrementAndGet()
-        val capacity = capacity() ?: return null
-        LIVE += generation
-        val ring = try {
-            TimeshiftRing(File(dir, "$RING_PREFIX$generation.ts"), capacity, MAX_AGE_MS, SystemClock::elapsedRealtime)
-        } catch (e: IOException) {
-            LIVE -= generation
-            Log.w(TAG, "Sem anel", e)
-            return null
-        }
-        val s = Session(ring, upstream, Uri.parse(candidate.url), extractors, generation)
-        val recorder = Recorder(s, reconnectMs, lastRecorder)
-        s.recorder = recorder
+        val reused = ChannelFeed.find(candidate.url)?.takeIf { it.hold(ChannelFeed.Holder.PLAYER) }
+        val feed = reused ?: ChannelFeed.open(dir, candidate.url, direct, gate, reconnectMs, ChannelFeed.Holder.PLAYER) ?: return null
+        feed.onReconnect = { n, at, waitMs -> onReconnect?.invoke(n, at, waitMs) }
+        feed.onConnected = { onConnected?.invoke() }
+        val s = Session(feed, extractors)
         session = s
-        lastRecorder = recorder
-        recorder.start()
+        if (reused != null) {
+            val ring = reused.ring
+            ring.entryAtOrBefore(ring.liveMediaMs - LIVE_START_MS)?.let { entry ->
+                s.startMediaMs = entry.mediaMs
+                return s.sourceAt(entry.offset)
+            }
+        }
         return s.sourceAt(0)
     }
 
-    /** Fecha a ligação e apaga o anel (outro canal, catch-up, app em segundo plano). */
+    /**
+     * O player larga a ligação (outro canal, catch-up, app em segundo plano): fecha-a e apaga o anel, a não ser que
+     * uma gravação ainda a use.
+     */
     fun clear() {
         session?.close()
         session = null
@@ -153,26 +144,12 @@ internal class Timeshift(context: Context) {
     }
 
     /**
-     * Espaço para um anel novo: até [MAX_BYTES], sem passar de metade do livre (tirando uma reserva). O livre conta
-     * já com os anéis anteriores que ainda se estão a apagar (ver [trash]).
+     * O player vai ligar-se ao servidor sem o anel (HLS, VLC, catch-up do servidor): larga o anel e fecha também a
+     * ligação que uma gravação ainda tenha aberta (uma ligação de cada vez; a gravação acaba aí).
      */
-    private fun capacity(): Long? {
-        dir.mkdirs()
-        // Restos de uma sessão que não fechou (a app morreu a meio): apagados fora da thread principal. Os anéis
-        // abertos neste processo ([LIVE]) ficam; os fechados já se apagaram antes (a mesma thread, por ordem).
-        DISK.execute {
-            dir.listFiles()?.forEach { f ->
-                val gen = f.name.removePrefix(RING_PREFIX).removeSuffix(".ts").toIntOrNull()
-                if (gen == null || gen !in LIVE) f.delete()
-            }
-        }
-        val free = dir.usableSpace + PENDING_BYTES.get()
-        val bytes = minOf(MAX_BYTES, (free - RESERVE_BYTES) / 2)
-        if (bytes < TimeshiftRing.MIN_CAPACITY) {
-            Log.i(TAG, "Pouco espaço livre (${free / 1_048_576} MB): sem pausa do direto")
-            return null
-        }
-        return bytes
+    fun yieldConnection() {
+        clear()
+        ChannelFeed.closeCurrent()
     }
 
     /**
@@ -190,7 +167,7 @@ internal class Timeshift(context: Context) {
             // Folga de um minuto antes do início, que as horas do guia raramente são certas.
             val wall = System.currentTimeMillis()
             val start = programmeStart(wall - (live - (s.startMediaMs + player.currentPosition)))
-            ring.setMaxAge(if (start == null) NO_EPG_AGE_MS else MAX_AGE_MS)
+            ring.setMaxAge(if (start == null) NO_EPG_AGE_MS else ChannelFeed.MAX_AGE_MS)
             if (start != null) ring.dropBefore(live - (wall - start) - PROGRAMME_MARGIN_MS)
             live = ring.liveMediaMs
             val oldest = ring.oldest?.mediaMs ?: live
@@ -306,35 +283,10 @@ internal class Timeshift(context: Context) {
         update(player)
     }
 
-    /**
-     * Fecha e apaga [ring] noutra thread: apagar um ficheiro de vários GB (horas no mesmo canal) pode levar centenas
-     * de ms, e era na thread principal, a atrasar o canal seguinte. Quem estiver a ler recebe o fim logo
-     * ([TimeshiftRing.close] avisa antes de fechar os ficheiros).
-     */
-    private fun trash(ring: TimeshiftRing, generation: Int) {
-        val bytes = minOf(ring.writtenBytes, ring.capacity)
-        PENDING_BYTES.addAndGet(bytes)
-        DISK.execute {
-            val started = SystemClock.uptimeMillis()
-            try {
-                ring.close()
-            } finally {
-                LIVE -= generation
-                PENDING_BYTES.addAndGet(-bytes)
-            }
-            Log.d(TAG, "Anel apagado em ${SystemClock.uptimeMillis() - started} ms (${bytes / 1_048_576} MB)")
-        }
-    }
-
-    /** Um canal aberto pelo anel. */
-    private inner class Session(
-        val ring: TimeshiftRing,
-        val upstream: DataSource.Factory,
-        val uri: Uri,
-        private val extractors: ExtractorsFactory,
-        private val id: Int,
-    ) {
-        lateinit var recorder: Recorder
+    /** Um canal aberto pelo anel: a ligação (partilhada) e onde vai a leitura deste player. */
+    private inner class Session(val feed: ChannelFeed, private val extractors: ExtractorsFactory) {
+        val ring: TimeshiftRing get() = feed.ring
+        val notTs: Boolean get() = feed.notTs
 
         /** Tempo do vídeo (no anel) onde começou a fonte atual do player. */
         @Volatile var startMediaMs = 0L
@@ -343,17 +295,14 @@ internal class Timeshift(context: Context) {
         @Volatile var end = 0
         @Volatile var endAt = 0L
 
-        /** Afinal não é TS: o player liga-se ao servidor ele próprio (depois de o gravador largar a ligação). */
-        @Volatile var notTs = false
-
         fun sourceAt(offset: Long): MediaSource =
             ProgressiveMediaSource.Factory({ RingDataSource(this) }, extractors)
                 .setLoadErrorHandlingPolicy(ringErrors)
-                .createMediaSource(MediaItem.fromUri(Uri.parse("timeshift://ring/$id?at=$offset")))
+                .createMediaSource(MediaItem.fromUri(Uri.parse("timeshift://ring/${feed.id}?at=$offset")))
 
         /**
-         * O gravador já tentou a ligação as vezes que devia: quando o anel acabou com um erro, o ExoPlayer não volta
-         * a ler o mesmo erro do disco (eram mais 0, 1 e 2 s antes de o canal passar ao outro formato ou mostrar o erro).
+         * A ligação já tentou as vezes que devia: quando o anel acabou com um erro, o ExoPlayer não volta a ler o
+         * mesmo erro do disco (eram mais 0, 1 e 2 s antes de o canal passar ao outro formato ou mostrar o erro).
          */
         private val ringErrors = object : DefaultLoadErrorHandlingPolicy() {
             override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
@@ -361,110 +310,9 @@ internal class Timeshift(context: Context) {
         }
 
         fun close() {
-            recorder.close()
-            trash(ring, id)
-        }
-    }
-
-    /**
-     * A ligação ao servidor: lê o stream e escreve-o no anel. Se cair depois de já ter dado, volta a ligar de
-     * [reconnectMs] em [reconnectMs] (como o ecrã fazia), num segmento novo do anel; o que já estava guardado fica.
-     */
-    private inner class Recorder(private val s: Session, private val reconnectMs: Long, private val previous: Recorder?) : Thread("timeshift-${s.ring.hashCode()}") {
-        @Volatile private var closed = false
-        @Volatile private var source: DataSource? = null
-        val done = CountDownLatch(1)
-
-        override fun run() {
-            try {
-                // Uma ligação de cada vez: a do canal anterior fecha antes de abrir esta.
-                if (previous?.done?.await(PREVIOUS_WAIT_MS, TimeUnit.MILLISECONDS) == false) Log.w(TAG, "A ligação anterior ainda não fechou")
-                record()
-            } catch (_: InterruptedException) {
-            } catch (e: Throwable) {
-                if (!closed) Log.w(TAG, "Gravador parou", e)
-            } finally {
-                s.ring.endSegment(final = true)
-                done.countDown()
-            }
-        }
-
-        private fun record() {
-            val buffer = ByteArray(BUFFER_BYTES)
-            var failures = 0
-            var everData = false
-            var reconnects = 0
-            while (!closed) {
-                var error: IOException? = null
-                val src = s.upstream.createDataSource()
-                source = src
-                try {
-                    Log.d(TAG, "A ligar (${s.ring.hashCode()})")
-                    src.open(DataSpec(s.uri))
-                    var gotData = false
-                    while (!closed) {
-                        val n = src.read(buffer, 0, buffer.size)
-                        if (n == C.RESULT_END_OF_INPUT) break
-                        if (n <= 0) continue
-                        if (!gotData) {
-                            gotData = true
-                            s.ring.beginSegment()
-                            if (everData) main.post { onConnected?.invoke() }
-                            everData = true
-                            failures = 0
-                            reconnects = 0
-                        }
-                        s.ring.write(buffer, 0, n)
-                        // Não é TS (um MP4 num link sem extensão…): o anel não serve, o player liga-se ele próprio.
-                        if (s.ring.isTs == false) {
-                            s.notTs = true
-                            return
-                        }
-                    }
-                } catch (e: IOException) {
-                    error = e
-                } finally {
-                    source = null
-                    runCatching { src.close() }
-                    Log.d(TAG, "Ligação fechada (${s.ring.hashCode()})" + (error?.let { ": $it" } ?: ""))
-                }
-                if (closed) return
-                if (!everData) {
-                    // Ainda não deu: mais umas tentativas seguidas, depressa se o servidor recusou por ainda não ter
-                    // largado a ligação do canal anterior (ver OpenRetry); depois o erro vai para o player, que o explica.
-                    val wait = OpenRetry.delayMs(error, ++failures)
-                    if (wait == null) {
-                        s.ring.endSegment(final = true, error = error)
-                        return
-                    }
-                    ZapTrace.mark("RETRY", "${OpenRetry.httpCode(error) ?: error} +${wait}ms")
-                    sleep(wait)
-                    continue
-                }
-                if (reconnectMs <= 0) {
-                    s.ring.endSegment(final = true, error = error)
-                    return
-                }
-                s.ring.endSegment(final = false)
-                reconnects++
-                val attempt = reconnects
-                main.post { onReconnect?.invoke(attempt, SystemClock.elapsedRealtime() + reconnectMs, reconnectMs) }
-                sleep(reconnectMs)
-            }
-        }
-
-        fun close() {
-            closed = true
-            interrupt()
-            // Uma leitura presa (servidor parado) só acabava no timeout: fecha-se a ligação por fora, para libertar
-            // já a única que o fornecedor deixa.
-            val src = source ?: return
-            Thread {
-                try {
-                    if (!done.await(CLOSE_GRACE_MS, TimeUnit.MILLISECONDS)) src.close()
-                } catch (_: Throwable) {
-                }
-            }.apply { isDaemon = true }.start()
+            feed.onReconnect = null
+            feed.onConnected = null
+            feed.release(ChannelFeed.Holder.PLAYER)
         }
     }
 
@@ -489,13 +337,13 @@ internal class Timeshift(context: Context) {
             }
             if (s.notTs) {
                 try {
-                    s.recorder.done.await()
+                    s.feed.done.await()
                 } catch (e: InterruptedException) {
                     throw InterruptedIOException().apply { initCause(e) }
                 }
-                val d = s.upstream.createDataSource()
+                val d = s.feed.connect()
                 direct = d
-                val length = d.open(dataSpec.buildUpon().setUri(s.uri).build())
+                val length = d.open(dataSpec.buildUpon().setUri(s.feed.uriForPlayer).build())
                 opened = true
                 transferStarted(dataSpec)
                 return length
@@ -549,20 +397,9 @@ internal class Timeshift(context: Context) {
     }
 
     internal companion object {
-        private const val TAG = "Timeshift"
-
-        /**
-         * Com guia, o programa todo até 4 h; sem guia, 30 min. Nunca mais de 4 GB nem de metade do espaço livre
-         * (o anel acerta o tamanho pelo débito, ver TimeshiftRing): um canal pesado guarda menos tempo.
-         */
-        private const val MAX_AGE_MS = 4 * 60 * 60_000L
+        /** Sem guia, os últimos 30 min (com guia, o programa todo: ver [ChannelFeed.MAX_AGE_MS]). */
         private const val NO_EPG_AGE_MS = 30 * 60_000L
-        private const val MAX_BYTES = 4_096L * 1024 * 1024
-        private const val PROGRAMME_MARGIN_MS = 60_000L
-
-        /** O que fica sempre livre no disco, para o sistema e as outras apps. */
-        private const val RESERVE_BYTES = 512L * 1024 * 1024
-        private const val BUFFER_BYTES = 64 * 1024
+        const val PROGRAMME_MARGIN_MS = 60_000L
 
         /** Para voltar ao direto, começa-se este tanto antes do fim. */
         private const val LIVE_START_MS = 5_000L
@@ -580,20 +417,5 @@ internal class Timeshift(context: Context) {
         private const val HLS_LIVE_SLACK_MS = 6_000L
         private const val WAIT_MS = 250L
         private const val KIND_POLL_MS = 20L
-        private const val PREVIOUS_WAIT_MS = 3_000L
-        private const val CLOSE_GRACE_MS = 800L
-        private const val RING_PREFIX = "ring-"
-
-        /** O número de cada anel, único no processo (o nome do ficheiro). */
-        private val GENERATION = AtomicInteger()
-
-        /** Os anéis deste processo ainda não apagados: o resto da pasta são restos (ver [capacity]). */
-        private val LIVE: MutableSet<Int> = ConcurrentHashMap.newKeySet()
-
-        /** Apagar anéis e restos: uma thread só, fora da principal (a ordem fica a dos pedidos). */
-        private val DISK = Executors.newSingleThreadExecutor { r -> Thread(r, "timeshift-disk").apply { isDaemon = true } }
-
-        /** Bytes de anéis anteriores que ainda se estão a apagar (contam como livres para o anel novo). */
-        private val PENDING_BYTES = AtomicLong()
     }
 }
