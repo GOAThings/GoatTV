@@ -106,6 +106,14 @@ data class Prefs(
 
     fun isChannelHidden(playlistId: String, channelKey: String) = "$playlistId:$channelKey" in hiddenChannels
 
+    /** Grupo de [playlistId] marcado como bloqueado (com ou sem PIN definido). */
+    fun isGroupMarkedLocked(playlistId: String, groupId: String) = "$playlistId:$groupId" in lockedGroups
+
+    /** Quantos grupos de [playlistId] estão bloqueados / escondidos (as chaves são "playlistId:groupId"). */
+    fun lockedGroupCount(playlistId: String) = lockedGroups.count { it.startsWith("$playlistId:") }
+
+    fun hiddenGroupCount(playlistId: String) = hiddenGroups.count { it.startsWith("$playlistId:") }
+
     object Key {
         const val ENGINE = "engine"
         const val BUFFER = "buffer"

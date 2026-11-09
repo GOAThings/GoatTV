@@ -2,7 +2,6 @@ package cc.slokker.itv.ui.settings
 
 import android.net.Uri
 import java.util.Locale
-import cc.slokker.itv.ui.theme.outlineBrush
 import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
@@ -48,7 +47,6 @@ import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
@@ -58,8 +56,6 @@ import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.HdrType
 import cc.slokker.itv.ui.player.dynamicRangeLabel
-import cc.slokker.itv.ui.theme.Accent
-import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 /** Nome da origem dos logótipos: a lista, o guia de cada canal, ou o país (pelo código). */
@@ -93,6 +89,41 @@ internal class PageNav(
 
     fun pref(key: String, title: String, options: List<Pair<Any?, String>>, selected: Any?) =
         pick(key, title, options, selected) { vm.setPref(key, it) }
+
+    /** A linha de uma escolha do catálogo: o valor à direita; carregar abre as opções (com amostras de cor, se as tem). */
+    fun choice(setting: Setting.Choice, values: SettingValues, s: Strings, subtitle: String? = setting.subtitle?.invoke(s)): Item {
+        val title = setting.title(s)
+        val options = setting.options(s)
+        val selected = setting.read(values)
+        return Item.Nav(setting.key, title, options.firstOrNull { it.first == selected }?.second, subtitle) {
+            push(
+                Route.Pick(title, options, selected, swatches = setting.swatches?.invoke(values.prefs).orEmpty()) { v ->
+                    vm.saveSetting(setting, v)
+                    pop()
+                },
+                setting.key,
+            )
+        }
+    }
+
+    /** A linha normal de uma definição do catálogo (as [Setting.Custom] não têm: desenha-as a página). */
+    fun item(setting: Setting, values: SettingValues, s: Strings): Item? = when (setting) {
+        is Setting.Choice -> choice(setting, values, s)
+        is Setting.Toggle -> Item.Toggle(setting.key, setting.title(s), setting.read(values.prefs), setting.subtitle?.invoke(s)) { vm.setPref(setting.key, it) }
+        is Setting.Custom -> null
+    }
+
+    /**
+     * As linhas da página [page] do catálogo, secção a secção (com o título por cima). [custom] desenha as linhas que
+     * a página faz à sua maneira; null fica com a normal.
+     */
+    fun catalogItems(page: TvPage, values: SettingValues, s: Strings, custom: (Setting) -> Item? = { null }): List<Item> = buildList {
+        for ((section, settings) in SettingsCatalog.tv(page)) {
+            val title = section.title
+            if (title != null && section.headerKey != null) add(Item.Header(section.headerKey, title(s)))
+            settings.forEach { setting -> (custom(setting) ?: item(setting, values, s))?.let(::add) }
+        }
+    }
 }
 
 /**
@@ -148,11 +179,6 @@ private fun updateItem(updateState: UpdateState, vm: AppViewModel, s: Strings, k
     else -> null
 }
 
-private fun aspectOptions(s: Strings) = listOf<Pair<Any?, String>>(
-    Prefs.Aspect.FIT to s.aspectFit,
-    Prefs.Aspect.ZOOM to s.aspectZoom,
-    Prefs.Aspect.FILL to s.aspectFill,
-)
 
 // ---- Página principal e canal atual --------------------------------------------------------
 
@@ -209,7 +235,7 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
         add(Item.Toggle("fav", s.favorite, isFav, ch.name) { vm.toggleFavorite(ch) })
         add(Item.Nav("audio", s.audio, tracks.audioLabel()) { push(Route.Audio, "audio") })
         add(Item.Nav("subs", s.subtitles, tracks.textLabel(player)) { push(Route.Subtitles, "subs") })
-        add(nav.pref(Prefs.Key.ASPECT, s.aspect, aspectOptions(s), prefs.aspect))
+        add(nav.choice(SettingsCatalog.ASPECT, SettingValues(prefs, null), s))
         add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
         val net by vm.net.state.collectAsStateWithLifecycle()
         add(Item.Nav("net", s.connection, s.netShort(net.verdict)) { push(Route.Connection, "net") })
@@ -496,18 +522,13 @@ private fun connectionItems(vm: AppViewModel, player: Player?, nav: PageNav): Li
         if (problem) {
             add(Item.Header("htry", s.netTry))
             if (net.link.wifi) add(Item.Info("cable", s.netUseCable, "", s.netUseCableSub, ItvIcons.Cable))
-            val buffers = listOf<Pair<Any?, String>>(
-                Prefs.Buffer.LIVE to s.bufferLive,
-                Prefs.Buffer.SMALL to s.bufferSmall,
-                Prefs.Buffer.NORMAL to s.bufferNormal,
-                Prefs.Buffer.LARGE to s.bufferLarge,
-            )
+            val buffers = SettingsCatalog.BUFFER.options(s)
             add(
                 Item.Nav(Prefs.Key.BUFFER, s.buffer, buffers.firstOrNull { it.first == prefs.buffer }?.second, s.netBufferSub, ItvIcons.Buffer) {
                     push(Route.Pick(s.buffer, buffers, prefs.buffer) { v -> vm.setPref(Prefs.Key.BUFFER, v); pop() }, Prefs.Key.BUFFER)
                 },
             )
-            val formats = listOf<Pair<Any?, String>>(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)")
+            val formats = SettingsCatalog.STREAM_FORMAT.options(s)
             // Só nas listas Xtream o servidor dá os dois formatos de cada canal.
             if (content?.playlist?.type == PlaylistType.XTREAM) add(
                 Item.Nav("format", s.streamFormat, formats.firstOrNull { it.first == format }?.second, s.netFormatSub, ItvIcons.SwapPlaylist) {
@@ -527,209 +548,60 @@ private fun connectionItems(vm: AppViewModel, player: Player?, nav: PageNav): Li
 private fun prefPageItems(route: Route, vm: AppViewModel, nav: PageNav): List<Item> {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val format by vm.streamFormat.collectAsStateWithLifecycle()
+    val values = SettingValues(prefs, format)
     val s = LocalStrings.current
     val context = LocalContext.current
     val push = nav.push
-    val pop = nav.pop
-    val pick = nav::pick
-    val pref = nav::pref
     return when (route) {
         Route.Playback -> {
             val displayHdr = remember { HdrType.supportedByDisplay(context) }
-            listOf(
-                pick(
-                    "format", s.streamFormat,
-                    listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)"),
-                    format,
-                ) { vm.setStreamFormat(it as String?) },
-                pref(
-                    Prefs.Key.BUFFER, s.buffer,
-                    listOf(
-                        Prefs.Buffer.LIVE to s.bufferLive,
-                        Prefs.Buffer.SMALL to s.bufferSmall,
-                        Prefs.Buffer.NORMAL to s.bufferNormal,
-                        Prefs.Buffer.LARGE to s.bufferLarge,
-                    ),
-                    prefs.buffer,
-                ),
-                pref(
-                    Prefs.Key.ENGINE, s.engine,
-                    listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc),
-                    prefs.engine,
-                ),
-                pref(
-                    Prefs.Key.DECODER, s.decoder,
-                    listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw),
-                    prefs.decoder,
-                ),
-                pref(Prefs.Key.ASPECT, s.aspect, aspectOptions(s), prefs.aspect),
-                Item.Toggle(Prefs.Key.FREEZE_FRAME, s.freezeFrame, prefs.freezeFrame, s.freezeFrameSub) {
-                    vm.setPref(Prefs.Key.FREEZE_FRAME, it)
-                },
-                Item.Toggle(Prefs.Key.TIMESHIFT, s.timeshift, prefs.timeshift, s.timeshiftSub) {
-                    vm.setPref(Prefs.Key.TIMESHIFT, it)
-                },
-                pref(
-                    Prefs.Key.RECONNECT_SECONDS, s.reconnect,
-                    listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) },
-                    prefs.reconnectSeconds,
-                ),
-                Item.Toggle(Prefs.Key.AFR, s.afr, prefs.afr, s.afrSub) { vm.setPref(Prefs.Key.AFR, it) },
-                run {
-                    val options = listOf<Pair<Any?, String>>(Prefs.Hdr.AUTO to s.hdrAuto, Prefs.Hdr.SDR to s.hdrSdr)
-                    Item.Nav(
-                        Prefs.Key.HDR, s.hdr,
-                        value = options.firstOrNull { it.first == prefs.hdr }?.second,
+            nav.catalogItems(TvPage.PLAYBACK, values, s) { setting ->
+                when (setting) {
+                    SettingsCatalog.HDR -> nav.choice(
+                        SettingsCatalog.HDR, values, s,
                         subtitle = if (displayHdr.isEmpty()) s.hdrTvNone else s.hdrTvSupports(displayHdr.joinToString(", ") { it.label }),
-                    ) {
-                        push(
-                            Route.Pick(s.hdr, options, prefs.hdr) { v ->
-                                vm.setPref(Prefs.Key.HDR, v)
-                                pop()
-                            },
-                            Prefs.Key.HDR,
-                        )
-                    }
-                },
-                Item.Header("audio", s.audioSection),
-                Item.Toggle(Prefs.Key.AUDIO_PASSTHROUGH, s.passthrough, prefs.audioPassthrough, s.passthroughSub) {
-                    vm.setPref(Prefs.Key.AUDIO_PASSTHROUGH, it)
-                },
-                Item.Toggle(Prefs.Key.SURROUND_DEFAULT, s.surroundDefault, prefs.surroundDefault, s.surroundDefaultSub) {
-                    vm.setPref(Prefs.Key.SURROUND_DEFAULT, it)
-                },
-                pref(
-                    Prefs.Key.AUDIO_DECODER, s.audioDecoder,
-                    listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw),
-                    prefs.audioDecoder,
-                ),
-            )
+                    )
+                    else -> null
+                }
+            }
         }
 
         Route.General -> {
             // Volta a verificar sempre que a página é mostrada (a pessoa pode ter ido dar a permissão).
             val canDrawOverlays = remember(route) { Settings.canDrawOverlays(context) }
-            listOf(
-                Item.Toggle(
-                    Prefs.Key.AUTO_START, s.autoStart, prefs.autoStart,
-                    if (prefs.autoStart && !canDrawOverlays) s.overlayNeeded else s.autoStartSub,
-                ) { on ->
-                    vm.setPref(Prefs.Key.AUTO_START, on)
-                    // O Android só deixa abrir a app no arranque com "Mostrar por cima de outras apps".
-                    if (on && !canDrawOverlays) requestOverlayPermission(context)
-                },
-                Item.Toggle(Prefs.Key.EXIT_CONFIRM, s.exitConfirm, prefs.exitConfirm) { vm.setPref(Prefs.Key.EXIT_CONFIRM, it) },
-                Item.Nav(Prefs.Key.USER_AGENT, s.userAgent, value = prefs.userAgent.ifBlank { s.userAgentDefault }, subtitle = s.userAgentSub) {
-                    push(
-                        Route.TextEdit(s.userAgent, prefs.userAgent, TextKind.PLAIN) { v -> vm.setPref(Prefs.Key.USER_AGENT, v.trim().ifEmpty { null }) },
-                        Prefs.Key.USER_AGENT,
-                    )
-                },
-            )
+            nav.catalogItems(TvPage.GENERAL, values, s) { setting ->
+                when (setting) {
+                    SettingsCatalog.AUTO_START -> Item.Toggle(
+                        Prefs.Key.AUTO_START, s.autoStart, prefs.autoStart,
+                        if (prefs.autoStart && !canDrawOverlays) s.overlayNeeded else s.autoStartSub,
+                    ) { on ->
+                        vm.setPref(Prefs.Key.AUTO_START, on)
+                        // O Android só deixa abrir a app no arranque com "Mostrar por cima de outras apps".
+                        if (on && !canDrawOverlays) requestOverlayPermission(context)
+                    }
+                    SettingsCatalog.USER_AGENT -> Item.Nav(Prefs.Key.USER_AGENT, s.userAgent, value = prefs.userAgent.ifBlank { s.userAgentDefault }, subtitle = s.userAgentSub) {
+                        push(
+                            Route.TextEdit(s.userAgent, prefs.userAgent, TextKind.PLAIN) { v -> vm.setPref(Prefs.Key.USER_AGENT, v.trim().ifEmpty { null }) },
+                            Prefs.Key.USER_AGENT,
+                        )
+                    }
+                    else -> null
+                }
+            }
         }
 
-        Route.Zapping -> listOf(
-            pref(
-                Prefs.Key.UP_DOWN, s.upDownKeys,
-                listOf(Prefs.UpDown.ZAP to s.upDownZap, Prefs.UpDown.LIST to s.upDownList),
-                prefs.upDown,
-            ),
-            Item.Toggle(Prefs.Key.REVERSE_ZAP, s.reverseUpDown, prefs.reverseZap, s.reverseUpDownSub) {
-                vm.setPref(Prefs.Key.REVERSE_ZAP, it)
-            },
-            pref(
-                Prefs.Key.INFO_SECONDS, s.infoOnZap,
-                listOf(0 to s.dontShow) + listOf(3, 4, 6, 10).map { it to s.seconds(it) },
-                prefs.infoSeconds,
-            ),
-            pref(
-                Prefs.Key.STARTUP, s.onStartup,
-                listOf(Prefs.Startup.LAST to s.startupLast, Prefs.Startup.LIST to s.startupList),
-                prefs.startup,
-            ),
-            pref(
-                Prefs.Key.BACK_ACTION, s.backKey,
-                listOf(Prefs.BackAction.GUIDE to s.backOpensGuide, Prefs.BackAction.EXIT to s.backExits),
-                prefs.backAction,
-            ),
-        )
+        Route.Zapping -> nav.catalogItems(TvPage.ZAPPING, values, s)
 
-        Route.Appearance -> listOf(
-            Item.Header("hlang", s.sectionLanguageText),
-            pref(Prefs.Key.LANGUAGE, s.language, listOf("auto" to s.languageAuto) + Strings.LANGUAGES, prefs.language),
-            pref(
-                Prefs.Key.UI_SCALE, s.uiScale,
-                (Prefs.UI_SCALE_MIN..Prefs.UI_SCALE_MAX step 5).map { it to s.percent(it) },
-                prefs.uiScale,
-            ),
-            pref(
-                Prefs.Key.TEXT_SIZE, s.textSize,
-                listOf(Prefs.TextSize.SMALL to s.sizeSmall, Prefs.TextSize.NORMAL to s.sizeNormal, Prefs.TextSize.LARGE to s.sizeLarge),
-                prefs.textSize,
-            ),
-            Item.Header("hlist", s.sectionChannelList),
-            Item.Toggle(Prefs.Key.SHOW_NUMBERS, s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) },
-            Item.Toggle(Prefs.Key.SHOW_LOGOS, s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) },
-            Item.Nav(Prefs.Key.LOGO_SOURCE, s.logoSource, value = logoSourceLabel(prefs.logoSource, s)) { push(Route.LogoSource, Prefs.Key.LOGO_SOURCE) },
-            pref(
-                Prefs.Key.SORT, s.sortChannels,
-                listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName),
-                prefs.sort,
-            ),
-            Item.Header("hpanels", s.sectionPanelsColour),
-            pref(
-                Prefs.Key.PANEL_WIDTH, s.panelWidth,
-                listOf(300 to s.widthNarrow, 340 to s.widthNormal, 400 to s.widthWide, 460 to s.widthExtraWide),
-                prefs.panelWidth,
-            ),
-            Item.Nav(Prefs.Key.ACCENT, s.accent, value = s.accentName(prefs.accent)) {
-                push(
-                    Route.Pick(
-                        s.accent,
-                        Accent.ALL.map { it.id to s.accentName(it.id) },
-                        prefs.accent,
-                        swatches = Accent.ALL.associate { it.id to it.brush },
-                    ) { v ->
-                        vm.setPref(Prefs.Key.ACCENT, v)
-                        pop()
-                    },
-                    Prefs.Key.ACCENT,
-                )
-            },
-            Item.Nav(Prefs.Key.OUTLINE_COLOR, s.outlineColor, value = s.outlineColorName(prefs.outlineColor)) {
-                val accent = Accent.byId(prefs.accent)
-                push(
-                    Route.Pick(
-                        s.outlineColor,
-                        Prefs.OutlineColors.IDS.map { it to s.outlineColorName(it) },
-                        prefs.outlineColor,
-                        swatches = Prefs.OutlineColors.IDS.associate { id: String -> (id as Any?) to outlineBrush(id, accent) },
-                    ) { v ->
-                        vm.setPref(Prefs.Key.OUTLINE_COLOR, v)
-                        pop()
-                    },
-                    Prefs.Key.OUTLINE_COLOR,
-                )
-            },
-            pref(
-                Prefs.Key.GLASS_OPACITY, s.glassOpacity,
-                (0..100 step 10).map { it to s.percent(it) },
-                prefs.glassOpacity,
-            ),
-            pref(
-                Prefs.Key.PANEL_TIMEOUT, s.autoClosePanels,
-                listOf(10, 15, 30).map { it to s.afterSeconds(it) } + listOf(0 to s.never),
-                prefs.panelTimeout,
-            ),
-        )
+        Route.Appearance -> nav.catalogItems(TvPage.APPEARANCE, values, s) { setting ->
+            when (setting) {
+                SettingsCatalog.LOGO_SOURCE -> Item.Nav(Prefs.Key.LOGO_SOURCE, s.logoSource, value = logoSourceLabel(prefs.logoSource, s)) {
+                    push(Route.LogoSource, Prefs.Key.LOGO_SOURCE)
+                }
+                else -> null
+            }
+        }
 
-        Route.Guide -> listOf(
-            pref(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours),
-            pref(Prefs.Key.EPG_OFFSET, s.timeOffset, (-180..180 step 30).map { it to offsetLabel(it) }, prefs.epgOffsetMin),
-            Item.Toggle(Prefs.Key.EPG_IN_LIST, s.nowInList, prefs.epgInList, s.nowInListSub) {
-                vm.setPref(Prefs.Key.EPG_IN_LIST, it)
-            },
-        )
+        Route.Guide -> nav.catalogItems(TvPage.GUIDE, values, s)
 
         else -> emptyList()
     }
@@ -749,7 +621,7 @@ private fun parentalItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                 add(Item.Action("newpin", s.setPin, s.setPinSub) { push(Route.NewPin, "newpin") })
             } else {
                 val data = content
-                val locked = if (data == null) 0 else prefs.lockedGroups.count { it.startsWith(data.playlist.id + ":") }
+                val locked = if (data == null) 0 else prefs.lockedGroupCount(data.playlist.id)
                 add(Item.Nav("locked", s.lockedGroups, locked.toString()) { push(Route.LockedGroups, "locked") })
                 add(Item.Toggle(Prefs.Key.SETTINGS_PIN, s.protectSettings, prefs.settingsPin, s.protectSettingsSub) { vm.setPref(Prefs.Key.SETTINGS_PIN, it) })
                 add(Item.Action("newpin", s.changePin) { push(Route.NewPin, "newpin") })
@@ -769,7 +641,7 @@ private fun parentalItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             data.categories.forEach { g ->
                 // "Outros" é o id do grupo dos canais sem grupo: o nome mostra-se na língua da app (como em Grupos).
                 val name = if (g.id == PlaylistContent.OTHERS) s.others else g.name
-                add(Item.Toggle("g:" + g.id, name, "${data.playlist.id}:${g.id}" in prefs.lockedGroups) { vm.toggleGroupLock(g.id) })
+                add(Item.Toggle("g:" + g.id, name, prefs.isGroupMarkedLocked(data.playlist.id, g.id)) { vm.toggleGroupLock(g.id) })
             }
         }
 
@@ -860,8 +732,8 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             if (!local) add(Item.Info("manage", s.playlistsSiteTip, ""))
             add(Item.Action("epg", s.refreshEpg, s.refreshEpgSub) { vm.refreshEpg() })
             add(Item.Header("hr", s.updates))
-            add(nav.pref(Prefs.Key.PLAYLIST_REFRESH, s.playlistRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.playlistRefreshHours))
-            add(nav.pref(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours))
+            add(nav.choice(SettingsCatalog.PLAYLIST_REFRESH, SettingValues(prefs, null), s))
+            add(nav.choice(SettingsCatalog.EPG_REFRESH, SettingValues(prefs, null), s))
         }
 
         is Route.PlaylistDetail -> buildList {
@@ -874,7 +746,7 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             // Organizar: esconder e reordenar grupos e canais (precisa dos canais, por isso só na lista em uso).
             add(Item.Header("horg", s.organize))
             if (isCurrent) {
-                val hidden = prefs.hiddenGroups.count { it.startsWith(p.id + ":") }
+                val hidden = prefs.hiddenGroupCount(p.id)
                 add(Item.Nav("groups", s.manageGroups, subtitle = s.manageGroupsSub(hidden)) { push(Route.GroupsManage, "groups") })
                 add(Item.Nav("channels", s.manageChannels, subtitle = s.manageChannelsSub) { push(Route.ChannelGroups, "channels") })
             } else {
@@ -1120,5 +992,3 @@ private fun streamInfo(player: Player?, format: String?): List<Item> {
     )
 }
 
-private fun offsetLabel(min: Int): String =
-    if (min == 0) I18n.s.noOffset else (if (min > 0) "+" else "−") + "${abs(min) / 60} h" + if (abs(min) % 60 != 0) " 30" else ""

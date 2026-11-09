@@ -43,8 +43,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.BuildConfig
-import cc.slokker.itv.data.RefreshPolicy
-import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
@@ -54,12 +52,16 @@ import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
-import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.maskEmail
-import cc.slokker.itv.ui.theme.Accent
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.launch
+import cc.slokker.itv.ui.settings.PhonePage
+import cc.slokker.itv.ui.settings.PhoneSection
+import cc.slokker.itv.ui.settings.Setting
+import cc.slokker.itv.ui.settings.SettingValues
+import cc.slokker.itv.ui.settings.SettingsCatalog
+import cc.slokker.itv.ui.settings.saveSetting
 
 /** As páginas das Definições. */
 private enum class MenuPage { Playback, Channels, Guide, Appearance, Parental }
@@ -120,14 +122,9 @@ fun MobileMenu(vm: AppViewModel) {
         return UserAgentPage(prefs.userAgent, onSave = { vm.setPref(Prefs.Key.USER_AGENT, it.trim().ifEmpty { null }) }) { editingAgent = false }
     }
     val open: (Picking) -> Unit = { picking = it }
-    @Composable
-    fun prefRow(key: String, title: String, options: List<Pair<Any?, String>>, value: Any?) = PickRow(title, options, value, open) { vm.setPref(key, it) }
-    val formats = listOf(null to s.auto, StreamFormat.TS to "TS (MPEG-TS)", StreamFormat.HLS to "HLS (m3u8)")
-    val buffers = listOf(Prefs.Buffer.LIVE to s.bufferLive, Prefs.Buffer.SMALL to s.bufferSmall, Prefs.Buffer.NORMAL to s.bufferNormal, Prefs.Buffer.LARGE to s.bufferLarge)
-    val startups = listOf(Prefs.PhoneStartup.HOME to s.homeScreen, Prefs.PhoneStartup.LAST to s.startupLast)
-    val languages = listOf("auto" to s.languageAuto) + Strings.LANGUAGES
-    val accents = Accent.ALL.map { it.id to s.accentName(it.id) }
-    fun label(options: List<Pair<Any?, String>>, value: Any?) = options.firstOrNull { it.first == value }?.second.orEmpty()
+    val values = SettingValues(prefs, format)
+    fun label(setting: Setting.Choice) = setting.label(s, values, phone = true)
+    val pipSupported = (LocalContext.current as? MainActivity)?.pipSupported == true
     page?.let { BackHandler { page = null } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalBarSpace.current), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when (page) {
@@ -146,12 +143,12 @@ fun MobileMenu(vm: AppViewModel) {
                     }
                 }
                 Section(s.sectionWatching) {
-                    MenuRow(s.playback, label(formats, format).substringBefore(" ") + ", " + label(buffers, prefs.buffer).substringBefore(" ("), ItvIcons.PlayCircle, chevron = true) { page = MenuPage.Playback }
-                    MenuRow(s.manageChannels, label(startups, prefs.phoneStartup), ItvIcons.SwapVert, chevron = true) { page = MenuPage.Channels }
-                    MenuRow(s.guide, s.refreshLabel(prefs.epgRefreshHours), ItvIcons.Calendar, chevron = true) { page = MenuPage.Guide }
+                    MenuRow(s.playback, label(SettingsCatalog.STREAM_FORMAT).substringBefore(" ") + ", " + label(SettingsCatalog.BUFFER).substringBefore(" ("), ItvIcons.PlayCircle, chevron = true) { page = MenuPage.Playback }
+                    MenuRow(s.manageChannels, label(SettingsCatalog.PHONE_STARTUP), ItvIcons.SwapVert, chevron = true) { page = MenuPage.Channels }
+                    MenuRow(s.guide, label(SettingsCatalog.EPG_REFRESH), ItvIcons.Calendar, chevron = true) { page = MenuPage.Guide }
                 }
                 Section(s.sectionInterface) {
-                    MenuRow(s.settingsAppearance, label(languages, prefs.language) + ", " + label(accents, prefs.accent), ItvIcons.Palette, chevron = true) { page = MenuPage.Appearance }
+                    MenuRow(s.settingsAppearance, label(SettingsCatalog.LANGUAGE) + ", " + label(SettingsCatalog.ACCENT), ItvIcons.Palette, chevron = true) { page = MenuPage.Appearance }
                 }
                 Section(s.sectionLibrary) {
                     MenuRow(s.parental, if (prefs.pinHash == null) s.settingOff else s.settingOn, ItvIcons.Lock, chevron = true) {
@@ -175,59 +172,56 @@ fun MobileMenu(vm: AppViewModel) {
             }
             MenuPage.Playback -> {
                 PageHeader(s.playback, s.settings) { page = null }
-                Section(s.settingsPictureSound) {
-                    prefRow(Prefs.Key.ASPECT, s.aspect, listOf(Prefs.Aspect.FIT to s.aspectFit, Prefs.Aspect.ZOOM to s.aspectZoom, Prefs.Aspect.FILL to s.aspectFill), prefs.aspect)
-                    if ((LocalContext.current as? MainActivity)?.pipSupported == true) {
-                        ToggleRow(s.pictureInPicture, prefs.pipEnabled) { vm.setPref(Prefs.Key.PIP_ENABLED, it) }
+                CatalogSections(PhonePage.PLAYBACK, vm, values, open) { setting ->
+                    when (setting) {
+                        // Só nos telemóveis com janela pequena.
+                        SettingsCatalog.PIP -> {
+                            if (pipSupported) ToggleRow(s.pictureInPicture, prefs.pipEnabled) { vm.setPref(Prefs.Key.PIP_ENABLED, it) }
+                            true
+                        }
+                        SettingsCatalog.USER_AGENT -> {
+                            MenuRow(s.userAgent, prefs.userAgent.ifBlank { s.userAgentDefault }, chevron = true) { editingAgent = true }
+                            true
+                        }
+                        else -> false
                     }
-                }
-                Section(s.settingsConnection) {
-                    prefRow(Prefs.Key.BUFFER, s.buffer, buffers, prefs.buffer)
-                    prefRow(Prefs.Key.RECONNECT_SECONDS, s.reconnect, listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) }, prefs.reconnectSeconds)
-                    ToggleRow(s.timeshift, prefs.timeshift) { vm.setPref(Prefs.Key.TIMESHIFT, it) }
-                }
-                Section(s.settingsAdvanced) {
-                    PickRow(s.streamFormat, formats, format, open) { vm.setStreamFormat(it as String?) }
-                    prefRow(Prefs.Key.ENGINE, s.engine, listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc), prefs.engine)
-                    prefRow(Prefs.Key.DECODER, s.decoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.decoder)
-                    prefRow(Prefs.Key.AUDIO_DECODER, s.audioDecoder, listOf(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw), prefs.audioDecoder)
-                    MenuRow(s.userAgent, prefs.userAgent.ifBlank { s.userAgentDefault }, chevron = true) { editingAgent = true }
                 }
             }
             MenuPage.Channels -> {
                 PageHeader(s.manageChannels, s.settings) { page = null }
-                Section(null) {
-                    prefRow(Prefs.Key.PHONE_STARTUP, s.onStartup, startups, prefs.phoneStartup)
-                    prefRow(Prefs.Key.SORT, s.sortChannels, listOf(Prefs.Sort.NUMBER to s.sortNumber, Prefs.Sort.NAME to s.sortName), prefs.sort)
-                    ToggleRow(s.channelNumbers, prefs.showNumbers) { vm.setPref(Prefs.Key.SHOW_NUMBERS, it) }
-                    ToggleRow(s.channelLogos, prefs.showLogos) { vm.setPref(Prefs.Key.SHOW_LOGOS, it) }
-                    ToggleRow(s.nowInList, prefs.epgInList) { vm.setPref(Prefs.Key.EPG_IN_LIST, it) }
-                    if (vm.epgPickerAvailable) MenuRow(s.logoSource, null, chevron = true) { pickingCountry = true }
-                    MenuRow(s.visibleGroups, null, chevron = true) { managingGroups = true }
+                CatalogSections(PhonePage.CHANNELS, vm, values, open) { setting ->
+                    when (setting) {
+                        SettingsCatalog.LOGO_SOURCE -> {
+                            if (vm.epgPickerAvailable) MenuRow(s.logoSource, null, chevron = true) { pickingCountry = true }
+                            true
+                        }
+                        SettingsCatalog.VISIBLE_GROUPS -> {
+                            MenuRow(s.visibleGroups, null, chevron = true) { managingGroups = true }
+                            true
+                        }
+                        else -> false
+                    }
                 }
             }
             MenuPage.Guide -> {
                 PageHeader(s.guide, s.settings) { page = null }
-                Section(null) {
-                    prefRow(Prefs.Key.EPG_REFRESH, s.epgRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.epgRefreshHours)
-                    prefRow(Prefs.Key.PLAYLIST_REFRESH, s.playlistRefresh, RefreshPolicy.OPTIONS.map { it to s.refreshLabel(it) }, prefs.playlistRefreshHours)
-                    prefRow(Prefs.Key.EPG_OFFSET, s.timeOffset, (-180..180 step 30).map { m -> m to (if (m == 0) "0" else "%+d min".format(m)) }, prefs.epgOffsetMin)
-                    if (vm.epgPickerAvailable) MenuRow(s.epgCountryGuide, null, chevron = true) { pickingCountry = false }
-                    if (vm.epgPickerAvailable && epgMappings.isNotEmpty()) {
-                        MenuRow(if (confirmingEpgReset) s.pressAgainToConfirm else s.epgResetAll, null) {
-                            if (confirmingEpgReset) vm.resetEpgMappings()
-                            confirmingEpgReset = !confirmingEpgReset
+                // Depois das definições, no mesmo cartão: o guia de um país, repor as escolhas e atualizar.
+                CatalogSections(PhonePage.GUIDE, vm, values, open, after = { section ->
+                    if (section == PhoneSection.MAIN) {
+                        if (vm.epgPickerAvailable) MenuRow(s.epgCountryGuide, null, chevron = true) { pickingCountry = false }
+                        if (vm.epgPickerAvailable && epgMappings.isNotEmpty()) {
+                            MenuRow(if (confirmingEpgReset) s.pressAgainToConfirm else s.epgResetAll, null) {
+                                if (confirmingEpgReset) vm.resetEpgMappings()
+                                confirmingEpgReset = !confirmingEpgReset
+                            }
                         }
+                        MenuRow(s.refreshEpg, null, onClick = vm::refreshEpg)
                     }
-                    MenuRow(s.refreshEpg, null, onClick = vm::refreshEpg)
-                }
+                }) { false }
             }
             MenuPage.Appearance -> {
                 PageHeader(s.settingsAppearance, s.settings) { page = null }
-                Section(null) {
-                    prefRow(Prefs.Key.LANGUAGE, s.language, languages, prefs.language)
-                    prefRow(Prefs.Key.ACCENT, s.accent, accents, prefs.accent)
-                }
+                CatalogSections(PhonePage.APPEARANCE, vm, values, open) { false }
             }
             MenuPage.Parental -> {
                 PageHeader(s.parental, s.settings) { page = null }
@@ -264,6 +258,36 @@ private fun PlaylistCard(name: String, detail: String) {
         Column(Modifier.weight(1f)) {
             Text(name, color = ItvColors.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(detail, color = ItvColors.TextDim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * As linhas da página [page] do catálogo, cada secção no seu cartão. [custom] desenha as linhas que esta página faz
+ * à sua maneira (devolve true quando a desenhou, ou a escondeu); [after] junta outras no fim do cartão de uma secção.
+ */
+@Composable
+private fun CatalogSections(
+    page: PhonePage,
+    vm: AppViewModel,
+    values: SettingValues,
+    open: (Picking) -> Unit,
+    after: @Composable (PhoneSection) -> Unit = {},
+    custom: @Composable (Setting) -> Boolean,
+) {
+    val s = LocalStrings.current
+    SettingsCatalog.phone(page).forEach { (section, settings) ->
+        Section(section.title?.invoke(s)) {
+            settings.forEach { setting ->
+                if (!custom(setting)) {
+                    when (setting) {
+                        is Setting.Choice -> PickRow(setting.title(s), setting.phoneOptions(s), setting.read(values), open) { vm.saveSetting(setting, it) }
+                        is Setting.Toggle -> ToggleRow(setting.title(s), setting.read(values.prefs)) { vm.setPref(setting.key, it) }
+                        is Setting.Custom -> Unit
+                    }
+                }
+            }
+            after(section)
         }
     }
 }
