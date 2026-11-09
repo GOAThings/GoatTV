@@ -104,6 +104,10 @@ enum CoreTests {
         ("recordingCut", recordingCut),
         ("recordingPlanDecisions", recordingPlanDecisions),
         ("recordingPlanConflictsWakeSeriesAndPrune", recordingPlanConflictsWakeSeriesAndPrune),
+        ("recordingWriterCopiesTheProgrammeCutAtIndexPoints", recordingWriterCopiesTheProgrammeCutAtIndexPoints),
+        ("recordingWriterFollowsLiveUntilTheEnd", recordingWriterFollowsLiveUntilTheEnd),
+        ("recordingWriterStopsAndKeepsWhatItHas", recordingWriterStopsAndKeepsWhatItHas),
+        ("recordingWriterSegmentsSpaceAndNothing", recordingWriterSegmentsSpaceAndNothing),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.

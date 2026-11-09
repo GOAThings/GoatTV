@@ -192,3 +192,172 @@ extension CoreTests {
         try expect(RecordingSpace.rate(bytes: 5_000_000, mediaMs: 10_000), 500_000)
     }
 }
+
+/// A cópia do anel para o ficheiro: os mesmos casos do GoatTV Android (RecordingWriterTest).
+extension CoreTests {
+    /// Um pacote TS de 188 bytes; com [pcrMs], leva o PCR no campo de adaptação.
+    private static func recPacket(pcrMs: Int64? = nil, fill: UInt8 = 0x11) -> [UInt8] {
+        var p = [UInt8](repeating: fill, count: 188)
+        p[0] = 0x47
+        p[1] = 0x01
+        p[2] = 0x00
+        if let pcrMs {
+            p[3] = 0x30
+            p[4] = 7
+            p[5] = 0x10
+            let base = pcrMs * 90
+            p[6] = UInt8(truncatingIfNeeded: base >> 25)
+            p[7] = UInt8(truncatingIfNeeded: base >> 17)
+            p[8] = UInt8(truncatingIfNeeded: base >> 9)
+            p[9] = UInt8(truncatingIfNeeded: base >> 1)
+            p[10] = UInt8(truncatingIfNeeded: ((base & 1) << 7) | 0x7E)
+            p[11] = 0
+        } else {
+            p[3] = 0x10
+        }
+        return p
+    }
+
+    /// [seconds] de vídeo a partir do PCR [fromMs]: um PCR e quatro pacotes a cada 100 ms.
+    private static func recStream(_ fromMs: Int64, _ seconds: Int, fill: UInt8 = 0x11) -> [UInt8] {
+        var out: [UInt8] = []
+        for i in 0..<(seconds * 10) {
+            out += recPacket(pcrMs: fromMs + Int64(i) * 100, fill: fill)
+            for _ in 0..<4 { out += recPacket(fill: fill) }
+        }
+        return out
+    }
+
+    private static let recGroup = 5 * 188
+
+    private static func recRing() throws -> (TimeshiftRing, URL) {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rec-writer-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ring = try TimeshiftRing(path: dir.appendingPathComponent("ring.ts").path, capacity: 1 << 22, maxAgeMs: 30 * 60_000) { 1_000 }
+        return (ring, dir)
+    }
+
+    private static func recWrite(_ ring: TimeshiftRing, _ data: [UInt8]) throws {
+        var o = 0
+        while o < data.count {
+            let n = min(7_000, data.count - o)
+            try ring.write(Array(data[o..<(o + n)]))
+            o += n
+        }
+    }
+
+    /// Corre o [writer] noutra thread; [meanwhile] faz o resto do teste enquanto ele grava.
+    private static func recRun(_ writer: RecordingWriter, meanwhile: () throws -> Void = {}) rethrows -> RecordingWriter.Result? {
+        let done = DispatchSemaphore(value: 0)
+        let box = ResultBox()
+        Thread { box.value = writer.run(); done.signal() }.start()
+        try meanwhile()
+        _ = done.wait(timeout: .now() + 10)
+        return box.value
+    }
+
+    private final class ResultBox: @unchecked Sendable { var value: RecordingWriter.Result? }
+
+    static func recordingWriterCopiesTheProgrammeCutAtIndexPoints() throws {
+        let (ring, dir) = try recRing()
+        defer { ring.close(); try? FileManager.default.removeItem(at: dir) }
+        let data = recStream(0, 20)
+        ring.beginSegment()
+        try recWrite(ring, data)
+        let now: Int64 = 100_000
+        let live = ring.liveMediaMs
+        try expect(live, 19_900)
+        let range = try expectValue(RecordingCut.range(ring.index, liveMediaMs: live, nowWall: now, startWall: now - (live - 5_000), endWall: now - (live - 15_000)))
+        try expect(range.startOffset, Int64(50 * recGroup))
+        try expect(range.startMediaMs, 5_000)
+        try expect(range.endMediaMs, 15_000)
+        try expect(range.late, false)
+        let out = dir.appendingPathComponent("a.ts")
+        let result = RecordingWriter(ring: ring, out: out, startOffset: range.startOffset, endMediaMs: range.endMediaMs, freeBytes: { .max }).run()
+        try expect(result.state, RecordingState.done)
+        try expect(result.bytes, Int64(100 * recGroup))
+        try expect(result.mediaEndMs, 15_000)
+        try expect([UInt8](try Data(contentsOf: out)), Array(data[(50 * recGroup)..<(150 * recGroup)]))
+    }
+
+    static func recordingWriterFollowsLiveUntilTheEnd() throws {
+        let (ring, dir) = try recRing()
+        defer { ring.close(); try? FileManager.default.removeItem(at: dir) }
+        let first = recStream(0, 4)
+        ring.beginSegment()
+        try recWrite(ring, first)
+        let out = dir.appendingPathComponent("b.ts")
+        let second = recStream(4_000, 4, fill: 0x22)
+        let result = try recRun(RecordingWriter(ring: ring, out: out, startOffset: 0, endMediaMs: 6_000, freeBytes: { .max })) {
+            Thread.sleep(forTimeInterval: 0.3)
+            try recWrite(ring, second)
+        }
+        try expect(result?.state, RecordingState.done)
+        try expect([UInt8](try Data(contentsOf: out)), Array((first + second)[0..<(60 * recGroup)]))
+    }
+
+    static func recordingWriterStopsAndKeepsWhatItHas() throws {
+        let (ring, dir) = try recRing()
+        defer { ring.close(); try? FileManager.default.removeItem(at: dir) }
+        ring.beginSegment()
+        try recWrite(ring, recStream(0, 3))
+        let out = dir.appendingPathComponent("c.ts")
+        let writer = RecordingWriter(ring: ring, out: out, startOffset: 0, endMediaMs: 60_000, freeBytes: { .max })
+        let stopped = recRun(writer) {
+            Thread.sleep(forTimeInterval: 0.3)
+            writer.stop()
+        }
+        try expect(stopped?.state, RecordingState.stopped)
+        try expect(stopped?.reason, RecordingReason.user)
+        try expect((try Data(contentsOf: out)).count, 30 * recGroup)
+
+        // O anel fechou (a ligação foi para outro canal): acaba com o que tem.
+        let (ring2, dir2) = try recRing()
+        defer { try? FileManager.default.removeItem(at: dir2) }
+        ring2.beginSegment()
+        try recWrite(ring2, recStream(0, 3))
+        let closed = recRun(RecordingWriter(ring: ring2, out: dir2.appendingPathComponent("d.ts"), startOffset: 0, endMediaMs: 60_000, freeBytes: { .max })) {
+            Thread.sleep(forTimeInterval: 0.3)
+            ring2.close()
+        }
+        try expect(closed?.state, RecordingState.stopped)
+        try expect(closed?.reason, RecordingReason.connection)
+        try expect(closed?.bytes, Int64(30 * recGroup))
+    }
+
+    static func recordingWriterSegmentsSpaceAndNothing() throws {
+        // A ligação caiu e voltou: continua no segmento novo e conta o buraco.
+        let (ring, dir) = try recRing()
+        defer { ring.close(); try? FileManager.default.removeItem(at: dir) }
+        let a = recStream(0, 2), b = recStream(50_000, 2, fill: 0x33)
+        ring.beginSegment()
+        try recWrite(ring, a)
+        ring.endSegment(final: false)
+        ring.beginSegment()
+        try recWrite(ring, b)
+        ring.endSegment(final: true)
+        let out = dir.appendingPathComponent("e.ts")
+        let result = RecordingWriter(ring: ring, out: out, startOffset: 0, endMediaMs: 60_000, freeBytes: { .max }).run()
+        try expect(result.gaps, 1)
+        try expect([UInt8](try Data(contentsOf: out)), a + b)
+
+        // Sem espaço: pára com o que tem.
+        let (ring2, dir2) = try recRing()
+        defer { ring2.close(); try? FileManager.default.removeItem(at: dir2) }
+        ring2.beginSegment()
+        try recWrite(ring2, recStream(0, 10))
+        let low = RecordingWriter(ring: ring2, out: dir2.appendingPathComponent("f.ts"), startOffset: 0, endMediaMs: 60_000,
+                                  freeBytes: { RecordingSpace.reserveBytes }, checkBytes: 10_000).run()
+        try expect(low.state, RecordingState.stopped)
+        try expect(low.reason, RecordingReason.lowSpace)
+        try expect((10_000...300_000).contains(low.bytes), true, "\(low.bytes)")
+
+        // Sem nada gravado: falhou.
+        let (ring3, dir3) = try recRing()
+        defer { ring3.close(); try? FileManager.default.removeItem(at: dir3) }
+        ring3.beginSegment()
+        ring3.endSegment(final: true)
+        try expect(RecordingWriter(ring: ring3, out: dir3.appendingPathComponent("g.ts"), startOffset: 0, endMediaMs: 60_000, freeBytes: { .max }).run().state,
+                   RecordingState.failed)
+    }
+}

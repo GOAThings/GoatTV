@@ -525,3 +525,146 @@ public struct RecordingFiles: Sendable {
         try schedule.json.encoded().write(to: scheduleFile, options: .atomic)
     }
 }
+
+/// Copia um pedaço do anel para o ficheiro da gravação: de [startOffset] até o vídeo chegar a [endMediaMs] (ver
+/// [RecordingCut]), ou até se pedir para parar. Lê o anel como o leitor (é mais um leitor; a ligação é a do anel) e vai
+/// atrás do direto. O fim é cortado num ponto do índice (o início de um pacote TS).
+///
+/// Quando a ligação cai e volta, o anel começa um segmento novo: a gravação continua no início dele (conta um buraco em
+/// [Result.gaps]). Se a escrita ficar tão para trás que o anel já reescreveu o ponto, continua no mais antigo. Pára
+/// sozinha quando o livre no disco ([freeBytes]) chega à reserva ([RecordingSpace]). O RecordingWriter do Android.
+public final class RecordingWriter: @unchecked Sendable {
+    private let ring: TimeshiftRing
+    private let out: URL
+    private let startOffset: Int64
+    private let freeBytes: () -> Int64
+    private let onProgress: (_ bytes: Int64, _ mediaMs: Int64) -> Void
+    private let checkBytes: Int64
+    private let lock = NSLock()
+    private var end: Int64
+    private var stopRequested = false
+
+    public struct Result: Equatable, Sendable {
+        public var state: String
+        public var reason: String?
+        public var bytes: Int64
+        public var mediaEndMs: Int64
+        public var gaps: Int
+    }
+
+    public init(ring: TimeshiftRing, out: URL, startOffset: Int64, endMediaMs: Int64, freeBytes: @escaping () -> Int64,
+                checkBytes: Int64 = RecordingWriter.checkBytes, onProgress: @escaping (_ bytes: Int64, _ mediaMs: Int64) -> Void = { _, _ in }) {
+        self.ring = ring
+        self.out = out
+        self.startOffset = startOffset
+        self.end = endMediaMs
+        self.freeBytes = freeBytes
+        self.checkBytes = checkBytes
+        self.onProgress = onProgress
+    }
+
+    /// Até onde gravar (pode mudar a meio).
+    public var endMediaMs: Int64 {
+        get { lock.lock(); defer { lock.unlock() }; return end }
+        set { lock.lock(); end = newValue; lock.unlock() }
+    }
+
+    private var stopping: Bool { lock.lock(); defer { lock.unlock() }; return stopRequested }
+
+    /// Pára no ponto a que já chegou (o resultado diz [RecordingReason.user]).
+    public func stop() {
+        lock.lock()
+        stopRequested = true
+        lock.unlock()
+    }
+
+    /// Grava (bloqueia: corre numa thread sua) e devolve como acabou.
+    public func run() -> Result {
+        var pos = startOffset
+        var segment = ring.segment(at: pos)
+        var bytes: Int64 = 0
+        var gaps = 0
+        var endOffset: Int64?
+        var sinceCheck: Int64 = 0
+        var checkedAt = Date()
+        var lastMedia = ring.media(at: pos) ?? 0
+        func result(_ state: String, _ reason: String?) -> Result {
+            Result(state: bytes == 0 && state != RecordingState.done ? RecordingState.failed : state, reason: reason, bytes: bytes,
+                   mediaEndMs: lastMedia, gaps: gaps)
+        }
+        let files = FileManager.default
+        files.createFile(atPath: out.path, contents: nil)
+        guard let file = try? FileHandle(forWritingTo: out) else { return result(RecordingState.stopped, RecordingReason.lowSpace) }
+        defer {
+            try? file.close()
+            onProgress(bytes, lastMedia)
+        }
+        let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: Self.bufferBytes, alignment: 1)
+        defer { buffer.deallocate() }
+        while true {
+            if stopping { return result(RecordingState.stopped, RecordingReason.user) }
+            // O vídeo já passou do fim: o corte é no ponto do índice nesse instante.
+            let wanted = endMediaMs
+            if endOffset == nil, ring.liveMediaMs >= wanted { endOffset = ring.entry(atOrAfter: wanted)?.offset }
+            if let limit = endOffset, pos >= limit {
+                lastMedia = ring.media(at: limit) ?? lastMedia
+                return result(RecordingState.done, nil)
+            }
+            let max = endOffset.map { Int(min(Int64(Self.bufferBytes), $0 - pos)) } ?? Self.bufferBytes
+            let read: TimeshiftRing.Read
+            do {
+                read = try ring.read(at: pos, segment: segment, into: UnsafeMutableRawBufferPointer(rebasing: buffer[0..<max]), waitMs: Self.waitMs)
+            } catch {
+                // A ligação acabou com um erro (e não volta).
+                return result(RecordingState.stopped, RecordingReason.connection)
+            }
+            switch read {
+            case .bytes(let n) where n > 0:
+                do {
+                    try file.write(contentsOf: Data(bytes: buffer.baseAddress!, count: n))
+                } catch {
+                    // Sem espaço ou o disco saiu: fica o que já se escreveu.
+                    return result(RecordingState.stopped, RecordingReason.lowSpace)
+                }
+                pos += Int64(n)
+                bytes += Int64(n)
+                sinceCheck += Int64(n)
+                if sinceCheck >= checkBytes || Date().timeIntervalSince(checkedAt) >= Self.checkSeconds {
+                    sinceCheck = 0
+                    checkedAt = Date()
+                    lastMedia = ring.media(at: pos) ?? lastMedia
+                    onProgress(bytes, lastMedia)
+                    if RecordingSpace.mustStop(free: freeBytes()) { return result(RecordingState.stopped, RecordingReason.lowSpace) }
+                }
+            case .bytes, .wait:
+                break
+            case .boundary:
+                if let next = ring.segmentStart(segment + 1) {
+                    segment += 1
+                    pos = next
+                } else {
+                    guard let oldest = ring.oldest else { return result(RecordingState.stopped, RecordingReason.connection) }
+                    pos = oldest.offset
+                    segment = ring.segment(at: pos)
+                }
+                gaps += 1
+            case .overrun:
+                guard let oldest = ring.oldest else { return result(RecordingState.stopped, RecordingReason.connection) }
+                pos = oldest.offset
+                segment = ring.segment(at: pos)
+                gaps += 1
+            case .end:
+                // O anel fechou (a ligação foi para outro canal) ou acabou de vez.
+                lastMedia = ring.media(at: pos) ?? lastMedia
+                let reached = endOffset.map { pos >= $0 } ?? false
+                return result(reached ? RecordingState.done : RecordingState.stopped, reached ? nil : RecordingReason.connection)
+            }
+        }
+    }
+
+    static let bufferBytes = 256 * 1024
+    static let waitMs = 250
+    /// De quantos em quantos bytes (ou segundos) se vê o espaço livre e se avisa do progresso.
+    public static let checkBytes: Int64 = 8 * 1024 * 1024
+    static let checkSeconds: TimeInterval = 5
+}

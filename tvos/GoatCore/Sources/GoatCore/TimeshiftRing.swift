@@ -493,6 +493,21 @@ public final class TimeshiftRing: @unchecked Sendable {
         }
     }
 
+    /// O índice que ainda está no anel, do mais antigo ao direto (para cortar uma gravação, ver RecordingCut).
+    public var index: [Entry] { locked { Array(entries[head...]) } }
+
+    /// O primeiro ponto do índice com o tempo a partir de [mediaMs], ou nil se o vídeo ainda não chegou lá.
+    public func entry(atOrAfter mediaMs: Int64) -> Entry? {
+        locked {
+            var lo = head, hi = entries.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if entries[mid].mediaMs < mediaMs { lo = mid + 1 } else { hi = mid }
+            }
+            return lo < entries.count ? entries[lo] : nil
+        }
+    }
+
     /// O primeiro ponto do índice a partir de [offset] (para reabrir no início de um segmento).
     public func entry(from offset: Int64) -> Entry? {
         locked {
