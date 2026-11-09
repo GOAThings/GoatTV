@@ -31,6 +31,7 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cc.slokker.itv.ItvApp
+import cc.slokker.itv.data.Audience
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.ChannelCatalog
 import cc.slokker.itv.data.GroupNames
@@ -1140,7 +1141,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Canais e grupos ---------------------------------------------------------------------------
 
     /** O que se vê da lista aberta neste momento (ver ChannelCatalog). */
-    private fun catalog() = ChannelCatalog(_content.value, _prefs.value, _favorites.value, _recents.value, _unlocked.value)
+    private fun catalog() = catalogFor(_content.value)
+
+    /** O mesmo para outra lista (a do segundo canal): as definições, favoritos e desbloqueios são os mesmos. */
+    private fun catalogFor(content: PlaylistContent?) = ChannelCatalog(content, _prefs.value, _favorites.value, _recents.value, _unlocked.value)
 
     private fun groupNames() = I18n.s.let { GroupNames(it.favoritesStar, it.recents, it.all, it.others) }
 
@@ -1654,9 +1658,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal fun phoneChannelList(): PhoneChannelList? {
         val content = _content.value?.takeIf { phoneReady() } ?: return null
         val others = I18n.s.others
-        val groups = orderedGroups(includeHidden = false)
-            .filterNot { isGroupLockedSetting(it.id) }
-            .map { group -> (if (group.id == PlaylistContent.OTHERS) group.copy(name = others) else group) to channelsOf(group.id) }
+        val catalog = catalog()
+        val groups = catalog.orderedGroups(includeHidden = false)
+            .filterNot { catalog.isGroupLocked(it.id, Audience.PERSISTENT) }
+            .map { group -> (if (group.id == PlaylistContent.OTHERS) group.copy(name = others) else group) to catalog.channelsOf(group.id, Audience.PERSISTENT) }
         return PhoneChannelList(
             playlist = content.playlist,
             groups = groups,
@@ -1671,7 +1676,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O canal [key] da lista aberta, se o telemóvel o puder ver e abrir (nunca pede o PIN). */
     fun phoneChannel(key: String): Channel? {
         val content = _content.value?.takeIf { phoneReady() } ?: return null
-        return content.byKey[key]?.takeIf { PhoneChannelList.allowed(_prefs.value, content.playlist.id, it) }
+        return content.byKey[key]?.takeIf { catalog().isVisible(it, Audience.PERSISTENT) }
     }
 
     /**
@@ -1703,7 +1708,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun publishHome(locksChanged: Boolean = false) {
         val content = _content.value ?: return
-        val items = channelsOf(SpecialCategory.RECENT).filterNot { isGroupLockedSetting(it.categoryId) }.take(HOME_ITEMS).map { ch ->
+        val items = catalog().channelsOf(SpecialCategory.RECENT, Audience.PERSISTENT).take(HOME_ITEMS).map { ch ->
             val now = System.currentTimeMillis()
             // O launcher mostra o mesmo logótipo que a app.
             val logo = channelLogos.value[ch.key]
@@ -1890,29 +1895,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Grupos de [content] para o segundo canal (sem escondidos nem bloqueados). */
     fun groupsForSecond(content: PlaylistContent): List<Category> {
-        val p = _prefs.value
-        val id = content.playlist.id
         val s = I18n.s
-        val favorites = _favorites.value[id].orEmpty()
+        val catalog = catalogFor(content)
+        val favorites = _favorites.value[content.playlist.id].orEmpty()
         return listOfNotNull(
             Category(SpecialCategory.FAVORITES, s.favoritesStar).takeIf { favorites.isNotEmpty() },
             Category(SpecialCategory.ALL, s.all),
         ) + content.categories
-            .filterNot { p.isHidden(id, it.id) || (p.isLocked(id, it.id) && "$id:${it.id}" !in _unlocked.value) }
+            .filterNot { catalog.isGroupHidden(it.id) || catalog.isGroupLocked(it.id) }
             .map { if (it.id == PlaylistContent.OTHERS) it.copy(name = s.others) else it }
     }
 
     fun channelsForSecond(content: PlaylistContent, groupId: String): List<Channel> {
-        val p = _prefs.value
-        val id = content.playlist.id
-        fun visible(ch: Channel) = !p.isHidden(id, ch.categoryId) && !p.isChannelHidden(id, ch.key) &&
-            !(p.isLocked(id, ch.categoryId) && "$id:${ch.categoryId}" !in _unlocked.value)
+        val catalog = catalogFor(content)
         val list = when (groupId) {
-            SpecialCategory.FAVORITES -> _favorites.value[id].orEmpty().mapNotNull { content.byKey[it] }.filter(::visible)
-            SpecialCategory.ALL -> content.channels.filter(::visible)
-            else -> content.byCategory[groupId].orEmpty().filter(::visible)
+            SpecialCategory.FAVORITES -> _favorites.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter { catalog.isVisible(it) }
+            SpecialCategory.ALL -> content.channels.filter { catalog.isVisible(it) }
+            else -> content.byCategory[groupId].orEmpty().filter { catalog.isVisible(it) }
         }
-        return if (p.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
+        return if (_prefs.value.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
     }
 
     fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) {
@@ -1924,8 +1925,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val current = _second.value ?: return
         if (current.zapList.size < 2) return
         val index = current.zapList.indexOfFirst { it.uid == current.channel.uid }.coerceAtLeast(0)
-        val id = current.content.playlist.id
-        val next = nextAllowed(current.zapList, index, delta) { _prefs.value.isLocked(id, it.categoryId) && "$id:${it.categoryId}" !in _unlocked.value } ?: return
+        val catalog = catalogFor(current.content)
+        val next = nextAllowed(current.zapList, index, delta) { catalog.isGroupLocked(it.categoryId) } ?: return
         _second.value = current.copy(channel = next)
     }
 

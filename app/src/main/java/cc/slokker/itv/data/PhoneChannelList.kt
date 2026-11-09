@@ -11,7 +11,7 @@ import java.nio.charset.CodingErrorAction
 
 /**
  * Os canais que o GoatRemote vê (GET /channels da porta dos telemóveis). O estado é tirado na thread principal
- * (ver `AppViewModel.phoneChannelList`) e o JSON é montado fora dela.
+ * (ver `AppViewModel.phoneChannelList`, que os tira com o ChannelCatalog) e o JSON é montado fora dela.
  *
  * Nunca aparecem grupos ou canais escondidos, nem grupos bloqueados pelo controlo parental tal como está nas
  * definições, mesmo que tenham sido desbloqueados com o PIN nesta sessão: o telemóvel não pede PIN.
@@ -113,13 +113,13 @@ internal class PhoneChannelList(
         // Com os null ("current" sem canal) e sem trocar < > & por <… (é JSON para uma app, não para HTML).
         private val GSON = GsonBuilder().serializeNulls().disableHtmlEscaping().create()
 
-        /** Bloqueado nas definições (o mesmo que `AppViewModel.isGroupLockedSetting`), desbloqueado ou não com o PIN. */
-        fun isLockedSetting(prefs: Prefs, playlistId: String, groupId: String) = "$playlistId:$groupId" in prefs.lockedGroups
+        /** Bloqueado nas definições, desbloqueado ou não com o PIN (a regra do ChannelCatalog para [Audience.PERSISTENT]). */
+        fun isLockedSetting(prefs: Prefs, playlistId: String, groupId: String) =
+            ChannelCatalog.isLocked(prefs, emptySet(), playlistId, groupId, Audience.PERSISTENT)
 
-        /** O telemóvel pode ver e abrir [channel]: nem escondido (ele ou o grupo) nem bloqueado. */
+        /** O telemóvel pode ver e abrir [channel]: nem escondido (ele ou o grupo) nem bloqueado (ver ChannelCatalog). */
         fun allowed(prefs: Prefs, playlistId: String, channel: Channel): Boolean =
-            !prefs.isHidden(playlistId, channel.categoryId) && !prefs.isChannelHidden(playlistId, channel.key) &&
-                !isLockedSetting(prefs, playlistId, channel.categoryId)
+            ChannelCatalog.isVisible(prefs, emptySet(), playlistId, channel, Audience.PERSISTENT)
 
         /** O logótipo do canal tal como o ecrã o mostra (o escolhido, ou o da lista), se for um endereço http(s). */
         fun logoUrl(channel: Channel, logos: Map<String, String>): String? =

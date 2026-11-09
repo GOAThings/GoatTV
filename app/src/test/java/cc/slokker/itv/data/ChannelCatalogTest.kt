@@ -57,6 +57,21 @@ class ChannelCatalogTest {
     }
 
     @Test
+    fun `what lives outside the session keeps locked groups out, unlocked or not, pin or not`() {
+        val c = catalog(unlocked = setOf("p1:adult"))
+        assertTrue(c.isGroupLocked("adult", Audience.PERSISTENT))
+        assertEquals(listOf("k1", "n2"), c.channelsOf(SpecialCategory.FAVORITES, Audience.PERSISTENT).keys())
+        assertFalse(c.isVisible(channels[3], Audience.PERSISTENT))
+        assertTrue(c.isVisible(channels[3]))
+        val noPin = catalog(prefs = prefs.copy(pinHash = null))
+        assertFalse(noPin.isVisible(channels[3], Audience.PERSISTENT))
+        // O telemóvel usa a mesma regra.
+        channels.forEach { ch ->
+            assertEquals(ch.key, PhoneChannelList.allowed(prefs, "p1", ch), c.isVisible(ch, Audience.PERSISTENT))
+        }
+    }
+
+    @Test
     fun `without a pin nothing is locked`() {
         val c = catalog(prefs = prefs.copy(pinHash = null))
         assertFalse(c.isGroupLocked("adult"))

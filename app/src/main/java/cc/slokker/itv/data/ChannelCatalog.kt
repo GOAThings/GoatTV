@@ -1,5 +1,19 @@
 package cc.slokker.itv.data
 
+/**
+ * Quem vai ver a lista: o ecrã desta sessão, onde um grupo desbloqueado com o PIN conta como aberto, ou o que fica
+ * fora dela e sem PIN (o ecrã inicial do Android TV, o telemóvel), onde vale o bloqueio tal como está nas definições.
+ */
+enum class Audience {
+    SESSION,
+
+    /**
+     * Também não olha para o PIN: um grupo marcado continua de fora mesmo sem PIN definido (de propósito, ver
+     * PhoneChannelListTest.lockedStaysOutEvenWithoutPinCheck).
+     */
+    PERSISTENT,
+}
+
 /** Os nomes dos grupos especiais, na língua da app. */
 class GroupNames(val favorites: String, val recents: String, val all: String, val others: String)
 
@@ -17,14 +31,15 @@ class ChannelCatalog(
 ) {
     private val playlistId: String? = content?.playlist?.id
 
-    fun channelsOf(categoryId: String): List<Channel> {
+    fun channelsOf(categoryId: String, audience: Audience = Audience.SESSION): List<Channel> {
         val content = content ?: return emptyList()
+        val visible = { ch: Channel -> isVisible(ch, audience) }
         val list = when (categoryId) {
             // Os canais de grupos bloqueados não aparecem em "Todos" nem nos favoritos; os escondidos em lado nenhum.
-            SpecialCategory.ALL -> content.channels.filter(::isVisible)
-            SpecialCategory.FAVORITES -> favorites[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
+            SpecialCategory.ALL -> content.channels.filter(visible)
+            SpecialCategory.FAVORITES -> favorites[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(visible)
             // Pela ordem em que foram vistos (não se ordenam).
-            SpecialCategory.RECENT -> return recents[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(::isVisible)
+            SpecialCategory.RECENT -> return recents[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter(visible)
             // Um grupo com ordem escolhida fica por essa ordem (mesmo com "Ordenar por nome").
             else -> {
                 val ordered = orderedChannels(categoryId, includeHidden = false)
@@ -37,10 +52,13 @@ class ChannelCatalog(
 
     /**
      * O canal da lista aberta pode aparecer e abrir-se aqui: nem o grupo bloqueado (e por desbloquear nesta sessão),
-     * nem o grupo ou o canal escondidos. A mesma regra em "Todos", favoritos, recentes, pesquisa e números.
+     * nem o grupo ou o canal escondidos. A mesma regra em "Todos", favoritos, recentes, pesquisa, números, segundo
+     * canal, ecrã inicial e telemóvel (estes dois com [Audience.PERSISTENT]).
      */
-    fun isVisible(channel: Channel): Boolean =
-        !isGroupLocked(channel.categoryId) && !isGroupHidden(channel.categoryId) && !isChannelHidden(channel)
+    fun isVisible(channel: Channel, audience: Audience = Audience.SESSION): Boolean {
+        val playlistId = playlistId ?: return true
+        return isVisible(prefs, unlocked, playlistId, channel, audience)
+    }
 
     fun isChannelHidden(channel: Channel): Boolean {
         val playlistId = playlistId ?: return false
@@ -87,12 +105,12 @@ class ChannelCatalog(
         .map { if (it.id == PlaylistContent.OTHERS) it.copy(name = names.others) else it }
 
     /** O grupo está marcado como bloqueado, mesmo que já tenha sido desbloqueado com o PIN nesta sessão. */
-    fun isGroupLockedSetting(groupId: String): Boolean = content?.let { "${it.playlist.id}:$groupId" in prefs.lockedGroups } == true
+    fun isGroupLockedSetting(groupId: String): Boolean = isGroupLocked(groupId, Audience.PERSISTENT)
 
-    /** Bloqueado pelo controlo parental e ainda não desbloqueado nesta sessão. */
-    fun isGroupLocked(groupId: String): Boolean {
+    /** Bloqueado pelo controlo parental e ainda não desbloqueado nesta sessão (ou, para [Audience.PERSISTENT], marcado). */
+    fun isGroupLocked(groupId: String, audience: Audience = Audience.SESSION): Boolean {
         val playlistId = playlistId ?: return false
-        return prefs.isLocked(playlistId, groupId) && "$playlistId:$groupId" !in unlocked
+        return isLocked(prefs, unlocked, playlistId, groupId, audience)
     }
 
     /** Canal com o número [n] (teclas numéricas do comando). Os bloqueados e os escondidos (canal ou grupo) não contam. */
@@ -101,5 +119,18 @@ class ChannelCatalog(
     fun isFavorite(channel: Channel): Boolean {
         val playlistId = playlistId ?: return false
         return channel.key in favorites[playlistId].orEmpty()
+    }
+
+    companion object {
+        /** A regra de bloqueio, para quem não tem um catálogo à mão (o JSON do telemóvel). */
+        fun isLocked(prefs: Prefs, unlocked: Set<String>, playlistId: String, groupId: String, audience: Audience): Boolean = when (audience) {
+            Audience.SESSION -> prefs.isLocked(playlistId, groupId) && "$playlistId:$groupId" !in unlocked
+            Audience.PERSISTENT -> "$playlistId:$groupId" in prefs.lockedGroups
+        }
+
+        /** A regra de visibilidade (ver o [isVisible] do catálogo). */
+        fun isVisible(prefs: Prefs, unlocked: Set<String>, playlistId: String, channel: Channel, audience: Audience): Boolean =
+            !isLocked(prefs, unlocked, playlistId, channel.categoryId, audience) &&
+                !prefs.isHidden(playlistId, channel.categoryId) && !prefs.isChannelHidden(playlistId, channel.key)
     }
 }
