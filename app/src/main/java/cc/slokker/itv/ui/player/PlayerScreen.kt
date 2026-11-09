@@ -4,18 +4,9 @@ package cc.slokker.itv.ui.player
 
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
-import cc.slokker.itv.ui.glass.GlassChipButton
-import cc.slokker.itv.ui.glass.capsuleBar
-import cc.slokker.itv.ui.glass.ItvIcons
 import androidx.media3.common.Tracks
 import androidx.media3.common.C
 import cc.slokker.itv.ui.i18n.I18n
@@ -76,7 +67,6 @@ import androidx.media3.common.util.UnstableApi
 import android.util.Log
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.StreamFormat
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import cc.slokker.itv.ui.AppViewModel
@@ -106,7 +96,6 @@ import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
 import cc.slokker.itv.ui.player.engine.AppPlaybackHost
 import cc.slokker.itv.ui.common.focusWithRetry
-import cc.slokker.itv.data.minutesLeft
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -901,95 +890,41 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInVertically { it / 3 },
                 exit = fadeOut() + slideOutVertically { it / 3 },
             ) {
-                val s = LocalStrings.current
                 val favorites by vm.favorites.collectAsStateWithLifecycle()
                 val isFavorite = current.key in favorites[data.playlist.id].orEmpty()
                 val container = playback.currentCandidate?.format
                 NowPlayingBar(current, data, vm, badges = qualityBadges(stream, container)) { live ->
-                    // ← → andam entre os botões (sem abrir a lista nem saltar de canal).
-                    val focusManager = LocalFocusManager.current
-                    Row(
-                        Modifier
-                            .onKeyEvent { e ->
-                                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
-                                when (e.key.nativeKeyCode) {
-                                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { focusManager.moveFocus(FocusDirection.Left); true }
-                                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { focusManager.moveFocus(FocusDirection.Right); true }
-                                    else -> false
-                                }
+                    HudButtons(
+                        vm, current, live, prefs.aspect, isFavorite, sleepAt,
+                        pauseLive = tsActive(), second = second != null, dualLayout = dualLayout, firstFocus = hudFocus,
+                    ) { action ->
+                        when (action) {
+                            HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
+                            HudAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
+                            HudAction.PAUSE_LIVE -> tsToggle()
+                            HudAction.SECOND_CHANNEL -> {
+                                infoVisible = false
+                                secondPicker.reset()
+                                showSecondPicker = true
                             }
-                            .capsuleBar()
-                            .horizontalScroll(rememberScrollState())
-                            // Margem para o botão com foco (cresce um pouco) não ficar cortado nas pontas.
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        // Como num player: faixas e imagem primeiro, depois o resto.
-                        GlassChipButton(ItvIcons.Audio, s.audio, { trackPicker = C.TRACK_TYPE_AUDIO }, Modifier.focusRequester(hudFocus))
-                        GlassChipButton(ItvIcons.Subtitles, s.subtitles, { trackPicker = C.TRACK_TYPE_TEXT })
-                        GlassChipButton(
-                            ItvIcons.Aspect,
-                            when (prefs.aspect) {
-                                Prefs.Aspect.ZOOM -> s.aspectZoom
-                                Prefs.Aspect.FILL -> s.aspectFill
-                                else -> s.aspectFit
-                            },
-                            {
-                                val next = when (prefs.aspect) {
-                                    Prefs.Aspect.FIT -> Prefs.Aspect.ZOOM
-                                    Prefs.Aspect.ZOOM -> Prefs.Aspect.FILL
-                                    else -> Prefs.Aspect.FIT
-                                }
-                                vm.setPref(Prefs.Key.ASPECT, next)
-                            },
-                        )
-                        // Pausar o direto (também com Play/Pausa no comando, para quem o tem).
-                        if (tsActive()) GlassChipButton(ItvIcons.Pause, s.pauseLive, { tsToggle() })
-                        if (second == null) {
-                            GlassChipButton(ItvIcons.Pip, s.secondChannel, {
+                            HudAction.SWAP -> swapped = !swapped
+                            HudAction.LAYOUT -> dualLayout = if (dualLayout == DualLayout.PIP) DualLayout.SPLIT else DualLayout.PIP
+                            HudAction.SEARCH -> {
                                 infoVisible = false
-                                secondPicker.reset()
-                                showSecondPicker = true
-                            })
-                        } else {
-                            GlassChipButton(ItvIcons.SwapPlaylist, s.swapChannels, { swapped = !swapped })
-                            GlassChipButton(
-                                if (dualLayout == DualLayout.PIP) ItvIcons.Split else ItvIcons.Pip,
-                                if (dualLayout == DualLayout.PIP) s.splitScreen else s.pictureInPicture,
-                                { dualLayout = if (dualLayout == DualLayout.PIP) DualLayout.SPLIT else DualLayout.PIP },
-                            )
-                            GlassChipButton(ItvIcons.Pip, s.changeSecond, {
+                                showSearch = true
+                            }
+                            HudAction.GUIDE -> {
                                 infoVisible = false
-                                secondPicker.reset()
-                                showSecondPicker = true
-                            })
-                            GlassChipButton(ItvIcons.Close, s.closeSecond, { vm.closeSecond() })
-                        }
-                        GlassChipButton(ItvIcons.Search, s.search, { infoVisible = false; showSearch = true })
-                        GlassChipButton(ItvIcons.Guide, s.tvGuide, { infoVisible = false; guideFromBack = false; showGuide = true })
-                        // Trocar o guia deste canal por outro (só com conta; sem conta explica como ligar).
-                        GlassChipButton(ItvIcons.Guide, s.epgGuideChannel, {
-                            if (vm.epgPickerAvailable) {
+                                guideFromBack = false
+                                showGuide = true
+                            }
+                            HudAction.EPG_CHANNEL -> {
                                 infoVisible = false
                                 settingsAtEpg = true
                                 showSettings = true
-                            } else {
-                                vm.showToast(s.epgNeedsAccount)
                             }
-                        })
-                        GlassChipButton(
-                            if (isFavorite) ItvIcons.Star else ItvIcons.StarOutline,
-                            if (isFavorite) s.removeFavorite else s.addFavorite,
-                            { vm.toggleFavorite(current) },
-                        )
-                        if (live != null && vm.canCatchup(current, live)) {
-                            GlassChipButton(ItvIcons.Replay, s.startOver, { vm.playCatchup(current, live) })
+                            HudAction.SLEEP -> showSleep = true
                         }
-                        GlassChipButton(
-                            ItvIcons.Sleep,
-                            sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer,
-                            { showSleep = true },
-                        )
                     }
                 }
             }
@@ -1099,35 +1034,14 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInVertically { it / 3 },
                 exit = fadeOut() + slideOutVertically { it / 3 },
             ) {
-                val s = LocalStrings.current
-                val actions = buildList {
-                    // Buffer maior (o player recomeça com ele).
-                    val bigger = when (prefs.buffer) {
-                        Prefs.Buffer.LIVE -> Prefs.Buffer.SMALL
-                        Prefs.Buffer.SMALL -> Prefs.Buffer.NORMAL
-                        Prefs.Buffer.NORMAL -> Prefs.Buffer.LARGE
-                        else -> null
-                    }
-                    if (bigger != null) add(NetHintAction(ItvIcons.Buffer, s.netBiggerBuffer) { netHint = false; vm.setPref(Prefs.Key.BUFFER, bigger) })
-                    // O outro formato (TS ⇄ HLS), quando é mesmo outro endereço (Xtream, ou .ts ⇄ .m3u8); num link sem
-                    // extensão o "outro" é o mesmo URL, que já falhou nesse formato.
-                    val candidates = playback.candidates
-                    val playingNow = playback.currentCandidate
-                    val other = candidates.indices.firstOrNull { i ->
-                        val c = candidates[i]
-                        i != playback.attempt && c.format != playingNow?.format && c.url != playingNow?.url
-                    }
-                    if (other != null && catchup == null) {
-                        val format = candidates[other].format
-                        add(NetHintAction(ItvIcons.SwapPlaylist, s.netTryFormat(if (format == StreamFormat.HLS) "HLS" else "TS")) {
-                            netHint = false
-                            vm.setStreamFormat(format)
-                            playback.switchTo(other)
-                        })
-                    }
-                    add(NetHintAction(ItvIcons.Info, s.netDetails) { netHint = false; settingsAtConnection = true; showSettings = true })
-                    add(NetHintAction(ItvIcons.Close, s.netDontShow) { netHint = false; vm.setPref(Prefs.Key.NET_WARNINGS, false) })
-                }
+                val actions = netHintActions(
+                    LocalStrings.current, vm, prefs, playback, catchup != null,
+                    onDismiss = { netHint = false },
+                    onDetails = {
+                        settingsAtConnection = true
+                        showSettings = true
+                    },
+                )
                 NetHintCard(vm.net, actions, netHintFocus)
             }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
