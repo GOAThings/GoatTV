@@ -145,6 +145,19 @@ class ChannelCatalogTest {
     }
 
     @Test
+    fun `number keys switch at once when no longer number starts that way`() {
+        assertFalse(catalog().numberCanGrow("1"))
+        // Um 0 à frente fica à espera do resto.
+        assertTrue(catalog().numberCanGrow("0"))
+        val more = PlaylistContent.build(playlist, listOf(Category("news", "Notícias"), Category("kids", "Infantis")), channels + Channel(7, "n12", 12, "Doze", null, "news") + Channel(8, "k31", 31, "Escondido", null, "kids"))
+        val c = ChannelCatalog(more, prefs.copy(hiddenChannels = setOf("p1:k31")), emptyMap(), emptyMap(), emptySet())
+        assertTrue(c.numberCanGrow("1"))
+        assertFalse(c.numberCanGrow("12"))
+        // O 31 está escondido: o 3 não espera por ele.
+        assertFalse(c.numberCanGrow("3"))
+    }
+
+    @Test
     fun `nothing open means nothing visible`() {
         val c = ChannelCatalog(null, prefs, emptyMap(), emptyMap(), emptySet())
         assertEquals(emptyList<Channel>(), c.channelsOf(SpecialCategory.ALL))

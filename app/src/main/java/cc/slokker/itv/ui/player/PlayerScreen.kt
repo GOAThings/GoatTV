@@ -504,10 +504,11 @@ fun PlayerScreen(vm: AppViewModel) {
     val hudOpen = infoVisible && infoFull && !covered() && catchup == null
     LaunchedEffect(hudOpen) { if (hudOpen) focusWithRetry(hudFocus) }
 
-    // Teclas numéricas: o número fica à espera de mais algarismos e muda de canal ao fim de um bocado.
+    // Teclas numéricas: o número fica à espera de mais algarismos e muda de canal ao fim de um bocado (logo, se
+    // nenhum canal tem um número mais comprido que comece assim).
     LaunchedEffect(numberEntry) {
         if (numberEntry.isEmpty()) return@LaunchedEffect
-        delay(NUMBER_COMMIT_MS)
+        if (numberEntry.length < 4 && vm.numberCanGrow(numberEntry)) delay(NUMBER_COMMIT_MS)
         val n = numberEntry.toIntOrNull()
         numberEntry = ""
         if (n != null && !vm.playNumber(n)) vm.showToast(I18n.s.noChannelNumber(n))

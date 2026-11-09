@@ -1175,6 +1175,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelByNumber(n: Int): Channel? = catalog().channelByNumber(n)
 
+    fun numberCanGrow(typed: String): Boolean = catalog().numberCanGrow(typed)
+
     /** Teclas numéricas: muda já de canal (sem mudar de ecrã) e o zapping passa a ser por "Todos". */
     fun playNumber(n: Int): Boolean {
         val channel = channelByNumber(n) ?: return false

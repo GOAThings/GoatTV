@@ -123,6 +123,15 @@ class ChannelCatalog(
     /** Canal com o número [n] (teclas numéricas do comando). Os bloqueados e os escondidos (canal ou grupo) não contam. */
     fun channelByNumber(n: Int): Channel? = content?.channels?.firstOrNull { it.num == n && isVisible(it) }
 
+    /**
+     * Teclas numéricas: ainda pode vir mais um algarismo depois de [typed] (há um canal à vista com um número mais
+     * comprido que começa assim, ou começa por 0). Senão, muda-se já em vez de esperar.
+     */
+    fun numberCanGrow(typed: String): Boolean =
+        typed.startsWith("0") || content?.channels?.any { ch ->
+            ch.num.toString().let { it.length > typed.length && it.startsWith(typed) } && isVisible(ch)
+        } == true
+
     /** As chaves dos Recentes da lista, o mais recente primeiro (sem filtro: quem lê decide o que conta). */
     fun recentKeys(): List<String> = playlistId?.let { recents[it] }.orEmpty()
 
