@@ -52,7 +52,9 @@ import cc.slokker.itv.data.api.EpgGuideChannel
 import cc.slokker.itv.data.api.EpgMapping
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.data.api.EpgMappingRequest
-import cc.slokker.itv.data.api.PlaylistDto
+import cc.slokker.itv.data.api.accountBody
+import cc.slokker.itv.data.api.toDto
+import cc.slokker.itv.data.api.toPlaylist
 import cc.slokker.itv.data.api.epgErrorText
 import cc.slokker.itv.data.api.parseServerError
 import cc.slokker.itv.data.api.unescaped
@@ -897,7 +899,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (c.testMode) return "Test mode"
         val saved = try {
-            val body = playlistBody(form.toPlaylist(id.orEmpty()))
+            val body = form.toPlaylist(id.orEmpty()).accountBody()
             if (id == null) c.backend.createPlaylist(body) else c.backend.updatePlaylist(id, body)
         } catch (e: CancellationException) {
             throw e
@@ -944,18 +946,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startLoading(resume = false)
         }
         return null
-    }
-
-    /** O corpo de uma lista para a conta (os campos do outro tipo vão vazios, como no site). */
-    private fun playlistBody(p: Playlist) = JsonObject().apply {
-        val xtream = p.type == PlaylistType.XTREAM
-        addProperty("type", if (xtream) "xtream" else "m3u")
-        addProperty("name", p.name)
-        addProperty("server", if (xtream) p.server.orEmpty() else "")
-        addProperty("username", if (xtream) p.username.orEmpty() else "")
-        addProperty("password", if (xtream) p.password.orEmpty() else "")
-        addProperty("url", if (xtream) "" else p.url.orEmpty())
-        addProperty("epg_url", p.epgUrl.orEmpty())
     }
 
     /** A mensagem para um erro ao gravar uma lista na conta, pelo `code`/`params` do servidor (que vem em inglês). */
@@ -2421,51 +2411,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         /** De quanto em quanto tempo ver se a lista ou o guia já passaram do intervalo. */
         const val REFRESH_TICK_MS = 10 * 60_000L
         const val LAST_AT_KEY = "last_channel_at"
-
-        fun PlaylistDto.toPlaylist(): Playlist? {
-            val id = id ?: return null
-            val type = when (type?.lowercase()) {
-                "xtream" -> PlaylistType.XTREAM
-                "m3u" -> PlaylistType.M3U
-                "stalker" -> PlaylistType.STALKER
-                else -> return null
-            }
-            return Playlist(
-                id = id,
-                type = type,
-                name = name?.takeIf { it.isNotBlank() } ?: when (type) {
-                    PlaylistType.XTREAM -> "Xtream"
-                    PlaylistType.M3U -> "M3U"
-                    PlaylistType.STALKER -> "Stalker"
-                },
-                // A conta manda sempre os 8 campos ("" nos que não são do tipo): vazio = em falta, para a lista
-                // não parecer diferente da guardada em cache (e não recarregar sem razão).
-                server = server?.takeIf { it.isNotBlank() },
-                username = username?.takeIf { it.isNotBlank() },
-                password = password?.takeIf { it.isNotEmpty() },
-                url = url?.takeIf { it.isNotBlank() },
-                epgUrl = epgUrl?.takeIf { it.isNotBlank() },
-                serial = serial,
-                deviceId = deviceId,
-                deviceId2 = deviceId2,
-                signature = signature,
-            )
-        }
-
-        fun Playlist.toDto() = PlaylistDto(
-            id = id,
-            type = type.name.lowercase(),
-            name = name,
-            server = server,
-            username = username,
-            password = password,
-            url = url,
-            epgUrl = epgUrl,
-            serial = serial,
-            deviceId = deviceId,
-            deviceId2 = deviceId2,
-            signature = signature,
-        )
 
         /** Id de uma lista desta TV (sem conta). */
         fun newLocalId(): String = "local" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
