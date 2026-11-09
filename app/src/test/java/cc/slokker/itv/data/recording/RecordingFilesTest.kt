@@ -48,6 +48,8 @@ class RecordingFilesTest {
         assertEquals(1, s.recordings.size)
         assertEquals("http://iptv.example.com/live/u/p/101.ts", s.recordings[0].url)
         assertEquals("series-1", s.series.single().id)
+        assertEquals(2, s.paddingBeforeMin)
+        assertEquals(5, s.paddingAfterMin)
         assertEquals(JsonParser.parseString(json), JsonParser.parseString(files.encodeSchedule(s)))
     }
 
@@ -55,6 +57,9 @@ class RecordingFilesTest {
     fun campoQueFaltaFicaVazio() {
         val s = files.parseSchedule("""{"version":1}""")
         assertTrue(s.recordings.isEmpty() && s.series.isEmpty() && s.handled.isEmpty())
+        // Sem margens guardadas (ou uma que não está nas opções): as de omissão.
+        assertEquals(RecordingPlan.PADDING_BEFORE_DEFAULT, s.paddingBeforeMin)
+        assertEquals(RecordingPlan.PADDING_AFTER_DEFAULT, files.parseSchedule("""{"paddingAfterMin":7}""").paddingAfterMin)
         assertNull(files.parseInfo("""{"version":1}"""))
     }
 

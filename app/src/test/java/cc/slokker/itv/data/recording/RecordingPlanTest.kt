@@ -107,9 +107,9 @@ class RecordingPlanTest {
     @Test
     fun proximoAlarme() {
         val s = Schedule(recordings = listOf(rec("a"), rec("b", startMs = start + 60 * min, endMs = start + 90 * min)))
-        assertEquals(w.fromMs - RecordingPlan.WAKE_LEAD_MS, RecordingPlan.nextWake(s, 2, 5, start - 60 * min))
-        // A meio da primeira: acorda já (ainda não acabou).
-        assertEquals(start + 5 * min, RecordingPlan.nextWake(s, 2, 5, start + 5 * min))
+        assertEquals(w.fromMs, RecordingPlan.nextWake(s, 2, 5, start - 60 * min))
+        // A primeira já começou: a seguinte.
+        assertEquals(start + 58 * min, RecordingPlan.nextWake(s, 2, 5, start + 5 * min))
         assertNull(RecordingPlan.nextWake(Schedule(), 2, 5, start))
     }
 
@@ -128,6 +128,8 @@ class RecordingPlanTest {
             handled = mapOf(ScheduledRecording.instanceKey("p1", "101", start + 24 * 60 * min) to start),
         )
         assertEquals(listOf(entries[1], entries[3]), RecordingPlan.seriesEntries(rule, entries, Schedule(), start - min))
+        // O que já começou não entra (só os seguintes).
+        assertEquals(listOf(entries[3]), RecordingPlan.seriesEntries(rule, entries, Schedule(), start + min))
         assertTrue(RecordingPlan.seriesEntries(rule, entries, marked, start - min).isEmpty())
     }
 

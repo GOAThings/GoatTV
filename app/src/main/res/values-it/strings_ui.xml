@@ -680,4 +680,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Aggiorna</string>
     <string name="update_later">Più tardi</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Registrazioni</string>
+    <string name="record">Registra</string>
+    <string name="record_series">Registra la serie</string>
+    <string name="stop_recording">Interrompi registrazione</string>
+    <string name="cancel_recording">Annulla registrazione</string>
+    <string name="cancel_series">Annulla la serie</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Registrazione: %1$s</string>
+    <string name="recording_saved">Registrazione salvata: %1$s</string>
+    <string name="recording_stopped_space">Registrazione interrotta: spazio libero insufficiente</string>
+    <string name="recording_stopped_connection">Registrazione interrotta: la connessione al canale si è chiusa</string>
+    <string name="recording_no_space">Spazio libero insufficiente per registrare</string>
+    <string name="recording_not_recordable">Per registrare, questo canale richiede la pausa della diretta e uno stream TS</string>
+    <string name="recording_other_channel">È già in corso la registrazione di un altro canale</string>
+    <string name="recording_switch_title">Stai registrando %1$s</string>
+    <string name="recording_switch_text">Il tuo fornitore consente una sola connessione: guardare altro interrompe la registrazione.</string>
+    <string name="recording_stop_and_switch">Interrompi la registrazione e cambia</string>
+    <string name="recording_keep">Continua a registrare (resta su questo canale)</string>
+    <string name="recording_soon">Registrazione a breve su %1$s</string>
+    <string name="recording_switch_to">Passa a %1$s per registrare</string>
+    <string name="recording_skip">Salta questa registrazione</string>
+    <string name="recording_switching_in">Cambio tra %1$d s</string>
+    <string name="recording_scheduled">Registrazione programmata: %1$s</string>
+    <string name="recording_series_scheduled">Registrazione della serie: %1$s</string>
+    <string name="recording_cancelled">Registrazione annullata</string>
+    <string name="recording_overlap">Si sovrappone a %1$s: si può registrare un solo canale alla volta</string>
+    <string name="recording_hls_only">Questo canale non si può registrare (solo HLS)</string>
+    <string name="recording_skipped">Non registrato: %1$s</string>
+    <string name="recordings_empty">Nessuna registrazione. Premi Registra mentre guardi, o programmala dalla guida.</string>
+    <string name="recordings_scheduled">Programmate</string>
+    <string name="recordings_recorded">Registrate</string>
+    <string name="recordings_free">%1$s liberi</string>
+    <string name="recording_state_stopped">Interrotta prima</string>
+    <string name="recording_state_failed">Non riuscita</string>
+    <string name="recording_deleted">Registrazione eliminata</string>
+    <string name="recording_delete">Elimina</string>
+    <string name="recording_padding_before">Inizia le registrazioni prima</string>
+    <string name="recording_padding_after">Termina le registrazioni dopo</string>
+    <string name="recording_padding_sub">Gli orari della guida sono raramente esatti</string>
+    <string name="recording_exact_alarm">Per avviare le registrazioni in orario con l\'app chiusa, consenti sveglie e promemoria</string>
+    <string name="recording_allow">Consenti</string>
 </resources>

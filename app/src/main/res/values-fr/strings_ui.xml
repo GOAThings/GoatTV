@@ -680,4 +680,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Mettre à jour</string>
     <string name="update_later">Plus tard</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Enregistrements</string>
+    <string name="record">Enregistrer</string>
+    <string name="record_series">Enregistrer la série</string>
+    <string name="stop_recording">Arrêter l\'enregistrement</string>
+    <string name="cancel_recording">Annuler l\'enregistrement</string>
+    <string name="cancel_series">Annuler la série</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Enregistrement : %1$s</string>
+    <string name="recording_saved">Enregistrement terminé : %1$s</string>
+    <string name="recording_stopped_space">Enregistrement arrêté : pas assez d\'espace libre</string>
+    <string name="recording_stopped_connection">Enregistrement arrêté : la connexion à la chaîne s\'est terminée</string>
+    <string name="recording_no_space">Pas assez d\'espace libre pour enregistrer</string>
+    <string name="recording_not_recordable">Pour enregistrer, cette chaîne a besoin de la pause du direct et d\'un flux TS</string>
+    <string name="recording_other_channel">Une autre chaîne est déjà en cours d\'enregistrement</string>
+    <string name="recording_switch_title">Vous enregistrez %1$s</string>
+    <string name="recording_switch_text">Votre fournisseur n\'autorise qu\'une connexion : regarder autre chose arrête l\'enregistrement.</string>
+    <string name="recording_stop_and_switch">Arrêter l\'enregistrement et changer</string>
+    <string name="recording_keep">Continuer l\'enregistrement (rester sur cette chaîne)</string>
+    <string name="recording_soon">Enregistrement bientôt sur %1$s</string>
+    <string name="recording_switch_to">Passer sur %1$s pour enregistrer</string>
+    <string name="recording_skip">Ignorer cet enregistrement</string>
+    <string name="recording_switching_in">Changement dans %1$d s</string>
+    <string name="recording_scheduled">Enregistrement programmé : %1$s</string>
+    <string name="recording_series_scheduled">Enregistrement de la série : %1$s</string>
+    <string name="recording_cancelled">Enregistrement annulé</string>
+    <string name="recording_overlap">Chevauche %1$s : une seule chaîne peut être enregistrée à la fois</string>
+    <string name="recording_hls_only">Cette chaîne ne peut pas être enregistrée (HLS uniquement)</string>
+    <string name="recording_skipped">Non enregistré : %1$s</string>
+    <string name="recordings_empty">Aucun enregistrement. Appuyez sur Enregistrer pendant le visionnage, ou programmez-en un depuis le guide.</string>
+    <string name="recordings_scheduled">Programmés</string>
+    <string name="recordings_recorded">Enregistrés</string>
+    <string name="recordings_free">%1$s libres</string>
+    <string name="recording_state_stopped">Arrêté avant la fin</string>
+    <string name="recording_state_failed">Échec</string>
+    <string name="recording_deleted">Enregistrement supprimé</string>
+    <string name="recording_delete">Supprimer</string>
+    <string name="recording_padding_before">Commencer les enregistrements plus tôt</string>
+    <string name="recording_padding_after">Terminer les enregistrements plus tard</string>
+    <string name="recording_padding_sub">Les horaires du guide sont rarement exacts</string>
+    <string name="recording_exact_alarm">Pour démarrer les enregistrements à l\'heure avec l\'appli fermée, autorisez les alarmes et rappels</string>
+    <string name="recording_allow">Autoriser</string>
 </resources>

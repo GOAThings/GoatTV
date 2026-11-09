@@ -115,6 +115,13 @@ class MainActivity : AppCompatActivity() {
         if (!isChangingConfigurations) PhoneChannels.detach(vm)
     }
 
+    /** A autorização das notificações chegou com uma gravação a decorrer: a notificação dela aparece já. */
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) (application as ItvApp).container.recordings.refreshNotification()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

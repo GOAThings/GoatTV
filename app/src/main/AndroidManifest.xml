@@ -19,6 +19,15 @@
     <!-- Ligação do canal (Definições → Canal atual → Ligação): por cabo ou Wi-Fi, a banda e a força do sinal. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Gravações: continuam com a app em segundo plano (serviço em primeiro plano, com notificação) e com o ecrã
+         desligado; a notificação mostra-se no Android 13+ se o utilizador deixar. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Gravações marcadas: acordar a app à hora certa com ela fechada. Até ao Android 12 vem dada; no 13+ o
+         utilizador dá-a em "Alarmes e lembretes" (sem ela o alarme é aproximado). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- allowBackup=false: o token da sessão não deve sair da TV. -->
     <application
@@ -65,6 +74,19 @@
 
         <receiver
             android:name=".InstallResultReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".recording.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Recording a live TV stream the user chose to record to a local file" />
+        </service>
+
+        <receiver
+            android:name=".recording.RecordingAlarmReceiver"
             android:exported="false" />
 
         <receiver

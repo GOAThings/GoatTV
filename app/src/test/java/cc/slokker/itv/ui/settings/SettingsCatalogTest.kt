@@ -58,6 +58,7 @@ class SettingsCatalogTest {
                 TvSection.MAIN to listOf("format", k.BUFFER, k.ENGINE, k.DECODER, k.ASPECT, k.FREEZE_FRAME, k.TIMESHIFT, k.RECONNECT_SECONDS, k.AFR, k.AFR_FALLBACK, k.HDR),
                 TvSection.AUDIO to listOf(k.AUDIO_LANGUAGE, k.AUDIO_PASSTHROUGH, k.SURROUND_DEFAULT, k.AUDIO_DECODER),
                 TvSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE),
+                TvSection.RECORDINGS to listOf(k.RECORD_PADDING_BEFORE, k.RECORD_PADDING_AFTER),
             ),
             tv(TvPage.PLAYBACK),
         )
@@ -82,6 +83,7 @@ class SettingsCatalogTest {
                 PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SUBTITLE_LANGUAGE),
                 PhoneSection.CONNECTION to listOf(k.BUFFER, k.RECONNECT_SECONDS, k.TIMESHIFT, k.ZAP_DELAY),
                 PhoneSection.ADVANCED to listOf("format", k.ENGINE, k.DECODER, k.AUDIO_DECODER, k.USER_AGENT),
+                PhoneSection.RECORDINGS to listOf(k.RECORD_PADDING_BEFORE, k.RECORD_PADDING_AFTER),
             ),
             phone(PhonePage.PLAYBACK),
         )

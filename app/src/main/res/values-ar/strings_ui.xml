@@ -686,4 +686,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">تحديث</string>
     <string name="update_later">لاحقًا</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">التسجيلات</string>
+    <string name="record">تسجيل</string>
+    <string name="record_series">تسجيل السلسلة</string>
+    <string name="stop_recording">إيقاف التسجيل</string>
+    <string name="cancel_recording">إلغاء التسجيل</string>
+    <string name="cancel_series">إلغاء السلسلة</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">جارٍ التسجيل: %1$s</string>
+    <string name="recording_saved">تم حفظ التسجيل: %1$s</string>
+    <string name="recording_stopped_space">توقف التسجيل: لا توجد مساحة فارغة كافية</string>
+    <string name="recording_stopped_connection">توقف التسجيل: انتهى الاتصال بالقناة</string>
+    <string name="recording_no_space">لا توجد مساحة فارغة كافية للتسجيل</string>
+    <string name="recording_not_recordable">للتسجيل، تحتاج هذه القناة إلى إيقاف البث المباشر مؤقتًا وبث TS</string>
+    <string name="recording_other_channel">يتم بالفعل تسجيل قناة أخرى</string>
+    <string name="recording_switch_title">أنت تسجّل %1$s</string>
+    <string name="recording_switch_text">يسمح مزوّدك باتصال واحد فقط: مشاهدة شيء آخر توقف التسجيل.</string>
+    <string name="recording_stop_and_switch">إيقاف التسجيل والتبديل</string>
+    <string name="recording_keep">متابعة التسجيل (البقاء على هذه القناة)</string>
+    <string name="recording_soon">تسجيل قريبًا على %1$s</string>
+    <string name="recording_switch_to">التبديل إلى %1$s للتسجيل</string>
+    <string name="recording_skip">تخطي هذا التسجيل</string>
+    <string name="recording_switching_in">التبديل خلال %1$d ث</string>
+    <string name="recording_scheduled">تمت جدولة التسجيل: %1$s</string>
+    <string name="recording_series_scheduled">تسجيل السلسلة: %1$s</string>
+    <string name="recording_cancelled">تم إلغاء التسجيل</string>
+    <string name="recording_overlap">يتداخل مع %1$s: يمكن تسجيل قناة واحدة فقط في كل مرة</string>
+    <string name="recording_hls_only">لا يمكن تسجيل هذه القناة (HLS فقط)</string>
+    <string name="recording_skipped">لم يُسجَّل: %1$s</string>
+    <string name="recordings_empty">لا توجد تسجيلات بعد. اضغط تسجيل أثناء المشاهدة أو جدوِل تسجيلًا من الدليل.</string>
+    <string name="recordings_scheduled">المجدولة</string>
+    <string name="recordings_recorded">المسجّلة</string>
+    <string name="recordings_free">%1$s متاحة</string>
+    <string name="recording_state_stopped">توقف مبكرًا</string>
+    <string name="recording_state_failed">فشل</string>
+    <string name="recording_deleted">تم حذف التسجيل</string>
+    <string name="recording_delete">حذف</string>
+    <string name="recording_padding_before">بدء التسجيلات مبكرًا</string>
+    <string name="recording_padding_after">إنهاء التسجيلات متأخرًا</string>
+    <string name="recording_padding_sub">أوقات الدليل نادرًا ما تكون دقيقة</string>
+    <string name="recording_exact_alarm">لبدء التسجيلات في الوقت المحدد والتطبيق مغلق، اسمح بالمنبّهات والتذكيرات</string>
+    <string name="recording_allow">سماح</string>
 </resources>

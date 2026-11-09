@@ -676,4 +676,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">アップデート</string>
     <string name="update_later">あとで</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">録画</string>
+    <string name="record">録画</string>
+    <string name="record_series">シリーズを録画</string>
+    <string name="stop_recording">録画を停止</string>
+    <string name="cancel_recording">録画を取り消す</string>
+    <string name="cancel_series">シリーズを取り消す</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">録画中：%1$s</string>
+    <string name="recording_saved">録画を保存しました：%1$s</string>
+    <string name="recording_stopped_space">録画を停止しました：空き容量が足りません</string>
+    <string name="recording_stopped_connection">録画を停止しました：チャンネルの接続が終了しました</string>
+    <string name="recording_no_space">録画に必要な空き容量がありません</string>
+    <string name="recording_not_recordable">録画するには、このチャンネルでライブ一時停止と TS ストリームが必要です</string>
+    <string name="recording_other_channel">別のチャンネルを録画中です</string>
+    <string name="recording_switch_title">%1$s を録画中です</string>
+    <string name="recording_switch_text">プロバイダーの接続は1つだけです。ほかを視聴すると録画は止まります。</string>
+    <string name="recording_stop_and_switch">録画を止めて切り替える</string>
+    <string name="recording_keep">録画を続ける（このチャンネルのまま）</string>
+    <string name="recording_soon">まもなく %1$s で録画</string>
+    <string name="recording_switch_to">%1$s に切り替えて録画</string>
+    <string name="recording_skip">この録画をスキップ</string>
+    <string name="recording_switching_in">%1$d 秒後に切り替え</string>
+    <string name="recording_scheduled">録画予約しました：%1$s</string>
+    <string name="recording_series_scheduled">シリーズ録画：%1$s</string>
+    <string name="recording_cancelled">録画を取り消しました</string>
+    <string name="recording_overlap">%1$s と重なっています：同時に録画できるのは1チャンネルだけです</string>
+    <string name="recording_hls_only">このチャンネルは録画できません（HLS のみ）</string>
+    <string name="recording_skipped">録画されませんでした：%1$s</string>
+    <string name="recordings_empty">録画はまだありません。視聴中に「録画」を押すか、番組表から予約してください。</string>
+    <string name="recordings_scheduled">予約</string>
+    <string name="recordings_recorded">録画済み</string>
+    <string name="recordings_free">空き %1$s</string>
+    <string name="recording_state_stopped">途中で停止</string>
+    <string name="recording_state_failed">失敗</string>
+    <string name="recording_deleted">録画を削除しました</string>
+    <string name="recording_delete">削除</string>
+    <string name="recording_padding_before">録画を早めに開始</string>
+    <string name="recording_padding_after">録画を遅めに終了</string>
+    <string name="recording_padding_sub">番組表の時刻はめったに正確ではありません</string>
+    <string name="recording_exact_alarm">アプリを閉じていても録画を時間どおりに始めるには、アラームとリマインダーを許可してください</string>
+    <string name="recording_allow">許可</string>
 </resources>

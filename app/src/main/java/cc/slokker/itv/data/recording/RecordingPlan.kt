@@ -17,8 +17,11 @@ object RecordingPlan {
     /** O aviso "Mudar para X para gravar" aparece este tanto antes de a gravação começar (como os lembretes). */
     const val PROMPT_LEAD_MS = 60_000L
 
-    /** O alarme acorda a app este tanto antes, para ligar a tempo. */
-    const val WAKE_LEAD_MS = 30_000L
+    /**
+     * Um alarme pode chegar uns ms antes da hora: o que começa até este tanto depois já se trata como na hora (a
+     * gravação começa logo, enquanto o Android ainda deixa o serviço arrancar por causa do alarme).
+     */
+    const val ALARM_SLACK_MS = 3_000L
 
     /** Sem guia, "gravar agora" grava até isto (ou até se parar). */
     const val MAX_NO_EPG_MS = 4 * 3600_000L
@@ -55,7 +58,7 @@ object RecordingPlan {
         data object Start : Decision
         /** Mudar o player para o canal da gravação (respondeu que sim, ou ninguém respondeu até à hora). */
         data object Switch : Decision
-        /** Não gravar: [reason] é [SKIP_USER], [SKIP_BUSY] (já se grava outro canal) ou [SKIP_HLS]. */
+        /** Não gravar: [reason] é [SKIP_USER], [SKIP_BUSY] (já se grava outro canal), [SKIP_HLS] ou [SKIP_SPACE]. */
         data class Skip(val reason: String) : Decision
         /** A hora já passou sem se ter gravado. */
         data object Expired : Decision
@@ -64,6 +67,7 @@ object RecordingPlan {
     const val SKIP_USER = "user"
     const val SKIP_BUSY = "busy"
     const val SKIP_HLS = "hls"
+    const val SKIP_SPACE = "space"
 
     /**
      * O que fazer agora ([now]) com [r], que grava em [w]. [watching]: o canal no player; [busy]: as gravações a
@@ -102,12 +106,15 @@ object RecordingPlan {
         }
     }
 
-    /** A próxima hora a que a app tem de acordar (o alarme), ou null sem nada marcado. */
+    /**
+     * A próxima hora a que a app tem de acordar (o alarme): o início, com a margem, da próxima marcada que ainda não
+     * começou; null sem nenhuma. As que já começaram tratam-se com a app aberta (o processo está vivo).
+     */
     fun nextWake(schedule: Schedule, beforeMin: Int, afterMin: Int, now: Long): Long? =
         schedule.recordings
             .map { window(it, beforeMin, afterMin) }
-            .filter { it.toMs > now }
-            .minOfOrNull { maxOf(now, it.fromMs - WAKE_LEAD_MS) }
+            .filter { it.fromMs > now }
+            .minOfOrNull { it.fromMs }
 
     /** O mesmo título, sem maiúsculas, acentos nem espaços a mais (o guia não escreve sempre igual). */
     fun titleKey(title: String): String =
@@ -115,13 +122,14 @@ object RecordingPlan {
 
     /**
      * Os programas de [entries] (o guia do canal da série) que a regra [rule] marca agora: o mesmo título, ainda por
-     * acabar, dentro de [SERIES_HORIZON_MS], que não estejam marcados nem já tratados.
+     * começar (o que já está a dar noutro canal não faz mudar de canal de repente), dentro de [SERIES_HORIZON_MS], que
+     * não estejam marcados nem já tratados.
      */
     fun seriesEntries(rule: SeriesRule, entries: List<EpgEntry>, schedule: Schedule, now: Long): List<EpgEntry> {
         val key = titleKey(rule.title)
         val marked = schedule.recordings.map { it.instanceKey }.toSet()
         return entries.filter { e ->
-            e.endMs > now && e.startMs < now + SERIES_HORIZON_MS && titleKey(e.title) == key &&
+            e.startMs > now && e.startMs < now + SERIES_HORIZON_MS && titleKey(e.title) == key &&
                 ScheduledRecording.instanceKey(rule.playlistId, rule.channelKey, e.startMs).let { it !in marked && it !in schedule.handled }
         }
     }

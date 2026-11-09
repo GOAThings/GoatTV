@@ -262,6 +262,8 @@ class PersistedFormatTest {
         "audioLanguage" to (Prefs.Key.AUDIO_LANGUAGE to "en"),
         "subtitleLanguage" to (Prefs.Key.SUBTITLE_LANGUAGE to "pt"),
         "epgInList" to (Prefs.Key.EPG_IN_LIST to false),
+        "recordPaddingBeforeMin" to (Prefs.Key.RECORD_PADDING_BEFORE to 5),
+        "recordPaddingAfterMin" to (Prefs.Key.RECORD_PADDING_AFTER to 10),
         "pinHash" to (Prefs.Key.PIN_HASH to Prefs.hashPin("1234")),
         "lockedGroups" to (Prefs.Key.LOCKED_GROUPS to listOf("p1:9")),
         "settingsPin" to (Prefs.Key.SETTINGS_PIN to true),

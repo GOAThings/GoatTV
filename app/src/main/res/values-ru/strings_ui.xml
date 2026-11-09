@@ -682,4 +682,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Обновить</string>
     <string name="update_later">Позже</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Записи</string>
+    <string name="record">Записать</string>
+    <string name="record_series">Записывать серию</string>
+    <string name="stop_recording">Остановить запись</string>
+    <string name="cancel_recording">Отменить запись</string>
+    <string name="cancel_series">Отменить серию</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Идёт запись: %1$s</string>
+    <string name="recording_saved">Запись сохранена: %1$s</string>
+    <string name="recording_stopped_space">Запись остановлена: мало свободного места</string>
+    <string name="recording_stopped_connection">Запись остановлена: соединение с каналом прервано</string>
+    <string name="recording_no_space">Недостаточно свободного места для записи</string>
+    <string name="recording_not_recordable">Для записи этому каналу нужны пауза эфира и поток TS</string>
+    <string name="recording_other_channel">Уже идёт запись другого канала</string>
+    <string name="recording_switch_title">Идёт запись: %1$s</string>
+    <string name="recording_switch_text">Провайдер разрешает одно подключение: если смотреть другое, запись остановится.</string>
+    <string name="recording_stop_and_switch">Остановить запись и переключить</string>
+    <string name="recording_keep">Продолжить запись (остаться на канале)</string>
+    <string name="recording_soon">Скоро запись на %1$s</string>
+    <string name="recording_switch_to">Переключиться на %1$s для записи</string>
+    <string name="recording_skip">Пропустить эту запись</string>
+    <string name="recording_switching_in">Переключение через %1$d с</string>
+    <string name="recording_scheduled">Запись запланирована: %1$s</string>
+    <string name="recording_series_scheduled">Запись серии: %1$s</string>
+    <string name="recording_cancelled">Запись отменена</string>
+    <string name="recording_overlap">Пересекается с %1$s: одновременно записывается только один канал</string>
+    <string name="recording_hls_only">Этот канал нельзя записать (только HLS)</string>
+    <string name="recording_skipped">Не записано: %1$s</string>
+    <string name="recordings_empty">Записей пока нет. Нажмите «Записать» во время просмотра или запланируйте запись в телегиде.</string>
+    <string name="recordings_scheduled">Запланированные</string>
+    <string name="recordings_recorded">Записанные</string>
+    <string name="recordings_free">Свободно: %1$s</string>
+    <string name="recording_state_stopped">Остановлена раньше</string>
+    <string name="recording_state_failed">Не удалась</string>
+    <string name="recording_deleted">Запись удалена</string>
+    <string name="recording_delete">Удалить</string>
+    <string name="recording_padding_before">Начинать запись раньше</string>
+    <string name="recording_padding_after">Заканчивать запись позже</string>
+    <string name="recording_padding_sub">Время в телегиде редко бывает точным</string>
+    <string name="recording_exact_alarm">Чтобы записи начинались вовремя при закрытом приложении, разрешите будильники и напоминания</string>
+    <string name="recording_allow">Разрешить</string>
 </resources>

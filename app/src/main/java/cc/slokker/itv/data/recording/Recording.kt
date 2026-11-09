@@ -116,6 +116,9 @@ data class Schedule(
     val recordings: List<ScheduledRecording> = emptyList(),
     val series: List<SeriesRule> = emptyList(),
     val handled: Map<String, Long> = emptyMap(),
+    /** As margens das Definições, guardadas aqui para a app as saber quando acorda sozinha (sem as Definições). */
+    val paddingBeforeMin: Int = RecordingPlan.PADDING_BEFORE_DEFAULT,
+    val paddingAfterMin: Int = RecordingPlan.PADDING_AFTER_DEFAULT,
 ) {
     companion object {
         const val VERSION = 1

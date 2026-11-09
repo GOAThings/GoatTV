@@ -678,4 +678,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Güncelle</string>
     <string name="update_later">Daha sonra</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Kayıtlar</string>
+    <string name="record">Kaydet</string>
+    <string name="record_series">Diziyi kaydet</string>
+    <string name="stop_recording">Kaydı durdur</string>
+    <string name="cancel_recording">Kaydı iptal et</string>
+    <string name="cancel_series">Diziyi iptal et</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Kaydediliyor: %1$s</string>
+    <string name="recording_saved">Kayıt kaydedildi: %1$s</string>
+    <string name="recording_stopped_space">Kayıt durdu: yeterli boş alan yok</string>
+    <string name="recording_stopped_connection">Kayıt durdu: kanal bağlantısı sona erdi</string>
+    <string name="recording_no_space">Kayıt için yeterli boş alan yok</string>
+    <string name="recording_not_recordable">Kayıt için bu kanalda canlı yayını duraklatma ve TS akışı gerekir</string>
+    <string name="recording_other_channel">Zaten başka bir kanal kaydediliyor</string>
+    <string name="recording_switch_title">%1$s kaydediliyor</string>
+    <string name="recording_switch_text">Sağlayıcınız tek bağlantıya izin veriyor: başka bir şey izlemek kaydı durdurur.</string>
+    <string name="recording_stop_and_switch">Kaydı durdur ve geç</string>
+    <string name="recording_keep">Kayda devam et (bu kanalda kal)</string>
+    <string name="recording_soon">%1$s kanalında kayıt başlamak üzere</string>
+    <string name="recording_switch_to">Kaydetmek için %1$s kanalına geç</string>
+    <string name="recording_skip">Bu kaydı atla</string>
+    <string name="recording_switching_in">%1$d sn içinde geçilecek</string>
+    <string name="recording_scheduled">Kayıt planlandı: %1$s</string>
+    <string name="recording_series_scheduled">Dizi kaydı: %1$s</string>
+    <string name="recording_cancelled">Kayıt iptal edildi</string>
+    <string name="recording_overlap">%1$s ile çakışıyor: aynı anda yalnızca bir kanal kaydedilebilir</string>
+    <string name="recording_hls_only">Bu kanal kaydedilemez (yalnızca HLS)</string>
+    <string name="recording_skipped">Kaydedilmedi: %1$s</string>
+    <string name="recordings_empty">Henüz kayıt yok. İzlerken Kaydet\'e basın ya da rehberden planlayın.</string>
+    <string name="recordings_scheduled">Planlananlar</string>
+    <string name="recordings_recorded">Kaydedilenler</string>
+    <string name="recordings_free">%1$s boş</string>
+    <string name="recording_state_stopped">Erken durdu</string>
+    <string name="recording_state_failed">Başarısız</string>
+    <string name="recording_deleted">Kayıt silindi</string>
+    <string name="recording_delete">Sil</string>
+    <string name="recording_padding_before">Kayıtları erken başlat</string>
+    <string name="recording_padding_after">Kayıtları geç bitir</string>
+    <string name="recording_padding_sub">Rehber saatleri nadiren tam doğrudur</string>
+    <string name="recording_exact_alarm">Uygulama kapalıyken kayıtların zamanında başlaması için alarmlara ve hatırlatıcılara izin verin</string>
+    <string name="recording_allow">İzin ver</string>
 </resources>

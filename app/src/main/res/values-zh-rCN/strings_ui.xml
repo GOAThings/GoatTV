@@ -676,4 +676,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">更新</string>
     <string name="update_later">稍后</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">录像</string>
+    <string name="record">录制</string>
+    <string name="record_series">录制系列</string>
+    <string name="stop_recording">停止录制</string>
+    <string name="cancel_recording">取消录制</string>
+    <string name="cancel_series">取消系列</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">正在录制：%1$s</string>
+    <string name="recording_saved">录像已保存：%1$s</string>
+    <string name="recording_stopped_space">录制已停止：可用空间不足</string>
+    <string name="recording_stopped_connection">录制已停止：频道连接已结束</string>
+    <string name="recording_no_space">可用空间不足，无法录制</string>
+    <string name="recording_not_recordable">录制此频道需要开启直播暂停并使用 TS 流</string>
+    <string name="recording_other_channel">已在录制其他频道</string>
+    <string name="recording_switch_title">正在录制 %1$s</string>
+    <string name="recording_switch_text">服务商只允许一个连接：观看其他内容会停止录制。</string>
+    <string name="recording_stop_and_switch">停止录制并切换</string>
+    <string name="recording_keep">继续录制（留在此频道）</string>
+    <string name="recording_soon">即将在 %1$s 录制</string>
+    <string name="recording_switch_to">切换到 %1$s 进行录制</string>
+    <string name="recording_skip">跳过这次录制</string>
+    <string name="recording_switching_in">%1$d 秒后切换</string>
+    <string name="recording_scheduled">已预约录制：%1$s</string>
+    <string name="recording_series_scheduled">系列录制：%1$s</string>
+    <string name="recording_cancelled">已取消录制</string>
+    <string name="recording_overlap">与 %1$s 时间重叠：一次只能录制一个频道</string>
+    <string name="recording_hls_only">此频道无法录制（仅 HLS）</string>
+    <string name="recording_skipped">未录制：%1$s</string>
+    <string name="recordings_empty">还没有录像。观看时按“录制”，或在节目单中预约。</string>
+    <string name="recordings_scheduled">已预约</string>
+    <string name="recordings_recorded">已录制</string>
+    <string name="recordings_free">可用 %1$s</string>
+    <string name="recording_state_stopped">提前停止</string>
+    <string name="recording_state_failed">失败</string>
+    <string name="recording_deleted">录像已删除</string>
+    <string name="recording_delete">删除</string>
+    <string name="recording_padding_before">提前开始录制</string>
+    <string name="recording_padding_after">延后结束录制</string>
+    <string name="recording_padding_sub">节目单时间很少完全准确</string>
+    <string name="recording_exact_alarm">要在应用关闭时准时开始录制，请允许“闹钟和提醒”</string>
+    <string name="recording_allow">允许</string>
 </resources>

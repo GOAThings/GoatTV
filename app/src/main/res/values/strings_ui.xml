@@ -679,4 +679,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Update</string>
     <string name="update_later">Later</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Recordings</string>
+    <string name="record">Record</string>
+    <string name="record_series">Record series</string>
+    <string name="stop_recording">Stop recording</string>
+    <string name="cancel_recording">Cancel recording</string>
+    <string name="cancel_series">Cancel series</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Recording: %1$s</string>
+    <string name="recording_saved">Recording saved: %1$s</string>
+    <string name="recording_stopped_space">Recording stopped: not enough free space</string>
+    <string name="recording_stopped_connection">Recording stopped: the channel connection ended</string>
+    <string name="recording_no_space">Not enough free space to record</string>
+    <string name="recording_not_recordable">To record, this channel needs pause live and a TS stream</string>
+    <string name="recording_other_channel">Already recording another channel</string>
+    <string name="recording_switch_title">You are recording %1$s</string>
+    <string name="recording_switch_text">Your provider allows one connection: watching something else stops the recording.</string>
+    <string name="recording_stop_and_switch">Stop recording and switch</string>
+    <string name="recording_keep">Keep recording (stay on this channel)</string>
+    <string name="recording_soon">Recording soon on %1$s</string>
+    <string name="recording_switch_to">Switch to %1$s to record</string>
+    <string name="recording_skip">Skip this recording</string>
+    <string name="recording_switching_in">Switching in %1$d s</string>
+    <string name="recording_scheduled">Recording scheduled: %1$s</string>
+    <string name="recording_series_scheduled">Series recording: %1$s</string>
+    <string name="recording_cancelled">Recording cancelled</string>
+    <string name="recording_overlap">Overlaps with %1$s: only one channel can record at a time</string>
+    <string name="recording_hls_only">This channel can\'t be recorded (HLS only)</string>
+    <string name="recording_skipped">Not recorded: %1$s</string>
+    <string name="recordings_empty">No recordings yet. Press Record while watching, or schedule one from the guide.</string>
+    <string name="recordings_scheduled">Scheduled</string>
+    <string name="recordings_recorded">Recorded</string>
+    <string name="recordings_free">%1$s free</string>
+    <string name="recording_state_stopped">Stopped early</string>
+    <string name="recording_state_failed">Failed</string>
+    <string name="recording_deleted">Recording deleted</string>
+    <string name="recording_delete">Delete</string>
+    <string name="recording_padding_before">Start recordings early</string>
+    <string name="recording_padding_after">End recordings late</string>
+    <string name="recording_padding_sub">Guide times are rarely exact</string>
+    <string name="recording_exact_alarm">To start recordings on time with the app closed, allow alarms and reminders</string>
+    <string name="recording_allow">Allow</string>
 </resources>

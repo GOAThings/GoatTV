@@ -69,7 +69,10 @@ class RecordingFiles(val dir: File, private val scheduleFile: File) {
     fun encodeSchedule(schedule: Schedule): String = gson.toJson(schedule)
 
     fun parseSchedule(json: String): Schedule {
-        val s = gson.fromJson(json, Schedule::class.java) ?: return Schedule()
+        val o = JsonParser.parseString(json).asJsonObject
+        val s = gson.fromJson(o, Schedule::class.java) ?: return Schedule()
+        fun padding(key: String, default: Int) =
+            o.get(key)?.takeIf { it.isJsonPrimitive }?.asInt?.takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: default
         // O Gson não usa os valores por omissão do Kotlin: uma lista que falte vem null.
         @Suppress("SENSELESS_COMPARISON")
         return Schedule(
@@ -77,6 +80,8 @@ class RecordingFiles(val dir: File, private val scheduleFile: File) {
             recordings = (s.recordings ?: emptyList()).filter { it.id != null && it.candidates != null },
             series = s.series ?: emptyList(),
             handled = s.handled ?: emptyMap(),
+            paddingBeforeMin = padding("paddingBeforeMin", RecordingPlan.PADDING_BEFORE_DEFAULT),
+            paddingAfterMin = padding("paddingAfterMin", RecordingPlan.PADDING_AFTER_DEFAULT),
         )
     }
 

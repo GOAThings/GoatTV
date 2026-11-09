@@ -5,6 +5,7 @@ import cc.slokker.itv.data.Languages
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat
+import cc.slokker.itv.data.recording.RecordingPlan
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.theme.Accent
@@ -137,6 +138,26 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 10, TvSection.SUBTITLES),
         phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.PICTURE_SOUND),
     )
+    // ---- Gravações ----
+
+    /** As margens das gravações (o "gravar agora" e as marcadas): antes do início e depois do fim do guia. */
+    val RECORD_PADDING_BEFORE = Setting.Choice(
+        Prefs.Key.RECORD_PADDING_BEFORE, { it.recordingPaddingBefore },
+        options = ::paddingOptions,
+        read = { it.prefs.recordPaddingBeforeMin },
+        subtitle = { it.recordingPaddingSub },
+        tv = Place(TvPage.PLAYBACK, 10, TvSection.RECORDINGS),
+        phone = Place(PhonePage.PLAYBACK, 10, PhoneSection.RECORDINGS),
+    )
+    val RECORD_PADDING_AFTER = Setting.Choice(
+        Prefs.Key.RECORD_PADDING_AFTER, { it.recordingPaddingAfter },
+        options = ::paddingOptions,
+        read = { it.prefs.recordPaddingAfterMin },
+        subtitle = { it.recordingPaddingSub },
+        tv = Place(TvPage.PLAYBACK, 20, TvSection.RECORDINGS),
+        phone = Place(PhonePage.PLAYBACK, 20, PhoneSection.RECORDINGS),
+    )
+
     val AUDIO_DECODER = Setting.Choice(
         Prefs.Key.AUDIO_DECODER, { it.audioDecoder },
         options = ::decoders,
@@ -347,7 +368,7 @@ object SettingsCatalog {
         SURROUND, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
-        EPG_IN_LIST,
+        EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
     )
 
     /** As linhas de uma página da TV, por secção (pela ordem de [TvSection]) e, dentro dela, por [Place.order]. */
@@ -363,6 +384,8 @@ object SettingsCatalog {
             .map { (section, rows) -> section to rows.sortedBy { it.second.order }.map { it.first } }
 
     private fun decoders(s: Strings) = listOf<Pair<Any?, String>>(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw)
+
+    private fun paddingOptions(s: Strings) = RecordingPlan.PADDING_OPTIONS.map<Int, Pair<Any?, String>> { it to if (it == 0) s.off else s.minutes(it) }
 
     private fun refreshOptions(s: Strings) = RefreshPolicy.OPTIONS.map<Int, Pair<Any?, String>> { it to s.refreshLabel(it) }
 
@@ -404,6 +427,7 @@ enum class TvSection(val headerKey: String?, val title: ((Strings) -> String)?) 
     LANGUAGE_TEXT("hlang", { it.sectionLanguageText }),
     CHANNEL_LIST("hlist", { it.sectionChannelList }),
     PANELS_COLOUR("hpanels", { it.sectionPanelsColour }),
+    RECORDINGS("hrec", { it.recordings }),
 }
 
 /** As páginas das Definições do telemóvel onde há linhas do catálogo. */
@@ -415,6 +439,7 @@ enum class PhoneSection(val title: ((Strings) -> String)?) {
     PICTURE_SOUND({ it.settingsPictureSound }),
     CONNECTION({ it.settingsConnection }),
     ADVANCED({ it.settingsAdvanced }),
+    RECORDINGS({ it.recordings }),
 }
 
 /** Onde uma linha aparece: a página, a secção e a posição dentro dela (as posições vão de 10 em 10). */

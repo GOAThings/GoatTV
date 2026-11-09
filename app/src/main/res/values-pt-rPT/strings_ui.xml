@@ -680,4 +680,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Atualizar</string>
     <string name="update_later">Mais tarde</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Gravações</string>
+    <string name="record">Gravar</string>
+    <string name="record_series">Gravar a série</string>
+    <string name="stop_recording">Parar a gravação</string>
+    <string name="cancel_recording">Cancelar a gravação</string>
+    <string name="cancel_series">Cancelar a série</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">A gravar: %1$s</string>
+    <string name="recording_saved">Gravação guardada: %1$s</string>
+    <string name="recording_stopped_space">Gravação parada: não há espaço livre suficiente</string>
+    <string name="recording_stopped_connection">Gravação parada: a ligação do canal terminou</string>
+    <string name="recording_no_space">Não há espaço livre suficiente para gravar</string>
+    <string name="recording_not_recordable">Para gravar, este canal precisa da pausa do direto e de um stream TS</string>
+    <string name="recording_other_channel">Já se está a gravar outro canal</string>
+    <string name="recording_switch_title">Está a gravar %1$s</string>
+    <string name="recording_switch_text">O seu fornecedor só deixa uma ligação: ver outra coisa para a gravação.</string>
+    <string name="recording_stop_and_switch">Parar a gravação e mudar</string>
+    <string name="recording_keep">Continuar a gravar (ficar neste canal)</string>
+    <string name="recording_soon">Gravação a começar em %1$s</string>
+    <string name="recording_switch_to">Mudar para %1$s para gravar</string>
+    <string name="recording_skip">Não gravar desta vez</string>
+    <string name="recording_switching_in">Muda dentro de %1$d s</string>
+    <string name="recording_scheduled">Gravação marcada: %1$s</string>
+    <string name="recording_series_scheduled">Gravar a série: %1$s</string>
+    <string name="recording_cancelled">Gravação cancelada</string>
+    <string name="recording_overlap">Sobrepõe-se a %1$s: só se grava um canal de cada vez</string>
+    <string name="recording_hls_only">Este canal não se pode gravar (só HLS)</string>
+    <string name="recording_skipped">Não gravado: %1$s</string>
+    <string name="recordings_empty">Ainda não há gravações. Carregue em Gravar enquanto vê um canal, ou marque no guia.</string>
+    <string name="recordings_scheduled">Marcadas</string>
+    <string name="recordings_recorded">Gravadas</string>
+    <string name="recordings_free">%1$s livres</string>
+    <string name="recording_state_stopped">Parou antes</string>
+    <string name="recording_state_failed">Falhou</string>
+    <string name="recording_deleted">Gravação apagada</string>
+    <string name="recording_delete">Apagar</string>
+    <string name="recording_padding_before">Começar as gravações antes</string>
+    <string name="recording_padding_after">Acabar as gravações depois</string>
+    <string name="recording_padding_sub">As horas do guia raramente são certas</string>
+    <string name="recording_exact_alarm">Para as gravações começarem a horas com a app fechada, permita alarmes e lembretes</string>
+    <string name="recording_allow">Permitir</string>
 </resources>

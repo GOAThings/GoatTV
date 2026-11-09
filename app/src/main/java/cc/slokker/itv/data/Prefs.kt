@@ -1,5 +1,6 @@
 package cc.slokker.itv.data
 
+import cc.slokker.itv.data.recording.RecordingPlan
 import cc.slokker.itv.ui.i18n.Strings
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -111,6 +112,10 @@ data class Prefs(
      */
     val catchupOffsetMin: Int = 0,
     val epgInList: Boolean = true,
+    // Gravações
+    /** Minutos a gravar antes do início e depois do fim do programa no guia (ver RecordingPlan.PADDING_OPTIONS). */
+    val recordPaddingBeforeMin: Int = RecordingPlan.PADDING_BEFORE_DEFAULT,
+    val recordPaddingAfterMin: Int = RecordingPlan.PADDING_AFTER_DEFAULT,
     // Controlo parental
     val pinHash: String? = null,
     /** "playlistId:groupId". */
@@ -189,6 +194,8 @@ data class Prefs(
         const val EPG_OFFSET = "epg_offset_min"
         const val CATCHUP_OFFSET = "catchup_offset_min"
         const val EPG_IN_LIST = "epg_in_list"
+        const val RECORD_PADDING_BEFORE = "record_padding_before_min"
+        const val RECORD_PADDING_AFTER = "record_padding_after_min"
         const val PIN_HASH = "parental_pin_sha256"
         const val LOCKED_GROUPS = "locked_groups"
     }
@@ -359,6 +366,8 @@ data class Prefs(
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 catchupOffsetMin = int(Key.CATCHUP_OFFSET, d.catchupOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgInList = bool(Key.EPG_IN_LIST, d.epgInList),
+                recordPaddingBeforeMin = int(Key.RECORD_PADDING_BEFORE, d.recordPaddingBeforeMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingBeforeMin,
+                recordPaddingAfterMin = int(Key.RECORD_PADDING_AFTER, d.recordPaddingAfterMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingAfterMin,
                 pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },
                 lockedGroups = stringSet(s, Key.LOCKED_GROUPS),
             )

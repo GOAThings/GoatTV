@@ -676,4 +676,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Perbarui</string>
     <string name="update_later">Nanti</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Rekaman</string>
+    <string name="record">Rekam</string>
+    <string name="record_series">Rekam serial</string>
+    <string name="stop_recording">Hentikan rekaman</string>
+    <string name="cancel_recording">Batalkan rekaman</string>
+    <string name="cancel_series">Batalkan serial</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Merekam: %1$s</string>
+    <string name="recording_saved">Rekaman disimpan: %1$s</string>
+    <string name="recording_stopped_space">Rekaman berhenti: ruang kosong tidak cukup</string>
+    <string name="recording_stopped_connection">Rekaman berhenti: koneksi saluran berakhir</string>
+    <string name="recording_no_space">Ruang kosong tidak cukup untuk merekam</string>
+    <string name="recording_not_recordable">Untuk merekam, saluran ini memerlukan jeda siaran langsung dan stream TS</string>
+    <string name="recording_other_channel">Saluran lain sedang direkam</string>
+    <string name="recording_switch_title">Anda sedang merekam %1$s</string>
+    <string name="recording_switch_text">Penyedia Anda hanya mengizinkan satu koneksi: menonton yang lain menghentikan rekaman.</string>
+    <string name="recording_stop_and_switch">Hentikan rekaman dan pindah</string>
+    <string name="recording_keep">Tetap merekam (tetap di saluran ini)</string>
+    <string name="recording_soon">Rekaman segera di %1$s</string>
+    <string name="recording_switch_to">Pindah ke %1$s untuk merekam</string>
+    <string name="recording_skip">Lewati rekaman ini</string>
+    <string name="recording_switching_in">Pindah dalam %1$d dtk</string>
+    <string name="recording_scheduled">Rekaman dijadwalkan: %1$s</string>
+    <string name="recording_series_scheduled">Rekaman serial: %1$s</string>
+    <string name="recording_cancelled">Rekaman dibatalkan</string>
+    <string name="recording_overlap">Bertabrakan dengan %1$s: hanya satu saluran yang bisa direkam sekaligus</string>
+    <string name="recording_hls_only">Saluran ini tidak bisa direkam (hanya HLS)</string>
+    <string name="recording_skipped">Tidak direkam: %1$s</string>
+    <string name="recordings_empty">Belum ada rekaman. Tekan Rekam saat menonton, atau jadwalkan dari panduan.</string>
+    <string name="recordings_scheduled">Terjadwal</string>
+    <string name="recordings_recorded">Terekam</string>
+    <string name="recordings_free">%1$s kosong</string>
+    <string name="recording_state_stopped">Berhenti lebih awal</string>
+    <string name="recording_state_failed">Gagal</string>
+    <string name="recording_deleted">Rekaman dihapus</string>
+    <string name="recording_delete">Hapus</string>
+    <string name="recording_padding_before">Mulai rekaman lebih awal</string>
+    <string name="recording_padding_after">Akhiri rekaman lebih lambat</string>
+    <string name="recording_padding_sub">Waktu di panduan jarang tepat</string>
+    <string name="recording_exact_alarm">Agar rekaman mulai tepat waktu saat aplikasi ditutup, izinkan alarm dan pengingat</string>
+    <string name="recording_allow">Izinkan</string>
 </resources>

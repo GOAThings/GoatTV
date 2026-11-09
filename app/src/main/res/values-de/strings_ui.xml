@@ -678,4 +678,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">Aktualisieren</string>
     <string name="update_later">Später</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">Aufnahmen</string>
+    <string name="record">Aufnehmen</string>
+    <string name="record_series">Serie aufnehmen</string>
+    <string name="stop_recording">Aufnahme beenden</string>
+    <string name="cancel_recording">Aufnahme abbrechen</string>
+    <string name="cancel_series">Serie abbrechen</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">Aufnahme: %1$s</string>
+    <string name="recording_saved">Aufnahme gespeichert: %1$s</string>
+    <string name="recording_stopped_space">Aufnahme beendet: nicht genug freier Speicher</string>
+    <string name="recording_stopped_connection">Aufnahme beendet: die Verbindung zum Sender wurde beendet</string>
+    <string name="recording_no_space">Nicht genug freier Speicher für eine Aufnahme</string>
+    <string name="recording_not_recordable">Für eine Aufnahme braucht dieser Sender Live-Pause und einen TS-Stream</string>
+    <string name="recording_other_channel">Es wird schon ein anderer Sender aufgenommen</string>
+    <string name="recording_switch_title">Du nimmst gerade %1$s auf</string>
+    <string name="recording_switch_text">Dein Anbieter erlaubt nur eine Verbindung: Wenn du etwas anderes ansiehst, endet die Aufnahme.</string>
+    <string name="recording_stop_and_switch">Aufnahme beenden und wechseln</string>
+    <string name="recording_keep">Weiter aufnehmen (auf diesem Sender bleiben)</string>
+    <string name="recording_soon">Aufnahme gleich auf %1$s</string>
+    <string name="recording_switch_to">Zu %1$s wechseln und aufnehmen</string>
+    <string name="recording_skip">Diese Aufnahme auslassen</string>
+    <string name="recording_switching_in">Wechsel in %1$d s</string>
+    <string name="recording_scheduled">Aufnahme geplant: %1$s</string>
+    <string name="recording_series_scheduled">Serienaufnahme: %1$s</string>
+    <string name="recording_cancelled">Aufnahme abgebrochen</string>
+    <string name="recording_overlap">Überschneidet sich mit %1$s: nur ein Sender kann gleichzeitig aufnehmen</string>
+    <string name="recording_hls_only">Dieser Sender kann nicht aufgenommen werden (nur HLS)</string>
+    <string name="recording_skipped">Nicht aufgenommen: %1$s</string>
+    <string name="recordings_empty">Noch keine Aufnahmen. Drücke beim Ansehen auf Aufnehmen oder plane eine im Programmführer.</string>
+    <string name="recordings_scheduled">Geplant</string>
+    <string name="recordings_recorded">Aufgenommen</string>
+    <string name="recordings_free">%1$s frei</string>
+    <string name="recording_state_stopped">Vorzeitig beendet</string>
+    <string name="recording_state_failed">Fehlgeschlagen</string>
+    <string name="recording_deleted">Aufnahme gelöscht</string>
+    <string name="recording_delete">Löschen</string>
+    <string name="recording_padding_before">Aufnahmen früher beginnen</string>
+    <string name="recording_padding_after">Aufnahmen später beenden</string>
+    <string name="recording_padding_sub">Die Zeiten im Programmführer stimmen selten genau</string>
+    <string name="recording_exact_alarm">Damit Aufnahmen bei geschlossener App pünktlich starten, erlaube Wecker und Erinnerungen</string>
+    <string name="recording_allow">Erlauben</string>
 </resources>

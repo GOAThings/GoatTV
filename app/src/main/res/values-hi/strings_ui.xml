@@ -678,4 +678,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">अपडेट करें</string>
     <string name="update_later">बाद में</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">रिकॉर्डिंग</string>
+    <string name="record">रिकॉर्ड करें</string>
+    <string name="record_series">सीरीज़ रिकॉर्ड करें</string>
+    <string name="stop_recording">रिकॉर्डिंग रोकें</string>
+    <string name="cancel_recording">रिकॉर्डिंग रद्द करें</string>
+    <string name="cancel_series">सीरीज़ रद्द करें</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">रिकॉर्ड हो रहा है: %1$s</string>
+    <string name="recording_saved">रिकॉर्डिंग सहेजी गई: %1$s</string>
+    <string name="recording_stopped_space">रिकॉर्डिंग रुकी: पर्याप्त खाली जगह नहीं</string>
+    <string name="recording_stopped_connection">रिकॉर्डिंग रुकी: चैनल का कनेक्शन खत्म हो गया</string>
+    <string name="recording_no_space">रिकॉर्ड करने के लिए पर्याप्त खाली जगह नहीं</string>
+    <string name="recording_not_recordable">रिकॉर्ड करने के लिए इस चैनल में लाइव रोकना और TS स्ट्रीम चाहिए</string>
+    <string name="recording_other_channel">एक और चैनल पहले से रिकॉर्ड हो रहा है</string>
+    <string name="recording_switch_title">आप %1$s रिकॉर्ड कर रहे हैं</string>
+    <string name="recording_switch_text">आपका प्रदाता एक ही कनेक्शन देता है: कुछ और देखने से रिकॉर्डिंग रुक जाएगी।</string>
+    <string name="recording_stop_and_switch">रिकॉर्डिंग रोकें और बदलें</string>
+    <string name="recording_keep">रिकॉर्डिंग जारी रखें (इसी चैनल पर रहें)</string>
+    <string name="recording_soon">%1$s पर जल्द रिकॉर्डिंग</string>
+    <string name="recording_switch_to">रिकॉर्ड करने के लिए %1$s पर जाएँ</string>
+    <string name="recording_skip">यह रिकॉर्डिंग छोड़ें</string>
+    <string name="recording_switching_in">%1$d से. में बदलेगा</string>
+    <string name="recording_scheduled">रिकॉर्डिंग तय हुई: %1$s</string>
+    <string name="recording_series_scheduled">सीरीज़ रिकॉर्डिंग: %1$s</string>
+    <string name="recording_cancelled">रिकॉर्डिंग रद्द</string>
+    <string name="recording_overlap">%1$s से टकराता है: एक समय में एक ही चैनल रिकॉर्ड हो सकता है</string>
+    <string name="recording_hls_only">यह चैनल रिकॉर्ड नहीं हो सकता (सिर्फ़ HLS)</string>
+    <string name="recording_skipped">रिकॉर्ड नहीं हुआ: %1$s</string>
+    <string name="recordings_empty">अभी कोई रिकॉर्डिंग नहीं। देखते समय रिकॉर्ड दबाएँ, या गाइड से तय करें।</string>
+    <string name="recordings_scheduled">तय की गईं</string>
+    <string name="recordings_recorded">रिकॉर्ड की गईं</string>
+    <string name="recordings_free">%1$s खाली</string>
+    <string name="recording_state_stopped">पहले रुक गई</string>
+    <string name="recording_state_failed">विफल</string>
+    <string name="recording_deleted">रिकॉर्डिंग हटाई गई</string>
+    <string name="recording_delete">हटाएँ</string>
+    <string name="recording_padding_before">रिकॉर्डिंग पहले शुरू करें</string>
+    <string name="recording_padding_after">रिकॉर्डिंग बाद में खत्म करें</string>
+    <string name="recording_padding_sub">गाइड के समय शायद ही सटीक होते हैं</string>
+    <string name="recording_exact_alarm">ऐप बंद होने पर भी रिकॉर्डिंग समय पर शुरू हो, इसके लिए अलार्म और रिमाइंडर की अनुमति दें</string>
+    <string name="recording_allow">अनुमति दें</string>
 </resources>

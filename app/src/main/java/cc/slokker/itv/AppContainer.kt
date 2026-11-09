@@ -17,6 +17,7 @@ import cc.slokker.itv.data.epg.XmltvSource
 import cc.slokker.itv.data.m3u.M3uSource
 import cc.slokker.itv.data.stalker.StalkerSource
 import cc.slokker.itv.data.xtream.XtreamSource
+import cc.slokker.itv.recording.RecordingManager
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.CoroutineScope
@@ -148,6 +149,9 @@ class AppContainer(context: Context) {
     private val m3u = M3uSource(iptvHttp)
     val stalker = StalkerSource(iptvHttp)
     val epg = EpgRepository(xtream, stalker, XmltvSource(iptvHttp), AccountGuideSource(backend), cache)
+
+    /** As gravações (do processo, não do ecrã: continuam com a app em segundo plano). */
+    val recordings = RecordingManager(context)
 
     suspend fun loadPlaylist(playlist: Playlist): PlaylistContent = when (playlist.type) {
         PlaylistType.XTREAM -> xtream.load(playlist)

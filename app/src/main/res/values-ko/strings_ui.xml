@@ -676,4 +676,46 @@
     <!-- Telemóvel: folha de versão nova. -->
     <string name="update_now">업데이트</string>
     <string name="update_later">나중에</string>
+    <!-- Gravações: gravar o canal a dar, as marcadas no guia e a lista. -->
+    <string name="recordings">녹화</string>
+    <string name="record">녹화</string>
+    <string name="record_series">시리즈 녹화</string>
+    <string name="stop_recording">녹화 중지</string>
+    <string name="cancel_recording">녹화 취소</string>
+    <string name="cancel_series">시리즈 취소</string>
+    <string name="rec_badge">REC</string>
+    <string name="recording_now">녹화 중: %1$s</string>
+    <string name="recording_saved">녹화가 저장되었어요: %1$s</string>
+    <string name="recording_stopped_space">녹화가 중지됐어요: 여유 공간이 부족해요</string>
+    <string name="recording_stopped_connection">녹화가 중지됐어요: 채널 연결이 끊겼어요</string>
+    <string name="recording_no_space">녹화할 여유 공간이 부족해요</string>
+    <string name="recording_not_recordable">녹화하려면 이 채널에 실시간 일시정지와 TS 스트림이 필요해요</string>
+    <string name="recording_other_channel">이미 다른 채널을 녹화하고 있어요</string>
+    <string name="recording_switch_title">%1$s 녹화 중이에요</string>
+    <string name="recording_switch_text">제공업체는 연결을 하나만 허용해요. 다른 것을 보면 녹화가 멈춰요.</string>
+    <string name="recording_stop_and_switch">녹화를 멈추고 전환</string>
+    <string name="recording_keep">계속 녹화 (이 채널에 머물기)</string>
+    <string name="recording_soon">곧 %1$s에서 녹화</string>
+    <string name="recording_switch_to">%1$s(으)로 전환해 녹화</string>
+    <string name="recording_skip">이번 녹화 건너뛰기</string>
+    <string name="recording_switching_in">%1$d초 후 전환</string>
+    <string name="recording_scheduled">녹화 예약됨: %1$s</string>
+    <string name="recording_series_scheduled">시리즈 녹화: %1$s</string>
+    <string name="recording_cancelled">녹화가 취소됐어요</string>
+    <string name="recording_overlap">%1$s와(과) 겹쳐요: 한 번에 한 채널만 녹화할 수 있어요</string>
+    <string name="recording_hls_only">이 채널은 녹화할 수 없어요 (HLS 전용)</string>
+    <string name="recording_skipped">녹화되지 않음: %1$s</string>
+    <string name="recordings_empty">아직 녹화가 없어요. 시청 중에 녹화를 누르거나 편성표에서 예약하세요.</string>
+    <string name="recordings_scheduled">예약됨</string>
+    <string name="recordings_recorded">녹화됨</string>
+    <string name="recordings_free">%1$s 남음</string>
+    <string name="recording_state_stopped">일찍 중지됨</string>
+    <string name="recording_state_failed">실패</string>
+    <string name="recording_deleted">녹화가 삭제됐어요</string>
+    <string name="recording_delete">삭제</string>
+    <string name="recording_padding_before">녹화를 일찍 시작</string>
+    <string name="recording_padding_after">녹화를 늦게 종료</string>
+    <string name="recording_padding_sub">편성표 시간은 정확하지 않을 때가 많아요</string>
+    <string name="recording_exact_alarm">앱이 닫혀 있어도 녹화가 제시간에 시작되도록 알람 및 리마인더를 허용하세요</string>
+    <string name="recording_allow">허용</string>
 </resources>
