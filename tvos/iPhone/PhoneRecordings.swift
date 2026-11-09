@@ -19,6 +19,8 @@ struct PhoneRecordings: View {
                 Section {
                     Label(AppModel.openAppWarning(s), systemImage: "info.circle")
                         .font(.footnote).foregroundStyle(Theme.textDim)
+                    Label(s.r("recordings_free", phoneSizeLabel(free)), systemImage: "internaldrive")
+                        .font(.footnote).foregroundStyle(Theme.textDim)
                 }
                 if scheduled.isEmpty && recorded.isEmpty {
                     Text(s.r("recordings_empty")).foregroundStyle(Theme.textFaint)
@@ -80,9 +82,6 @@ struct PhoneRecordings: View {
             .navigationTitle(s.r("recordings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Text(s.r("recordings_free", phoneSizeLabel(free))).font(.footnote).foregroundStyle(Theme.textFaint)
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(s.r("done")) { dismiss() }
                 }
