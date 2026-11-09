@@ -1,7 +1,8 @@
 import Foundation
 @testable import GoatCore
 
-/// As regras do leitor: os mesmos casos do GoatTV Android (OpenRetryTest, ZapPacerTest, AfrTest e PrefsTest).
+/// As regras do leitor: os mesmos casos do GoatTV Android (OpenRetryTest, ChannelPlaybackTest, ZapPacerTest, AfrTest e
+/// PrefsTest).
 extension CoreTests {
     private static func ladder(_ code: Int?) -> [Int] {
         var out: [Int] = []
@@ -13,11 +14,18 @@ extension CoreTests {
         return out
     }
 
-    static func openRetryBusyTriesFastAndOften() throws {
-        for code in [403, 406, 429, 458, 503, 509] {
-            try expect(ladder(code), [150, 200, 250, 250, 300, 300, 400, 500, 600], "\(code)")
+    static func openRetryBusyTriesFourTimesInThreeSeconds() throws {
+        for code in [403, 406, 458, 503, 509] {
+            try expect(ladder(code), [250, 500, 1_000, 1_500], "\(code)")
             try expect(OpenRetry.isBusy(code), true, "\(code)")
+            try expect(OpenRetry.isRefusal(code), true, "\(code)")
         }
+    }
+
+    static func openRetryTooManyRequestsWaitsForReal() throws {
+        try expect(ladder(429), [2_000, 4_000])
+        try expect(OpenRetry.isBusy(429), false)
+        try expect(OpenRetry.isRefusal(429), true)
     }
 
     static func openRetryNotFoundOnceMore() throws {
@@ -30,6 +38,46 @@ extension CoreTests {
         try expect(ladder(nil), [0, 500, 1_000])
         try expect(ladder(500), [0, 500, 1_000])
         try expect(OpenRetry.isBusy(nil), false)
+    }
+
+    // As tentativas de um canal em direto: o .ts (0) e o m3u8 (1).
+
+    static func formatFallbackRefusalFallsBackWithoutLearning() throws {
+        var f = FormatFallback()
+        f.restart()
+        // O .ts foi recusado (403) durante as tentativas rápidas: há canais que o fornecedor só dá em m3u8.
+        try expect(f.next(after: 403, count: 2), 1)
+        // Deu em m3u8, mas não se aprende para a conta: noutro canal, o .ts pode dar.
+        try expect(f.learns(candidateIndex: 1, live: true), false)
+        // Um 429 também não se aprende.
+        var g = FormatFallback()
+        try expect(g.next(after: 429, count: 2), 1)
+        try expect(g.learns(candidateIndex: 1, live: true), false)
+    }
+
+    static func formatFallbackOtherFailureLearns() throws {
+        // O .ts não existe (404) ou não respondeu: o m3u8 que deu fica a ser o preferido (só no direto).
+        for code: Int? in [404, nil, 500] {
+            var f = FormatFallback()
+            try expect(f.next(after: code, count: 2), 1, "\(code.map(String.init) ?? "nil")")
+            try expect(f.learns(candidateIndex: 1, live: true), true, "\(code.map(String.init) ?? "nil")")
+            try expect(f.learns(candidateIndex: 1, live: false), false, "\(code.map(String.init) ?? "nil")")
+        }
+        // O primeiro formato não se aprende: já é o preferido.
+        try expect(FormatFallback().learns(candidateIndex: 0, live: true), false)
+    }
+
+    static func formatFallbackRefusedEverywhereShowsTheError() throws {
+        var f = FormatFallback()
+        try expect(f.next(after: 403, count: 2), 1)
+        // Os dois recusados: o erro explicado e, mais tarde, outra volta desde o .ts.
+        try expect(f.next(after: 403, count: 2), nil)
+        f.restart()
+        try expect(f.index, 0)
+        try expect(f.fellBackOnRefusal, false)
+        // Nesta volta o .ts não existe e o m3u8 dá: já se aprende (a recusa era da volta anterior).
+        try expect(f.next(after: 404, count: 2), 1)
+        try expect(f.learns(candidateIndex: 1, live: true), true)
     }
 
     static func zapPacerOnePressOpensAtOnce() throws {

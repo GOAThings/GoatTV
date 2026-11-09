@@ -1,20 +1,25 @@
 import Foundation
 
 // As regras do leitor que não dependem do motor (as mesmas do GoatTV Android, ui/player/engine): quanto esperar para
-// voltar a abrir uma stream recusada, o atraso ao mudar de canal e quando o AFR muda o modo da TV.
+// voltar a abrir uma stream recusada, quando passar ao outro formato, o atraso ao mudar de canal e quando o AFR muda o
+// modo da TV.
 
 /// Quanto esperar para voltar a abrir uma stream que ainda não deu nada (o gravador da pausa do direto).
 ///
 /// O caso mais comum ao mudar de canal: o fornecedor só deixa uma ligação e ainda não largou a do canal anterior, e
-/// recusa a nova ("max connections": 403, 503, 509…). Liberta-a em centenas de ms, por isso tenta-se depressa e
-/// várias vezes ([busy]). Um 404 é quase sempre "este formato não existe aqui": só mais uma tentativa rápida antes de
-/// passar ao outro formato. O resto (rede) fica perto do que o ExoPlayer faz, um pouco mais curto.
+/// recusa a nova ("max connections": 403, 503, 509…). Liberta-a em centenas de ms, por isso tenta-se umas vezes em
+/// pouco tempo ([busy]). Um 429 ("demasiados pedidos") pede calma: espera-se a sério ([rateLimited]). Um 404 é quase
+/// sempre "este formato não existe aqui": só mais uma tentativa rápida antes de passar ao outro formato. O resto
+/// (rede) fica perto do que o ExoPlayer faz, um pouco mais curto.
 public enum OpenRetry {
     /// Os códigos com que os painéis Xtream recusam uma ligação a mais (ver [isBusy]).
-    public static let busyCodes: Set<Int> = [403, 406, 429, 458, 503, 509]
+    public static let busyCodes: Set<Int> = [403, 406, 458, 503, 509]
 
-    /// Ocupado: tenta-se a cada 150–600 ms, até uns 3 s ao todo.
-    static let busy: [Int] = [150, 200, 250, 250, 300, 300, 400, 500, 600]
+    /// Ocupado: 4 tentativas em uns 3 s (o fornecedor ainda está a fechar a ligação anterior). Não mais amiúde: na
+    /// SHIELD, com um fornecedor real, 9 pedidos em 3 s levavam a conta a "demasiados pedidos" (429) no formato seguinte.
+    static let busy: [Int] = [250, 500, 1_000, 1_500]
+    /// "Demasiados pedidos" (429): o servidor pede calma; espera-se a sério antes de voltar a pedir.
+    static let rateLimited: [Int] = [2_000, 4_000]
     /// Não existe (404/410): uma só tentativa, logo a seguir.
     static let notFound: [Int] = [250]
     /// Outros erros (rede, 5xx): 0, 0,5 e 1 s.
@@ -26,14 +31,55 @@ public enum OpenRetry {
         let ladder: [Int]
         switch httpCode {
         case let code? where busyCodes.contains(code): ladder = busy
+        case 429: ladder = rateLimited
         case 404, 410: ladder = notFound
         default: ladder = other
         }
         return retry >= 1 && retry <= ladder.count ? ladder[retry - 1] : nil
     }
 
-    /// O fornecedor recusou por estar ocupado (a ligação anterior ainda conta): o outro formato também seria recusado.
+    /// O fornecedor recusou a ligação como quem está ocupado (403, 503…; a ligação anterior pode ainda contar).
     public static func isBusy(_ httpCode: Int?) -> Bool { httpCode.map { busyCodes.contains($0) } ?? false }
+
+    /// Uma recusa do fornecedor: ocupado ou "demasiados pedidos" (429).
+    public static func isRefusal(_ httpCode: Int?) -> Bool { isBusy(httpCode) || httpCode == 429 }
+}
+
+/// Ao abrir um canal, as formas tentam-se por ordem (ts ⇄ m3u8, como no GoatTV Android, ChannelPlayback): a que não
+/// começa a dar passa à seguinte; nenhuma deu, mostra-se o erro e, mais tarde, outra volta desde a primeira.
+///
+/// Uma recusa de "ocupado" (403, 503…) já foi tentada uns 3 s (ver [OpenRetry]): a ligação anterior já fechou, por
+/// isso é este formato que o fornecedor recusa neste canal (há canais que só dão em m3u8). Passa-se ao outro, como
+/// antes da 0.10, mas o formato a que se chegou assim (ou depois de um 429) não fica aprendido para a conta: noutro
+/// canal, o primeiro pode dar.
+public struct FormatFallback: Sendable {
+    /// A tentativa atual (0 = a primeira, o formato preferido).
+    public private(set) var index = 0
+    /// Chegou-se à tentativa atual porque uma anterior foi recusada (ver [OpenRetry.isRefusal]).
+    public private(set) var fellBackOnRefusal = false
+
+    public init() {}
+
+    /// Começa-se outra vez: desde a primeira tentativa (canal novo, a volta seguinte depois do erro, OK no erro) ou
+    /// desde [index] (o canal que uma gravação está a gravar abre pela ligação dela).
+    public mutating func restart(at index: Int = 0) {
+        self.index = index
+        fellBackOnRefusal = false
+    }
+
+    /// A tentativa atual não começou a dar (o servidor respondeu [httpCode], nil = sem resposta HTTP): a seguinte das
+    /// [count], ou nil = nenhuma deu (mostra-se o erro).
+    public mutating func next(after httpCode: Int?, count: Int) -> Int? {
+        if OpenRetry.isRefusal(httpCode) { fellBackOnRefusal = true }
+        index += 1
+        return index < count ? index : nil
+    }
+
+    /// Começou a dar na forma do formato [candidateIndex] (0 = o preferido): o outro formato é que deu (no direto,
+    /// [live]) e fica a ser o preferido da conta? Não se chegou lá por uma recusa.
+    public func learns(candidateIndex: Int, live: Bool) -> Bool {
+        live && candidateIndex > 0 && !fellBackOnRefusal
+    }
 }
 
 /// O atraso ao mudar de canal (Definições → Mudança de canal → Atraso ao mudar de canal, `zap_delay_ms`).

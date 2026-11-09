@@ -209,7 +209,9 @@ final class PlayerEngine: NSObject {
     }
 
     @ObservationIgnored private var attempts: [Attempt] = []
-    @ObservationIgnored private var index = 0
+    /// Qual das [attempts] se está a abrir e se se chegou lá por uma recusa (então o formato não se aprende).
+    @ObservationIgnored private var fallback = FormatFallback()
+    private var index: Int { fallback.index }
     @ObservationIgnored private var userAgent = iptvUserAgent
     @ObservationIgnored private var referrer: String?
     @ObservationIgnored private var watchdog: Task<Void, Never>?
@@ -296,7 +298,7 @@ final class PlayerEngine: NSObject {
         self.referrer = referrer.map(SafeInput.stripControl)
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
         attempts = makeAttempts(candidates)
-        index = 0
+        fallback.restart()
         paused = false
         wasPlaying = false
         retries = 0
@@ -385,7 +387,8 @@ final class PlayerEngine: NSObject {
         pendingStart?.cancel()
         held = false
         nextTryAt = nil
-        index = 0
+        lastHTTPStatus = nil
+        fallback.restart()
         start()
     }
 
@@ -445,7 +448,7 @@ final class PlayerEngine: NSObject {
         // Uma gravação deste canal: abre-se o endereço que ela grava (é a mesma ligação).
         if index == 0, pausable, let feed = ChannelFeed.current, !feed.isClosed,
            let i = attempts.firstIndex(where: { $0.candidate.url == feed.url && $0.backend == .vlc }), i > 0 {
-            index = i
+            fallback.restart(at: i)
         }
         guard let linkResolver, index == 0 else {
             open()
@@ -512,15 +515,12 @@ final class PlayerEngine: NSObject {
     }
 
     private func next() {
-        // O fornecedor recusou por ainda ter a ligação anterior (o gravador já tentou várias vezes, ver OpenRetry): o
-        // outro formato também seria recusado e, se desse depois, ficava aprendido um formato errado. Mostra o erro
-        // (explicado) e tenta outra vez, desde o primeiro formato.
-        if !wasPlaying, OpenRetry.isBusy(currentHTTPStatus) {
-            DebugLog.add("Player: the provider is busy (HTTP \(currentHTTPStatus.map(String.init) ?? "-")), no other format")
-            return fail()
-        }
-        index += 1
-        if index < attempts.count {
+        // Tenta a forma seguinte (ts ⇄ m3u8). Uma recusa de "ocupado" (403, 503…) já foi tentada uns 3 s pelo
+        // gravador (ver OpenRetry): a ligação anterior já fechou, por isso é este formato que o fornecedor recusa neste
+        // canal (há canais que só dão em m3u8). Passa-se ao outro, mas sem o aprender para a conta (ver FormatFallback).
+        let status = currentHTTPStatus
+        if OpenRetry.isRefusal(status) { DebugLog.add("Player: refused (HTTP \(status.map(String.init) ?? "-")), trying the next form") }
+        if fallback.next(after: status, count: attempts.count) != nil {
             open()
         } else {
             fail()
@@ -568,7 +568,9 @@ final class PlayerEngine: NSObject {
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self else { return }
             self.nextTryAt = nil
-            self.index = 0
+            // Outra volta desde o primeiro formato: o código da volta anterior já não conta.
+            self.lastHTTPStatus = nil
+            self.fallback.restart()
             self.start()
         }
     }
@@ -612,9 +614,12 @@ final class PlayerEngine: NSObject {
         }
         let attempt = attempts.indices.contains(index) ? attempts[index] : nil
         format = attempt?.candidate.format
-        // O outro formato é que deu (no direto): fica a ser o preferido. A ordem das tentativas não muda: ao voltar a
-        // ligar, começa-se sempre pela primeira (um .ts em baixo uns minutos volta a ser tentado primeiro).
-        if let attempt, attempt.candidateIndex > 0, openedLive { onFormatWorked?(attempt.candidate.format) }
+        // O outro formato é que deu (no direto, sem ser por uma recusa): fica a ser o preferido. A ordem das tentativas
+        // não muda: ao voltar a ligar, começa-se sempre pela primeira (um .ts em baixo uns minutos volta a ser tentado
+        // primeiro).
+        if let attempt, fallback.learns(candidateIndex: attempt.candidateIndex, live: openedLive) {
+            onFormatWorked?(attempt.candidate.format)
+        }
         applyAspect()
         applyAudio()
         scheduleTrackChoice()

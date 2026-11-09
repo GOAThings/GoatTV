@@ -521,8 +521,9 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         let failure: Error? = refused.map { Failure.http($0) } ?? error
         if !everData {
             // Ainda não deu: mais umas tentativas seguidas (ver OpenRetry, como no Android). Recusado por estar ocupado
-            // (o fornecedor ainda não largou a ligação do canal anterior), depressa e várias vezes; um 404, só mais
-            // uma; o resto, 0, 0,5 e 1 s. Depois o erro vai para o leitor, que o explica.
+            // (o fornecedor ainda não largou a ligação do canal anterior), 4 vezes em uns 3 s; um 429, ao fim de 2 e de
+            // 4 s; um 404, só mais uma; o resto, 0, 0,5 e 1 s. Depois o erro vai para o leitor, que passa ao outro
+            // formato ou o explica.
             failures += 1
             guard let wait = OpenRetry.delayMs(httpCode: refused, retry: failures) else {
                 DebugLog.add("Timeshift: gave up after \(failures - 1) retries (HTTP \(refused.map(String.init) ?? "-"))")
