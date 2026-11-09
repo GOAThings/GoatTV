@@ -345,6 +345,10 @@ struct SettingsPanel: View {
                 .padding(.bottom, 56)
                 .padding(.horizontal, 8)
             }
+            // Cada página tem a sua lista: sem isto o SwiftUI reaproveitava a mesma ScrollView e uma página curta (ex.: as
+            // três opções do AFR) abria com o deslocamento da anterior, com a primeira linha (a escolhida, com o foco)
+            // escondida em cima.
+            .id(page)
             // A lista desvanece em baixo (há mais para ver).
             .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9),
                                          .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
