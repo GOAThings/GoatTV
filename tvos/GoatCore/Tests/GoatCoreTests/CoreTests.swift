@@ -85,6 +85,14 @@ enum CoreTests {
         ("afrSessionModes", afrSessionModes),
         ("prefsAfrModeKeepsTheOldKey", prefsAfrModeKeepsTheOldKey),
         ("prefsNewKeysAcceptOnlyTheirOptions", prefsNewKeysAcceptOnlyTheirOptions),
+        ("languagesIsoCodes", languagesIsoCodes),
+        ("languagesNames", languagesNames),
+        ("languagesLabels", languagesLabels),
+        ("languagesEveryChoiceHasAName", languagesEveryChoiceHasAName),
+        ("trackPickPreferredLanguage", trackPickPreferredLanguage),
+        ("trackPickSurround", trackPickSurround),
+        ("trackPickSubtitles", trackPickSubtitles),
+        ("trackChoiceKeepsAManualPick", trackChoiceKeepsAManualPick),
     ]
 
     /// Os limites do guia da conta trazem a frase do servidor; os outros erros ficam como estavam.
