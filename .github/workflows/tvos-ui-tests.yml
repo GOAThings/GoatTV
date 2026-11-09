@@ -50,7 +50,8 @@ jobs:
             -resultBundlePath build/UITests.xcresult \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             test 2>&1 | tee build/xcodebuild.log | grep -E "error:|Test Case|XCTAssert|failed|TEST (SUCCEEDED|FAILED)|BUILD FAILED" || true
-          grep -qE "TEST (SUCCEEDED|FAILED)" build/xcodebuild.log
+          # Só passa com os testes a passar (as capturas sobem na mesma: o passo delas corre sempre).
+          grep -q "TEST SUCCEEDED" build/xcodebuild.log
       - name: Erros
         if: failure()
         run: grep -E "error:" -A3 build/xcodebuild.log | head -150 || tail -150 build/xcodebuild.log
