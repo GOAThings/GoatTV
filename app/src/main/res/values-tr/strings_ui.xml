@@ -686,6 +686,7 @@
     <string name="cancel_recording">Kaydı iptal et</string>
     <string name="cancel_series">Diziyi iptal et</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Kaydediliyor</string>
     <string name="recording_now">Kaydediliyor: %1$s</string>
     <string name="recording_saved">Kayıt kaydedildi: %1$s</string>
     <string name="recording_stopped_space">Kayıt durdu: yeterli boş alan yok</string>

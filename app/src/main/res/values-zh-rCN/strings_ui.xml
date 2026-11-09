@@ -684,6 +684,7 @@
     <string name="cancel_recording">取消录制</string>
     <string name="cancel_series">取消系列</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">正在录制</string>
     <string name="recording_now">正在录制：%1$s</string>
     <string name="recording_saved">录像已保存：%1$s</string>
     <string name="recording_stopped_space">录制已停止：可用空间不足</string>

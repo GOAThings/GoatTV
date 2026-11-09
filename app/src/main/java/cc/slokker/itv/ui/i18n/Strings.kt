@@ -151,6 +151,7 @@ class Strings(context: Context) {
     val cancelRecording get() = s(R.string.cancel_recording)
     val cancelSeries get() = s(R.string.cancel_series)
     val recBadge get() = s(R.string.rec_badge)
+    val recordingPill get() = s(R.string.recording_pill)
     fun recordingNow(title: String) = s(R.string.recording_now, title)
     fun recordingSaved(title: String) = s(R.string.recording_saved, title)
     val recordingStoppedSpace get() = s(R.string.recording_stopped_space)

@@ -269,6 +269,13 @@ fun PlayerScreen(vm: AppViewModel) {
     /** Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up. */
     fun tsShifted() = tsActive() && (seek.paused || !timeshift.atLive || seek.pending != null)
 
+    /** No canto de cima à direita está a cápsula do catch-up ou de quanto se está atrás do direto. */
+    fun cornerPill() = !showGuide && (playback.ready || playback.failure != null) &&
+        (catchup != null || tsShifted() && playback.failure == null)
+
+    /** A cápsula da gravação: por baixo da do catch-up/atrás do direto, quando essa está lá. */
+    fun recPillTop() = if (cornerPill()) 44.dp else 0.dp
+
     fun tsToggle() {
         infoVisible = false
         seek.togglePause(ring)
@@ -964,7 +971,10 @@ fun PlayerScreen(vm: AppViewModel) {
                     attempt = playback.reconnects,
                     nextTryAt = playback.nextTryAt,
                     waitMs = playback.retryDelayMs,
-                    modifier = Modifier.align(if (second != null) Alignment.TopStart else Alignment.TopEnd),
+                    modifier = Modifier
+                        .align(if (second != null) Alignment.TopStart else Alignment.TopEnd)
+                        // A gravar, fica por baixo da cápsula da gravação (no mesmo canto).
+                        .padding(top = if (activeRecordings.isNotEmpty() && !covered()) recPillTop() + 54.dp else 0.dp),
                 )
             }
 
@@ -1169,7 +1179,14 @@ fun PlayerScreen(vm: AppViewModel) {
             }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
             // Com um painel ou as Definições abertas, a cápsula sai (tapava o cabeçalho deles).
-            activeRecordings.firstOrNull()?.let { if (!covered()) RecPill(it.info.title, Modifier.align(Alignment.TopCenter)) }
+            // O canto da gravação (o da cápsula de voltar a ligar): à esquerda com o segundo canal à direita.
+            val recCorner = if (second != null) Alignment.TopStart else Alignment.TopEnd
+            activeRecordings.firstOrNull()?.let {
+                // O número a escrever tapa o canto por uns segundos: a cápsula sai até ele acabar.
+                if (!covered() && numberEntry.isEmpty() && switchPrompt == null) {
+                    RecPill(it.info, Modifier.align(recCorner).padding(top = recPillTop()))
+                }
+            }
             recordingPrompt?.let { r ->
                 val from = cc.slokker.itv.data.recording.RecordingPlan.window(r, recordingSchedule.paddingBeforeMin, recordingSchedule.paddingAfterMin).fromMs
                 var left by remember(r.id) { mutableIntStateOf(0) }
@@ -1179,9 +1196,10 @@ fun PlayerScreen(vm: AppViewModel) {
                         delay(1_000)
                     }
                 }
-                RecordingPromptCard(r, left, Modifier.align(Alignment.BottomEnd))
+                RecordingPromptCard(r, left, Modifier.align(recCorner).padding(top = recPillTop()))
             }
-            switchPrompt?.let { RecordingSwitchCard(it, Modifier.align(Alignment.Center)) }
+            // A cápsula da gravação abre-se no canto com a pergunta (e sai enquanto ela está lá).
+            switchPrompt?.let { RecordingSwitchCard(it, activeRecordings.firstOrNull()?.info, Modifier.align(recCorner).padding(top = recPillTop())) }
 
             var lastNotice by remember { mutableStateOf<AppRelease?>(null) }
             updateNotice?.let { lastNotice = it }

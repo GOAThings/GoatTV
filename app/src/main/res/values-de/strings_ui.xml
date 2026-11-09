@@ -686,6 +686,7 @@
     <string name="cancel_recording">Aufnahme abbrechen</string>
     <string name="cancel_series">Serie abbrechen</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Aufnahme läuft</string>
     <string name="recording_now">Aufnahme: %1$s</string>
     <string name="recording_saved">Aufnahme gespeichert: %1$s</string>
     <string name="recording_stopped_space">Aufnahme beendet: nicht genug freier Speicher</string>

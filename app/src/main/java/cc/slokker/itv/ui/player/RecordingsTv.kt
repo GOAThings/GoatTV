@@ -7,6 +7,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import cc.slokker.itv.ui.theme.tabular
+import cc.slokker.itv.data.recording.RecordingPlan
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,43 +74,95 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.ItvShapes
 import kotlinx.coroutines.delay
 
-/** A cápsula "REC" no canto enquanto há uma gravação (com o título do que grava). */
+/** O que diz a gravação ao lado do anel: quanto falta (com guia) ou há quanto tempo grava (sem guia), e o anel. */
+private class RecProgress(val fraction: Float, val detail: String)
+
 @Composable
-internal fun RecPill(title: String, modifier: Modifier = Modifier) {
+private fun rememberRecProgress(info: RecordingInfo): RecProgress {
     val s = LocalStrings.current
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    // Sem guia grava-se até ao máximo: o anel fica vazio e conta-se o tempo desde o início.
+    if (info.programmeEndMs - info.programmeStartMs >= RecordingPlan.MAX_NO_EPG_MS) {
+        return RecProgress(0f, formatDuration(now - info.fileStartMs))
+    }
+    val total = (info.endMs - info.startMs).coerceAtLeast(1)
+    return RecProgress(
+        (now - info.startMs).toFloat() / total,
+        s.minutesLeft((((info.endMs - now).coerceAtLeast(0) + 59_999) / 60_000).toInt()),
+    )
+}
+
+/** O anel da gravação: enche-se a vermelho com o que já se gravou, com o ponto a pulsar no meio. */
+@Composable
+private fun RecRing(fraction: Float) {
     val pulse by rememberInfiniteTransition(label = "rec").animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
         label = "pulse",
     )
-    Row(
-        modifier
-            .padding(horizontal = 48.dp, vertical = 27.dp)
-            .widthIn(max = 420.dp)
-            .glass(ItvShapes.Control)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+        ProgressRing(fraction, Modifier.fillMaxSize(), color = GoatPalette.Live)
         Box(Modifier.size(10.dp).alpha(pulse).clip(CircleShape).background(GoatPalette.Live))
-        Spacer(Modifier.width(8.dp))
-        Text(s.recBadge, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold))
-        Spacer(Modifier.width(8.dp))
-        Text(title, style = MaterialTheme.typography.labelLarge, color = ItvColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A linha da cápsula: o anel e duas linhas (o título e, por baixo, o nome com o pormenor, que se vê sempre). */
+@Composable
+private fun RecHeader(ring: @Composable () -> Unit, title: String, name: String, detail: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ring()
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.widthIn(max = 300.dp)) {
+                val style = MaterialTheme.typography.bodySmall.tabular
+                Text(name, style = style, color = ItvColors.TextDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(" · $detail", style = style, color = ItvColors.TextDim, maxLines = 1)
+            }
+        }
     }
 }
 
 /**
- * Mudar de canal com uma gravação a decorrer: OK pára a gravação e muda, Voltar fica a gravar (neste canal). É a
- * mesma forma do lembrete ([ReminderCard]): o fornecedor só deixa uma ligação, e o cartão diz isso.
+ * A cápsula da gravação no canto, com a forma da de voltar a ligar ([TuningPill]): o anel enche-se com o que já se
+ * gravou e por baixo diz quanto falta. Sem guia (gravar até ao máximo), diz há quanto tempo grava.
  */
 @Composable
-internal fun RecordingSwitchCard(prompt: AppViewModel.SwitchPrompt, modifier: Modifier = Modifier) {
+internal fun RecPill(info: RecordingInfo, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
-    PromptCard(
-        icon = { Box(Modifier.size(14.dp).clip(CircleShape).background(GoatPalette.Live)) },
-        overline = s.recBadge,
-        title = s.recordingSwitchTitle(prompt.title),
+    val p = rememberRecProgress(info)
+    Box(
+        modifier
+            .padding(horizontal = 48.dp, vertical = 27.dp)
+            .glass(CircleShape)
+            .padding(start = 7.dp, end = 16.dp, top = 7.dp, bottom = 7.dp),
+    ) {
+        RecHeader({ RecRing(p.fraction) }, s.recordingPill, info.title, p.detail)
+    }
+}
+
+/**
+ * Mudar de canal com uma gravação a decorrer: a cápsula do canto abre-se para baixo com a pergunta. OK pára a
+ * gravação e muda, Voltar fica a gravar (neste canal): o fornecedor só deixa uma ligação, e o cartão diz isso.
+ */
+@Composable
+internal fun RecordingSwitchCard(prompt: AppViewModel.SwitchPrompt, info: RecordingInfo?, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
+    CapsuleCard(
+        header = {
+            if (info != null) {
+                val p = rememberRecProgress(info)
+                RecHeader({ RecRing(p.fraction) }, s.recordingPill, info.title, p.detail)
+            } else {
+                RecHeader({ RecRing(0f) }, s.recordingPill, prompt.title, s.recBadge)
+            }
+        },
         text = s.recordingSwitchText,
         ok = s.recordingStopAndSwitch,
         back = s.recordingKeep,
@@ -114,46 +171,49 @@ internal fun RecordingSwitchCard(prompt: AppViewModel.SwitchPrompt, modifier: Mo
 }
 
 /**
- * Uma marcada noutro canal quase a começar: OK muda para esse canal (e grava), Voltar não grava. Sem resposta até à
- * hora, muda-se ([secondsLeft] conta até lá).
+ * Uma marcada noutro canal quase a começar, na mesma forma: o anel conta até à mudança, com os segundos no meio. OK
+ * muda para esse canal (e grava), Voltar não grava. Sem resposta até à hora, muda-se ([secondsLeft] conta até lá).
  */
 @Composable
 internal fun RecordingPromptCard(recording: ScheduledRecording, secondsLeft: Int, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
-    PromptCard(
-        icon = { Icon(ItvIcons.Record, contentDescription = null, modifier = Modifier.size(22.dp), tint = GoatPalette.Live) },
-        overline = s.recordingSoon(recording.channelName),
-        title = recording.title,
-        text = "${formatTime(recording.startMs)} · ${s.recordingSwitchingIn(secondsLeft.coerceAtLeast(0))}",
+    val left = secondsLeft.coerceAtLeast(0)
+    CapsuleCard(
+        header = {
+            RecHeader(
+                { CountdownRing(left * 1_000L, RecordingPlan.PROMPT_LEAD_MS, Modifier.size(32.dp), color = GoatPalette.Live) },
+                s.recordingSoon(recording.channelName),
+                recording.title,
+                formatTime(recording.startMs),
+            )
+        },
+        text = s.recordingSwitchingIn(left),
         ok = s.recordingSwitchTo(recording.channelName),
         back = s.recordingSkip,
         modifier = modifier,
     )
 }
 
+/** A cápsula do canto aberta para baixo: a linha de cima igual à da cápsula, e por baixo o texto e as teclas. */
 @Composable
-private fun PromptCard(icon: @Composable () -> Unit, overline: String, title: String, text: String, ok: String, back: String, modifier: Modifier) {
+private fun CapsuleCard(header: @Composable () -> Unit, text: String, ok: String, back: String, modifier: Modifier) {
     val s = LocalStrings.current
     Column(
         modifier
-            .padding(48.dp)
-            .widthIn(max = 560.dp)
-            .glass(ItvShapes.Panel)
-            .padding(horizontal = 28.dp, vertical = 22.dp),
+            .padding(horizontal = 48.dp, vertical = 27.dp)
+            .widthIn(max = 440.dp)
+            .glass(RoundedCornerShape(23.dp))
+            .padding(start = 7.dp, end = 18.dp, top = 7.dp, bottom = 16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(ItvColors.TextFaint.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) { icon() }
-            Spacer(Modifier.width(14.dp))
-            Column {
-                Text(overline, color = ItvColors.TextDim, style = MaterialTheme.typography.labelLarge)
-                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(text, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
+        header()
+        // Alinhado com o texto da linha de cima (depois do anel).
+        Column(Modifier.padding(start = 42.dp, top = 10.dp)) {
+            Text(text, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyHint("OK", ok)
+                KeyHint(s.backKeyName, back)
             }
-        }
-        Spacer(Modifier.height(16.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            KeyHint("OK", ok)
-            KeyHint(s.backKeyName, back)
         }
     }
 }

@@ -690,6 +690,7 @@
     <string name="cancel_recording">Отменить запись</string>
     <string name="cancel_series">Отменить серию</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Идёт запись</string>
     <string name="recording_now">Идёт запись: %1$s</string>
     <string name="recording_saved">Запись сохранена: %1$s</string>
     <string name="recording_stopped_space">Запись остановлена: мало свободного места</string>

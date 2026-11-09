@@ -686,6 +686,7 @@
     <string name="cancel_recording">रिकॉर्डिंग रद्द करें</string>
     <string name="cancel_series">सीरीज़ रद्द करें</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">रिकॉर्ड हो रहा है</string>
     <string name="recording_now">रिकॉर्ड हो रहा है: %1$s</string>
     <string name="recording_saved">रिकॉर्डिंग सहेजी गई: %1$s</string>
     <string name="recording_stopped_space">रिकॉर्डिंग रुकी: पर्याप्त खाली जगह नहीं</string>

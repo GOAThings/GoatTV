@@ -688,6 +688,7 @@
     <string name="cancel_recording">Annulla registrazione</string>
     <string name="cancel_series">Annulla la serie</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Registrazione</string>
     <string name="recording_now">Registrazione: %1$s</string>
     <string name="recording_saved">Registrazione salvata: %1$s</string>
     <string name="recording_stopped_space">Registrazione interrotta: spazio libero insufficiente</string>

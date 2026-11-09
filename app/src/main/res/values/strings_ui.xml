@@ -687,6 +687,7 @@
     <string name="cancel_recording">Cancel recording</string>
     <string name="cancel_series">Cancel series</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Recording</string>
     <string name="recording_now">Recording: %1$s</string>
     <string name="recording_saved">Recording saved: %1$s</string>
     <string name="recording_stopped_space">Recording stopped: not enough free space</string>

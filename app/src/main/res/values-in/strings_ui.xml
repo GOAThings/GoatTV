@@ -684,6 +684,7 @@
     <string name="cancel_recording">Batalkan rekaman</string>
     <string name="cancel_series">Batalkan serial</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">Merekam</string>
     <string name="recording_now">Merekam: %1$s</string>
     <string name="recording_saved">Rekaman disimpan: %1$s</string>
     <string name="recording_stopped_space">Rekaman berhenti: ruang kosong tidak cukup</string>

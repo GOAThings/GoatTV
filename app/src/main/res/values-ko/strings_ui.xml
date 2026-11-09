@@ -684,6 +684,7 @@
     <string name="cancel_recording">녹화 취소</string>
     <string name="cancel_series">시리즈 취소</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">녹화 중</string>
     <string name="recording_now">녹화 중: %1$s</string>
     <string name="recording_saved">녹화가 저장되었어요: %1$s</string>
     <string name="recording_stopped_space">녹화가 중지됐어요: 여유 공간이 부족해요</string>

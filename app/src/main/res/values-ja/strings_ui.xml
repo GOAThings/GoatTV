@@ -684,6 +684,7 @@
     <string name="cancel_recording">録画を取り消す</string>
     <string name="cancel_series">シリーズを取り消す</string>
     <string name="rec_badge">REC</string>
+    <string name="recording_pill">録画中</string>
     <string name="recording_now">録画中：%1$s</string>
     <string name="recording_saved">録画を保存しました：%1$s</string>
     <string name="recording_stopped_space">録画を停止しました：空き容量が足りません</string>
