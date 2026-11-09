@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
-import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.ui.glass.GlassChipButton
 import cc.slokker.itv.ui.glass.capsuleBar
 import cc.slokker.itv.ui.glass.ItvIcons
@@ -59,7 +58,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.core.graphics.createBitmap
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
@@ -84,8 +82,6 @@ import kotlinx.coroutines.flow.first
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.GlassBackdrop
 import cc.slokker.itv.ui.glass.LocalGlassBackdrop
-import cc.slokker.itv.ui.glass.blurInto
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.withFrameMillis
@@ -95,7 +91,6 @@ import cc.slokker.itv.ui.UpdateState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.mutableFloatStateOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import cc.slokker.itv.ui.player.engine.FREEZE_HEIGHT
 import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
 import cc.slokker.itv.ui.player.engine.aspectOrNull
@@ -193,7 +188,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val stream = rememberStreamState(player)
     /** Número a ser escrito com as teclas numéricas. */
     var numberEntry by remember { mutableStateOf("") }
-    var reminder by remember { mutableStateOf<Reminder?>(null) }
+    var reminder by rememberDueReminder(vm)
     /** Segundos até o temporizador parar a app (null = sem aviso). */
     var sleepWarning by remember { mutableStateOf<Int?>(null) }
     /** Catch-up: onde vai o vídeo (ms desde o início do programa), para a barra. */
@@ -457,40 +452,7 @@ fun PlayerScreen(vm: AppViewModel) {
             showSearch || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || sleepWarning != null || numberEntry.isNotEmpty() ||
             tsShifted()
         )
-    LaunchedEffect(glassVisible, videoView) {
-        val view = videoView ?: return@LaunchedEffect
-        val scratch = createBitmap(BACKDROP_WIDTH, BACKDROP_HEIGHT)
-        // Dois buffers alternados: escreve-se sempre no que não está a ser mostrado. Sem alocações por frame.
-        val buffers = Array(2) { createBitmap(BACKDROP_WIDTH, BACKDROP_HEIGHT) }
-        val images = buffers.map { it.asImageBitmap() }
-        val workA = IntArray(BACKDROP_WIDTH * BACKDROP_HEIGHT)
-        val workB = IntArray(BACKDROP_WIDTH * BACKDROP_HEIGHT)
-        var next = 0
-        while (glassVisible) {
-            val started = SystemClock.uptimeMillis()
-            // Com o vidro quase opaco o fundo nem se vê, por isso não vale a pena renová-lo.
-            val opaque = prefs.glassOpacity >= 95 && backdrop.image != null
-            // Enquanto se navega com o comando, o fundo fica parado: copiar e desfocar o vídeo a cada frame
-            // competia com o scroll pelo CPU e pela GPU. Desfocado, nem se nota que esperou pelo fim das teclas.
-            val navigating = SystemClock.uptimeMillis() - lastInput[0] < BACKDROP_PAUSE_MS
-            if (opaque || navigating) {
-                delay(50)
-                continue
-            }
-            view.capture(BACKDROP_WIDTH, BACKDROP_HEIGHT, into = scratch)?.let { frame ->
-                val target = next
-                withContext(Dispatchers.Default) { blurInto(frame, buffers[target], workA, workB) }
-                backdrop.image = images[target]
-                next = 1 - target
-            }
-            // O vidro renova-se ao ritmo do vídeo: à cadência até 30 fps, a meia cadência acima (50 → 25),
-            // para ficar alinhado com os frames sem pesar na box.
-            val videoFps = player.videoFormat()?.frameRate?.takeIf { it > 0f } ?: DEFAULT_BACKDROP_FPS
-            val fps = if (videoFps > 30f) videoFps / 2 else videoFps
-            val frameMs = (1000f / fps).toLong().coerceIn(33L, 66L)
-            delay((frameMs - (SystemClock.uptimeMillis() - started)).coerceAtLeast(4))
-        }
-    }
+    GlassBackdropEffect(glassVisible, videoView, backdrop, prefs.glassOpacity, lastInput, player)
 
     // A informação esconde-se 4 s depois de o canal arrancar (fica enquanto sintoniza ou há erro).
     // A barra completa (OK) tem botões: fica enquanto se mexe no comando.
@@ -520,40 +482,8 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     // Temporizador: aviso no último minuto e, no fim, pára e fecha a app.
-    LaunchedEffect(sleepAt) {
-        val at = sleepAt
-        if (at == null) {
-            sleepWarning = null
-            return@LaunchedEffect
-        }
-        while (true) {
-            val left = at - System.currentTimeMillis()
-            if (left <= 0) {
-                player.stop()
-                vm.setSleepTimer(null, announce = false)
-                (context as? Activity)?.finish()
-                break
-            }
-            sleepWarning = if (left <= SLEEP_WARNING_MS) ((left + 999) / 1000).toInt() else null
-            delay(if (left <= SLEEP_WARNING_MS + 1_000) 1_000 else minOf(left - SLEEP_WARNING_MS, 30_000))
-        }
-    }
+    SleepTimerEffect(vm, sleepAt, player, context) { sleepWarning = it }
 
-    // Lembretes: vê de 15 em 15 s se algum programa vai começar; o aviso some-se sozinho.
-    LaunchedEffect(Unit) {
-        while (true) {
-            if (reminder == null) vm.dueReminder(System.currentTimeMillis())?.let { reminder = it }
-            delay(15_000)
-        }
-    }
-    LaunchedEffect(reminder) {
-        val r = reminder ?: return@LaunchedEffect
-        delay(REMINDER_CARD_MS)
-        if (reminder == r) {
-            vm.consumeReminder(r, watch = false)
-            reminder = null
-        }
-    }
 
     LaunchedEffect(panel) {
         if (panel != Panel.Groups) playlistMenu = false
@@ -1310,8 +1240,6 @@ private const val SEEK_COMMIT_MS = 900L
 /** Pausa do direto: cada ← → (ou ⏪ ⏩) recua/avança isto. */
 private const val TIMESHIFT_STEP_MS = 10_000L
 private const val NUMBER_COMMIT_MS = 1_500L
-private const val SLEEP_WARNING_MS = 60_000L
-private const val REMINDER_CARD_MS = 45_000L
 /** O cartão de versão nova: quanto fica no ecrã e quanto tempo se mantém OK para instalar. */
 private const val UPDATE_CARD_SECONDS = 12
 private const val UPDATE_HOLD_MS = 1_500L
@@ -1327,9 +1255,3 @@ private fun digitOf(code: Int): Char? = when (code) {
     in AndroidKeyEvent.KEYCODE_NUMPAD_0..AndroidKeyEvent.KEYCODE_NUMPAD_9 -> '0' + (code - AndroidKeyEvent.KEYCODE_NUMPAD_0)
     else -> null
 }
-private const val BACKDROP_WIDTH = 128
-private const val BACKDROP_HEIGHT = 72
-private const val DEFAULT_BACKDROP_FPS = 30f
-
-/** Quanto tempo depois da última tecla o fundo do vidro volta a acompanhar o vídeo. */
-private const val BACKDROP_PAUSE_MS = 400L
