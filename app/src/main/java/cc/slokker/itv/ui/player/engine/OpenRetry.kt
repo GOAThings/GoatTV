@@ -20,13 +20,16 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
  */
 internal object OpenRetry {
     /** Os códigos com que os painéis Xtream recusam uma ligação a mais (ver [isBusy]). */
-    val BUSY_CODES = setOf(403, 406, 429, 458, 503, 509)
+    val BUSY_CODES = setOf(403, 406, 458, 503, 509)
 
     /**
-     * Ocupado: tenta-se a cada 150–600 ms, até uns 3 s ao todo (o fornecedor ainda está a fechar a ligação anterior;
-     * quanto demora não se sabe, por isso tenta-se amiúde). São pedidos que o servidor recusa logo, sem vídeo.
+     * Ocupado: 4 tentativas em uns 3 s (o fornecedor ainda está a fechar a ligação anterior). Não mais amiúde: na
+     * SHIELD, com um fornecedor real, 9 pedidos em 3 s levavam a conta a "demasiados pedidos" (429) no formato seguinte.
      */
-    private val BUSY = longArrayOf(150, 200, 250, 250, 300, 300, 400, 500, 600)
+    private val BUSY = longArrayOf(250, 500, 1_000, 1_500)
+
+    /** "Demasiados pedidos" (429): o servidor pede calma; espera-se a sério antes de voltar a pedir. */
+    private val RATE_LIMITED = longArrayOf(2_000, 4_000)
 
     /** Não existe (404/410): uma só tentativa, logo a seguir. */
     private val NOT_FOUND = longArrayOf(250)
@@ -38,6 +41,7 @@ internal object OpenRetry {
     fun delayMs(error: Throwable?, retry: Int): Long? {
         val ladder = when (httpCode(error)) {
             in BUSY_CODES -> BUSY
+            429 -> RATE_LIMITED
             404, 410 -> NOT_FOUND
             else -> OTHER
         }

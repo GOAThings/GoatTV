@@ -94,6 +94,9 @@ internal class ChannelPlayback(
     var attempt = 0
         private set
 
+    /** Chegou a este formato porque o anterior foi recusado (403…) neste canal: dá, mas não se aprende para a conta. */
+    private var fellBackOnRefusal = false
+
     /** Já tocou neste canal: uma falha agora é uma quebra, não um canal em baixo. */
     var wasPlaying = false
         private set
@@ -319,6 +322,7 @@ internal class ChannelPlayback(
             if (index == 0 && !req.live) fail(PlaybackException("Sem gravação", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND), req, null)
             return
         }
+        if (index == 0) fellBackOnRefusal = false
         attempt = index
         failure = null
         ready = false
@@ -418,7 +422,7 @@ internal class ChannelPlayback(
             nextTryAt = 0L
             // O fallback encontrou um formato que funciona (no direto; as tentativas do catch-up não são formatos).
             val candidate = currentCandidate
-            if (policy.learnFormat && attempt > 0 && candidate != null && live) host.onFormatWorked(candidate.format)
+            if (policy.learnFormat && attempt > 0 && candidate != null && live && !fellBackOnRefusal) host.onFormatWorked(candidate.format)
         }
     }
 
@@ -471,10 +475,13 @@ internal class ChannelPlayback(
             error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> source.restartAtLive()
             // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
             policy.vlcFallback && !source.isVlc && isDecoderError(error.errorCode) -> useVlc(source)
-            // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8). Não se o fornecedor recusou por ainda ter a
-            // ligação anterior (já se tentou várias vezes, ver OpenRetry): o outro formato também seria recusado e,
-            // se desse depois, ficava aprendido um formato errado. Mostra o erro (explicado) e tenta outra vez.
-            !ready && attempt + 1 < candidates.size && !OpenRetry.isBusy(error) -> start(attempt + 1)
+            // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8). Uma recusa de "ocupado" (403, 503…) já foi
+            // tentada uns 3 s (ver OpenRetry): a ligação anterior já fechou, por isso é este formato que o fornecedor
+            // recusa neste canal (há canais que só dão em m3u8). Passa-se ao outro, mas sem o aprender para a conta.
+            !ready && attempt + 1 < candidates.size -> {
+                fellBackOnRefusal = fellBackOnRefusal || OpenRetry.isBusy(error) || OpenRetry.httpCode(error) == 429
+                start(attempt + 1)
+            }
             // Catch-up caiu a meio: pede de novo a partir de onde ia.
             wasPlaying && !req.live -> {
                 val position = programmePositionMs() ?: 0L

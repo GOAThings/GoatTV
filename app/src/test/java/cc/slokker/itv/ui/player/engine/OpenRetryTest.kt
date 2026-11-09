@@ -22,11 +22,17 @@ class OpenRetryTest {
     private fun ladder(error: Throwable?) = generateSequence(1) { it + 1 }.map { OpenRetry.delayMs(error, it) }.takeWhile { it != null }.toList()
 
     @Test
-    fun ocupadoTentaDepressaEVariasVezes() {
-        for (code in listOf(403, 406, 429, 458, 503, 509)) {
-            assertEquals("$code", listOf(150L, 200L, 250L, 250L, 300L, 300L, 400L, 500L, 600L), ladder(http(code)))
+    fun ocupadoTentaQuatroVezesEmTresSegundos() {
+        for (code in listOf(403, 406, 458, 503, 509)) {
+            assertEquals("$code", listOf(250L, 500L, 1_000L, 1_500L), ladder(http(code)))
             assertTrue(OpenRetry.isBusy(http(code)))
         }
+    }
+
+    @Test
+    fun demasiadosPedidosEsperaASerio() {
+        assertEquals(listOf(2_000L, 4_000L), ladder(http(429)))
+        assertFalse(OpenRetry.isBusy(http(429)))
     }
 
     @Test

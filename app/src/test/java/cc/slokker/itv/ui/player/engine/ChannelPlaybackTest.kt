@@ -536,17 +536,28 @@ class ChannelPlaybackTest {
     }
 
     @Test
-    fun ocupadoNaoPassaAoOutroFormato() {
+    fun recusaPassaAoOutroFormatoSemAprender() {
         val p = playback()
         p.tuneNow(live())
-        p.onError(engine, PlaybackException("ocupado", busy(), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
-        // Fica no .ts: mostra o erro (a explicação diz se a conta está ocupada) e volta a tentar desde o primeiro.
-        assertEquals(listOf(ts), engine.opened)
-        assertNotNull(p.failure)
-        time.advance(5_000)
-        assertEquals(listOf(ts, ts), engine.opened)
+        // O .ts foi recusado (403) durante as tentativas rápidas: há canais que o fornecedor só dá em m3u8.
+        p.onError(engine, PlaybackException("recusado", busy(), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        assertEquals(listOf(ts, hls), engine.opened)
+        assertNull(p.failure)
+        // Deu em m3u8, mas não se aprende para a conta: noutro canal, o .ts pode dar.
         p.onState(engine, Player.STATE_READY)
         assertTrue(host.learned.isEmpty())
+    }
+
+    @Test
+    fun recusaEmTodosOsFormatosMostraOErro() {
+        val p = playback()
+        p.tuneNow(live())
+        p.onError(engine, PlaybackException("recusado", busy(), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        p.onError(engine, PlaybackException("recusado", busy(), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        // Os dois recusados: o erro explicado e, mais tarde, outra volta desde o .ts.
+        assertNotNull(p.failure)
+        time.advance(5_000)
+        assertEquals(listOf(ts, hls, ts), engine.opened)
     }
 
     /** Uma recusa 403 do servidor (sem Uri: no PC o Android não existe, por isso sem passar pelo construtor). */
