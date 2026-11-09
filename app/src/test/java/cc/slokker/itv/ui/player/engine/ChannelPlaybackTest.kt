@@ -69,6 +69,7 @@ class ChannelPlaybackTest {
         }
         override fun restartAtLive() { log += "live" }
         override fun stop() { log += "stop"; idle = true }
+        override fun holdForZap() { log += "hold"; idle = true }
         override fun release() { log += "release" }
         override fun ringContinues() = false
         override fun tick(programmeStart: (Long) -> Long?) = Unit
@@ -411,6 +412,8 @@ class ChannelPlaybackTest {
         assertEquals(false, engine.lastOptions?.ring)
         assertEquals(false, engine.lastOptions?.nearLive)
         host.prefs = Prefs(buffer = Prefs.Buffer.LIVE)
+        // (O buffer muda o player: recria-se, e o novo está parado.)
+        engine.idle = true
         withRing.tuneNow(live())
         assertEquals(true, engine.lastOptions?.nearLive)
     }
@@ -434,9 +437,44 @@ class ChannelPlaybackTest {
         c.cancel()
         scope.launch { p.tune(request("d")) }
         time.advance(ZapPacer.SETTLE_MS - 1)
-        assertEquals("open http://x/b.ts", engine.log.last())
+        assertEquals("hold", engine.log.last())
         time.advance(1)
-        assertEquals(listOf("open http://x/a.ts", "open http://x/b.ts", "open http://x/d.ts"), engine.log)
+        // A primeira tecla de mais seguidas pára o canal que estava a dar (larga a ligação) enquanto se escolhe.
+        assertEquals(listOf("open http://x/a.ts", "open http://x/b.ts", "hold", "open http://x/d.ts"), engine.log)
+    }
+
+    @Test
+    fun aPassarCanaisVoltarAoQueParouTambemEspera() {
+        val p = playback()
+        p.tuneNow(request("a"))
+        time.advance(5_000)
+        p.tuneNow(request("b"))
+        time.advance(200)
+        val c = scope.launch { p.tune(request("c")) }
+        time.advance(200)
+        c.cancel()
+        // De volta ao b (parado enquanto se passava): é mais uma tecla, espera como as outras.
+        scope.launch { p.tune(request("b")) }
+        assertEquals("hold", engine.log.last())
+        time.advance(ZapPacer.SETTLE_MS)
+        assertEquals(listOf("open http://x/a.ts", "open http://x/b.ts", "hold", "open http://x/b.ts"), engine.log)
+    }
+
+    @Test
+    fun voltarAoCanalQueEstaADarNaoAbreNada() {
+        val p = playback()
+        p.tuneNow(request("a"))
+        time.advance(5_000)
+        p.tuneNow(request("b"))
+        // b ainda a dar: de volta a ele (a lista deu a volta, ou a lista do servidor foi lida outra vez) não reabre.
+        time.advance(5_000)
+        p.tuneNow(request("b"))
+        assertEquals(listOf("open http://x/a.ts", "open http://x/b.ts"), engine.log)
+        // Parado (outro player, ou parou ao passar canais): abre.
+        engine.idle = true
+        p.tuneNow(request("b"))
+        assertEquals("open http://x/b.ts", engine.log.last())
+        assertEquals(3, engine.log.size)
     }
 
     @Test
@@ -444,7 +482,8 @@ class ChannelPlaybackTest {
         host.prefs = Prefs(zapDelayMs = 2_000)
         val p = playback()
         p.tuneNow(request("a"))
-        // Outro player ou o mesmo canal outra vez (definições): abre logo.
+        // Outro player (parado) ou o mesmo canal outra vez: abre logo, sem esperar.
+        engine.idle = true
         p.tuneNow(request("a"))
         assertEquals(2, engine.log.size)
     }

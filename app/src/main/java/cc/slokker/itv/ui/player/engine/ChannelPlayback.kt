@@ -105,6 +105,9 @@ internal class ChannelPlayback(
 
     /** O canal novo já mostrou a primeira imagem: a do anterior, se só chegar agora, já não serve. */
     private var firstFrameSeen = false
+
+    /** Parado por [holdForZap] (a passar canais), à espera do canal onde se parar. */
+    private var held = false
     private var retryJob: Job? = null
     private var linkJob: Job? = null
     private var tickJob: Job? = null
@@ -185,15 +188,24 @@ internal class ChannelPlayback(
      * tentativas na ordem do formato preferido. A imagem tira-se ao mesmo tempo que o canal novo abre: o
      * descodificador é esvaziado, não libertado, e a última imagem fica no ecrã até à primeira do canal novo.
      *
-     * Outro canal em direto passa pelo atraso ao mudar de canal ([ZapPacer]): a passar canais depressa, espera aqui
-     * (o canal anterior continua a dar) e uma mudança nova pelo meio cancela o efeito, e com ele esta espera.
+     * Outro canal em direto passa pelo atraso ao mudar de canal ([ZapPacer]): a passar canais depressa, o canal que
+     * estava a dar pára (fica a última imagem) e larga a ligação, para o fornecedor a libertar enquanto se escolhe;
+     * espera-se aqui, e uma mudança nova pelo meio cancela o efeito, e com ele esta espera. Voltar ao canal que
+     * ainda está a dar não abre nada.
      */
     suspend fun tune(request: PlaybackRequest) {
         val previous = this.request
-        if (request.live && previous != null && previous.channel.key != request.channel.key) {
+        val same = previous?.channel?.key == request.channel.key
+        // Parado a meio de uma passagem de canais ([held]), voltar ao mesmo canal também é mais uma tecla.
+        val zap = request.live && previous != null && (!same || held)
+        val back = !zap && request.live && previous?.live == true && same &&
+            previous.candidates == request.candidates && failure == null && engine?.idle == false
+        if (zap || back) {
             val pause = pacer.delayFor(now(), host.prefs.zapDelayMs)
+            if (back) return
             if (pause > 0) {
                 ZapTrace.mark("W", "${pause}ms")
+                holdForZap()
                 wait(pause)
             }
         }
@@ -210,6 +222,7 @@ internal class ChannelPlayback(
     }
 
     private fun open(request: PlaybackRequest) {
+        held = false
         this.request = request
         candidates = request.candidates
         net?.reset()
@@ -220,6 +233,20 @@ internal class ChannelPlayback(
         reconnects = 0
         nextTryAt = 0L
         start(0)
+    }
+
+    /** A passar canais: pára o canal que está a dar e larga a ligação, com a última imagem no ecrã. */
+    private suspend fun holdForZap() {
+        val e = engine ?: return
+        if (e.idle) return
+        if (ready) freezeCapture?.invoke()?.let { freeze = it }
+        retryJob?.cancel()
+        linkJob?.cancel()
+        nextTryAt = 0L
+        e.holdForZap()
+        timeshift?.clear()
+        ready = false
+        held = true
     }
 
     /** OK no cartão de erro: tenta outra vez desde o primeiro formato. */

@@ -39,8 +39,15 @@ internal class PlayerEngine(
     private val gate = playback.gate
     private var pendingOpen: Job? = null
 
+    /** Parado por [holdForZap], com os descodificadores guardados até o canal seguinte estar a dar. */
+    private var holding = false
+
     private val listener = object : Player.Listener {
-        override fun onPlaybackStateChanged(playbackState: Int) = playback.onState(this@PlayerEngine, playbackState)
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // O canal seguinte já usa os descodificadores: deixa de os guardar quando estiver parado.
+            if (playbackState == Player.STATE_READY) keepCodecs(false)
+            playback.onState(this@PlayerEngine, playbackState)
+        }
         override fun onIsPlayingChanged(isPlaying: Boolean) = playback.onPlayingChanged(this@PlayerEngine, isPlaying)
         override fun onRenderedFirstFrame() = playback.onFirstFrame(this@PlayerEngine)
         override fun onPlayerError(error: PlaybackException) = playback.onError(this@PlayerEngine, error)
@@ -95,7 +102,23 @@ internal class PlayerEngine(
 
     override fun stop() {
         pendingOpen?.cancel()
+        // Em segundo plano os descodificadores ficam livres para as outras apps.
+        keepCodecs(false)
         player.stop()
+    }
+
+    override fun holdForZap() {
+        pendingOpen?.cancel()
+        keepCodecs(true)
+        player.stop()
+    }
+
+    /** O ExoPlayer parado guarda os descodificadores ("foreground mode") só entre canais, a passar canais. */
+    private fun keepCodecs(keep: Boolean) {
+        val exo = player as? ExoPlayer ?: return
+        if (holding == keep) return
+        holding = keep
+        exo.setForegroundMode(keep)
     }
 
     override fun release() {

@@ -149,6 +149,12 @@ internal interface StreamEngine {
     /** Atrás da janela do direto: volta ao ponto em direto. */
     fun restartAtLive()
     fun stop()
+
+    /**
+     * Pára a stream (e larga a ligação) a meio de uma passagem de canais, mas guarda os descodificadores para o
+     * canal onde se parar (ver [ChannelPlayback.tune]).
+     */
+    fun holdForZap()
     fun release()
 
     /** A leitura do anel acabou: true se continuou sozinho (fim de uma ligação, ou o ponto saiu do anel). */
