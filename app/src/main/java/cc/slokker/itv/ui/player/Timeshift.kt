@@ -25,14 +25,22 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.ExtractorsFactory
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.TimeshiftRing
+import cc.slokker.itv.ui.player.engine.OpenRetry
+import cc.slokker.itv.ui.player.engine.ZapTrace
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * "Pausar o direto": pausar, recuar e voltar ao direto em qualquer canal, mesmo sem catch-up no servidor.
@@ -59,7 +67,6 @@ internal class Timeshift(context: Context) {
     private var session: Session? = null
     private var lastRecorder: Recorder? = null
     private var hls = false
-    private var generation = 0
     private val window = Timeline.Window()
 
     /** Dá para pausar e recuar neste canal. */
@@ -112,10 +119,13 @@ internal class Timeshift(context: Context) {
             hls = true
             return null
         }
+        val generation = GENERATION.incrementAndGet()
         val capacity = capacity() ?: return null
+        LIVE += generation
         val ring = try {
-            TimeshiftRing(File(dir, "ring-${++generation}.ts"), capacity, MAX_AGE_MS, SystemClock::elapsedRealtime)
+            TimeshiftRing(File(dir, "$RING_PREFIX$generation.ts"), capacity, MAX_AGE_MS, SystemClock::elapsedRealtime)
         } catch (e: IOException) {
+            LIVE -= generation
             Log.w(TAG, "Sem anel", e)
             return null
         }
@@ -142,12 +152,21 @@ internal class Timeshift(context: Context) {
         atLive = true
     }
 
-    /** Espaço para o anel: até [MAX_BYTES], sem passar de metade do livre (tirando uma reserva). */
+    /**
+     * Espaço para um anel novo: até [MAX_BYTES], sem passar de metade do livre (tirando uma reserva). O livre conta
+     * já com os anéis anteriores que ainda se estão a apagar (ver [trash]).
+     */
     private fun capacity(): Long? {
         dir.mkdirs()
-        // Restos de uma sessão que não fechou (a app morreu a meio).
-        dir.listFiles()?.forEach { it.delete() }
-        val free = dir.usableSpace
+        // Restos de uma sessão que não fechou (a app morreu a meio): apagados fora da thread principal. Os anéis
+        // abertos neste processo ([LIVE]) ficam; os fechados já se apagaram antes (a mesma thread, por ordem).
+        DISK.execute {
+            dir.listFiles()?.forEach { f ->
+                val gen = f.name.removePrefix(RING_PREFIX).removeSuffix(".ts").toIntOrNull()
+                if (gen == null || gen !in LIVE) f.delete()
+            }
+        }
+        val free = dir.usableSpace + PENDING_BYTES.get()
         val bytes = minOf(MAX_BYTES, (free - RESERVE_BYTES) / 2)
         if (bytes < TimeshiftRing.MIN_CAPACITY) {
             Log.i(TAG, "Pouco espaço livre (${free / 1_048_576} MB): sem pausa do direto")
@@ -287,6 +306,26 @@ internal class Timeshift(context: Context) {
         update(player)
     }
 
+    /**
+     * Fecha e apaga [ring] noutra thread: apagar um ficheiro de vários GB (horas no mesmo canal) pode levar centenas
+     * de ms, e era na thread principal, a atrasar o canal seguinte. Quem estiver a ler recebe o fim logo
+     * ([TimeshiftRing.close] avisa antes de fechar os ficheiros).
+     */
+    private fun trash(ring: TimeshiftRing, generation: Int) {
+        val bytes = minOf(ring.writtenBytes, ring.capacity)
+        PENDING_BYTES.addAndGet(bytes)
+        DISK.execute {
+            val started = SystemClock.uptimeMillis()
+            try {
+                ring.close()
+            } finally {
+                LIVE -= generation
+                PENDING_BYTES.addAndGet(-bytes)
+            }
+            Log.d(TAG, "Anel apagado em ${SystemClock.uptimeMillis() - started} ms (${bytes / 1_048_576} MB)")
+        }
+    }
+
     /** Um canal aberto pelo anel. */
     private inner class Session(
         val ring: TimeshiftRing,
@@ -309,11 +348,21 @@ internal class Timeshift(context: Context) {
 
         fun sourceAt(offset: Long): MediaSource =
             ProgressiveMediaSource.Factory({ RingDataSource(this) }, extractors)
+                .setLoadErrorHandlingPolicy(ringErrors)
                 .createMediaSource(MediaItem.fromUri(Uri.parse("timeshift://ring/$id?at=$offset")))
+
+        /**
+         * O gravador já tentou a ligação as vezes que devia: quando o anel acabou com um erro, o ExoPlayer não volta
+         * a ler o mesmo erro do disco (eram mais 0, 1 e 2 s antes de o canal passar ao outro formato ou mostrar o erro).
+         */
+        private val ringErrors = object : DefaultLoadErrorHandlingPolicy() {
+            override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+                if (ring.isFinished && !notTs) C.TIME_UNSET else super.getRetryDelayMsFor(loadErrorInfo)
+        }
 
         fun close() {
             recorder.close()
-            ring.close()
+            trash(ring, id)
         }
     }
 
@@ -381,13 +430,15 @@ internal class Timeshift(context: Context) {
                 }
                 if (closed) return
                 if (!everData) {
-                    // Ainda não deu: como o ExoPlayer, mais umas tentativas seguidas (o servidor pode ainda não ter
-                    // largado a ligação do canal anterior); depois o erro vai para o player, que o explica.
-                    if (++failures > OPEN_RETRIES) {
+                    // Ainda não deu: mais umas tentativas seguidas, depressa se o servidor recusou por ainda não ter
+                    // largado a ligação do canal anterior (ver OpenRetry); depois o erro vai para o player, que o explica.
+                    val wait = OpenRetry.delayMs(error, ++failures)
+                    if (wait == null) {
                         s.ring.endSegment(final = true, error = error)
                         return
                     }
-                    sleep(minOf((failures - 1) * 1_000L, 5_000L))
+                    ZapTrace.mark("RETRY", "${OpenRetry.httpCode(error) ?: error} +${wait}ms")
+                    sleep(wait)
                     continue
                 }
                 if (reconnectMs <= 0) {
@@ -531,8 +582,18 @@ internal class Timeshift(context: Context) {
         private const val KIND_POLL_MS = 20L
         private const val PREVIOUS_WAIT_MS = 3_000L
         private const val CLOSE_GRACE_MS = 800L
+        private const val RING_PREFIX = "ring-"
 
-        /** Como o ExoPlayer (DefaultLoadErrorHandlingPolicy): mais 3 tentativas antes de dar erro. */
-        private const val OPEN_RETRIES = 3
+        /** O número de cada anel, único no processo (o nome do ficheiro). */
+        private val GENERATION = AtomicInteger()
+
+        /** Os anéis deste processo ainda não apagados: o resto da pasta são restos (ver [capacity]). */
+        private val LIVE: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+
+        /** Apagar anéis e restos: uma thread só, fora da principal (a ordem fica a dos pedidos). */
+        private val DISK = Executors.newSingleThreadExecutor { r -> Thread(r, "timeshift-disk").apply { isDaemon = true } }
+
+        /** Bytes de anéis anteriores que ainda se estão a apagar (contam como livres para o anel novo). */
+        private val PENDING_BYTES = AtomicLong()
     }
 }

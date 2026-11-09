@@ -350,8 +350,10 @@ internal class ChannelPlayback(
             error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> source.restartAtLive()
             // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
             policy.vlcFallback && !source.isVlc && isDecoderError(error.errorCode) -> useVlc(source)
-            // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8).
-            !ready && attempt + 1 < candidates.size -> start(attempt + 1)
+            // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8). Não se o fornecedor recusou por ainda ter a
+            // ligação anterior (já se tentou várias vezes, ver OpenRetry): o outro formato também seria recusado e,
+            // se desse depois, ficava aprendido um formato errado. Mostra o erro (explicado) e tenta outra vez.
+            !ready && attempt + 1 < candidates.size && !OpenRetry.isBusy(error) -> start(attempt + 1)
             // Catch-up caiu a meio: pede de novo a partir de onde ia.
             wasPlaying && !req.live -> {
                 val position = programmePositionMs() ?: 0L

@@ -413,4 +413,29 @@ class ChannelPlaybackTest {
         withRing.tuneNow(live())
         assertEquals(true, engine.lastOptions?.nearLive)
     }
+
+    // ---- Recusas "ocupado" ----
+
+    @Test
+    fun ocupadoNaoPassaAoOutroFormato() {
+        val p = playback()
+        p.tuneNow(live())
+        p.onError(engine, PlaybackException("ocupado", busy(), PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        // Fica no .ts: mostra o erro (a explicação diz se a conta está ocupada) e volta a tentar desde o primeiro.
+        assertEquals(listOf(ts), engine.opened)
+        assertNotNull(p.failure)
+        time.advance(5_000)
+        assertEquals(listOf(ts, ts), engine.opened)
+        p.onState(engine, Player.STATE_READY)
+        assertTrue(host.learned.isEmpty())
+    }
+
+    /** Uma recusa 403 do servidor (sem Uri: no PC o Android não existe, por isso sem passar pelo construtor). */
+    private fun busy(): androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException {
+        val type = androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException::class.java
+        val unsafe = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe").apply { isAccessible = true }.get(null)
+        val e = unsafe.javaClass.getMethod("allocateInstance", Class::class.java).invoke(unsafe, type) as androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+        type.getField("responseCode").apply { isAccessible = true }.setInt(e, 403)
+        return e
+    }
 }

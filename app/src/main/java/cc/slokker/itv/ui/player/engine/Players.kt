@@ -314,6 +314,7 @@ private fun mediaSourceFor(candidate: StreamCandidate, nearLive: Boolean, http: 
     return if (candidate.isHls) {
         HlsMediaSource.Factory(http).createMediaSource(item)
     } else {
-        ProgressiveMediaSource.Factory(http, tsExtractors()).createMediaSource(item)
+        // Recusas "ocupado" do fornecedor: tentativas rápidas (ver OpenRetry); o resto como no Media3.
+        ProgressiveMediaSource.Factory(http, tsExtractors()).setLoadErrorHandlingPolicy(OpenRetry.Policy()).createMediaSource(item)
     }
 }
