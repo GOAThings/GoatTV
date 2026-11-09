@@ -61,11 +61,17 @@ class RecordingWriter(
                         return result(RecordingState.DONE, null)
                     }
                     val max = if (limit != null) minOf(BUFFER_BYTES.toLong(), limit - pos).toInt() else BUFFER_BYTES
-                    val n = try {
+                    var n = try {
                         ring.read(pos, segment, buffer, 0, max, WAIT_MS)
                     } catch (e: IOException) {
                         // A ligação acabou com um erro (e não volta).
                         return result(RecordingState.STOPPED, RecordingReason.CONNECTION)
+                    }
+                    // O que se leu pode já passar do fim (a escrita chegou lá entre ver o direto e ler): corta-se no ponto.
+                    if (n > 0) {
+                        if (endOffset == null && ring.liveMediaMs >= endMediaMs) endOffset = ring.entryAtOrAfter(endMediaMs)?.offset
+                        endOffset?.let { end -> if (pos + n > end) n = maxOf(0L, end - pos).toInt() }
+                        if (n == 0) continue
                     }
                     when {
                         n > 0 -> {
