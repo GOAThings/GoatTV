@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Lembretes de programas (só nesta TV, na cache), da lista aberta ([playlistId]). */
 class Reminders(
@@ -20,6 +22,13 @@ class Reminders(
 ) {
     private val _reminders = MutableStateFlow<List<Reminder>>(emptyList())
     val reminders: StateFlow<List<Reminder>> = _reminders.asStateFlow()
+
+    /** Uma gravação de cada vez, sempre da lista atual: duas seguidas podiam acabar ao contrário e deixar a antiga no disco. */
+    private val saving = Mutex()
+
+    private fun save() {
+        scope.launch { saving.withLock { cache.saveReminders(_reminders.value) } }
+    }
 
     /** Lê os lembretes guardados, sem os que já passaram há mais de [GRACE_MS]. */
     suspend fun load(now: Long = System.currentTimeMillis()) {
@@ -42,7 +51,7 @@ class Reminders(
             toast(I18n.s.reminderSet(entry.title))
             (_reminders.value + Reminder(playlistId, channel.key, channel.name, entry.title, entry.startMs)).sortedBy { it.startMs }
         }
-        scope.launch { cache.saveReminders(_reminders.value) }
+        save()
     }
 
     /** Lembrete a mostrar agora (o programa começa dentro de 1 min, ou começou há pouco). */
@@ -56,7 +65,7 @@ class Reminders(
     /** O lembrete já foi mostrado: sai da lista. */
     fun consume(reminder: Reminder) {
         _reminders.value = _reminders.value - reminder
-        scope.launch { cache.saveReminders(_reminders.value) }
+        save()
     }
 
     companion object {
