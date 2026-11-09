@@ -106,8 +106,6 @@ import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.common.ChannelLogo
-import cc.slokker.itv.ui.common.ErrorInfo
-import cc.slokker.itv.ui.common.Logo
 import cc.slokker.itv.ui.common.formatTime
 import cc.slokker.itv.ui.common.rememberEpg
 import cc.slokker.itv.ui.common.rememberNow
@@ -144,40 +142,6 @@ private enum class Tab { Tv, Guide, Favorites, Search, Menu }
 
 /** Chamado depois de abrir um canal a partir de uma lista: no ecrã inicial, passa a mostrar o vídeo. */
 internal val LocalOnPlayed = staticCompositionLocalOf<() -> Unit> { {} }
-
-/** Primeira vez no telemóvel: conta GOAT ou listas só neste aparelho. */
-@Composable
-fun MobileWelcome(onAccount: () -> Unit, onLocal: () -> Unit) {
-    val s = LocalStrings.current
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Spacer(Modifier.height(24.dp))
-        Logo(size = 28)
-        Text(s.welcomeTitle, color = ItvColors.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Text(s.welcomeSub, color = ItvColors.TextDim, fontSize = 15.sp)
-        Spacer(Modifier.height(8.dp))
-        ChoiceCard(s.welcomeAccount, s.welcomeAccountSub, s.recommended, onAccount)
-        ChoiceCard(s.welcomeLocalPhone, s.welcomeLocalPhoneSub, null, onLocal)
-    }
-}
-
-@Composable
-private fun ChoiceCard(title: String, body: String, badge: String?, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(CardShape).background(Card).clickable(onClick = onClick).padding(18.dp)) {
-        if (badge != null) {
-            Text(
-                badge.uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.background(LocalAccent.current.brush, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
-            )
-            Spacer(Modifier.height(10.dp))
-        }
-        Text(title, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
-        Text(body, color = ItvColors.TextDim, fontSize = 14.sp)
-    }
-}
 
 /** O ecrã principal do telemóvel: abre logo a dar o último canal, com a lista por baixo. */
 @Composable
@@ -1474,28 +1438,6 @@ private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val ZAP_DRAG_PX = 120f
-
-/** Erro ao carregar uma lista, com botões de toque. */
-@Composable
-fun MobileLoadError(error: ErrorInfo, onRetry: () -> Unit, onSettings: (() -> Unit)?, onLogout: (() -> Unit)?, onAddPlaylist: (() -> Unit)?) {
-    val s = LocalStrings.current
-    Column(
-        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Logo(size = 26)
-        Spacer(Modifier.height(8.dp))
-        Text(error.title, color = ItvColors.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        error.cause?.let { Text(it, color = ItvColors.TextDim, fontSize = 15.sp) }
-        error.fixes.forEach { Text("• $it", color = ItvColors.TextDim, fontSize = 14.sp) }
-        error.detail?.let { Text(it, color = ItvColors.TextFaint, fontSize = 12.sp) }
-        Spacer(Modifier.height(8.dp))
-        onAddPlaylist?.let { MenuRow(s.addPlaylist, null, onClick = it) }
-        MenuRow(s.retry, null, onClick = onRetry)
-        onSettings?.let { MenuRow(s.settings, null, onClick = it) }
-        onLogout?.let { MenuRow(s.logout, null, onClick = it) }
-    }
-}
 
 /** Com conta: o guia ou o logótipo de um canal (sugestões, pesquisa e países, como na TV). */
 @Composable
