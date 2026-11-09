@@ -900,6 +900,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return null
         }
         if (c.testMode) return "Test mode"
+        // Só a UI escondia o Stalker com conta: aqui também não passa (ver PlaylistKind.supportsAccount).
+        if (!form.type.kind.supportsAccount) return I18n.s.playlistRejected
         val saved = try {
             val body = form.toPlaylist(id.orEmpty()).accountBody()
             if (id == null) c.backend.createPlaylist(body) else c.backend.updatePlaylist(id, body)

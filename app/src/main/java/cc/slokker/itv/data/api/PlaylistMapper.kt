@@ -45,10 +45,14 @@ fun Playlist.toDto() = PlaylistDto(
     signature = signature,
 )
 
-/** O corpo de uma lista para a conta (os campos do outro tipo vão vazios, como no site). */
-fun Playlist.accountBody() = JsonObject().apply {
+/**
+ * O corpo de uma lista para a conta (os campos do outro tipo vão vazios, como no site). Só para os tipos que a conta
+ * guarda: um Stalker ia como M3U e perdia o portal e o MAC.
+ */
+fun Playlist.accountBody(): JsonObject = JsonObject().apply {
+    require(type.kind.supportsAccount) { "${type.kind.wireName} não vai para a conta" }
     val xtream = type == PlaylistType.XTREAM
-    addProperty("type", if (xtream) PlaylistKind.XTREAM.wireName else PlaylistKind.M3U.wireName)
+    addProperty("type", type.kind.wireName)
     addProperty("name", name)
     addProperty("server", if (xtream) server.orEmpty() else "")
     addProperty("username", if (xtream) username.orEmpty() else "")

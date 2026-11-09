@@ -66,6 +66,11 @@ class PlaylistKindTest {
         assertEquals("", m.get("epg_url").asString)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun `a stalker playlist never goes to the account as m3u`() {
+        stalker.accountBody()
+    }
+
     @Test
     fun `same source follows each kind's rule`() {
         assertTrue(xtream.sameSourceAs(xtream.copy(id = "o", server = " HTTP://X.example.com:8080/ ", username = " u ")))
