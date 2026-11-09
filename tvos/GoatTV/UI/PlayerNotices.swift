@@ -26,25 +26,49 @@ struct TuningPill: View {
         let s = model.strings
         // O nome não estica a cápsula: um nome muito comprido fica cortado (no Android, 220 dp no máximo).
         let name = channel.count > 34 ? String(channel.prefix(33)) + "…" : channel
-        HStack(spacing: 20 * scale) {
+        CapsuleRow(title: reconnecting ? s.r("reconnecting") : s.r("tuning"), scale: scale) {
             CountdownRing(nextTryAt: nextTryAt, waitSeconds: waitSeconds, lineWidth: 4.5 * scale, fontSize: 22 * scale)
-                .frame(width: 60 * scale, height: 60 * scale)
-            VStack(alignment: .leading, spacing: 2 * scale) {
-                Text(reconnecting ? s.r("reconnecting") : s.r("tuning"))
-                    .font(.system(size: 26 * scale, weight: .semibold))
-                if attempt > 0 || !name.isEmpty {
-                    Text(attempt > 0 ? s.r("reconnect_attempt", name, "\(attempt)") : name)
-                        .font(.system(size: 21 * scale).monospacedDigit())
-                        .foregroundStyle(Theme.textDim)
-                        .lineLimit(1)
-                }
+        } detail: {
+            if attempt > 0 || !name.isEmpty {
+                Text(attempt > 0 ? s.r("reconnect_attempt", name, "\(attempt)") : name).lineLimit(1)
             }
-            .fixedSize()
         }
-        .padding(.leading, 14 * scale)
-        .padding(.trailing, 32 * scale)
-        .padding(.vertical, 14 * scale)
-        .glass(radius: 44 * scale)
+        .fixedSize()
+        .capsuleGlass(scale: scale)
+    }
+}
+
+/// A linha da cápsula do canto: o anel (60 pt) e duas linhas, a de cima e o pormenor por baixo, esbatido. É a da
+/// cápsula de voltar a ligar e a da gravação (RecordingsTv), para serem iguais.
+struct CapsuleRow<Ring: View, Detail: View>: View {
+    let title: String
+    var scale: CGFloat = 1
+    @ViewBuilder let ring: () -> Ring
+    @ViewBuilder let detail: () -> Detail
+
+    var body: some View {
+        HStack(spacing: 20 * scale) {
+            ring().frame(width: 60 * scale, height: 60 * scale)
+            VStack(alignment: .leading, spacing: 2 * scale) {
+                Text(title).font(.system(size: 26 * scale, weight: .semibold))
+                detail()
+                    .font(.system(size: 21 * scale).monospacedDigit())
+                    .foregroundStyle(Theme.textDim)
+            }
+        }
+    }
+}
+
+/// O que a cápsula do canto mede: o anel com as margens à volta (o canto é metade disto).
+let capsuleHeight: CGFloat = 60 + 2 * 14
+
+extension View {
+    /// As margens e o vidro da cápsula do canto (a de voltar a ligar; a da gravação é igual).
+    func capsuleGlass(scale: CGFloat = 1) -> some View {
+        padding(.leading, 14 * scale)
+            .padding(.trailing, 32 * scale)
+            .padding(.vertical, 14 * scale)
+            .glass(radius: capsuleHeight / 2 * scale)
     }
 }
 
@@ -55,6 +79,7 @@ struct CountdownRing: View {
     let waitSeconds: TimeInterval
     var lineWidth: CGFloat = 4.5
     var fontSize: CGFloat = 22
+    /// O traço do anel (os segundos no meio ficam sempre brancos).
     var color: Color = .white
 
     var body: some View {

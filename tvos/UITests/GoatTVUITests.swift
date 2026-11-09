@@ -126,14 +126,20 @@ final class GoatTVUITests: XCTestCase {
         press(.select, wait: 2)
         if focus("hud:record", .right) { press(.select, wait: 4) }
         shot("rec-started")
-        XCTAssertTrue(app.staticTexts["REC"].waitForExistence(timeout: 5), "sem a cápsula REC")
+        XCTAssertTrue(recPill.waitForExistence(timeout: 5), "sem a cápsula da gravação")
         press(.menu, wait: 10); shot("rec-watching")
+
+        // Em pausa a gravar: a cápsula da gravação fica por baixo da de quanto se está atrás do direto. Voltar: o direto.
+        press(.playPause, wait: 5); shot("rec-paused")
+        XCTAssertTrue(recPill.exists, "a cápsula da gravação saiu com a pausa")
+        press(.menu, wait: 8)
 
         // ↓ outro canal a gravar: o cartão "Estás a gravar"; Voltar fica a gravar neste canal.
         press(.down, wait: 3); shot("rec-switch-card")
-        XCTAssertTrue(app.buttons["recording-back"].exists, "sem o cartão da gravação ao mudar de canal")
+        XCTAssertTrue(app.buttons["recording-card"].exists, "sem o cartão da gravação ao mudar de canal")
+        XCTAssertFalse(recPill.exists, "a cápsula da gravação ficou com o cartão")
         press(.menu, wait: 3); shot("rec-kept")
-        XCTAssertTrue(app.staticTexts["REC"].exists, "a gravação parou depois de Voltar")
+        XCTAssertTrue(recPill.waitForExistence(timeout: 3), "a gravação parou depois de Voltar")
 
         // O painel das gravações (OK → Gravações) e ver a gravação, com a barra e o "GRAVADO".
         press(.select, wait: 2)
@@ -149,7 +155,7 @@ final class GoatTVUITests: XCTestCase {
         press(.select, wait: 2)
         if focus("hud:record", .right) { press(.select, wait: 4) }
         press(.menu, wait: 3); shot("rec-stopped")
-        XCTAssertFalse(app.staticTexts["REC"].exists, "a cápsula REC ficou depois de parar")
+        XCTAssertFalse(recPill.exists, "a cápsula da gravação ficou depois de parar")
 
         // ↓ o canal HLS ao vivo: a janela do próprio leitor da Apple (sem disco).
         press(.down, wait: 25); shot("hls-live")
@@ -172,6 +178,9 @@ final class GoatTVUITests: XCTestCase {
         XCTAssertNil(behind(), "MP4: atrás do direto")
         XCTAssertFalse(app.otherElements["timeshiftBar"].exists, "MP4: com a barra da pausa do direto")
     }
+
+    /// A cápsula da gravação no canto.
+    private var recPill: XCUIElement { app.descendants(matching: .any)["rec-pill"] }
 
     /// Quanto a cápsula da pausa do direto diz que vai atrás ("−0:18" → 18), ou nil sem ela.
     private func behind() -> Int? {
