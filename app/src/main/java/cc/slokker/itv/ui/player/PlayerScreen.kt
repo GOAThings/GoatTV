@@ -1168,7 +1168,8 @@ fun PlayerScreen(vm: AppViewModel) {
                 NetHintCard(vm.net, actions, netHintFocus)
             }
             reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
-            activeRecordings.firstOrNull()?.let { if (!showGuide) RecPill(it.info.title, Modifier.align(Alignment.TopCenter)) }
+            // Com um painel ou as Definições abertas, a cápsula sai (tapava o cabeçalho deles).
+            activeRecordings.firstOrNull()?.let { if (!covered()) RecPill(it.info.title, Modifier.align(Alignment.TopCenter)) }
             recordingPrompt?.let { r ->
                 val from = cc.slokker.itv.data.recording.RecordingPlan.window(r, recordingSchedule.paddingBeforeMin, recordingSchedule.paddingAfterMin).fromMs
                 var left by remember(r.id) { mutableIntStateOf(0) }
