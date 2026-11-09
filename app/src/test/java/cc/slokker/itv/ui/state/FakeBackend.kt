@@ -64,7 +64,12 @@ class FakeBackend : BackendApi {
     override suspend fun deviceLogout(token: String): Response<Unit> = TODO()
     override suspend fun sendReport(body: JsonObject): Response<JsonObject> = TODO()
     override suspend fun config(etag: String?): Response<ConfigResponse> = TODO()
-    override suspend fun putPlaylistIndex(playlistId: String, body: RequestBody, encoding: String): Response<JsonObject> = TODO()
+    var onPutPlaylistIndex: (String) -> Response<JsonObject> = { Response.success(JsonObject()) }
+
+    override suspend fun putPlaylistIndex(playlistId: String, body: RequestBody, encoding: String): Response<JsonObject> {
+        calls += "putPlaylistIndex:$playlistId"
+        return onPutPlaylistIndex(playlistId)
+    }
     override suspend fun createPlaylist(body: JsonObject): PlaylistDto = TODO()
     override suspend fun updatePlaylist(id: String, body: JsonObject): PlaylistDto = TODO()
     override suspend fun deletePlaylist(id: String): JsonObject = TODO()

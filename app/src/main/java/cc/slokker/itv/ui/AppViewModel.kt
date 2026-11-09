@@ -27,6 +27,7 @@ import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.ui.state.GuideController
 import cc.slokker.itv.ui.state.PlaybackState
+import cc.slokker.itv.ui.state.PlaylistController
 import cc.slokker.itv.ui.state.ProfileStore
 import cc.slokker.itv.ui.common.explainPlaylistError
 import android.app.Application
@@ -189,13 +190,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         else -> accountProfile
     }
 
-    private val _content = MutableStateFlow<PlaylistContent?>(null)
-    val content: StateFlow<PlaylistContent?> = _content.asStateFlow()
+    /** Listas e guias já verificados desde que a app abriu, e a última tentativa de cada (ver RefreshTracker). */
+    private val refreshes = RefreshTracker()
+
+    /** Os canais da lista aberta, a renovação por trás e as listas do segundo canal (ver PlaylistController). */
+    private val lists = PlaylistController(
+        viewModelScope, c::loadPlaylist, c.cache, c.backend, profile, ::repository, refreshes, profile.prefs, ::showToast,
+        onRefreshed = { fresh, guideChanged ->
+            if (guideChanged) guide.open(fresh)
+            playback.onContentRefreshed(fresh)
+        },
+    )
+
+    val content: StateFlow<PlaylistContent?> = lists.content
 
     /** `favorites` da conta: playlistId → channelKeys. */
     val favorites: StateFlow<Map<String, List<String>>> = profile.favorites
-
-    private var indexJob: Job? = null
 
     /** O formato que funcionou nas Xtream (null = Auto). */
     val streamFormat: StateFlow<String?> = profile.streamFormat
@@ -212,7 +222,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             prefs.collect { p ->
                 c.userAgent = SafeInput.headerSafe(p.userAgent).ifBlank { IPTV_USER_AGENT }
-                if (_content.value != null) c.session.setAutoStart(p.autoStart)
+                if (content.value != null) c.session.setAutoStart(p.autoStart)
             }
         }
     }
@@ -246,9 +256,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Segundo canal no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
     val second: StateFlow<PlaybackState.SecondView?> = playback.second
 
-    /** Listas carregadas só para o segundo canal (a principal está em [content]). */
-    private val secondContents = HashMap<String, PlaylistContent>()
-
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
 
@@ -265,9 +272,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** As Definições já foram desbloqueadas com o PIN nesta sessão. */
     private var settingsUnlocked = false
-
-    /** Listas e guias já verificados desde que a app abriu, e a última tentativa de cada (ver RefreshTracker). */
-    private val refreshes = RefreshTracker()
 
     /** O guia: XMLTV da lista e o extra, o da conta e as associações, o desvio horário e os logótipos (ver GuideController). */
     private val guide = GuideController(viewModelScope, c.epg, c.backend, content, prefs, ::repository, refreshes, ::showToast)
@@ -287,7 +291,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var retryAction: () -> Unit = { startLoading(resume = true) }
     private var loadJob: Job? = null
     private var saveLastJob: Job? = null
-    private var refreshJob: Job? = null
     /** Sobe ao terminar sessão: o que ainda vinha a caminho vê que já não é desta sessão e não grava nada. */
     private var sessionGeneration = 0
 
@@ -322,9 +325,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             while (true) {
                 delay(REFRESH_TICK_MS)
-                val content = _content.value ?: continue
+                val content = content.value ?: continue
                 if (_screen.value == Screen.Player || _screen.value == Screen.Settings) {
-                    maybeRefreshPlaylist(content)
+                    lists.maybeRefresh(content)
                     guide.open(content)
                 }
             }
@@ -384,7 +387,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun leaveActivation() {
         when {
             !_local.value -> _screen.value = Screen.Welcome
-            _content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
+            content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
             else -> startLoading(resume = true)
         }
     }
@@ -490,7 +493,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         applyConfig(config)
         if (playlists.value.isEmpty()) return false
         val playlist = lastPlaylist()
-        if (!c.cache.hasPlaylist(playlist)) return false
+        if (!lists.hasCached(playlist)) return false
         loadPlaylist(playlist, resume = true)
         viewModelScope.launch {
             if (renewToken()) syncConfig()
@@ -545,34 +548,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Manda à conta o índice de grupos e canais de [content] (para o site o poder organizar), se for diferente do
-     * que ela tem. Corre por trás e nunca atrapalha a TV: sem rede ou com erro, tenta-se na próxima carga.
-     */
-    private fun uploadIndex(content: PlaylistContent) {
-        if (!repository().uploadsIndex) return
-        val playlistId = content.playlist.id
-        if (!profile.knowsIndexOf(playlistId)) return // lista que a conta não conhece
-        indexJob?.cancel()
-        indexJob = viewModelScope.launch(Dispatchers.Default) {
-            val index = ChannelIndex.of(content) ?: return@launch
-            if (profile.indexHash(playlistId) == index.hash) return@launch
-            try {
-                val res = c.backend.putPlaylistIndex(playlistId, index.gzipBody().toRequestBody(JSON_MEDIA))
-                if (res.isSuccessful) {
-                    profile.setIndexHash(playlistId, index.hash)
-                    Log.i(TAG, "Índice de canais enviado: ${content.channels.size} canais")
-                } else {
-                    Log.w(TAG, "Índice de canais: HTTP ${res.code()}")
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Índice de canais: ${e.message}")
-            }
-        }
-    }
-
-    /**
      * Passa a usar [config]: a conta (utilizador, nome desta TV) e o perfil. O mesmo ao arrancar e ao reler a conta
      * ([keepSettingsIfMissing], ver ProfileStore.applyConfig); com o bloqueio mudado, o ecrã inicial atualiza-se.
      */
@@ -619,32 +594,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun loadPlaylist(playlist: Playlist, resume: Boolean) {
         retryAction = { loadJob = viewModelScope.launch { loadPlaylist(playlist, resume) } }
-        c.cache.loadPlaylist(playlist)?.let { cached ->
+        lists.cached(playlist)?.let { cached ->
             showContent(cached, resume)
-            maybeRefreshPlaylist(cached)
+            lists.maybeRefresh(cached)
             return
         }
         _screen.value = Screen.Loading(I18n.s.loadingPlaylist(playlist.name))
         val loaded = try {
-            c.loadPlaylist(playlist)
+            lists.download(playlist)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _screen.value = Screen.Loading("", explainPlaylistError(I18n.s, playlist.name, e))
             return
         }
-        c.cache.savePlaylist(loaded)
-        refreshes.markChecked(RefreshTracker.Slot.PLAYLIST, playlist.id)
         showContent(loaded, resume)
-    }
-
-    /** Volta a descarregar os canais por trás se o intervalo das definições já passou. */
-    private fun maybeRefreshPlaylist(content: PlaylistContent) {
-        val id = content.playlist.id
-        if (!refreshes.isDue(RefreshTracker.Slot.PLAYLIST, id, prefs.value.playlistRefreshHours, content.fetchedAt)) return
-        if (refreshJob?.isActive == true) return
-        refreshes.attempted(RefreshTracker.Slot.PLAYLIST, id)
-        refreshPlaylistInBackground(content.playlist)
     }
 
     /** Guia XMLTV extra de [playlistId] ([url] vazio ou null tira-o); na lista em uso, descarrega-se já. */
@@ -652,7 +616,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val clean = url?.trim()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         val current = prefs.value.extraEpg
         setPref(Prefs.Key.EXTRA_EPG, if (clean == null) current - playlistId else current + (playlistId to clean))
-        _content.value?.takeIf { it.playlist.id == playlistId }?.let { guide.openExtra(it, force = true) }
+        content.value?.takeIf { it.playlist.id == playlistId }?.let { guide.openExtra(it, force = true) }
     }
 
     /** A app voltou ao primeiro plano: conta como "abrir a app" para as atualizações. */
@@ -663,9 +627,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         refreshes.clearChecked()
         guide.forgetMappings() // as associações podem ter mudado noutra TV
-        val content = _content.value ?: return
+        val content = content.value ?: return
         if (loadJob?.isActive == true) return
-        maybeRefreshPlaylist(content)
+        lists.maybeRefresh(content)
         guide.open(content)
     }
 
@@ -681,8 +645,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         guide.clearShort()
         guide.open(loaded)
-        _content.value = loaded
-        uploadIndex(loaded)
+        lists.show(loaded)
         playback.clearForNewContent()
         if (loaded.channels.isEmpty()) {
             _screen.value = Screen.Loading("", I18n.s.errPlaylistEmpty(playlist.name))
@@ -722,29 +685,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         play(first, SpecialCategory.ALL)
     }
 
-    /** Volta a descarregar [playlist] sem interromper o que está a tocar, e troca os canais. */
-    private fun refreshPlaylistInBackground(playlist: Playlist, notify: Boolean = false) {
-        refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            val fresh = try {
-                c.loadPlaylist(playlist)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (notify) showToast(I18n.s.playlistLoadFailed(playlist.name, e.message ?: e.javaClass.simpleName))
-                return@launch
-            }
-            if (_content.value?.playlist != playlist || fresh.channels.isEmpty()) return@launch
-            c.cache.savePlaylist(fresh)
-            val guideChanged = fresh.guideUrl != _content.value?.guideUrl
-            _content.value = fresh
-            uploadIndex(fresh)
-            if (guideChanged) guide.open(fresh)
-            playback.onContentRefreshed(fresh)
-            if (notify) showToast(I18n.s.playlistUpdated)
-        }
-    }
-
     // ---- Listas ----------------------------------------------------------------------------
     // Com conta, as listas são da conta (iguais em todas as TVs): gerem-se no site (recomendado) ou aqui.
     // Sem conta, gerem-se aqui e ficam nesta TV.
@@ -775,7 +715,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Lê as listas da conta (uma editada em uso recarrega com os dados novos; ver syncConfig).
         syncConfig()
         when {
-            _content.value == null -> {
+            content.value == null -> {
                 profile.setLastPlaylist(playlist.id)
                 startLoading(resume = false)
             }
@@ -803,7 +743,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return playlistError(e)
         }
         c.cache.removePlaylist(playlist.id)
-        secondContents.remove(playlist.id)
+        lists.forget(playlist.id)
         syncConfig()
         // Era a última: mostra o aviso de conta sem listas (com o botão para adicionar).
         if (playlists.value.isEmpty()) {
@@ -852,7 +792,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun saveLocalPlaylist(id: String?, form: PlaylistForm) {
         val playlist = form.toPlaylist(id ?: newLocalId())
-        val first = !_local.value || _content.value == null
+        val first = !_local.value || content.value == null
         if (first) _screen.value = Screen.Loading(I18n.s.loadingPlaylist(playlist.name))
         viewModelScope.launch {
             if (!_local.value || profile.lastConfig == null) {
@@ -868,7 +808,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 // A lista nova passa a ser a que se vê; a editada em uso recarrega com os dados novos.
                 id == null -> switchPlaylist(playlist)
-                id == _content.value?.playlist?.id -> switchPlaylist(playlist, force = true)
+                id == content.value?.playlist?.id -> switchPlaylist(playlist, force = true)
             }
         }
     }
@@ -879,14 +819,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun deleteLocalPlaylist(playlist: Playlist) {
         val remaining = profile.removeLocalPlaylist(playlist.id)
-        secondContents.remove(playlist.id)
+        lists.forget(playlist.id)
         viewModelScope.launch { c.cache.removePlaylist(playlist.id) }
         when {
             remaining.isEmpty() -> {
                 resetState(Reset.PLAYLISTS)
                 _screen.value = Screen.Welcome
             }
-            playlist.id == _content.value?.playlist?.id -> switchPlaylist(remaining.first())
+            playlist.id == content.value?.playlist?.id -> switchPlaylist(remaining.first())
             playback.second.value?.content?.playlist?.id == playlist.id -> playback.closeSecond()
         }
     }
@@ -896,8 +836,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Volta a descarregar a lista atual (ex.: o fornecedor mudou canais). */
     fun reloadPlaylist() {
-        val playlist = _content.value?.playlist ?: return
-        refreshPlaylistInBackground(playlist, notify = true)
+        val playlist = content.value?.playlist ?: return
+        lists.refreshInBackground(playlist, notify = true)
     }
 
     /** true uma única vez depois de carregar sem canal para retomar. */
@@ -908,7 +848,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Chamado ao voltar à app e ao abrir as Definições, para apanhar listas novas do site.
      */
     fun refreshConfig() {
-        if (_local.value || _content.value == null || loadJob?.isActive == true) return
+        if (_local.value || content.value == null || loadJob?.isActive == true) return
         viewModelScope.launch { syncConfig() }
     }
 
@@ -927,7 +867,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (generation != sessionGeneration) return
         applyAccountConfig(config, keepSettingsIfMissing = true)
         val playlists = profile.playlists.value
-        val current = _content.value?.playlist ?: return
+        val current = content.value?.playlist ?: return
         val updated = playlists.firstOrNull { it.id == current.id }
         when {
             // A lista atual foi apagada no site: abre outra.
@@ -940,7 +880,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun switchPlaylist(playlist: Playlist, force: Boolean = false) {
-        if (!force && playlist.id == _content.value?.playlist?.id) {
+        if (!force && playlist.id == content.value?.playlist?.id) {
             if (_screen.value == Screen.Settings) closeSettings()
             return
         }
@@ -952,7 +892,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Canais e grupos ---------------------------------------------------------------------------
 
     /** O que se vê da lista aberta neste momento (ver ChannelCatalog). */
-    private fun catalog() = catalogFor(_content.value)
+    private fun catalog() = catalogFor(content.value)
 
     /** O mesmo para outra lista (a do segundo canal): as definições, favoritos e desbloqueios são os mesmos. */
     private fun catalogFor(content: PlaylistContent?) = ChannelCatalog(content, prefs.value, favorites.value, recents.value, _unlocked.value)
@@ -974,7 +914,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun orderedChannels(groupId: String, includeHidden: Boolean): List<Channel> = catalog().orderedChannels(groupId, includeHidden)
 
     fun setChannelHidden(channel: Channel, hidden: Boolean) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val key = "$playlistId:${channel.key}"
         val current = prefs.value.hiddenChannels
         setPref(Prefs.Key.HIDDEN_CHANNELS, (if (hidden) current + key else current - key).toList())
@@ -1000,7 +940,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Os grupos voltam à ordem da lista. */
     fun resetGroupOrder() {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         if (playlistId !in prefs.value.groupOrder) return
         setPref(Prefs.Key.GROUP_ORDER, prefs.value.groupOrder - playlistId)
     }
@@ -1014,7 +954,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun guideGroups(): List<Category> = catalog().guideGroups(groupNames())
 
     fun setGroupHidden(groupId: String, hidden: Boolean) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val key = "$playlistId:$groupId"
         val current = prefs.value.hiddenGroups
         setPref(Prefs.Key.HIDDEN_GROUPS, (if (hidden) current + key else current - key).toList())
@@ -1022,7 +962,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Move um grupo [delta] posições (−1 = para cima). */
     fun moveGroup(groupId: String, delta: Int) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val ids = orderedGroups(includeHidden = true).map { it.id }.toMutableList()
         val from = ids.indexOf(groupId)
         val to = (from + delta).coerceIn(0, ids.lastIndex)
@@ -1038,7 +978,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Confere o PIN; se estiver certo, desbloqueia [groupId] até a app fechar. */
     fun unlockGroup(groupId: String, pin: String): Boolean {
         if (prefs.value.pinHash == null || !checkPin(pin)) return false
-        val playlistId = _content.value?.playlist?.id ?: return true
+        val playlistId = content.value?.playlist?.id ?: return true
         _unlocked.value = _unlocked.value + "$playlistId:$groupId"
         return true
     }
@@ -1079,7 +1019,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleGroupLock(groupId: String) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val key = "$playlistId:$groupId"
         val current = prefs.value.lockedGroups
         setPref(Prefs.Key.LOCKED_GROUPS, (if (key in current) current - key else current + key).toList())
@@ -1093,14 +1033,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Adiciona/remove dos favoritos e grava logo na conta. */
     fun toggleFavorite(channel: Channel) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val added = profile.toggleFavorite(playlistId, channel.key)
         showToast(if (added) I18n.s.favoriteAdded(channel.name) else I18n.s.favoriteRemoved(channel.name))
     }
 
     /** Move um favorito [delta] posições (−1 = para cima). */
     fun moveFavorite(channel: Channel, delta: Int) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         profile.moveFavorite(playlistId, channel.key, delta)
     }
 
@@ -1109,7 +1049,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun cachedEpg(channel: Channel): List<EpgEntry> = guide.cachedEpg(channel)
 
     suspend fun xtreamConnections(): Pair<Int, Int>? {
-        val content = _content.value ?: return null
+        val content = content.value ?: return null
         if (!content.playlist.type.kind.knowsConnectionLimit) return null
         return c.xtream.connections(content.playlist)
     }
@@ -1133,12 +1073,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Logótipo escolhido para [channel] na lista em uso: um URL, "" para o da lista, ou null para seguir a origem geral. */
     fun channelLogoChoice(channel: Channel): String? {
-        val playlistId = _content.value?.playlist?.id ?: return null
+        val playlistId = content.value?.playlist?.id ?: return null
         return prefs.value.channelLogos["$playlistId:${channel.key}"]
     }
 
     fun setChannelLogo(channel: Channel, url: String?) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val key = "$playlistId:${channel.key}"
         val current = prefs.value.channelLogos
         setPref(Prefs.Key.CHANNEL_LOGOS, if (url == null) current - key else current + (key to url))
@@ -1182,7 +1122,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * aberta (a app está a arrancar, ou o canal é de outra lista), fica pendente até carregar.
      */
     fun openLink(playlistId: String, channelKey: String) {
-        val content = _content.value
+        val content = content.value
         if (content != null && content.playlist.id == playlistId && loadJob?.isActive != true) {
             val channel = content.byKey[channelKey]
             when {
@@ -1201,11 +1141,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- GoatRemote (o comando no telemóvel, ver PhoneChannels) -------------------------------
 
     /** Há canais para o telemóvel: a lista está aberta (no player ou nas Definições), não a carregar nem na ativação. */
-    fun phoneReady(): Boolean = _content.value != null && (_screen.value == Screen.Player || _screen.value == Screen.Settings)
+    fun phoneReady(): Boolean = content.value != null && (_screen.value == Screen.Player || _screen.value == Screen.Settings)
 
     /** Os grupos e canais como o ecrã os mostra, sem os escondidos nem os bloqueados nas definições (mesmo desbloqueados). */
     internal fun phoneChannelList(): PhoneChannelList? {
-        val content = _content.value?.takeIf { phoneReady() } ?: return null
+        val content = content.value?.takeIf { phoneReady() } ?: return null
         val others = I18n.s.others
         val catalog = catalog()
         val groups = catalog.orderedGroups(includeHidden = false)
@@ -1224,7 +1164,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** O canal [key] da lista aberta, se o telemóvel o puder ver e abrir (nunca pede o PIN). */
     fun phoneChannel(key: String): Channel? {
-        val content = _content.value?.takeIf { phoneReady() } ?: return null
+        val content = content.value?.takeIf { phoneReady() } ?: return null
         return content.byKey[key]?.takeIf { catalog().isVisible(it, Audience.PERSISTENT) }
     }
 
@@ -1256,7 +1196,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * fechar, por isso conta o bloqueio tal como está nas definições, mesmo que esteja desbloqueado nesta sessão.
      */
     private fun publishHome(locksChanged: Boolean = false) {
-        val content = _content.value ?: return
+        val content = content.value ?: return
         val items = catalog().channelsOf(SpecialCategory.RECENT, Audience.PERSISTENT).take(HOME_ITEMS).map { ch ->
             val now = System.currentTimeMillis()
             // O launcher mostra o mesmo logótipo que a app.
@@ -1293,7 +1233,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * últimas 24 h que ainda se podem ver em catch-up.
      */
     fun search(query: String, withPast: Boolean = false): List<SearchHit> {
-        val content = _content.value ?: return emptyList()
+        val content = content.value ?: return emptyList()
         val q = searchKey(query)
         if (q.length < 2) return emptyList()
         val visible = content.channels.filter(::isVisible)
@@ -1322,7 +1262,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** O servidor ainda guarda [entry] de [channel]? (Xtream com `tv_archive`, dentro dos dias que guarda.) */
     fun canCatchup(channel: Channel, entry: EpgEntry): Boolean {
-        val content = _content.value ?: return false
+        val content = content.value ?: return false
         if (!content.playlist.type.kind.supportsCatchup || channel.archiveDays <= 0) return false
         val now = System.currentTimeMillis()
         return entry.startMs < now - Catchup.MIN_AGE_MS && entry.startMs > now - channel.archiveDays * 86_400_000L
@@ -1349,13 +1289,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun hasReminder(channel: Channel, entry: EpgEntry): Boolean {
-        val playlistId = _content.value?.playlist?.id ?: return false
+        val playlistId = content.value?.playlist?.id ?: return false
         return _reminders.value.any { it.playlistId == playlistId && it.channelKey == channel.key && it.startMs == entry.startMs }
     }
 
     /** Marca/desmarca o lembrete de um programa que ainda vai começar. */
     fun toggleReminder(channel: Channel, entry: EpgEntry) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         val existing = _reminders.value.firstOrNull { it.playlistId == playlistId && it.channelKey == channel.key && it.startMs == entry.startMs }
         _reminders.value = if (existing != null) {
             showToast(I18n.s.reminderRemoved)
@@ -1369,7 +1309,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lembrete a mostrar agora (o programa começa dentro de 1 min, ou começou há pouco). */
     fun dueReminder(now: Long): Reminder? {
-        val playlistId = _content.value?.playlist?.id ?: return null
+        val playlistId = content.value?.playlist?.id ?: return null
         return _reminders.value.firstOrNull {
             it.playlistId == playlistId && it.startMs <= now + REMINDER_AHEAD_MS && it.startMs > now - REMINDER_GRACE_MS
         }
@@ -1380,7 +1320,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _reminders.value = _reminders.value - reminder
         viewModelScope.launch { c.cache.saveReminders(_reminders.value) }
         if (!watch) return
-        val content = _content.value ?: return
+        val content = content.value ?: return
         val channel = content.byKey[reminder.channelKey] ?: return
         if (isGroupLocked(channel.categoryId)) {
             showToast(I18n.s.groupLocked(content.categoryName(channel.categoryId)))
@@ -1398,7 +1338,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun secondAllowed(playlist: Playlist): Boolean {
         // Um MAC é uma box: uma ligação de cada vez.
         if (playlist.type.kind.singleConnection) return false
-        val main = _content.value ?: return true
+        val main = content.value ?: return true
         if (!playlist.sharesConnectionsWith(main.playlist)) return true
         if (!main.playlist.type.kind.knowsConnectionLimit) return true
         val limit = main.account?.maxConnections ?: return false
@@ -1414,13 +1354,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun stalkerCandidates(playlist: Playlist, channel: Channel) = c.stalker.candidates(playlist, channel)
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
-    suspend fun loadForSecond(playlist: Playlist): PlaylistContent {
-        _content.value?.takeIf { it.playlist.id == playlist.id }?.let { return it }
-        secondContents[playlist.id]?.let { return it }
-        val loaded = c.cache.loadPlaylist(playlist) ?: c.loadPlaylist(playlist).also { c.cache.savePlaylist(it) }
-        secondContents[playlist.id] = loaded
-        return loaded
-    }
+    suspend fun loadForSecond(playlist: Playlist): PlaylistContent = lists.loadForSecond(playlist)
 
     /**
      * Grupos de [content] para o segundo canal: os mesmos da lista de grupos (ordem escolhida, Favoritos, Recentes e
@@ -1483,7 +1417,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     "Account: ${if (_local.value) "no" else "yes"} · playlists: ${playlists.joinToString { it.type.kind.wireName }.ifEmpty { "none" }}" +
                     (if (c.testMode) " · test mode" else "")
                 val secrets = playlists.flatMap { it.secrets() } +
-                    (playlists.flatMap { listOfNotNull(it.server, it.url, it.epgUrl) } + listOfNotNull(_content.value?.guideUrl)).mapNotNull(BugReport::hostOf) +
+                    (playlists.flatMap { listOfNotNull(it.server, it.url, it.epgUrl) } + listOfNotNull(content.value?.guideUrl)).mapNotNull(BugReport::hostOf) +
                     listOfNotNull(c.token, _email.value)
                 val log = kotlinx.coroutines.withContext(Dispatchers.IO) { BugReport.collect(getApplication(), header, secrets) }
                 val body = JsonObject().apply {
@@ -1551,12 +1485,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** O fallback encontrou um formato que funciona: fica guardado na conta. */
     fun onFormatWorked(format: String) {
-        if (_content.value?.playlist?.type?.kind?.remembersFormat != true) return
+        if (content.value?.playlist?.type?.kind?.remembersFormat != true) return
         if (format != streamFormat.value) setStreamFormat(format)
     }
 
     private fun scheduleSaveLast(channel: Channel) {
-        val playlistId = _content.value?.playlist?.id ?: return
+        val playlistId = content.value?.playlist?.id ?: return
         saveLastJob?.cancel()
         pendingLast = playlistId to channel.key
         saveLastJob = viewModelScope.launch {
@@ -1597,7 +1531,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun closeSettings() {
         settingsStartAtNewPlaylist = false
         when {
-            _content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
+            content.value != null && playback.playing.value != null -> _screen.value = Screen.Player
             // Sem conta e sem listas (ex.: Voltar no formulário da primeira lista).
             c.token == null && playlists.value.isEmpty() -> _screen.value = Screen.Welcome
             else -> startLoading(resume = false)
@@ -1653,8 +1587,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         cancelBackgroundJobs()
         pendingLast = null
         playback.reset()
-        secondContents.clear()
-        _content.value = null
+        lists.close()
         guide.reset()
         viewModelScope.launch { c.home.clear() }
         if (scope == Reset.PLAYLISTS) return
@@ -1677,9 +1610,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun cancelBackgroundJobs() {
         loadJob?.cancel()
-        refreshJob?.cancel()
+        lists.cancelJobs()
         saveLastJob?.cancel()
-        indexJob?.cancel()
     }
 
     // ---- Avisos e gravação na conta --------------------------------------------------------
@@ -1698,7 +1630,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val TAG = "GoatTV"
-        val JSON_MEDIA = "application/json".toMediaType()
         const val UPDATE_FIRST_CHECK_MS = 20_000L
         const val UPDATE_INTERVAL_MS = 12 * 3600_000L
         /** Canais na linha da GoatTV no ecrã inicial. */
