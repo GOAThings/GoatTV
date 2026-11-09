@@ -60,6 +60,17 @@ final class AppModel {
     private(set) var zapCount = 0
 
     let player = PlayerEngine()
+    /// As gravações (só com a app aberta: ver RecordingManager).
+    let recordings = RecordingManager()
+    /// Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta do cartão
+    /// "Estás a gravar X" (o fornecedor só deixa uma ligação).
+    struct SwitchPrompt: Identifiable {
+        let id = UUID()
+        let title: String
+        let action: () -> Void
+    }
+
+    private(set) var switchPrompt: SwitchPrompt?
     /// O leitor do segundo canal (imagem na imagem ou ecrã dividido).
     let secondPlayer = PlayerEngine()
 
@@ -166,6 +177,7 @@ final class AppModel {
         // Os nomes das línguas (para ler as faixas) montam-se uma vez, fora do ecrã: o primeiro canal já os encontra prontos.
         Task.detached(priority: .utility) { _ = Languages.code("English") }
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
+        wireRecordings()
         // Pausar o direto: guarda-se só o programa que se está a ver.
         player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
         player.onFormatWorked = { [weak self] format in self?.formatWorked(format) }
@@ -175,7 +187,12 @@ final class AppModel {
         }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in
-            guard let self, self.catchup != nil else { return false }
+            guard let self, let cu = self.catchup else { return false }
+            // Uma gravação do disco que chegou ao fim (ou que deixou de se ler): volta ao direto.
+            if cu.recording != nil {
+                self.exitCatchup()
+                return true
+            }
             let position = self.catchupPosition
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(Double(max(1, self?.prefs.reconnectSeconds ?? 5))))
@@ -568,6 +585,8 @@ final class AppModel {
             engine.hdr = prefs.hdr
         }
         secondPlayer.controlsDisplay = false
+        secondPlayer.ownsProviderConnection = false
+        recordings.setPadding(before: prefs.recordPaddingBeforeMin, after: prefs.recordPaddingAfterMin)
         // O segundo canal só escolhe o áudio (como no Android).
         secondPlayer.subtitlesByLanguage = false
         player.afrFallback = prefs.afrFallback
@@ -897,6 +916,12 @@ final class AppModel {
 
     func switchPlaylist(_ playlist: Playlist) {
         guard playlist.id != content?.playlist.id else { return }
+        // Outra lista abre outro canal: com uma gravação a decorrer, pergunta primeiro.
+        if guardRecording(nil, { [weak self] in self?.switchPlaylistNow(playlist) }) { return }
+        switchPlaylistNow(playlist)
+    }
+
+    private func switchPlaylistNow(_ playlist: Playlist) {
         settings["last_playlist"] = .string(playlist.id)
         session.lastPlaylist = playlist.id
         saveSettings()
@@ -1006,8 +1031,12 @@ final class AppModel {
     // MARK: Canais
 
     /// Com [opening] a false, só muda de canal: quem chama abre logo outro stream (ex.: catch-up).
-    func play(_ channel: Channel, from group: String? = nil, remember: Bool = true, opening: Bool = true) {
+    /// [force]: já se respondeu ao cartão da gravação (ou não é preciso perguntar).
+    func play(_ channel: Channel, from group: String? = nil, remember: Bool = true, opening: Bool = true, force: Bool = false) {
         guard let content else { return }
+        if opening, !force, guardRecording(channel, { [weak self] in
+            self?.play(channel, from: group, remember: remember, opening: opening, force: true)
+        }) { return }
         if let group { groupId = group }
         catchup = nil
         playbackError = nil
@@ -1024,6 +1053,7 @@ final class AppModel {
                                               allowedFormats: content.account?.allowedFormats ?? [])
             let stalker = loader.stalker
             let playlist = content.playlist
+            defer { updateWatching() }
             player.play(candidates, channelKey: channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,
                         referrer: channel.referrer, pausable: true,
                         linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
@@ -1099,17 +1129,28 @@ final class AppModel {
 
     /// Vê [entry] em catch-up, desde o início (ou desde [positionMs]).
     func playCatchup(_ channel: Channel, _ entry: EpgEntry, positionMs: Int64 = 0) {
+        // O catch-up do servidor usa a ligação: com uma gravação a decorrer, pergunta primeiro.
+        if guardRecording(nil, { [weak self] in self?.playCatchup(channel, entry, positionMs: positionMs) }) { return }
         let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
         if current?.key != channel.key {
             // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
             let opens = content.map { $0.playlist.type == .stalker } == true || content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone,
                                                             correctionMin: prefs.catchupOffsetMin) } != nil
-            play(channel, from: groupFor(channel), opening: !opens)
+            play(channel, from: groupFor(channel), opening: !opens, force: true)
         }
         startCatchup(cu)
     }
 
     private func startCatchup(_ cu: Catchup) {
+        defer { updateWatching() }
+        if let file = cu.recording {
+            // Uma gravação do disco: o ficheiro, já no ponto pedido (sem ligação ao fornecedor).
+            catchup = cu
+            catchupBase = cu.startMs
+            player.play([StreamCandidate(url: file, format: StreamFormat.ts)], channelKey: cu.channel.key, live: false, userAgent: nil,
+                        referrer: nil, startMs: cu.positionMs)
+            return
+        }
         if content?.playlist.type == .stalker { return startStalkerCatchup(cu) }
         guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone,
                                                          correctionMin: prefs.catchupOffsetMin) else { return }
@@ -1166,6 +1207,8 @@ final class AppModel {
     /// [positionMs] já passa do que o servidor tem: o salto volta ao direto.
     func catchupGoesLive(_ positionMs: Int64) -> Bool {
         guard let catchup else { return false }
+        // Uma gravação acaba no fim do ficheiro.
+        if catchup.recording != nil { return positionMs >= catchup.durationMs }
         return positionMs >= nowMs() - catchup.startMs - Catchup.minAgeMs || positionMs >= catchup.durationMs
     }
 
@@ -1173,6 +1216,8 @@ final class AppModel {
     /// seguinte, senão ficava no mesmo sítio; a recuar, para o início desse minuto.
     func catchupLanding(_ positionMs: Int64) -> Int64 {
         guard let catchup else { return positionMs }
+        // Num ficheiro do disco salta-se para onde se pediu (não há minutos certos).
+        if catchup.recording != nil { return max(0, positionMs) }
         let target = max(0, positionMs)
         let extra = (catchup.startMs + target) % 60_000
         return max(0, target > catchupPosition ? target + (60_000 - extra) % 60_000 : target - extra)
@@ -1180,8 +1225,12 @@ final class AppModel {
 
     func exitCatchup() {
         guard catchup != nil, let current else { return }
+        let wasRecording = catchup?.recording != nil
         catchup = nil
-        play(current, remember: false)
+        updateWatching()
+        // Voltar ao direto depois de ver uma gravação do disco precisa da ligação: com uma gravação de outro canal a
+        // decorrer, pergunta (e, ficando, continua no direto sem abrir nada).
+        play(current, remember: false, force: !wasRecording)
     }
 
     // MARK: Lembretes
@@ -1906,6 +1955,8 @@ final class AppModel {
         if let main { mainGuide = main }
         if let extra { extraGuide = extra }
         guideVersion += 1
+        // As séries marcam os programas novos que o guia vai trazendo.
+        recordings.expandSeries { [weak self] rule, entry in self?.seriesInstance(rule, entry) }
     }
 
     /// Canal Xtream sem guia: pede os próximos programas ao servidor.
@@ -1937,6 +1988,15 @@ final class AppModel {
     /// A app vai para segundo plano: guarda o canal, para o vídeo (liberta a ligação Xtream), fecha o segundo canal
     /// e devolve a TV ao modo normal.
     func didEnterBackground() {
+        // O sistema não deixa gravar em segundo plano: as gravações param aqui (com uns segundos para fechar os ficheiros).
+        if !recordings.active.isEmpty {
+            let task = UIApplication.shared.beginBackgroundTask(withName: "recordings")
+            Task { @MainActor in
+                for _ in 0..<40 where !self.recordings.active.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+                UIApplication.shared.endBackgroundTask(task)
+            }
+        }
+        recordings.appEnded()
         updateTopShelf()
         flushWatched()
         closeSecond()
@@ -1948,6 +2008,7 @@ final class AppModel {
 
     /// De volta à app: o canal (ou o catch-up) volta a dar.
     func didBecomeActive() {
+        recordings.appActive()
         checkForUpdate()
         guard backgrounded else { return }
         backgrounded = false
@@ -2162,3 +2223,247 @@ extension AppModel {
     }
 }
 #endif
+
+// MARK: Gravações
+
+/// O que a app diz às gravações (o canal a ver, o guia das séries) e o que o ecrã lhes pede: gravar agora, marcar no
+/// guia, ver, parar, apagar; e o cartão que pergunta antes de largar a ligação de uma gravação.
+@MainActor
+extension AppModel {
+    fileprivate func wireRecordings() {
+        let warnedKey = "recordings.warned"
+        recordings.onEvent = { [weak self] event in
+            guard let self else { return }
+            let s = self.strings
+            switch event {
+            case .started(let info):
+                #if os(tvOS)
+                // A primeira vez: o tvOS pode apagar a cache (onde ficam as gravações) com pouco espaço.
+                if !UserDefaults.standard.bool(forKey: warnedKey) {
+                    UserDefaults.standard.set(true, forKey: warnedKey)
+                    self.showToast(s.r("recording_now", info.title) + " · " + Self.cacheWarning(s))
+                    return
+                }
+                #endif
+                self.showToast(s.r("recording_now", info.title))
+            case .finished(let info):
+                if info.reason == RecordingReason.appEnded { return }
+                if info.state == RecordingState.done || info.reason == RecordingReason.user {
+                    self.showToast(s.r("recording_saved", info.title))
+                } else if info.reason == RecordingReason.lowSpace {
+                    self.showToast(s.r("recording_stopped_space"))
+                } else if info.state != RecordingState.failed || info.reason == RecordingReason.connection {
+                    self.showToast(s.r("recording_stopped_connection"))
+                }
+            case .skipped(let r, let reason):
+                switch reason {
+                case RecordingPlan.skipUser: break
+                case RecordingPlan.skipHls: self.showToast(s.r("recording_hls_only"))
+                case RecordingPlan.skipSpace: self.showToast(s.r("recording_no_space"))
+                default: self.showToast(s.r("recording_skipped", r.title))
+                }
+            }
+        }
+        // Uma marcada noutro canal: ninguém disse que não, ou disse que sim; muda-se (também de lista, se for de outra).
+        recordings.onSwitch = { [weak self] r in self?.openChannel(playlistId: r.playlistId, key: r.channelKey) }
+        recordings.guide = { [weak self] playlistId, key in
+            guard let self, let content = self.content, content.playlist.id == playlistId, let channel = content.byKey[key] else { return nil }
+            return self.programmes(for: channel)
+        }
+        recordings.beforeOwnFeed = { [weak self] in self?.player.releaseForRecording() }
+        recordings.afterOwnFeed = { [weak self] in self?.player.reopenAfterRecording() }
+    }
+
+    /// O aviso do Apple TV: as gravações ficam na cache, que o tvOS pode limpar.
+    static func cacheWarning(_ s: Strings) -> String {
+        s.t("tvOS may delete recordings when the Apple TV runs low on space.",
+            "O tvOS pode apagar as gravações quando a Apple TV ficar com pouco espaço.")
+    }
+
+    /// Só se grava com a app aberta.
+    static func openAppWarning(_ s: Strings) -> String {
+        s.t("Recording only runs while GoatTV is open.", "Só se grava com o GoatTV aberto.")
+    }
+
+    /// Diz às gravações o que o leitor está a ver (uma gravação do disco não usa a ligação: é como não ver nada).
+    func updateWatching() {
+        guard let content, let current, catchup?.recording == nil else {
+            recordings.watching = nil
+            return
+        }
+        recordings.watching = RecordingPlan.Watching(content.playlist.id, current.key, live: catchup == nil)
+    }
+
+    /// Abre o canal [key] da lista [playlistId] (outra lista: muda primeiro).
+    func openChannel(playlistId: String, key: String) {
+        if let content, content.playlist.id == playlistId {
+            if let channel = content.byKey[key] { play(channel, from: groupFor(channel), force: true) }
+            return
+        }
+        pendingOpen = (playlistId, key)
+        if let playlist = playlists.first(where: { $0.id == playlistId }) { switchPlaylistNow(playlist) }
+    }
+
+    /// [action] precisa da ligação ao fornecedor para outra coisa ([channel] em direto, ou nil: um catch-up do
+    /// servidor, outra lista). Com uma gravação de outra coisa a decorrer, pergunta primeiro e devolve true.
+    fileprivate func guardRecording(_ channel: Channel?, _ action: @escaping () -> Void) -> Bool {
+        let active = recordings.active
+        guard let first = active.first else { return false }
+        let id = content?.playlist.id
+        if let channel, active.allSatisfy({ $0.playlistId == id && $0.channelKey == channel.key }) { return false }
+        switchPrompt = SwitchPrompt(title: first.title, action: action)
+        return true
+    }
+
+    /// A resposta ao cartão: parar a gravação e fazer o que se pediu, ou ficar a gravar ([stop] false).
+    func answerSwitch(stop: Bool) {
+        guard let p = switchPrompt else { return }
+        switchPrompt = nil
+        guard stop else { return }
+        recordings.stopAll()
+        p.action()
+    }
+
+    /// A resposta ao aviso de uma marcada ("Mudar para X para gravar" ou "Não gravar").
+    func answerRecordingPrompt(_ id: String, switchChannel: Bool) {
+        recordings.answer(id, switchChannel: switchChannel)
+    }
+
+    /// A gravação a decorrer de [channel] (da lista aberta).
+    func recordingOf(_ channel: Channel) -> RecordingInfo? {
+        recordings.activeFor(content?.playlist.id, channel.key)
+    }
+
+    private func logoString(_ channel: Channel) -> String? { logo(for: channel)?.absoluteString ?? channel.logo }
+
+    /// "Gravar" no leitor: o programa a dar, desde o início que o anel da pausa do direto ainda tem.
+    func recordNow(_ channel: Channel) {
+        let s = strings
+        guard catchup == nil, channel.key == current?.key, let feed = player.timeshift.feed else {
+            return showToast(s.r("recording_not_recordable"))
+        }
+        let p = nowNext(for: channel).now
+        let meta = RecordingManager.Meta(playlistId: content?.playlist.id, channelKey: channel.key, channelName: channel.name,
+                                         logo: logoString(channel), title: p?.title ?? channel.name, programmeStartMs: p?.startMs,
+                                         programmeEndMs: p?.endMs)
+        switch recordings.recordNow(feed: feed, meta: meta) {
+        case nil: break
+        case .noSpace?: showToast(s.r("recording_no_space"))
+        case .otherChannel?: showToast(s.r("recording_other_channel"))
+        case .already?: showToast(s.r("recording_now", p?.title ?? channel.name))
+        case .notRecordable?: showToast(s.r("recording_not_recordable"))
+        }
+    }
+
+    /// "Parar a gravação" de [channel].
+    func stopRecording(_ channel: Channel) {
+        if let info = recordingOf(channel) { recordings.stop(info.id) }
+    }
+
+    func stopRecording(id: String) { recordings.stop(id) }
+
+    func deleteRecording(_ id: String) {
+        // A ver esta gravação: sai dela primeiro (volta ao direto do canal a dar).
+        if catchup?.recording == recordings.files.videoFile(id).absoluteString { exitCatchup() }
+        recordings.delete(id)
+        showToast(strings.r("recording_deleted"))
+    }
+
+    func cancelScheduled(_ id: String) {
+        recordings.cancel(id)
+        showToast(strings.r("recording_cancelled"))
+    }
+
+    func cancelSeries(_ seriesId: String) {
+        recordings.cancelSeries(seriesId)
+        showToast(strings.r("recording_cancelled"))
+    }
+
+    /// Como está marcado um programa no guia.
+    enum RecordMark { case unmarked, one, series }
+
+    func recordMark(_ channel: Channel, _ entry: EpgEntry) -> RecordMark {
+        guard let id = content?.playlist.id else { return .unmarked }
+        if recordings.seriesFor(id, channel.key, entry.title) != nil { return .series }
+        if recordings.scheduledFor(id, channel.key, entry.startMs) != nil { return .one }
+        // O programa a gravar agora também conta como marcado.
+        if let active = recordingOf(channel), active.programmeStartMs == entry.startMs { return .one }
+        return .unmarked
+    }
+
+    /// A marcada de [entry] em [channel] (com as tentativas do canal e o User-Agent).
+    private func scheduledRecording(_ channel: Channel, _ entry: EpgEntry, seriesId: String? = nil) -> ScheduledRecording? {
+        guard let content else { return nil }
+        let playlist = content.playlist
+        // O Stalker dá o link na hora (e caduca): não dá para guardar para depois.
+        guard playlist.type != .stalker else { return nil }
+        let candidates = streamCandidates(playlist: playlist, channel: channel, preferred: prefs.streamFormat,
+                                          allowedFormats: content.account?.allowedFormats ?? [])
+        let agent = SafeInput.stripControl(channel.userAgent ?? prefs.userAgent)
+        return ScheduledRecording(id: "s-\(entry.startMs)-" + UUID().uuidString.prefix(6).lowercased(), playlistId: playlist.id,
+                                  channelKey: channel.key, channelName: channel.name, logo: logoString(channel), title: entry.title,
+                                  startMs: entry.startMs, endMs: entry.endMs, candidates: candidates,
+                                  userAgent: agent.isEmpty ? iptvUserAgent : agent, referrer: channel.referrer, seriesId: seriesId)
+    }
+
+    fileprivate func seriesInstance(_ rule: SeriesRule, _ entry: EpgEntry) -> ScheduledRecording? {
+        guard let content, content.playlist.id == rule.playlistId, let channel = content.byKey[rule.channelKey] else { return nil }
+        return scheduledRecording(channel, entry, seriesId: rule.id)
+    }
+
+    /// Gravar [entry] de [channel]: o programa a dar no canal a ver grava-se já (do anel); os outros ficam marcados.
+    func recordProgramme(_ channel: Channel, _ entry: EpgEntry) {
+        let s = strings
+        let now = nowMs()
+        guard entry.endMs > now else { return }
+        if entry.startMs <= now, current?.key == channel.key, catchup == nil { return recordNow(channel) }
+        guard let r = scheduledRecording(channel, entry) else { return showToast(s.r("recording_not_recordable")) }
+        guard r.url != nil else { return showToast(s.r("recording_hls_only")) }
+        let overlap = recordings.add(r)
+        showToast(overlap.first.map { s.r("recording_overlap", $0.title) } ?? s.r("recording_scheduled", entry.title))
+    }
+
+    /// "Gravar a série": este programa (se ainda não grava) e os seguintes com o mesmo título neste canal.
+    func recordSeries(_ channel: Channel, _ entry: EpgEntry) {
+        guard let id = content?.playlist.id else { return }
+        let rule = SeriesRule(id: "series-" + UUID().uuidString.prefix(8).lowercased(), playlistId: id, channelKey: channel.key,
+                              channelName: channel.name, logo: logoString(channel), title: entry.title)
+        var first = recordings.scheduledFor(id, channel.key, entry.startMs) ?? (entry.startMs > nowMs() ? scheduledRecording(channel, entry) : nil)
+        first?.seriesId = rule.id
+        recordings.addSeries(rule, first: first) { [weak self] rule, entry in self?.seriesInstance(rule, entry) }
+        showToast(strings.r("recording_series_scheduled", entry.title))
+    }
+
+    /// Desmarca o programa (e a série dele).
+    func cancelRecordMark(_ channel: Channel, _ entry: EpgEntry) {
+        guard let id = content?.playlist.id else { return }
+        if let rule = recordings.seriesFor(id, channel.key, entry.title) { recordings.cancelSeries(rule.id) }
+        if let r = recordings.scheduledFor(id, channel.key, entry.startMs) { recordings.cancel(r.id) }
+        if let active = recordingOf(channel), active.programmeStartMs == entry.startMs { recordings.stop(active.id) }
+        showToast(strings.r("recording_cancelled"))
+    }
+
+    /// O botão de gravar num programa (telemóvel), como a tecla Menu do Android: gravar → gravar a série → desmarcar.
+    func cycleRecording(_ channel: Channel, _ entry: EpgEntry) {
+        switch recordMark(channel, entry) {
+        case .unmarked: recordProgramme(channel, entry)
+        case .one: recordSeries(channel, entry)
+        case .series: cancelRecordMark(channel, entry)
+        }
+    }
+
+    /// Vê uma gravação do disco no leitor (com a barra e os saltos do catch-up; sem ligação ao fornecedor).
+    func playRecording(_ info: RecordingInfo) {
+        let file = recordings.files.videoFile(info.id)
+        guard FileManager.default.fileExists(atPath: file.path), current != nil else { return }
+        let known: Channel? = content.flatMap { c in
+            guard c.playlist.id == info.playlistId, let key = info.channelKey else { return nil }
+            return c.byKey[key]
+        }
+        let channel = known
+            ?? Channel(uid: -1, key: "rec:\(info.id)", num: 0, name: info.channelName, logo: info.logo, categoryId: "")
+        let end = info.recording ? nowMs() : info.fileEndMs
+        startCatchup(Catchup(channel: channel, title: info.title, startMs: info.fileStartMs, endMs: max(end, info.fileStartMs + 1),
+                             recording: file.absoluteString))
+    }
+}

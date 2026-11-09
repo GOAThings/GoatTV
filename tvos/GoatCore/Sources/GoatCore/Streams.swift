@@ -53,13 +53,17 @@ public struct Catchup: Equatable, Sendable {
     public var endMs: Int64
     /// Onde o vídeo começa, em ms desde [startMs] (avançar/recuar = pedir de novo daí).
     public var positionMs: Int64
+    /// Uma gravação do disco (o endereço do ficheiro), vista como um catch-up: a mesma barra e os mesmos saltos, sem
+    /// ligação ao fornecedor. nil num catch-up do servidor.
+    public var recording: String?
 
-    public init(channel: Channel, title: String, startMs: Int64, endMs: Int64, positionMs: Int64 = 0) {
+    public init(channel: Channel, title: String, startMs: Int64, endMs: Int64, positionMs: Int64 = 0, recording: String? = nil) {
         self.channel = channel
         self.title = title
         self.startMs = startMs
         self.endMs = endMs
         self.positionMs = positionMs
+        self.recording = recording
     }
 
     public var durationMs: Int64 { endMs - startMs }
