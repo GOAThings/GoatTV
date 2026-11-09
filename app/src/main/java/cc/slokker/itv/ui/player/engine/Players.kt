@@ -96,7 +96,10 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
     val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(minMs, maxMs, startMs, rebufferMs).build()
     return ExoPlayer.Builder(context, renderers).setLoadControl(loadControl).build().apply {
         playWhenReady = true
-        if (PLAYER_LOGS) addAnalyticsListener(EventLogger())
+        if (PLAYER_LOGS) {
+            addAnalyticsListener(EventLogger())
+            addAnalyticsListener(ZapTrace.listener)
+        }
     }
 }
 

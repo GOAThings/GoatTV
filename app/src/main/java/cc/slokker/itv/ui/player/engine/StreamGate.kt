@@ -65,6 +65,7 @@ internal class StreamGate(
                 blocking = open.filter(blocks)
                 if (blocking.isEmpty()) {
                     if (self != null) open += self
+                    if (self != null) ZapTrace.mark("G", "${clock() - started}ms")
                     if (forced || clock() - started > 0) Log.d(TAG, "Abriu depois de esperar ${clock() - started} ms pela ligação anterior")
                     return
                 }
@@ -101,21 +102,31 @@ internal class StreamGate(
         /** Já se pediu ao [upstream] para fechar (aqui ou por fora): só se fecha uma vez. */
         private var closing = false
 
+        /** Já chegou algum byte (para a marca do primeiro byte, ver [ZapTrace]). */
+        private var readAny = false
+
         override fun addTransferListener(transferListener: TransferListener) = upstream.addTransferListener(transferListener)
 
         override fun open(dataSpec: DataSpec): Long {
             waitFor(this) { other -> other !== this && (other.gen < gen || other.gen == gen && (exclusive || other.exclusive)) }
             synchronized(this) { closing = false }
             return try {
-                upstream.open(dataSpec)
+                upstream.open(dataSpec).also { ZapTrace.mark("H") { dataSpec.uri.lastPathSegment.orEmpty() } }
             } catch (e: Throwable) {
                 // Não abriu: o DefaultHttpDataSource já largou a ligação; não fica a bloquear as seguintes.
+                ZapTrace.mark("H!") { e.toString() }
                 closed(this)
                 throw e
             }
         }
 
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = upstream.read(buffer, offset, length)
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            upstream.read(buffer, offset, length).also {
+                if (it > 0 && !readAny) {
+                    readAny = true
+                    ZapTrace.first("B")
+                }
+            }
 
         override fun getUri(): Uri? = upstream.uri
 

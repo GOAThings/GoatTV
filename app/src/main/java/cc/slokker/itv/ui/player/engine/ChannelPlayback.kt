@@ -178,7 +178,9 @@ internal class ChannelPlayback(
      * tentativas na ordem do formato preferido. Num efeito: espera pela imagem antes de abrir.
      */
     suspend fun tune(request: PlaybackRequest) {
+        ZapTrace.tune(request.channel.name)
         if (ready) freezeCapture?.invoke()?.let { freeze = it }
+        ZapTrace.mark("F")
         this.request = request
         candidates = request.candidates
         net?.reset()
@@ -243,6 +245,7 @@ internal class ChannelPlayback(
         // Pausar o direto: pelo anel (só no ExoPlayer, em direto). Sem ele, o anel (e a ligação dele) fecha antes.
         val ring = policy.timeshift && timeshift != null && prefs.timeshift && req.live && engine.supportsRing
         if (!ring) timeshift?.clear()
+        ZapTrace.mark("O", "${candidate.format} #$index${if (ring) " ring" else ""}")
         engine.open(
             candidate, req.channel,
             OpenOptions(

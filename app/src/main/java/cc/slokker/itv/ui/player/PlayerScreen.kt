@@ -86,6 +86,7 @@ import cc.slokker.itv.ui.player.engine.FREEZE_WIDTH
 import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
+import cc.slokker.itv.ui.player.engine.ZapTrace
 import cc.slokker.itv.ui.player.engine.cannotDecode
 import cc.slokker.itv.ui.player.engine.selectSurroundTrack
 import cc.slokker.itv.ui.player.engine.videoFormat
@@ -658,6 +659,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     }
                     if (e.type != KeyEventType.KeyDown || keysTaken()) return@onKeyEvent false
                     val code = e.key.nativeKeyCode
+                    // Medir o zapping (debug/staging): a hora da própria tecla.
+                    if (code in ZAP_KEYS) ZapTrace.key(e.nativeKeyEvent.eventTime, AndroidKeyEvent.keyCodeToString(code))
                     // Teclas numéricas: escrever o número do canal.
                     digitOf(code)?.let { d ->
                         if (numberEntry.length < 4) numberEntry += d
@@ -1180,6 +1183,12 @@ private const val UPDATE_CARD_SECONDS = 12
 private const val UPDATE_HOLD_MS = 1_500L
 /** Até aqui é um toque no OK (abre a info, como sempre); a partir daqui conta como "manter". */
 private const val UPDATE_TAP_MS = 250L
+
+/** As teclas que mudam de canal (para as marcas do [ZapTrace]). */
+private val ZAP_KEYS = setOf(
+    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_UP,
+    AndroidKeyEvent.KEYCODE_CHANNEL_DOWN, AndroidKeyEvent.KEYCODE_DPAD_RIGHT, AndroidKeyEvent.KEYCODE_LAST_CHANNEL,
+)
 
 private fun isOkKey(code: Int) = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER || code == AndroidKeyEvent.KEYCODE_INFO

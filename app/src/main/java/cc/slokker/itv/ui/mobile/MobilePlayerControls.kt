@@ -92,6 +92,7 @@ import cc.slokker.itv.ui.common.formatDuration
 import cc.slokker.itv.data.at
 import cc.slokker.itv.data.after
 import cc.slokker.itv.data.minutesLeft
+import cc.slokker.itv.ui.player.engine.ZapTrace
 
 @Composable
 internal fun VideoArea(
@@ -192,7 +193,12 @@ internal fun VideoArea(
                 var drag = 0f
                 detectVerticalDragGestures(
                     onDragStart = { drag = 0f },
-                    onDragEnd = { if (kotlin.math.abs(drag) > ZAP_DRAG_PX) vm.zap(if (drag < 0) 1 else -1) },
+                    onDragEnd = {
+                        if (kotlin.math.abs(drag) > ZAP_DRAG_PX) {
+                            ZapTrace.key(what = "swipe")
+                            vm.zap(if (drag < 0) 1 else -1)
+                        }
+                    },
                 ) { _, amount -> drag += amount }
             },
     ) {
