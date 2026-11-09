@@ -622,7 +622,7 @@ public final class RecordingWriter: @unchecked Sendable {
             case .bytes(var n) where n > 0:
                 // O que se leu pode já passar do fim (a escrita chegou lá entre ver o direto e ler): corta-se no ponto.
                 if endOffset == nil, ring.liveMediaMs >= wanted { endOffset = ring.entry(atOrAfter: wanted)?.offset }
-                if let limit = endOffset, pos + Int64(n) > limit { n = Int(max(0, limit - pos)) }
+                if let limit = endOffset, pos + Int64(n) > limit { n = Int(Swift.max(0, limit - pos)) }
                 if n == 0 { continue }
                 do {
                     try file.write(contentsOf: Data(bytes: buffer.baseAddress!, count: n))
