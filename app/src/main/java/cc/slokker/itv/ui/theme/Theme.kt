@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.theme
 
+import cc.slokker.itv.data.Prefs
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.runtime.compositionLocalOf
@@ -62,8 +63,9 @@ data class Accent(val id: String, val start: Color, val end: Color) {
     val brush: Brush get() = Brush.linearGradient(listOf(start, end))
 
     companion object {
+        /** Uma por cada id de [Prefs.Accents.IDS], pela mesma ordem (o ThemeTest confere). */
         val ALL = listOf(
-            Accent("itv", ItvColors.Sky, ItvColors.Indigo),
+            Accent(Prefs.Accents.DEFAULT, ItvColors.Sky, ItvColors.Indigo),
             Accent("violet", Color(0xFFA78BFA), Color(0xFFF472B6)),
             Accent("mint", Color(0xFF34D399), Color(0xFF22D3EE)),
             Accent("sunset", Color(0xFFFB923C), Color(0xFFF43F5E)),

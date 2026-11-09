@@ -41,7 +41,7 @@ data class Prefs(
     val autoStart: Boolean = false,
     val exitConfirm: Boolean = true,
     /** Paleta da cor de destaque (ver Accent). */
-    val accent: String = "itv",
+    val accent: String = Accents.DEFAULT,
     /** Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco). */
     val glassOpacity: Int = 60,
     /** Mostrar "★ Favoritos" e "Todos" na lista de grupos (para todas as listas). */
@@ -161,9 +161,26 @@ data class Prefs(
         const val LOCKED_GROUPS = "locked_groups"
     }
 
-    object Buffer { const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large" }
-    object Decoder { const val HARDWARE = "hw"; const val SOFTWARE = "sw" }
-    object Engine { const val EXO = "exo"; const val VLC = "vlc" }
+    // Os valores que cada opção aceita ficam ao lado dos nomes (ALL): o que não estiver lá volta ao padrão em [from].
+
+    object Buffer {
+        const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large"
+        val ALL = setOf(LIVE, SMALL, NORMAL, LARGE)
+    }
+    object Decoder {
+        const val HARDWARE = "hw"; const val SOFTWARE = "sw"
+        val ALL = setOf(HARDWARE, SOFTWARE)
+    }
+    object Engine {
+        const val EXO = "exo"; const val VLC = "vlc"
+        val ALL = setOf(EXO, VLC)
+    }
+
+    /** As cores de destaque, pela ordem das Definições (as cores de cada uma estão em ui/theme Accent.ALL). */
+    object Accents {
+        const val DEFAULT = "itv"
+        val IDS = listOf(DEFAULT, "violet", "mint", "sunset", "gold", "white")
+    }
 
     /** As cores do contorno do seletor; "accent" segue a cor de destaque (com o gradiente dela). */
     object OutlineColors {
@@ -178,15 +195,37 @@ data class Prefs(
         const val GUIDE = "guide"
         fun isCountry(source: String) = source != PLAYLIST && source != GUIDE
     }
-    object Hdr { const val AUTO = "auto"; const val SDR = "sdr" }
-    object Aspect { const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill" }
-    object UpDown { const val ZAP = "zap"; const val LIST = "list" }
-    object Startup { const val LAST = "last"; const val LIST = "list" }
-    object PhoneStartup { const val HOME = "home"; const val LAST = "last" }
-    object BackAction { const val GUIDE = "guide"; const val EXIT = "exit" }
-    object Sort { const val NUMBER = "number"; const val NAME = "name" }
+    object Hdr {
+        const val AUTO = "auto"; const val SDR = "sdr"
+        val ALL = setOf(AUTO, SDR)
+    }
+    object Aspect {
+        const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill"
+        val ALL = setOf(FIT, ZOOM, FILL)
+    }
+    object UpDown {
+        const val ZAP = "zap"; const val LIST = "list"
+        val ALL = setOf(ZAP, LIST)
+    }
+    object Startup {
+        const val LAST = "last"; const val LIST = "list"
+        val ALL = setOf(LAST, LIST)
+    }
+    object PhoneStartup {
+        const val HOME = "home"; const val LAST = "last"
+        val ALL = setOf(HOME, LAST)
+    }
+    object BackAction {
+        const val GUIDE = "guide"; const val EXIT = "exit"
+        val ALL = setOf(GUIDE, EXIT)
+    }
+    object Sort {
+        const val NUMBER = "number"; const val NAME = "name"
+        val ALL = setOf(NUMBER, NAME)
+    }
     object TextSize {
         const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large"
+        val ALL = setOf(SMALL, NORMAL, LARGE)
 
         fun scale(size: String) = when (size) { SMALL -> 0.9f; LARGE -> 1.15f; else -> 1f }
     }
@@ -203,18 +242,18 @@ data class Prefs(
             fun int(k: String, def: Int) =
                 s.get(k)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asInt }.getOrNull() } ?: def
             return Prefs(
-                engine = str(Key.ENGINE, d.engine, setOf(Engine.EXO, Engine.VLC)),
-                buffer = str(Key.BUFFER, d.buffer, setOf(Buffer.LIVE, Buffer.SMALL, Buffer.NORMAL, Buffer.LARGE)),
-                decoder = str(Key.DECODER, d.decoder, setOf(Decoder.HARDWARE, Decoder.SOFTWARE)),
-                aspect = str(Key.ASPECT, d.aspect, setOf(Aspect.FIT, Aspect.ZOOM, Aspect.FILL)),
+                engine = str(Key.ENGINE, d.engine, Engine.ALL),
+                buffer = str(Key.BUFFER, d.buffer, Buffer.ALL),
+                decoder = str(Key.DECODER, d.decoder, Decoder.ALL),
+                aspect = str(Key.ASPECT, d.aspect, Aspect.ALL),
                 freezeFrame = bool(Key.FREEZE_FRAME, d.freezeFrame),
                 reconnectSeconds = int(Key.RECONNECT_SECONDS, d.reconnectSeconds).coerceIn(0, 120),
                 afr = bool(Key.AFR, d.afr),
                 audioPassthrough = bool(Key.AUDIO_PASSTHROUGH, d.audioPassthrough),
                 surroundDefault = bool(Key.SURROUND_DEFAULT, d.surroundDefault),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
-                audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, setOf(Decoder.HARDWARE, Decoder.SOFTWARE)),
-                hdr = str(Key.HDR, d.hdr, setOf(Hdr.AUTO, Hdr.SDR)),
+                audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
+                hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),
@@ -222,21 +261,21 @@ data class Prefs(
                 autoStart = bool(Key.AUTO_START, d.autoStart),
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),
                 glassOpacity = int(Key.GLASS_OPACITY, d.glassOpacity).coerceIn(0, 100),
-                accent = str(Key.ACCENT, d.accent, setOf("itv", "violet", "mint", "sunset", "gold", "white")),
+                accent = str(Key.ACCENT, d.accent, Accents.IDS.toSet()),
                 showFavoritesGroup = bool(Key.SHOW_FAVORITES_GROUP, d.showFavoritesGroup),
                 showAllGroup = bool(Key.SHOW_ALL_GROUP, d.showAllGroup),
                 showRecentGroup = bool(Key.SHOW_RECENT_GROUP, d.showRecentGroup),
-                backAction = str(Key.BACK_ACTION, d.backAction, setOf(BackAction.GUIDE, BackAction.EXIT)),
+                backAction = str(Key.BACK_ACTION, d.backAction, BackAction.ALL),
                 settingsPin = bool(Key.SETTINGS_PIN, d.settingsPin),
                 hiddenGroups = stringSet(s, Key.HIDDEN_GROUPS),
                 groupOrder = stringListMap(s, Key.GROUP_ORDER),
                 hiddenChannels = stringSet(s, Key.HIDDEN_CHANNELS),
                 channelOrder = stringListMap(s, Key.CHANNEL_ORDER),
-                upDown = str(Key.UP_DOWN, d.upDown, setOf(UpDown.ZAP, UpDown.LIST)),
+                upDown = str(Key.UP_DOWN, d.upDown, UpDown.ALL),
                 reverseZap = bool(Key.REVERSE_ZAP, d.reverseZap),
                 infoSeconds = int(Key.INFO_SECONDS, d.infoSeconds).coerceIn(0, 30),
-                startup = str(Key.STARTUP, d.startup, setOf(Startup.LAST, Startup.LIST)),
-                phoneStartup = str(Key.PHONE_STARTUP, d.phoneStartup, setOf(PhoneStartup.HOME, PhoneStartup.LAST)),
+                startup = str(Key.STARTUP, d.startup, Startup.ALL),
+                phoneStartup = str(Key.PHONE_STARTUP, d.phoneStartup, PhoneStartup.ALL),
                 showNumbers = bool(Key.SHOW_NUMBERS, d.showNumbers),
                 showLogos = bool(Key.SHOW_LOGOS, d.showLogos),
                 logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString
@@ -245,10 +284,10 @@ data class Prefs(
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
-                sort = str(Key.SORT, d.sort, setOf(Sort.NUMBER, Sort.NAME)),
+                sort = str(Key.SORT, d.sort, Sort.ALL),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
                 uiScale = int(Key.UI_SCALE, d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
-                textSize = str(Key.TEXT_SIZE, d.textSize, setOf(TextSize.SMALL, TextSize.NORMAL, TextSize.LARGE)),
+                textSize = str(Key.TEXT_SIZE, d.textSize, TextSize.ALL),
                 language = Strings.normalize(s.get(Key.LANGUAGE)?.takeIf { it.isJsonPrimitive }?.asString),
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.epgRefreshHours,
