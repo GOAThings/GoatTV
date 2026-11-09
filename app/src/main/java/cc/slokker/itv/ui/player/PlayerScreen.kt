@@ -202,12 +202,18 @@ fun PlayerScreen(vm: AppViewModel) {
     val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
     val overlayOpen = showGuide || showSearch || showSleep || trackPicker != null || showSecondPicker || netHint
 
+    /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
+    fun covered() = panel != Panel.None || showSettings || overlayOpen
+
+    /** As teclas são de outro (painel, Definições, janela ou PIN), não do player. */
+    fun keysTaken() = covered() || pinFor != null
+
     // Versão nova (ver UpdateCard): aparece com o vídeo livre, ou enquanto descarrega/instala.
     val updateNotice by vm.updateNotice.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
     val updateBusy = update is UpdateState.Downloading || update is UpdateState.Installing
     val showUpdate = updateNotice != null && (update is UpdateState.Available || updateBusy) && (
-        updateBusy || panel == Panel.None && !showSettings && !overlayOpen && pinFor == null && reminder == null &&
+        updateBusy || !keysTaken() && reminder == null &&
             sleepWarning == null && catchup == null && !(timeshift.available && (seek.paused || !timeshift.atLive)) && !(infoVisible && infoFull)
         )
     var updateHold by remember { mutableFloatStateOf(0f) }
@@ -458,7 +464,7 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     // Com a barra completa à vista, o foco vai para os botões dela.
-    val hudOpen = infoVisible && infoFull && panel == Panel.None && !showSettings && !overlayOpen && catchup == null
+    val hudOpen = infoVisible && infoFull && !covered() && catchup == null
     LaunchedEffect(hudOpen) { if (hudOpen) focusWithRetry(hudFocus) }
 
     // Teclas numéricas: o número fica à espera de mais algarismos e muda de canal ao fim de um bocado.
@@ -494,7 +500,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
     // Com os painéis fechados, as teclas voltam ao player.
     LaunchedEffect(panel, showSettings, pinFor, overlayOpen, hudOpen) {
-        if (panel == Panel.None && !showSettings && pinFor == null && !overlayOpen && !hudOpen) {
+        if (!keysTaken() && !hudOpen) {
             repeat(5) {
                 withFrameNanos { }
                 if (runCatching { rootFocus.requestFocus() }.isSuccess) return@LaunchedEffect
@@ -502,26 +508,43 @@ fun PlayerScreen(vm: AppViewModel) {
         }
     }
 
-    /**
-     * Voltar recua um nível: avisos → PIN → janelas (pesquisa, guia…) → grupos → canais → informação →
-     * catch-up (volta ao direto) → guia ou sair, conforme as definições.
-     */
+    /** Voltar recua um nível (a ordem está em [tvBack]). */
     fun goBack() {
         val now = SystemClock.uptimeMillis()
-        when {
-            reminder != null -> {
+        val state = TvBackState(
+            reminder = reminder != null,
+            numberEntry = numberEntry.isNotEmpty(),
+            netHint = netHint,
+            pin = pinFor != null,
+            playlistMenu = playlistMenu,
+            sleep = showSleep,
+            secondPicker = showSecondPicker,
+            tracks = trackPicker != null,
+            search = showSearch,
+            guide = showGuide,
+            epgPanel = epgPanelChannel != null,
+            panel = panel != Panel.None,
+            info = infoVisible && playback.failure == null,
+            catchup = catchup != null,
+            shifted = tsShifted(),
+            second = second != null,
+            backOpensGuide = prefs.backAction == Prefs.BackAction.GUIDE,
+            exitConfirm = prefs.exitConfirm,
+        )
+        when (tvBack(state, now - lastBack)) {
+            TvBack.DISMISS_REMINDER -> {
                 reminder?.let { vm.consumeReminder(it, watch = false) }
                 reminder = null
             }
-            numberEntry.isNotEmpty() -> numberEntry = ""
-            netHint -> netHint = false
-            pinFor != null -> pinFor = null
-            playlistMenu -> playlistMenu = false
-            showSleep -> showSleep = false
-            showSecondPicker -> if (!secondPicker.back()) showSecondPicker = false
-            trackPicker != null -> trackPicker = null
-            showSearch -> showSearch = false
-            showGuide -> {
+            TvBack.CLEAR_NUMBER -> numberEntry = ""
+            TvBack.CLOSE_NET_HINT -> netHint = false
+            TvBack.CLOSE_PIN -> pinFor = null
+            TvBack.CLOSE_PLAYLIST_MENU -> playlistMenu = false
+            TvBack.CLOSE_SLEEP -> showSleep = false
+            TvBack.SECOND_PICKER -> if (!secondPicker.back()) showSecondPicker = false
+            TvBack.CLOSE_TRACKS -> trackPicker = null
+            TvBack.CLOSE_SEARCH -> showSearch = false
+            TvBack.CLOSE_GUIDE -> {
                 showGuide = false
                 // Fechar o guia que o Voltar abriu conta como o 1.º Voltar para sair: o seguinte sai,
                 // em vez de abrir o guia outra vez (senão Voltar ficava a abrir e fechar o guia para sempre).
@@ -531,20 +554,18 @@ fun PlayerScreen(vm: AppViewModel) {
                     if (prefs.exitConfirm) vm.showToast(I18n.s.pressBackToExit)
                 }
             }
-            epgPanelChannel != null -> epgPanelChannel = null
-            // Voltar fecha o painel lateral (canais ou grupos) e volta ao vídeo. Antes os grupos voltavam
-            // aos canais e os canais aos grupos: vindo de um grupo, o painel nunca chegava a fechar.
-            panel != Panel.None -> panel = Panel.None
-            infoVisible && playback.failure == null -> infoVisible = false
-            catchup != null -> vm.exitCatchup()
-            tsShifted() -> seek.goLive(ring)
-            second != null -> vm.closeSecond()
-            prefs.backAction == Prefs.BackAction.GUIDE && now - lastBack >= 2_500 -> {
+            TvBack.CLOSE_EPG_PANEL -> epgPanelChannel = null
+            TvBack.CLOSE_PANEL -> panel = Panel.None
+            TvBack.HIDE_INFO -> infoVisible = false
+            TvBack.EXIT_CATCHUP -> vm.exitCatchup()
+            TvBack.GO_LIVE -> seek.goLive(ring)
+            TvBack.CLOSE_SECOND -> vm.closeSecond()
+            TvBack.OPEN_GUIDE -> {
                 showGuide = true
                 guideFromBack = true
             }
-            !prefs.exitConfirm || now - lastBack < 2_500 -> (context as? Activity)?.finish()
-            else -> {
+            TvBack.EXIT -> (context as? Activity)?.finish()
+            TvBack.WARN_EXIT -> {
                 lastBack = now
                 vm.showToast(I18n.s.pressBackToExit)
             }
@@ -624,7 +645,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 .onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyUp && okPressed[0] && isOkKey(e.key.nativeKeyCode)) {
                         okPressed[0] = false
-                        if (panel != Panel.None || showSettings || pinFor != null || overlayOpen) return@onKeyEvent false
+                        if (keysTaken()) return@onKeyEvent false
                         if (numberEntry.isNotEmpty()) {
                             val n = numberEntry.toIntOrNull()
                             numberEntry = ""
@@ -635,7 +656,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         return@onKeyEvent true
                     }
-                    if (e.type != KeyEventType.KeyDown || panel != Panel.None || showSettings || pinFor != null || overlayOpen) return@onKeyEvent false
+                    if (e.type != KeyEventType.KeyDown || keysTaken()) return@onKeyEvent false
                     val code = e.key.nativeKeyCode
                     // Teclas numéricas: escrever o número do canal.
                     digitOf(code)?.let { d ->
@@ -875,7 +896,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 }
             }
 
-            val infoAllowed = infoVisible && panel == Panel.None && !showSettings && !overlayOpen && catchup == null
+            val infoAllowed = infoVisible && !covered() && catchup == null
             AnimatedVisibility(
                 visible = infoAllowed && !infoFull,
                 modifier = Modifier.align(Alignment.BottomStart),
