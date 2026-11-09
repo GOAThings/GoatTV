@@ -174,4 +174,38 @@ class StreamGateTest {
         exo.close()
         assertTrue(done.await(2, TimeUnit.SECONDS))
     }
+
+    /**
+     * Zapping como o ExoPlayer o faz: a tentativa nova começa a abrir logo, e a ligação do canal anterior só fecha
+     * uns milissegundos depois (o loader dela acaba a leitura em curso). O servidor nunca vê duas; um canal por onde
+     * só se passou (já há outro a seguir) nem chega a abrir.
+     */
+    @Test
+    fun zappingRapidoNuncaTemDuasLigacoes() {
+        val gate = gate()
+        val server = Server()
+        var previous: DataSource? = null
+        val threads = mutableListOf<Thread>()
+        repeat(10) { n ->
+            gate.next()
+            val factory = gate.factory(server.factory("canal$n"), exclusive = true)
+            val old = previous
+            // O canal anterior fecha 3–100 ms depois de o novo começar a abrir (o que se via no servidor falso).
+            old?.let { threads += thread { Thread.sleep(3L + n * 10L); it.close() } }
+            val next = factory.createDataSource()
+            threads += thread {
+                try {
+                    next.open(spec)
+                } catch (_: IOException) {
+                    // Ultrapassado pelo canal seguinte enquanto esperava.
+                }
+            }
+            previous = next
+            Thread.sleep(20)
+        }
+        threads.forEach { it.join(5_000) }
+        previous?.close()
+        assertEquals(1, server.peak.get())
+        assertEquals("open canal9", server.events.last { it.startsWith("open") })
+    }
 }
