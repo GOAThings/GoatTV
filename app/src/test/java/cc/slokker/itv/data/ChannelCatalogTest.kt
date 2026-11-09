@@ -121,6 +121,20 @@ class ChannelCatalogTest {
     }
 
     @Test
+    fun `the group list (second channel) follows the same settings as the apple tv`() {
+        val c = catalog(prefs = prefs.copy(groupOrder = mapOf("p1" to listOf("kids"))))
+        assertEquals(
+            listOf(SpecialCategory.FAVORITES, SpecialCategory.RECENT, SpecialCategory.ALL, "kids", "news", PlaylistContent.OTHERS),
+            c.groups(names).map { it.id },
+        )
+        assertEquals(listOf("kids", "news", "adult", PlaylistContent.OTHERS), c.groups(names, includeLocked = true).drop(3).map { it.id })
+        // "★ Favoritos" fica mesmo vazio (fora do guia); "Todos" só se ligado; "Recentes" só com canais.
+        val empty = catalog(prefs = prefs.copy(showAllGroup = false), favorites = emptyMap(), recents = emptyMap())
+        assertEquals(listOf(SpecialCategory.FAVORITES, "news", "kids", PlaylistContent.OTHERS), empty.groups(names).map { it.id })
+        assertEquals(listOf(SpecialCategory.ALL, "news", "kids", PlaylistContent.OTHERS), empty.guideGroups(names).map { it.id })
+    }
+
+    @Test
     fun `number keys skip locked and hidden channels and hidden groups`() {
         val c = catalog()
         assertEquals("n1", c.channelByNumber(1)?.key)

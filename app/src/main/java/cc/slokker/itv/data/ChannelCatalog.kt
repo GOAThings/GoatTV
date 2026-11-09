@@ -95,14 +95,21 @@ class ChannelCatalog(
             .filter { includeHidden || !isGroupHidden(it.id) }
     }
 
-    /** Grupos que o guia percorre (← →): os especiais visíveis e os normais sem os escondidos nem bloqueados. */
-    fun guideGroups(names: GroupNames): List<Category> = listOfNotNull(
-        Category(SpecialCategory.FAVORITES, names.favorites).takeIf { prefs.showFavoritesGroup && channelsOf(SpecialCategory.FAVORITES).isNotEmpty() },
+    /**
+     * A lista de grupos, como o Library.groups da Apple TV: "★ Favoritos" sempre que ligado (vazio mostra como juntar),
+     * "Recentes" só quando há, "Todos" se ligado, e os grupos pela ordem escolhida sem os escondidos (nem os bloqueados,
+     * sem [includeLocked]). Para o guia ([forGuide]) só os especiais com canais, e "Todos" sempre.
+     */
+    fun groups(names: GroupNames, includeLocked: Boolean = false, forGuide: Boolean = false): List<Category> = listOfNotNull(
+        Category(SpecialCategory.FAVORITES, names.favorites).takeIf { prefs.showFavoritesGroup && (!forGuide || channelsOf(SpecialCategory.FAVORITES).isNotEmpty()) },
         Category(SpecialCategory.RECENT, names.recents).takeIf { prefs.showRecentGroup && channelsOf(SpecialCategory.RECENT).isNotEmpty() },
-        Category(SpecialCategory.ALL, names.all),
+        Category(SpecialCategory.ALL, names.all).takeIf { prefs.showAllGroup || forGuide },
     ) + orderedGroups(includeHidden = false)
-        .filterNot { isGroupLocked(it.id) }
+        .filter { includeLocked || !isGroupLocked(it.id) }
         .map { if (it.id == PlaylistContent.OTHERS) it.copy(name = names.others) else it }
+
+    /** Grupos que o guia percorre (← →): os especiais visíveis e os normais sem os escondidos nem bloqueados. */
+    fun guideGroups(names: GroupNames): List<Category> = groups(names, forGuide = true)
 
     /** O grupo está marcado como bloqueado, mesmo que já tenha sido desbloqueado com o PIN nesta sessão. */
     fun isGroupLockedSetting(groupId: String): Boolean = isGroupLocked(groupId, Audience.PERSISTENT)

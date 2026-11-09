@@ -1893,28 +1893,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return loaded
     }
 
-    /** Grupos de [content] para o segundo canal (sem escondidos nem bloqueados). */
-    fun groupsForSecond(content: PlaylistContent): List<Category> {
-        val s = I18n.s
-        val catalog = catalogFor(content)
-        val favorites = _favorites.value[content.playlist.id].orEmpty()
-        return listOfNotNull(
-            Category(SpecialCategory.FAVORITES, s.favoritesStar).takeIf { favorites.isNotEmpty() },
-            Category(SpecialCategory.ALL, s.all),
-        ) + content.categories
-            .filterNot { catalog.isGroupHidden(it.id) || catalog.isGroupLocked(it.id) }
-            .map { if (it.id == PlaylistContent.OTHERS) it.copy(name = s.others) else it }
-    }
+    /**
+     * Grupos de [content] para o segundo canal: os mesmos da lista de grupos (ordem escolhida, Favoritos, Recentes e
+     * Todos conforme as definições), sem os bloqueados (aqui não se pede o PIN). Como na Apple TV.
+     */
+    fun groupsForSecond(content: PlaylistContent): List<Category> = catalogFor(content).groups(groupNames())
 
-    fun channelsForSecond(content: PlaylistContent, groupId: String): List<Channel> {
-        val catalog = catalogFor(content)
-        val list = when (groupId) {
-            SpecialCategory.FAVORITES -> _favorites.value[content.playlist.id].orEmpty().mapNotNull { content.byKey[it] }.filter { catalog.isVisible(it) }
-            SpecialCategory.ALL -> content.channels.filter { catalog.isVisible(it) }
-            else -> content.byCategory[groupId].orEmpty().filter { catalog.isVisible(it) }
-        }
-        return if (_prefs.value.sort == Prefs.Sort.NAME) list.sortedBy { it.name.lowercase() } else list
-    }
+    fun channelsForSecond(content: PlaylistContent, groupId: String): List<Channel> = catalogFor(content).channelsOf(groupId)
 
     fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) {
         _second.value = SecondView(content, channel, channelsForSecond(content, groupId).ifEmpty { listOf(channel) })
