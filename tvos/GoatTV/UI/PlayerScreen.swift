@@ -283,16 +283,19 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
-            // A gravar: a cápsula REC no canto (debaixo dos painéis, como no Android).
-            if let rec = model.recordings.active.first, panel == .none, !tvGuide {
+            // A gravar: a cápsula da gravação no canto da de voltar a ligar (à esquerda com o segundo canal à direita),
+            // por baixo da do catch-up ou de quanto se está atrás do direto. Com um painel aberto sai (tapava o
+            // cabeçalho dele), e com um cartão da gravação também: é ele que se abre nesse canto.
+            if let rec = model.recordings.active.first, panel == .none, !tvGuide, !recordingCard {
                 VStack {
                     HStack {
-                        RecPill(title: rec.title)
-                        Spacer()
+                        if model.second == nil { Spacer() }
+                        RecPill(info: rec)
+                        if model.second != nil { Spacer() }
                     }
                     Spacer()
                 }
-                .padding(.top, 48)
+                .padding(.top, 48 + recPillTop)
                 .padding(.horizontal, 64)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -328,21 +331,24 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
+            // Os cartões da gravação: a cápsula do canto abre-se para baixo com a pergunta (no mesmo sítio).
             if recordingCard, panel == .none, !tvGuide {
                 VStack {
-                    Spacer()
-                    HStack {
+                    HStack(alignment: .top) {
+                        if model.second == nil { Spacer() }
                         if let prompt = model.switchPrompt {
-                            RecordingSwitchCard(prompt: prompt)
+                            RecordingSwitchCard(prompt: prompt, info: model.recordings.active.first)
                         } else if let soon = model.recordings.prompt {
                             RecordingPromptCard(recording: soon)
                         }
-                        Spacer()
+                        if model.second != nil { Spacer() }
                     }
+                    Spacer()
                 }
-                .padding(64)
+                .padding(.top, 48 + recPillTop)
+                .padding(.horizontal, 64)
                 .ignoresSafeArea()
-                .transition(.move(edge: .leading).combined(with: .opacity))
+                .transition(.opacity)
             }
 
             if let reminder, panel == .none, !tvGuide, !recordingCard {
@@ -754,7 +760,8 @@ struct PlayerScreen: View {
                 }
                 Spacer()
             }
-            .padding(.top, 48)
+            // A gravar, fica por baixo da cápsula da gravação (no mesmo canto).
+            .padding(.top, 48 + (!model.recordings.active.isEmpty && panel == .none ? recPillTop + capsuleHeight + 16 : 0))
             .padding(.horizontal, 64)
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -769,6 +776,14 @@ struct PlayerScreen: View {
 
     /// Há um cartão de gravação no ecrã (mudar de canal a gravar, ou uma marcada noutro canal).
     private var recordingCard: Bool { model.switchPrompt != nil || model.recordings.prompt != nil }
+
+    /// No canto de cima à direita está a cápsula do catch-up ou de quanto se está atrás do direto.
+    private var cornerPill: Bool {
+        !tvGuide && (model.catchup != nil || (tsShifted && model.player.state == .playing))
+    }
+
+    /// A cápsula da gravação: por baixo da do catch-up/atrás do direto, quando essa está lá (a altura dela e o espaço).
+    private var recPillTop: CGFloat { cornerPill ? 72 : 0 }
 
     /// "CATCH-UP", ou "GRAVADO" numa gravação do disco.
     private func catchupBadge(_ cu: Catchup) -> String {

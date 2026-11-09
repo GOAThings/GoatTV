@@ -4,88 +4,172 @@ import SwiftUI
 // As gravações no Apple TV, como no Android TV (RecordingsTv.kt): a cápsula REC, o cartão "Estás a gravar X" ao mudar
 // de canal, o aviso de uma marcada noutro canal e o painel das gravações.
 
-/// A cápsula "REC" no canto enquanto há uma gravação (com o título do que grava).
-struct RecPill: View {
-    @Environment(AppModel.self) private var model
-    let title: String
+/// O vermelho do direto e das gravações (GoatPalette.Live no Android).
+let recordingRed = Theme.hex(0xF2777E)
+
+/// O que diz a gravação ao lado do anel: quanto falta (com guia) ou há quanto tempo grava (sem guia), e o anel.
+private struct RecProgress {
+    let fraction: Double
+    let detail: String
+
+    init(_ s: Strings, _ info: RecordingInfo, now: Int64) {
+        // Sem guia grava-se até ao máximo: o anel fica vazio e conta-se o tempo desde o início.
+        if info.programmeEndMs - info.programmeStartMs >= RecordingPlan.maxNoEpgMs {
+            fraction = 0
+            detail = CatchupBar.duration(now - info.fileStartMs)
+        } else {
+            let total = max(1, info.endMs - info.startMs)
+            fraction = Double(now - info.startMs) / Double(total)
+            detail = s.r("minutes_left", "\((max(0, info.endMs - now) + 59_999) / 60_000)")
+        }
+    }
+}
+
+/// O anel da gravação: enche-se a vermelho com o que já se gravou, com o ponto a pulsar no meio.
+private struct RecRing: View {
+    let fraction: Double
     @State private var pulse = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle().fill(Color.red).frame(width: 14, height: 14).opacity(pulse ? 1 : 0.45)
-            Text(model.strings.r("rec_badge")).font(.system(size: 22, weight: .bold))
-            Text(title).font(.system(size: 22)).foregroundStyle(Theme.textDim).lineLimit(1)
+        ZStack {
+            ProgressRing(fraction: fraction, color: AnyShapeStyle(recordingRed))
+            Circle().fill(recordingRed).frame(width: 18, height: 18).opacity(pulse ? 1 : 0.45)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 640, alignment: .leading)
-        .fixedSize(horizontal: true, vertical: false)
-        .glass(radius: 30)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
         }
     }
 }
 
-/// O cartão das gravações, com a forma do lembrete ([ReminderCard]): ícone, títulos e dois botões (OK e Voltar).
-private struct RecordingCard: View {
-    @Environment(AppModel.self) private var model
-    let icon: String
-    let overline: String
+/// A linha da cápsula da gravação: o anel e duas linhas (a de cima e, por baixo, o nome com o pormenor). O nome
+/// corta-se com "…"; o pormenor vê-se sempre.
+private struct RecHeader<Ring: View>: View {
     let title: String
+    let name: String
+    let detail: String
+    @ViewBuilder let ring: () -> Ring
+
+    var body: some View {
+        CapsuleRow(title: title, ring: ring) {
+            UpTo(width: 600) {
+                HStack(spacing: 0) {
+                    Text(name).lineLimit(1).truncationMode(.tail)
+                    Text(" · " + detail).lineLimit(1).fixedSize().layoutPriority(1)
+                }
+            }
+        }
+    }
+}
+
+/// Até [width] de largura, mas só o que precisa (o .frame(maxWidth:) estica até ao máximo).
+private struct UpTo: Layout {
+    let width: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(ProposedViewSize(width: min(proposal.width ?? width, width), height: nil))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
+/// A cápsula da gravação no canto, com a forma da de voltar a ligar ([TuningPill]): o anel enche-se com o que já se
+/// gravou e por baixo diz quanto falta. Sem guia (gravar até ao máximo), diz há quanto tempo grava.
+struct RecPill: View {
+    @Environment(AppModel.self) private var model
+    let info: RecordingInfo
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let p = RecProgress(model.strings, info, now: Int64(timeline.date.timeIntervalSince1970 * 1000))
+            RecHeader(title: model.strings.r("recording_pill"), name: info.title, detail: p.detail) {
+                RecRing(fraction: p.fraction)
+            }
+            .fixedSize()
+            .capsuleGlass()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("rec-pill")
+    }
+}
+
+/// A cápsula do canto aberta para baixo, num só vidro: a linha de cima igual à da cápsula, e por baixo (alinhados
+/// com o texto, depois do anel) o texto e as teclas. OK responde que sim, Voltar que não.
+private struct RecordingCard<Header: View>: View {
     let text: String
     let ok: String
     let back: String
     let onOk: () -> Void
     let onBack: () -> Void
-    @FocusState private var focus: String?
+    @ViewBuilder let header: () -> Header
+    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            HStack(spacing: 24) {
-                Image(systemName: icon)
-                    .font(.system(size: 34))
-                    .foregroundStyle(.white)
-                    .frame(width: 80, height: 80)
-                    .background(Circle().fill(Color.red.opacity(0.85)))
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(overline).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
-                    Text(title).font(.system(size: 36, weight: .semibold)).lineLimit(2)
-                    Text(text).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).lineLimit(3)
+        // O cartão todo é o botão (sem aspeto): o OK do comando é o OK do cartão.
+        Button(action: onOk) {
+            UpTo(width: 880 - 14 - 36) {
+                VStack(alignment: .leading, spacing: 0) {
+                    header()
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(text)
+                            .font(.system(size: 25))
+                            .foregroundStyle(Theme.textDim)
+                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 16) {
+                            KeyHint(key: "OK", label: ok)
+                            KeyHint(key: "MENU", label: back)
+                        }
+                        .padding(.top, 24)
+                    }
+                    .padding(.leading, 60 + 20)
+                    .padding(.top, 20)
                 }
             }
-            HStack(spacing: 20) {
-                Button(ok, action: onOk).buttonStyle(ChipButtonStyle()).focused($focus, equals: "ok").accessibilityIdentifier("recording-ok")
-                Button(back, action: onBack).buttonStyle(ChipButtonStyle()).focused($focus, equals: "back").accessibilityIdentifier("recording-back")
-            }
+            .padding(.leading, 14)
+            .padding(.trailing, 36)
+            .padding(.top, 14)
+            .padding(.bottom, 32)
+            .glass(radius: capsuleHeight / 2)
         }
-        .padding(44)
-        .frame(maxWidth: 1040, alignment: .leading)
-        .glass(radius: 34)
+        .buttonStyle(InvisibleButtonStyle())
+        .focused($focused)
+        .accessibilityIdentifier("recording-card")
         .focusSection()
         .onExitCommand(perform: onBack)
         .task {
             try? await Task.sleep(for: .milliseconds(80))
-            focus = "ok"
+            focused = true
         }
     }
 }
 
-/// Mudar de canal com uma gravação a decorrer: OK pára a gravação e muda, Voltar fica a gravar (neste canal).
+/// Mudar de canal com uma gravação a decorrer: a cápsula do canto abre-se para baixo com a pergunta. OK pára a
+/// gravação e muda, Voltar fica a gravar (neste canal): o fornecedor só deixa uma ligação, e o cartão diz isso.
 struct RecordingSwitchCard: View {
     @Environment(AppModel.self) private var model
     let prompt: AppModel.SwitchPrompt
+    let info: RecordingInfo?
 
     var body: some View {
         let s = model.strings
-        RecordingCard(icon: "record.circle", overline: s.r("rec_badge"), title: s.r("recording_switch_title", prompt.title),
-                      text: s.r("recording_switch_text"), ok: s.r("recording_stop_and_switch"), back: s.r("recording_keep"),
-                      onOk: { model.answerSwitch(stop: true) }, onBack: { model.answerSwitch(stop: false) })
+        RecordingCard(text: s.r("recording_switch_text"), ok: s.r("recording_stop_and_switch"), back: s.r("recording_keep"),
+                      onOk: { model.answerSwitch(stop: true) }, onBack: { model.answerSwitch(stop: false) }) {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                if let info {
+                    let p = RecProgress(s, info, now: Int64(timeline.date.timeIntervalSince1970 * 1000))
+                    RecHeader(title: s.r("recording_pill"), name: info.title, detail: p.detail) { RecRing(fraction: p.fraction) }
+                } else {
+                    RecHeader(title: s.r("recording_pill"), name: prompt.title, detail: s.r("rec_badge")) { RecRing(fraction: 0) }
+                }
+            }
+        }
     }
 }
 
-/// Uma marcada noutro canal quase a começar: OK muda para esse canal (e grava), Voltar não grava. Sem resposta até à
-/// hora, muda-se (conta-se até lá).
+/// Uma marcada noutro canal quase a começar, na mesma forma: o anel conta até à mudança, com os segundos no meio. OK
+/// muda para esse canal (e grava), Voltar não grava. Sem resposta até à hora, muda-se (conta-se até lá).
 struct RecordingPromptCard: View {
     @Environment(AppModel.self) private var model
     let recording: ScheduledRecording
@@ -96,17 +180,22 @@ struct RecordingPromptCard: View {
         let schedule = model.recordings.schedule
         let from = RecordingPlan.window(recording, schedule.paddingBeforeMin, schedule.paddingAfterMin).fromMs
         let left = max(0, Int((from - now + 999) / 1000))
-        RecordingCard(icon: "record.circle", overline: s.r("recording_soon", recording.channelName), title: recording.title,
-                      text: "\(hhmm(Date(timeIntervalSince1970: Double(recording.startMs) / 1000))) · \(s.r("recording_switching_in", "\(left)"))",
-                      ok: s.r("recording_switch_to", recording.channelName), back: s.r("recording_skip"),
+        RecordingCard(text: s.r("recording_switching_in", "\(left)"), ok: s.r("recording_switch_to", recording.channelName),
+                      back: s.r("recording_skip"),
                       onOk: { model.answerRecordingPrompt(recording.id, switchChannel: true) },
-                      onBack: { model.answerRecordingPrompt(recording.id, switchChannel: false) })
-            .task {
-                while !Task.isCancelled {
-                    now = nowMs()
-                    try? await Task.sleep(for: .seconds(1))
-                }
+                      onBack: { model.answerRecordingPrompt(recording.id, switchChannel: false) }) {
+            RecHeader(title: s.r("recording_soon", recording.channelName), name: recording.title,
+                      detail: hhmm(Date(timeIntervalSince1970: Double(recording.startMs) / 1000))) {
+                CountdownRing(nextTryAt: Date(timeIntervalSince1970: Double(from) / 1000),
+                              waitSeconds: Double(RecordingPlan.promptLeadMs) / 1000, color: recordingRed)
             }
+        }
+        .task {
+            while !Task.isCancelled {
+                now = nowMs()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 }
 
