@@ -193,7 +193,7 @@ struct RecordingsPanel: View {
             }
             HStack(spacing: 30) {
                 KeyHint(key: "OK", label: s.t("Watch", "Ver"))
-                KeyHint(key: s.t("Hold OK", "Manter OK"), label: s.r("recording_delete"))
+                KeyHint(key: s.t("Hold OK", "Manter OK"), label: holdLabel)
             }
             .padding(.horizontal, 16)
         }
@@ -210,6 +210,18 @@ struct RecordingsPanel: View {
             try? await Task.sleep(for: .milliseconds(80))
             focus = scheduled.first.map { "s:" + $0.id } ?? recorded.first.map { "r:" + $0.id } ?? "empty"
         }
+    }
+
+    /// O que manter OK faz na linha com foco: desmarcar, parar ou apagar.
+    private var holdLabel: String {
+        let s = model.strings
+        guard let f = focus else { return s.r("recording_delete") }
+        if f.hasPrefix("s:") {
+            let id = String(f.dropFirst(2))
+            return model.recordings.schedule.recordings.first { $0.id == id }?.seriesId != nil ? s.r("cancel_series") : s.r("cancel_recording")
+        }
+        if f.hasPrefix("r:"), model.recordings.isRunning(String(f.dropFirst(2))) { return s.r("stop_recording") }
+        return s.r("recording_delete")
     }
 
     private func header(_ text: String) -> some View {
@@ -247,7 +259,8 @@ struct RecordingsPanel: View {
             HStack(spacing: 16) {
                 if running { Circle().fill(Color.red).frame(width: 14, height: 14) }
                 RowContent(title: info.title, subtitle: recordingLine(s, info)) {
-                    Text(running ? s.r("stop_recording") : recordingSizeLabel(info.bytes)).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
+                    // Na cor da linha (escura com foco), um pouco esbatido, como no Android.
+                    Text(running ? s.r("stop_recording") : recordingSizeLabel(info.bytes)).font(Fonts.rowSubtitle).opacity(0.6)
                 }
             }
         }
