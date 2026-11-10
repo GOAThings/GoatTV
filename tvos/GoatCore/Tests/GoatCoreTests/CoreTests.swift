@@ -13,6 +13,10 @@ enum CoreTests {
 
     static let all: [(String, () throws -> Void)] = [
         ("hashes", hashes),
+        ("channelMatchNormalize", channelMatchNormalize),
+        ("channelMatchFind", channelMatchFind),
+        ("channelMatchCoverage", channelMatchCoverage),
+        ("channelMatchRanked", channelMatchRanked),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
         ("stalker", stalker),
@@ -452,6 +456,13 @@ enum CoreTests {
         try expect(Prefs(settings: .object(["audio_delay_ms": 9_000])).audioDelayMs, 1_000)
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
+        // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.
+        let backup = Prefs(settings: .object([
+            "backup_playlist": .object(["p1": "p1", "p2": "", "p3": "p1"]),
+            "backup_channels": .object(["p1:1": "", "p1:2": "off"]),
+        ]))
+        try expect(backup.backupPlaylist, ["p3": "p1"])
+        try expect(backup.backupChannels, ["p1:2": "off"])
     }
 
     static func library() throws {
