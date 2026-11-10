@@ -249,8 +249,10 @@ public struct Prefs: Equatable, Sendable {
         let epgRefresh = int("epg_refresh_hours", d.epgRefreshHours)
         epgRefreshHours = Prefs.refreshOptions.contains(epgRefresh) ? epgRefresh : d.epgRefreshHours
         epgOffsetMin = clamp(int("epg_offset_min", d.epgOffsetMin), -12 * 60, 12 * 60)
-        epgPastHours = Optional(int("epg_past_hours", d.epgPastHours)).filter { GuideWindow.pastHours.contains($0) } ?? d.epgPastHours
-        epgFutureHours = Optional(int("epg_future_hours", d.epgFutureHours)).filter { GuideWindow.futureHours.contains($0) } ?? d.epgFutureHours
+        let past = int("epg_past_hours", d.epgPastHours)
+        epgPastHours = GuideWindow.pastHours.contains(past) ? past : d.epgPastHours
+        let future = int("epg_future_hours", d.epgFutureHours)
+        epgFutureHours = GuideWindow.futureHours.contains(future) ? future : d.epgFutureHours
         epgInList = bool("epg_in_list", d.epgInList)
         reminderSwitch = bool("reminder_switch", d.reminderSwitch)
         catchupOffsetMin = clamp(int("catchup_offset_min", d.catchupOffsetMin), -12 * 60, 12 * 60)
