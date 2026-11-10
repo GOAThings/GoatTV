@@ -185,6 +185,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showGuide by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
+    var showBackup by remember { mutableStateOf(false) }
     var showRecordings by remember { mutableStateOf(false) }
     /** Aviso "este canal está sempre a parar" (uma vez por canal; ver NetHintCard). */
     var netHint by remember { mutableStateOf(false) }
@@ -221,7 +222,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val latestSecondView by rememberUpdatedState(secondView)
     val latestMainView by rememberUpdatedState(mainView)
     val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
-    val overlayOpen = showGuide || showSearch || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
+    val overlayOpen = showGuide || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
 
     /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
     fun covered() = panel != Panel.None || showSettings || overlayOpen
@@ -544,7 +545,7 @@ fun PlayerScreen(vm: AppViewModel) {
     // O guia não usa vidro (o vídeo fica pequeno, no canto).
     val glassVisible = !showGuide && (
         panel != Panel.None || showSettings || infoVisible || playback.failure != null || !playback.ready ||
-            showSearch || showRecordings || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || recordingPrompt != null || switchPrompt != null || sleepWarning != null || numberEntry.isNotEmpty() ||
+            showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || recordingPrompt != null || switchPrompt != null || sleepWarning != null || numberEntry.isNotEmpty() ||
             tsShifted()
         )
     GlassBackdropEffect(glassVisible, videoView, backdrop, prefs.glassOpacity, lastInput, player)
@@ -622,6 +623,7 @@ fun PlayerScreen(vm: AppViewModel) {
             secondPicker = showSecondPicker,
             tracks = trackPicker != null,
             search = showSearch,
+            backup = showBackup,
             recordings = showRecordings,
             guide = showGuide,
             epgPanel = epgPanelChannel != null,
@@ -646,6 +648,7 @@ fun PlayerScreen(vm: AppViewModel) {
             TvBack.SECOND_PICKER -> if (!secondPicker.back()) showSecondPicker = false
             TvBack.CLOSE_TRACKS -> trackPicker = null
             TvBack.CLOSE_SEARCH -> showSearch = false
+            TvBack.CLOSE_BACKUP -> showBackup = false
             TvBack.CLOSE_RECORDINGS -> showRecordings = false
             TvBack.CLOSE_GUIDE -> {
                 showGuide = false
@@ -1058,7 +1061,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     HudButtons(
                         vm, current, live, prefs.aspect, isFavorite, sleepAt,
                         pauseLive = tsActive(), recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
-                        second = second != null, dualLayout = dualLayout, firstFocus = hudFocus,
+                        second = second != null, backup = catchup == null && vm.backupOf(data.playlist.id) != null,
+                        dualLayout = dualLayout, firstFocus = hudFocus,
                     ) { action ->
                         when (action) {
                             HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
@@ -1091,6 +1095,10 @@ fun PlayerScreen(vm: AppViewModel) {
                                 infoVisible = false
                                 settingsAtEpg = true
                                 showSettings = true
+                            }
+                            HudAction.BACKUP -> {
+                                infoVisible = false
+                                showBackup = true
                             }
                             HudAction.SLEEP -> showSleep = true
                         }
@@ -1154,6 +1162,19 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                     },
                 )
+            }
+
+            AnimatedVisibility(
+                visible = showBackup,
+                modifier = Modifier.align(Alignment.CenterStart),
+                enter = fadeIn() + slideInHorizontally { -it / 4 },
+                exit = fadeOut() + slideOutHorizontally { -it / 4 },
+            ) {
+                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, onTry = { target ->
+                    showBackup = false
+                    // Fecha a ligação à lista principal e abre a da reserva (o aviso aparece quando der).
+                    scope.launch { vm.backupStream(data, current, target)?.let(playback::playBackup) }
+                })
             }
 
             AnimatedVisibility(

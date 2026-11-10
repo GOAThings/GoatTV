@@ -64,6 +64,10 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.ui.player.HudLogo
+import cc.slokker.itv.ui.player.BackupPanelState
+import cc.slokker.itv.ui.player.rememberBackupPanel
+import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.formatTime
@@ -420,7 +424,9 @@ internal fun VideoArea(
                             }
                         }
                         // O que estava no "mais": cada um no seu botão.
-                        PlayerOption.entries.forEach { option ->
+                        // O canal de reserva só no direto, numa lista com reserva.
+        val backup = catchup == null && vm.content.collectAsStateWithLifecycle().value?.playlist?.id?.let(vm::backupOf) != null
+        PlayerOption.entries.filter { it != PlayerOption.BACKUP || backup }.forEach { option ->
                             ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
@@ -509,7 +515,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), SLEEP(ItvIcons.Sleep) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
 
 @Composable
 private fun PlayerOption.label(): String {
@@ -517,6 +523,7 @@ private fun PlayerOption.label(): String {
     return when (this) {
         PlayerOption.AUDIO -> s.audio
         PlayerOption.SUBTITLES -> s.subtitles
+        PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
     }
 }
@@ -527,6 +534,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
@@ -549,6 +557,13 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                                 onClose()
                             }
                         }
+                    }
+                }
+                PlayerOption.BACKUP -> vm.playing.collectAsStateWithLifecycle().value?.let { channel ->
+                    BackupSection(vm, channel) { target ->
+                        onClose()
+                        val data = vm.content.value ?: return@BackupSection
+                        scope.launch { vm.backupStream(data, channel, target)?.let(playback.core::playBackup) }
                     }
                 }
                 PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer) {
@@ -645,3 +660,35 @@ private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val ZAP_DRAG_PX = 120f
+
+/** O canal de reserva do canal a dar (como o painel da TV, ver BackupChannelPanel). */
+@Composable
+private fun BackupSection(vm: AppViewModel, channel: Channel, onTry: (Channel) -> Unit) {
+    val s = LocalStrings.current
+    val state = rememberBackupPanel(vm, channel)
+    val choices = state.choices
+    Section(listOfNotNull(s.backupChannel, choices?.backup?.name).joinToString(" · ")) {
+        when {
+            state.loading -> Note(s.backupChecking)
+            choices == null -> Note(s.backupUnavailable(vm.content.value?.playlist?.id?.let(vm::backupOf)?.name.orEmpty()))
+            else -> {
+                val effective = state.effective
+                MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play, subtitle = effective?.name) { effective?.let(onTry) }
+                MenuRow(s.backupChannelAuto, null, checked = state.choice == null, subtitle = state.autoLabel(s)) { state.pick(null) }
+                MenuRow(s.backupChannelOff, null, checked = state.choice == ChannelMatch.OFF) { state.pick(ChannelMatch.OFF) }
+                val chosen = choices.content.byKey[state.choice ?: ""]
+                val similar = (listOfNotNull(chosen) + choices.similar).distinctBy { it.key }
+                if (similar.isNotEmpty()) Note(s.backupChannelSimilar)
+                similar.forEach { c -> BackupRow(state, choices, c, s) }
+                Field(s.backupChannelSearch(choices.backup.name), state.query, Modifier.padding(horizontal = 12.dp).padding(vertical = 8.dp)) { state.query = it }
+                state.results.forEach { c -> BackupRow(state, choices, c, s) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, c: Channel, s: Strings) {
+    val sub = listOfNotNull(choices.content.categoryName(c.categoryId), s.backupChannelAuto.takeIf { c.key == choices.autoChannel?.key }).joinToString(" · ")
+    MenuRow(c.name, null, checked = state.choice == c.key, subtitle = sub) { state.pick(c.key) }
+}
