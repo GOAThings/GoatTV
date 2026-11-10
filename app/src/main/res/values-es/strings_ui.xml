@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Cerrar paneles automáticamente</string>
     <string name="never">Nunca</string>
     <string name="time_offset">Desfase horario</string>
+    <string name="epg_past">Guía: programas pasados</string>
+    <string name="epg_past_sub">Hasta dónde llega la guía hacia atrás, para el catch-up. Más días usan más memoria</string>
+    <string name="epg_future">Guía: próximos programas</string>
+    <string name="guide_one_day">1 día</string>
+    <string name="guide_days">%1$s días</string>
     <string name="no_offset">Sin desfase</string>
     <string name="catchup_offset">Corrección de hora del catch-up</string>
     <string name="catchup_offset_sub">Desplaza la hora pedida en el catch-up, si el reloj del proveedor está mal</string>

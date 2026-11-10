@@ -112,6 +112,9 @@ data class Prefs(
     /** Igual, para o guia XMLTV. */
     val epgRefreshHours: Int = 12,
     val epgOffsetMin: Int = 0,
+    /** Quantas horas do guia se guardam para trás (catch-up) e para a frente (ver GuideWindow). */
+    val epgPastHours: Int = GuideHours.PAST_DEFAULT,
+    val epgFutureHours: Int = GuideHours.FUTURE_DEFAULT,
     /**
      * Correção da hora pedida no catch-up, em minutos (para o relógio ou o fuso errado do fornecedor): soma-se à hora
      * do programa só no pedido ao servidor, em todas as listas (como a "catchup correction" do Kodi).
@@ -203,6 +206,8 @@ data class Prefs(
         const val PLAYLIST_REFRESH = "playlist_refresh_hours"
         const val EPG_REFRESH = "epg_refresh_hours"
         const val EPG_OFFSET = "epg_offset_min"
+        const val EPG_PAST_HOURS = "epg_past_hours"
+        const val EPG_FUTURE_HOURS = "epg_future_hours"
         const val CATCHUP_OFFSET = "catchup_offset_min"
         const val EPG_IN_LIST = "epg_in_list"
         const val REMINDER_SWITCH = "reminder_switch"
@@ -223,6 +228,14 @@ data class Prefs(
         val ALL = setOf(HARDWARE, SOFTWARE)
     }
     /** Os nomes do VLC (iguais aos da Apple TV). */
+    /** As janelas do guia que se podem escolher; mais dias pesam mais na memória da box. Iguais na Apple TV. */
+    object GuideHours {
+        const val PAST_DEFAULT = 24
+        const val FUTURE_DEFAULT = 36
+        val PAST = listOf(24, 48, 72, 168)
+        val FUTURE = listOf(36, 72, 168)
+    }
+
     /** Atraso do som (as opções das definições vão de −300 a +500). */
     object AudioDelay {
         const val MAX_MS = 1_000
@@ -389,6 +402,8 @@ data class Prefs(
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.epgRefreshHours,
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),
+                epgPastHours = int(Key.EPG_PAST_HOURS, d.epgPastHours).takeIf { it in GuideHours.PAST } ?: d.epgPastHours,
+                epgFutureHours = int(Key.EPG_FUTURE_HOURS, d.epgFutureHours).takeIf { it in GuideHours.FUTURE } ?: d.epgFutureHours,
                 catchupOffsetMin = int(Key.CATCHUP_OFFSET, d.catchupOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgInList = bool(Key.EPG_IN_LIST, d.epgInList),
                 reminderSwitch = bool(Key.REMINDER_SWITCH, d.reminderSwitch),

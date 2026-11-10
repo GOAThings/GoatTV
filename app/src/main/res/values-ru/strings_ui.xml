@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Автозакрытие панелей</string>
     <string name="never">Никогда</string>
     <string name="time_offset">Сдвиг времени</string>
+    <string name="epg_past">Программа: прошедшие передачи</string>
+    <string name="epg_past_sub">Насколько назад идёт программа, для просмотра в записи. Больше дней — больше памяти</string>
+    <string name="epg_future">Программа: будущие передачи</string>
+    <string name="guide_one_day">1 день</string>
+    <string name="guide_days">%1$s дн.</string>
     <string name="no_offset">Без сдвига</string>
     <string name="catchup_offset">Поправка времени архива</string>
     <string name="catchup_offset_sub">Сдвигает запрашиваемое время в архиве, если часы провайдера идут неверно</string>

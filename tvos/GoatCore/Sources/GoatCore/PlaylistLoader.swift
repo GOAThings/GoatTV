@@ -85,7 +85,7 @@ public struct PlaylistLoader: Sendable {
     // MARK: Guias XMLTV
 
     /// Descarrega e lê um guia XMLTV (`.xml` ou `.xml.gz`), só com os canais da lista.
-    public func loadGuide(url: String, channels: [Channel]) async throws -> XMLTVGuide {
+    public func loadGuide(url: String, channels: [Channel], window: GuideWindow = .default) async throws -> XMLTVGuide {
         guard let u = URL(string: url), u.scheme != nil else { throw SourceError.badURL }
         var data = try await get(u, timeout: 120, maxBytes: SafeInput.maxGuideBytes)
         // Muitos guias vêm em .gz sem Content-Encoding: vê-se pelos dois primeiros bytes.
@@ -94,7 +94,7 @@ public struct PlaylistLoader: Sendable {
             data = unzipped
         }
         try Task.checkCancellation()
-        return XMLTVGuide.build(url: url, data: data, channels: channels)
+        return XMLTVGuide.build(url: url, data: data, channels: channels, window: window)
     }
 
     // MARK: Pedidos

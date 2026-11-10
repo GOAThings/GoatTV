@@ -404,6 +404,11 @@
     <string name="auto_close_panels">إغلاق اللوحات تلقائيًا</string>
     <string name="never">أبدًا</string>
     <string name="time_offset">فرق التوقيت</string>
+    <string name="epg_past">الدليل: البرامج السابقة</string>
+    <string name="epg_past_sub">إلى أي مدى يعود الدليل، للمشاهدة اللاحقة. أيام أكثر تستهلك ذاكرة أكثر</string>
+    <string name="epg_future">الدليل: البرامج القادمة</string>
+    <string name="guide_one_day">يوم واحد</string>
+    <string name="guide_days">%1$s أيام</string>
     <string name="no_offset">بلا فرق</string>
     <string name="catchup_offset">تصحيح وقت الأرشيف</string>
     <string name="catchup_offset_sub">يزيح الوقت المطلوب من الأرشيف إذا كانت ساعة المزوّد خاطئة</string>

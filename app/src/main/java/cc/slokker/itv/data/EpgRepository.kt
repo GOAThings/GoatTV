@@ -2,6 +2,7 @@ package cc.slokker.itv.data
 
 import cc.slokker.itv.data.epg.AccountGuide
 import cc.slokker.itv.data.epg.AccountGuideSource
+import cc.slokker.itv.data.epg.GuideWindow
 import cc.slokker.itv.data.epg.XmltvGuide
 import cc.slokker.itv.data.epg.XmltvSource
 import cc.slokker.itv.data.stalker.StalkerSource
@@ -33,6 +34,10 @@ class EpgRepository(
 ) {
 
     private val account = MutableStateFlow<AccountGuide?>(null)
+
+    /** Que programas se guardam à volta de agora (Definições → Guia); muda-se com [GuideController]. */
+    @Volatile
+    var window = GuideWindow.DEFAULT
     private var accountJob: Job? = null
 
     /** Programas do guia da conta para o canal (null se não está associado, ou o guia não os tem). */
@@ -54,13 +59,13 @@ class EpgRepository(
         if (accountJob?.isActive == true && !force) return
         accountJob?.cancel()
         accountJob = scope.launch {
-            val current = account.value?.takeIf { it.playlistId == playlistId } ?: store.loadAccountGuide(playlistId)?.trimmed(System.currentTimeMillis())?.also {
+            val current = account.value?.takeIf { it.playlistId == playlistId } ?: store.loadAccountGuide(playlistId)?.trimmed(System.currentTimeMillis(), window)?.also {
                 account.value = it
                 _version.value++
             }
             if (!force && current != null && System.currentTimeMillis() - current.fetchedAt < ACCOUNT_REFRESH_MS) return@launch
             try {
-                val fresh = accountSource.load(playlistId, current)
+                val fresh = accountSource.load(playlistId, current, window)
                 store.saveAccountGuide(fresh)
                 if (fresh.etag != current?.etag || current == null) _version.value++
                 account.value = fresh
@@ -139,7 +144,7 @@ class EpgRepository(
                     if (stored != null && previous == null) _version.value++
                     if (!force && stored != null && !isDue(stored.fetchedAt)) return@launch
                     val fresh = try {
-                        xmltv.load(url, content.channels).takeIf { it.programmes.isNotEmpty() }
+                        xmltv.load(url, content.channels, window).takeIf { it.programmes.isNotEmpty() }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

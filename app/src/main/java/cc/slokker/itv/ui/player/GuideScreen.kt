@@ -123,8 +123,6 @@ private val CELL_GAP = 3.dp
 private const val HALF_HOUR = 30 * 60_000L
 /** Largura visível da grelha: 2 horas. */
 private const val WINDOW_MS = 4 * HALF_HOUR
-private const val PAST_LIMIT_MS = 24 * 3600_000L
-private const val FUTURE_LIMIT_MS = 36 * 3600_000L
 private const val PAGE_ROWS = 6
 private const val HELD_HERO_DELAY_MS = 150L
 
@@ -186,8 +184,9 @@ internal fun TvGuide(
     var windowStart by remember { mutableLongStateOf(floorHalfHour(opened)) }
     var focusTime by remember { mutableLongStateOf(opened) }
     var onHeader by remember { mutableStateOf(false) }
-    val minTime = floorHalfHour(opened - PAST_LIMIT_MS)
-    val maxTime = opened + FUTURE_LIMIT_MS
+    // Até onde o guia guarda programas (Definições → Guia).
+    val minTime = floorHalfHour(opened - prefs.epgPastHours * 3600_000L)
+    val maxTime = opened + prefs.epgFutureHours * 3600_000L
     val listState = remember { guideListState((row - 2).coerceAtLeast(0)) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }

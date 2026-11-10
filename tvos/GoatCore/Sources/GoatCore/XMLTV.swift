@@ -303,13 +303,10 @@ public struct XMLTVGuide: Codable, Sendable {
         return programmes[id] ?? []
     }
 
-    public static let windowBeforeMs: Int64 = 24 * 3_600_000
-    public static let windowAfterMs: Int64 = 36 * 3_600_000
-
-    /// Lê o XMLTV guardando só os programas dos [channels] entre [from] e [to].
-    public static func build(url: String, data: Data, channels: [Channel], now: Int64 = nowMs()) -> XMLTVGuide {
-        let from = now - windowBeforeMs
-        let to = now + windowAfterMs
+    /// Lê o XMLTV guardando só os programas dos [channels] da [window] à volta de agora.
+    public static func build(url: String, data: Data, channels: [Channel], window: GuideWindow = .default, now: Int64 = nowMs()) -> XMLTVGuide {
+        let from = now - window.beforeMs
+        let to = now + window.afterMs
         let wantedIds = Set(channels.compactMap { $0.epgId?.lowercased() })
         var channelNames = Set(channels.map { normalizeName($0.name) })
         channelNames.remove("")
@@ -367,9 +364,9 @@ public struct AccountGuide: Codable, Sendable {
     /// channelKey → programas por ordem.
     public let programmes: [String: [EpgEntry]]
 
-    public static func parse(playlistId: String, etag: String?, data: Data, now: Int64 = nowMs()) -> AccountGuide {
-        let from = now - XMLTVGuide.windowBeforeMs
-        let to = now + XMLTVGuide.windowAfterMs
+    public static func parse(playlistId: String, etag: String?, data: Data, window: GuideWindow = .default, now: Int64 = nowMs()) -> AccountGuide {
+        let from = now - window.beforeMs
+        let to = now + window.afterMs
         var programmes: [String: [EpgEntry]] = [:]
         var titles: [String: String] = [:]
         XMLTVParser(
@@ -388,5 +385,28 @@ public struct AccountGuide: Codable, Sendable {
     /// O mesmo guia (resposta 304), com a hora atualizada.
     public func refreshed() -> AccountGuide {
         AccountGuide(playlistId: playlistId, etag: etag, fetchedAt: Date(), programmes: programmes)
+    }
+}
+
+/// Que programas do guia se guardam à volta de agora: [beforeMs] para trás (o que já passou, para o catch-up) e
+/// [afterMs] para a frente. Com centenas de canais, muitos dias pesam na memória, por isso por defeito é pouco
+/// (24 h e 36 h); as Definições → Guia deixam alargar. As mesmas opções do Android.
+public struct GuideWindow: Equatable, Sendable {
+    public let beforeMs: Int64
+    public let afterMs: Int64
+
+    public static let pastDefault = 24
+    public static let futureDefault = 36
+    public static let pastHours = [24, 48, 72, 168]
+    public static let futureHours = [36, 72, 168]
+    public static let `default` = GuideWindow(pastHours: pastDefault, futureHours: futureDefault)
+
+    public init(pastHours: Int, futureHours: Int) {
+        beforeMs = Int64(pastHours) * 3_600_000
+        afterMs = Int64(futureHours) * 3_600_000
+    }
+
+    public init(_ prefs: Prefs) {
+        self.init(pastHours: prefs.epgPastHours, futureHours: prefs.epgFutureHours)
     }
 }

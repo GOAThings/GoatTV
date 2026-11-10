@@ -17,6 +17,7 @@ import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.data.api.epgErrorText
 import cc.slokker.itv.data.api.parseServerError
 import cc.slokker.itv.data.api.unescaped
+import cc.slokker.itv.data.epg.GuideWindow
 import cc.slokker.itv.data.epg.XmltvGuide
 import cc.slokker.itv.ui.i18n.I18n
 import kotlinx.coroutines.CancellationException
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -92,6 +94,15 @@ class GuideController(
         }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     init {
+        // Mais (ou menos) dias de guia: com uma lista aberta, o guia volta a ler-se já com a janela nova (o do disco
+        // foi lido com a antiga). Ao arrancar as definições chegam antes da lista, e não se descarrega nada a mais.
+        scope.launch {
+            prefs.map { GuideWindow.of(it) }.distinctUntilChanged().collect { window ->
+                val changed = window != epg.window
+                epg.window = window
+                if (changed) openContent.value?.let { open(it, force = true) }
+            }
+        }
         // Com um país em "Origem dos logótipos", vai buscar os canais de guia desse país e associa-os aos da lista
         // pelo tvg-id ou pelo nome (como em "Usar <país> na lista inteira", mas sem gravar associações).
         scope.launch {

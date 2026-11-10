@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Panelleri otomatik kapat</string>
     <string name="never">Asla</string>
     <string name="time_offset">Saat farkı</string>
+    <string name="epg_past">Rehber: geçmiş programlar</string>
+    <string name="epg_past_sub">Geriye dönük izleme için rehberin ne kadar geriye gittiği. Daha çok gün daha çok bellek kullanır</string>
+    <string name="epg_future">Rehber: yaklaşan programlar</string>
+    <string name="guide_one_day">1 gün</string>
+    <string name="guide_days">%1$s gün</string>
     <string name="no_offset">Fark yok</string>
     <string name="catchup_offset">Geriye dönük izleme saat düzeltmesi</string>
     <string name="catchup_offset_sub">Sağlayıcının saati yanlışsa geriye dönük izlemede istenen saati kaydırır</string>

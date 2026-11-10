@@ -384,6 +384,21 @@ object SettingsCatalog {
         tv = Place(TvPage.GUIDE, 30),
         phone = Place(PhonePage.CHANNELS, 50),
     )
+    val EPG_PAST = Setting.Choice(
+        Prefs.Key.EPG_PAST_HOURS, { it.epgPast },
+        options = { s -> Prefs.GuideHours.PAST.map { it to s.guideDays(it) } },
+        read = { it.prefs.epgPastHours },
+        subtitle = { it.epgPastSub },
+        tv = Place(TvPage.GUIDE, 32),
+        phone = Place(PhonePage.GUIDE, 37),
+    )
+    val EPG_FUTURE = Setting.Choice(
+        Prefs.Key.EPG_FUTURE_HOURS, { it.epgFuture },
+        options = { s -> Prefs.GuideHours.FUTURE.map { it to s.guideDays(it) } },
+        read = { it.prefs.epgFutureHours },
+        tv = Place(TvPage.GUIDE, 33),
+        phone = Place(PhonePage.GUIDE, 38),
+    )
     val REMINDER_SWITCH = Setting.Toggle(
         Prefs.Key.REMINDER_SWITCH, { it.reminderSwitch }, { it.reminderSwitchSub },
         read = { it.reminderSwitch },
@@ -394,7 +409,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, REMINDER_SWITCH, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,

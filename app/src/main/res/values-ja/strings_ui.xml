@@ -404,6 +404,11 @@
     <string name="auto_close_panels">パネルを自動で閉じる</string>
     <string name="never">しない</string>
     <string name="time_offset">時刻のずれ</string>
+    <string name="epg_past">番組表：過去の番組</string>
+    <string name="epg_past_sub">キャッチアップ用に番組表をどこまで遡るか。日数が多いほどメモリを使います</string>
+    <string name="epg_future">番組表：今後の番組</string>
+    <string name="guide_one_day">1日</string>
+    <string name="guide_days">%1$s日</string>
     <string name="no_offset">ずれなし</string>
     <string name="catchup_offset">見逃し配信の時刻補正</string>
     <string name="catchup_offset_sub">提供元の時計がずれている場合、見逃し配信で要求する時刻をずらします</string>

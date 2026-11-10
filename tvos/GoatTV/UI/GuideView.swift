@@ -19,8 +19,6 @@ private let rulerHeight: CGFloat = 52
 private let halfHour: Int64 = 30 * 60_000
 /// Largura visível da grelha: 2 horas.
 private let windowMs: Int64 = 4 * halfHour
-private let pastLimitMs: Int64 = 24 * 3_600_000
-private let futureLimitMs: Int64 = 36 * 3_600_000
 
 /// Um bloco da grelha: um programa, ou um intervalo sem informação.
 struct GuideSlot: Equatable {
@@ -66,8 +64,9 @@ struct GuideView: View {
 
     private var groups: [ChannelGroup] { model.guideGroups }
     private var channels: [Channel] { model.channels(in: group) }
-    private var minTime: Int64 { GuideView.floorHalfHour(opened - pastLimitMs) }
-    private var maxTime: Int64 { opened + futureLimitMs }
+    // Até onde o guia guarda programas (Definições → Guia).
+    private var minTime: Int64 { GuideView.floorHalfHour(opened - GuideWindow(model.prefs).beforeMs) }
+    private var maxTime: Int64 { opened + GuideWindow(model.prefs).afterMs }
 
     var body: some View {
         let list = channels

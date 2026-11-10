@@ -89,6 +89,11 @@ func hhmm(_ date: Date) -> String {
     date.formatted(date: .omitted, time: .shortened)
 }
 
+/// "1 dia", "1½ dias", "7 dias" (as janelas do guia, em horas; como no Android).
+func guideDays(_ s: Strings, _ hours: Int) -> String {
+    hours == 24 ? s.r("guide_one_day") : s.r("guide_days", hours % 24 == 0 ? "\(hours / 24)" : "\(hours / 24)½")
+}
+
 /// "−1:05": quanto a pausa do direto vai atrás do direto (a cápsula no canto, a barra, o botão do direto no iPhone).
 func behindLabel(_ ms: Int64) -> String {
     let total = max(0, ms / 1000)

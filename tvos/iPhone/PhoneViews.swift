@@ -1781,6 +1781,8 @@ private struct MenuTab: View {
                 pick(s.t("Time offset", "Desvio horário"), "epg_offset_min", .number(Double(p.epgOffsetMin)), stride(from: -180, through: 180, by: 30).map { (.number(Double($0)), $0 == 0 ? "0" : String(format: "%+d min", $0)) })
                 pick(s.r("catchup_offset"), "catchup_offset_min", .number(Double(p.catchupOffsetMin)),
                      (-12...12).map { (h: Int) -> (JSON?, String) in (.number(Double(h * 60)), h == 0 ? "0" : String(format: "%+d h", h)) })
+                pick(s.r("epg_past"), "epg_past_hours", .number(Double(p.epgPastHours)), GuideWindow.pastHours.map { (.number(Double($0)), guideDays(s, $0)) })
+                pick(s.r("epg_future"), "epg_future_hours", .number(Double(p.epgFutureHours)), GuideWindow.futureHours.map { (.number(Double($0)), guideDays(s, $0)) })
                 toggle(s.r("reminder_switch"), "reminder_switch", p.reminderSwitch)
                 if model.hasAccount { MenuRow(s.t("Guide by country", "Guia por país"), chevron: true) { pickingGuideCountry = true } }
                 if model.hasAccount, !model.epgMappings.isEmpty {

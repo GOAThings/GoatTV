@@ -791,6 +791,12 @@ class Strings(context: Context) {
 
     // ---- Guia ----
     val timeOffset get() = s(R.string.time_offset)
+    val epgPast get() = s(R.string.epg_past)
+    val epgPastSub get() = s(R.string.epg_past_sub)
+    val epgFuture get() = s(R.string.epg_future)
+
+    /** "1 dia", "1½ dias", "7 dias" (as janelas do guia, em horas). */
+    fun guideDays(hours: Int) = if (hours == 24) s(R.string.guide_one_day) else s(R.string.guide_days, if (hours % 24 == 0) "${hours / 24}" else "${hours / 24}½")
     val noOffset get() = s(R.string.no_offset)
     val catchupOffset get() = s(R.string.catchup_offset)
     val catchupOffsetSub get() = s(R.string.catchup_offset_sub)

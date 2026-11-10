@@ -380,6 +380,9 @@ enum CoreTests {
         try expect(guide.programmes["outro"] == nil, true)
         let account = AccountGuide.parse(playlistId: "p", etag: nil, data: Data(xml.utf8), now: now)
         try expect(account.programmes["outro"]?.first?.title, "Fora")
+        // Com 7 dias para a frente, guarda-se o que a janela de 36 h deixava de fora (e vice-versa).
+        try expect(GuideWindow(Prefs(settings: .object(["epg_future_hours": 168]))).afterMs, 168 * 3_600_000)
+        try expect(Prefs(settings: .object(["epg_past_hours": 5])).epgPastHours, 24)
     }
 
     static func xmltvTime() throws {

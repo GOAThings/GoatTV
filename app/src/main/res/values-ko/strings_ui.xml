@@ -404,6 +404,11 @@
     <string name="auto_close_panels">패널 자동 닫기</string>
     <string name="never">사용 안 함</string>
     <string name="time_offset">시간 보정</string>
+    <string name="epg_past">편성표: 지난 프로그램</string>
+    <string name="epg_past_sub">다시보기를 위해 편성표가 얼마나 과거까지 보여줄지. 일수가 많을수록 메모리를 더 씁니다</string>
+    <string name="epg_future">편성표: 예정 프로그램</string>
+    <string name="guide_one_day">1일</string>
+    <string name="guide_days">%1$s일</string>
     <string name="no_offset">보정 없음</string>
     <string name="catchup_offset">다시보기 시간 보정</string>
     <string name="catchup_offset_sub">제공업체 시계가 틀리면 다시보기에서 요청하는 시간을 옮겨요</string>

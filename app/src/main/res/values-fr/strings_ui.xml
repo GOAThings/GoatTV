@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Fermeture auto des panneaux</string>
     <string name="never">Jamais</string>
     <string name="time_offset">Décalage horaire</string>
+    <string name="epg_past">Guide : programmes passés</string>
+    <string name="epg_past_sub">Jusqu\'où remonte le guide, pour le replay. Plus de jours utilisent plus de mémoire</string>
+    <string name="epg_future">Guide : programmes à venir</string>
+    <string name="guide_one_day">1 jour</string>
+    <string name="guide_days">%1$s jours</string>
     <string name="no_offset">Aucun décalage</string>
     <string name="catchup_offset">Correction de l\'heure du replay</string>
     <string name="catchup_offset_sub">Décale l\'heure demandée en replay, si l\'horloge du fournisseur est fausse</string>

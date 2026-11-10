@@ -83,7 +83,7 @@ class XmltvGuide(
 /** Descarrega e lê guias XMLTV (`.xml` ou `.xml.gz`). */
 class XmltvSource(private val http: OkHttpClient) {
 
-    suspend fun load(url: String, channels: List<Channel>): XmltvGuide = withContext(Dispatchers.IO) {
+    suspend fun load(url: String, channels: List<Channel>, window: GuideWindow): XmltvGuide = withContext(Dispatchers.IO) {
         val request = try {
             Request.Builder().url(url).build()
         } catch (e: IllegalArgumentException) {
@@ -98,7 +98,7 @@ class XmltvSource(private val http: OkHttpClient) {
             val stream = LimitedInputStream(if (gzip) GZIPInputStream(source.inputStream(), 64 * 1024) else source.inputStream(), SafeInput.MAX_GUIDE_BYTES)
             val now = System.currentTimeMillis()
             SafeInput.outOfMemoryAsIo {
-                XmltvGuide.build(url, channels, now - WINDOW_BEFORE_MS, now + WINDOW_AFTER_MS, now) { parser ->
+                XmltvGuide.build(url, channels, now - window.beforeMs, now + window.afterMs, now) { parser ->
                     val reader = CancellableReader(stream.reader(Charsets.UTF_8)) { context.ensureActive() }
                     parser.parse(reader.buffered(64 * 1024))
                 }
@@ -114,11 +114,5 @@ class XmltvSource(private val http: OkHttpClient) {
         }
 
         override fun close() = inner.close()
-    }
-
-    private companion object {
-        /** 24 h para trás: o guia mostra o que já passou (e dá para ver em catch-up). */
-        const val WINDOW_BEFORE_MS = 24 * 3600_000L
-        const val WINDOW_AFTER_MS = 36 * 3600_000L
     }
 }

@@ -85,6 +85,9 @@ public struct Prefs: Equatable, Sendable {
     public var playlistRefreshHours = 0
     public var epgRefreshHours = 12
     public var epgOffsetMin = 0
+    /// Quantas horas do guia se guardam para trás (catch-up) e para a frente (ver GuideWindow).
+    public var epgPastHours = GuideWindow.pastDefault
+    public var epgFutureHours = GuideWindow.futureDefault
     public var epgInList = true
     /// Um lembrete muda sozinho para o canal ao fim de uns segundos (sem isto, só com "Ver").
     public var reminderSwitch = false
@@ -246,6 +249,8 @@ public struct Prefs: Equatable, Sendable {
         let epgRefresh = int("epg_refresh_hours", d.epgRefreshHours)
         epgRefreshHours = Prefs.refreshOptions.contains(epgRefresh) ? epgRefresh : d.epgRefreshHours
         epgOffsetMin = clamp(int("epg_offset_min", d.epgOffsetMin), -12 * 60, 12 * 60)
+        epgPastHours = Optional(int("epg_past_hours", d.epgPastHours)).filter { GuideWindow.pastHours.contains($0) } ?? d.epgPastHours
+        epgFutureHours = Optional(int("epg_future_hours", d.epgFutureHours)).filter { GuideWindow.futureHours.contains($0) } ?? d.epgFutureHours
         epgInList = bool("epg_in_list", d.epgInList)
         reminderSwitch = bool("reminder_switch", d.reminderSwitch)
         catchupOffsetMin = clamp(int("catchup_offset_min", d.catchupOffsetMin), -12 * 60, 12 * 60)

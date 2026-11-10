@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Tutup panel otomatis</string>
     <string name="never">Tidak pernah</string>
     <string name="time_offset">Selisih waktu</string>
+    <string name="epg_past">Panduan: acara lalu</string>
+    <string name="epg_past_sub">Seberapa jauh panduan mundur, untuk catch-up. Lebih banyak hari memakai lebih banyak memori</string>
+    <string name="epg_future">Panduan: acara mendatang</string>
+    <string name="guide_one_day">1 hari</string>
+    <string name="guide_days">%1$s hari</string>
     <string name="no_offset">Tanpa selisih</string>
     <string name="catchup_offset">Koreksi waktu siaran ulang</string>
     <string name="catchup_offset_sub">Menggeser waktu yang diminta di siaran ulang, jika jam penyedia salah</string>

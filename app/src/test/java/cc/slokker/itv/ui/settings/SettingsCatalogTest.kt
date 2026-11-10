@@ -72,7 +72,7 @@ class SettingsCatalogTest {
             ),
             tv(TvPage.APPEARANCE),
         )
-        assertEquals(listOf(TvSection.MAIN to listOf(k.EPG_REFRESH, k.EPG_OFFSET, k.CATCHUP_OFFSET, k.EPG_IN_LIST, k.REMINDER_SWITCH)), tv(TvPage.GUIDE))
+        assertEquals(listOf(TvSection.MAIN to listOf(k.EPG_REFRESH, k.EPG_OFFSET, k.CATCHUP_OFFSET, k.EPG_IN_LIST, k.EPG_PAST_HOURS, k.EPG_FUTURE_HOURS, k.REMINDER_SWITCH)), tv(TvPage.GUIDE))
     }
 
     @Test
@@ -91,7 +91,7 @@ class SettingsCatalogTest {
             listOf(PhoneSection.MAIN to listOf(k.PHONE_STARTUP, k.SORT, k.SHOW_NUMBERS, k.SHOW_LOGOS, k.EPG_IN_LIST, k.LOGO_SOURCE, "visible_groups")),
             phone(PhonePage.CHANNELS),
         )
-        assertEquals(listOf(PhoneSection.MAIN to listOf(k.EPG_REFRESH, k.PLAYLIST_REFRESH, k.EPG_OFFSET, k.CATCHUP_OFFSET, k.REMINDER_SWITCH)), phone(PhonePage.GUIDE))
+        assertEquals(listOf(PhoneSection.MAIN to listOf(k.EPG_REFRESH, k.PLAYLIST_REFRESH, k.EPG_OFFSET, k.CATCHUP_OFFSET, k.EPG_PAST_HOURS, k.EPG_FUTURE_HOURS, k.REMINDER_SWITCH)), phone(PhonePage.GUIDE))
         assertEquals(listOf(PhoneSection.MAIN to listOf(k.LANGUAGE, k.ACCENT)), phone(PhonePage.APPEARANCE))
     }
 

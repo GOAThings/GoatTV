@@ -404,6 +404,11 @@
     <string name="auto_close_panels">पैनल अपने आप बंद हों</string>
     <string name="never">कभी नहीं</string>
     <string name="time_offset">समय का अंतर</string>
+    <string name="epg_past">गाइड: पिछले कार्यक्रम</string>
+    <string name="epg_past_sub">कैच-अप के लिए गाइड कितना पीछे जाता है। ज़्यादा दिन ज़्यादा मेमोरी लेते हैं</string>
+    <string name="epg_future">गाइड: आने वाले कार्यक्रम</string>
+    <string name="guide_one_day">1 दिन</string>
+    <string name="guide_days">%1$s दिन</string>
     <string name="no_offset">कोई अंतर नहीं</string>
     <string name="catchup_offset">कैच-अप समय सुधार</string>
     <string name="catchup_offset_sub">प्रदाता की घड़ी गलत हो तो कैच-अप में माँगा गया समय खिसकाता है</string>

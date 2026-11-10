@@ -1,6 +1,7 @@
 package cc.slokker.itv.data
 
 import cc.slokker.itv.data.epg.AccountGuide
+import cc.slokker.itv.data.epg.GuideWindow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -19,7 +20,7 @@ class AccountGuideTest {
 
     @Test
     fun `programmes are keyed by the playlist channelKey, in order`() {
-        val guide = AccountGuide.parse("p1", "\"etag\"", OCT_22_18H, StringReader(xml))
+        val guide = AccountGuide.parse("p1", "\"etag\"", OCT_22_18H, StringReader(xml), GuideWindow.DEFAULT)
         val sic = guide.programmes.getValue("1001")
         assertEquals(listOf("Casados à Primeira Vista", "Jornal da Noite"), sic.map { it.title })
         // As chaves são exatas (não se passam a minúsculas, como os ids do XMLTV das listas).
@@ -30,9 +31,9 @@ class AccountGuideTest {
 
     @Test
     fun `only keeps programmes around now`() {
-        val guide = AccountGuide.parse("p1", null, OCT_22_18H + 3 * 86_400_000L, StringReader(xml))
+        val guide = AccountGuide.parse("p1", null, OCT_22_18H + 3 * 86_400_000L, StringReader(xml), GuideWindow.DEFAULT)
         assertEquals(emptyMap<String, Any>(), guide.programmes)
-        val later = AccountGuide.parse("p1", null, OCT_22_18H, StringReader(xml)).trimmed(OCT_22_18H + 25 * 3600_000L)
+        val later = AccountGuide.parse("p1", null, OCT_22_18H, StringReader(xml), GuideWindow.DEFAULT).trimmed(OCT_22_18H + 25 * 3600_000L, GuideWindow.DEFAULT)
         assertEquals(listOf("Jornal da Noite"), later.programmes.getValue("1001").map { it.title })
     }
 

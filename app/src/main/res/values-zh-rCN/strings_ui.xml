@@ -404,6 +404,11 @@
     <string name="auto_close_panels">自动关闭面板</string>
     <string name="never">从不</string>
     <string name="time_offset">时间偏移</string>
+    <string name="epg_past">节目表：过去的节目</string>
+    <string name="epg_past_sub">节目表回看可追溯多远。天数越多，占用内存越多</string>
+    <string name="epg_future">节目表：即将播出</string>
+    <string name="guide_one_day">1 天</string>
+    <string name="guide_days">%1$s 天</string>
     <string name="no_offset">无偏移</string>
     <string name="catchup_offset">回看时间校正</string>
     <string name="catchup_offset_sub">服务商时钟不准时，平移回看请求的时间</string>

@@ -404,6 +404,11 @@
     <string name="auto_close_panels">Leisten automatisch schließen</string>
     <string name="never">Nie</string>
     <string name="time_offset">Zeitversatz</string>
+    <string name="epg_past">Programmführer: vergangene Sendungen</string>
+    <string name="epg_past_sub">Wie weit der Führer zurückreicht, für Catch-up. Mehr Tage brauchen mehr Speicher</string>
+    <string name="epg_future">Programmführer: kommende Sendungen</string>
+    <string name="guide_one_day">1 Tag</string>
+    <string name="guide_days">%1$s Tage</string>
     <string name="no_offset">Kein Versatz</string>
     <string name="catchup_offset">Zeitkorrektur für Catch-up</string>
     <string name="catchup_offset_sub">Verschiebt die angefragte Zeit bei Catch-up, wenn die Uhr des Anbieters falsch geht</string>

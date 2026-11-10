@@ -567,7 +567,10 @@ final class AppModel {
     }
 
     private func applySettings() {
+        let oldWindow = GuideWindow(prefs)
         prefs = Prefs(settings: .object(settings))
+        // Mais (ou menos) dias de guia: com uma lista aberta, volta a ler-se já com a janela nova.
+        if GuideWindow(prefs) != oldWindow, content != nil { loadGuides(force: true, window: true) }
         recents = Backend.parseKeyLists(settings["recent_channels"])
         strings = Strings(language: prefs.language)
         player.reconnectSeconds = prefs.reconnectSeconds
@@ -1711,13 +1714,14 @@ final class AppModel {
     private func refreshAccountGuide(again: Bool) {
         guard let id = content?.playlist.id else { return }
         let backend = self.backend
+        let window = GuideWindow(prefs)
         Task { [weak self] in
             for attempt in 0..<(again ? 2 : 1) {
                 if attempt > 0 { try? await Task.sleep(for: .seconds(90)) }
                 guard let reply = try? await backend.epgGuide(playlistId: id, etag: nil), (200..<300).contains(reply.status) else { continue }
                 let data = reply.data
                 let etag = reply.etag
-                let guide = await Task.detached { AccountGuide.parse(playlistId: id, etag: etag, data: data) }.value
+                let guide = await Task.detached { AccountGuide.parse(playlistId: id, etag: etag, data: data, window: window) }.value
                 guard self?.content?.playlist.id == id else { return }
                 self?.setGuide(account: guide)
             }
@@ -1896,8 +1900,10 @@ final class AppModel {
     @ObservationIgnored private var guidesChecked = Set<String>()
 
     /// Abre os guias: primeiro os guardados em disco (logo), depois atualiza os que estão na hora (ou todos, com [force]).
-    private func loadGuides(force: Bool = false) {
+    /// [force]: descarrega já. [window]: a janela do guia mudou, e o guia da conta pede-se todo (sem o ETag).
+    private func loadGuides(force: Bool = false, window windowChanged: Bool = false) {
         guard let content else { return }
+        let window = GuideWindow(prefs)
         guideTask?.cancel()
         let loader = self.loader
         let backend = self.backend
@@ -1923,7 +1929,7 @@ final class AppModel {
         }
         let mainDue = mainURL != nil && due("main:\(playlistId)", mainGuide?.url == mainURL ? mainGuide?.fetchedAt : nil)
         let extraDue = extraURL != nil && due("extra:\(playlistId)", extraGuide?.url == extraURL ? extraGuide?.fetchedAt : nil)
-        let previousAccount = accountGuide
+        let previousAccount = windowChanged ? nil : accountGuide
         guideTask = Task { [weak self] in
             // Guia da conta (associações feitas no site ou no Android): pequeno; com o ETag, um 304 não traz nada.
             if hasAccount, let reply = try? await backend.epgGuide(playlistId: playlistId, etag: previousAccount?.etag) {
@@ -1933,7 +1939,7 @@ final class AppModel {
                 } else if (200..<300).contains(reply.status) {
                     let data = reply.data
                     let etag = reply.etag
-                    guide = await Task.detached { AccountGuide.parse(playlistId: playlistId, etag: etag, data: data) }.value
+                    guide = await Task.detached { AccountGuide.parse(playlistId: playlistId, etag: etag, data: data, window: window) }.value
                 }
                 guard !Task.isCancelled else { return }
                 if let guide {
@@ -1941,13 +1947,13 @@ final class AppModel {
                     cache.save(guide, as: "guide-account-\(playlistId)")
                 }
             }
-            if mainDue, let mainURL, let guide = try? await loader.loadGuide(url: mainURL, channels: channels) {
+            if mainDue, let mainURL, let guide = try? await loader.loadGuide(url: mainURL, channels: channels, window: window) {
                 guard !Task.isCancelled else { return }
                 self?.guidesChecked.insert("main:\(playlistId)")
                 self?.setGuide(main: guide)
                 cache.save(guide, as: "guide-main-\(playlistId)")
             }
-            if extraDue, let extraURL, let guide = try? await loader.loadGuide(url: extraURL, channels: channels) {
+            if extraDue, let extraURL, let guide = try? await loader.loadGuide(url: extraURL, channels: channels, window: window) {
                 guard !Task.isCancelled else { return }
                 self?.guidesChecked.insert("extra:\(playlistId)")
                 self?.setGuide(extra: guide)

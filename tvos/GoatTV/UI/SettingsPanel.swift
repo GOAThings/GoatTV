@@ -778,6 +778,8 @@ struct SettingsPanel: View {
                 pickItem("catchup_offset_min", subtitle: s.r("catchup_offset_sub")),
                 .toggle("epg_in_list", s.t("Current show in the list", "Programa atual na lista"), prefs.epgInList,
                         subtitle: s.t("What's on, on every channel", "O que está a dar em cada canal")) { model.setPref("epg_in_list", .bool($0)) },
+                pickItem("epg_past_hours", subtitle: s.r("epg_past_sub")),
+                pickItem("epg_future_hours"),
                 .toggle("reminder_switch", s.r("reminder_switch"), prefs.reminderSwitch, subtitle: s.r("reminder_switch_sub")) {
                     model.setPref("reminder_switch", .bool($0))
                 },
@@ -1393,6 +1395,10 @@ struct SettingsPanel: View {
             return (s.t("Aspect ratio", "Proporção"),
                     [o("fit", s.t("Fit", "Ajustar")), o("zoom", s.t("Fill (crop)", "Preencher (cortar)")), o("fill", s.t("Stretch", "Esticar"))],
                     .string(p.aspect))
+        case "epg_past_hours":
+            return (s.r("epg_past"), GuideWindow.pastHours.map { o(n($0), guideDays(s, $0)) }, n(p.epgPastHours))
+        case "epg_future_hours":
+            return (s.r("epg_future"), GuideWindow.futureHours.map { o(n($0), guideDays(s, $0)) }, n(p.epgFutureHours))
         case "audio_delay_ms":
             return (s.r("audio_delay"),
                     Prefs.audioDelayOptions.map { o(n($0), $0 == 0 ? s.r("off") : String(format: "%+d ms", $0)) },
