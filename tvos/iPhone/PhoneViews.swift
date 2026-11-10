@@ -169,7 +169,16 @@ private struct PhoneActivation: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 15)
                         .background(Theme.accent(model.prefs.accent), in: cardShape)
                 }
-                Text(a.url ?? text).font(.caption).foregroundStyle(Theme.textFaint).padding(.top, 8)
+                // A página de aprovar também cria a conta (com signup=1 abre já nesse separador).
+                if let signup = URL(string: url.absoluteString + (url.query == nil ? "?" : "&") + "signup=1") {
+                    Link(destination: signup) {
+                        Text(s.r("create_account"))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                    }
+                    .padding(.top, 4)
+                }
+                Text(a.url ?? text).font(.caption).foregroundStyle(Theme.textFaint)
             }
             Spacer()
             Button(s.r("use_without_account")) { model.leaveActivation() }

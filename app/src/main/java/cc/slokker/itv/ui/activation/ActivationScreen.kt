@@ -173,7 +173,14 @@ fun ActivationScreen(
                 ) {
                     Text(s.signInToApprove, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
+                // A página de aprovar também cria a conta (com signup=1 abre já nesse separador).
+                Text(
+                    s.createAccount, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(signupUrl(state.approveUrl)))) } }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                )
                 Text(state.verificationUrl, color = ItvColors.TextFaint, fontSize = 12.sp)
             }
             Spacer(Modifier.weight(1f))
@@ -234,10 +241,19 @@ fun ActivationScreen(
                 }
                 Spacer(Modifier.height(14.dp))
                 Text(s.activateQr, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    s.activateNoAccount, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center, modifier = Modifier.width(280.dp),
+                )
             }
         }
     }
 }
+
+/** A página de aprovar a abrir já no separador "Criar conta" (o site ignora o parâmetro se não o conhecer). */
+internal fun signupUrl(approveUrl: String): String =
+    approveUrl + (if ("?" in approveUrl) "&" else "?") + "signup=1"
 
 private suspend fun runActivation(
     api: BackendApi,

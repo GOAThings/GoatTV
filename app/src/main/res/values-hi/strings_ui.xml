@@ -22,6 +22,8 @@
     <string name="activate_enter_code">और यह कोड डालें</string>
     <string name="activate_requesting">कोड माँगा जा रहा है…</string>
     <string name="activate_qr">या कैमरे से QR कोड स्कैन करें</string>
+    <string name="activate_no_account">अभी तक खाता नहीं है? आप उसी पेज पर खाता बना सकते हैं।</string>
+    <string name="create_account">खाता बनाएँ</string>
     <string name="activate_qr_description">सक्रिय करने के लिए QR कोड</string>
     <string name="activate_server_error">सर्वर ने %1$s लौटाया। फिर से कोशिश हो रही है…</string>
     <string name="activate_offline">इंटरनेट कनेक्शन नहीं है। फिर से कोशिश हो रही है…</string>

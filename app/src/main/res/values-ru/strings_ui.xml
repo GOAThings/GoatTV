@@ -22,6 +22,8 @@
     <string name="activate_enter_code">и введите код</string>
     <string name="activate_requesting">Запрос кода…</string>
     <string name="activate_qr">Или отсканируйте QR-код камерой</string>
+    <string name="activate_no_account">Ещё нет аккаунта? Его можно создать на той же странице.</string>
+    <string name="create_account">Создать аккаунт</string>
     <string name="activate_qr_description">QR-код для активации</string>
     <string name="activate_server_error">Сервер ответил %1$s. Повторная попытка…</string>
     <string name="activate_offline">Нет подключения к интернету. Повторная попытка…</string>

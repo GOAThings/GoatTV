@@ -22,6 +22,8 @@
     <string name="activate_enter_code">und gib den Code ein</string>
     <string name="activate_requesting">Code wird angefordert…</string>
     <string name="activate_qr">Oder scanne den QR-Code mit deiner Kamera</string>
+    <string name="activate_no_account">Noch kein Konto? Du kannst es auf derselben Seite erstellen.</string>
+    <string name="create_account">Konto erstellen</string>
     <string name="activate_qr_description">QR-Code zum Aktivieren</string>
     <string name="activate_server_error">Der Server antwortete mit %1$s. Neuer Versuch…</string>
     <string name="activate_offline">Keine Internetverbindung. Neuer Versuch…</string>

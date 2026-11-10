@@ -22,6 +22,8 @@
     <string name="activate_enter_code">وأدخل الرمز</string>
     <string name="activate_requesting">جارٍ طلب رمز…</string>
     <string name="activate_qr">أو امسح رمز QR بالكاميرا</string>
+    <string name="activate_no_account">ليس لديك حساب بعد؟ يمكنك إنشاؤه في الصفحة نفسها.</string>
+    <string name="create_account">إنشاء حساب</string>
     <string name="activate_qr_description">رمز QR للتفعيل</string>
     <string name="activate_server_error">أعاد الخادم الرمز %1$s. جارٍ إعادة المحاولة…</string>
     <string name="activate_offline">لا يوجد اتصال بالإنترنت. جارٍ إعادة المحاولة…</string>

@@ -22,6 +22,8 @@
     <string name="activate_enter_code">lalu masukkan kode</string>
     <string name="activate_requesting">Meminta kode…</string>
     <string name="activate_qr">Atau pindai kode QR dengan kamera</string>
+    <string name="activate_no_account">Belum punya akun? Kamu bisa membuatnya di halaman yang sama.</string>
+    <string name="create_account">Buat akun</string>
     <string name="activate_qr_description">Kode QR untuk aktivasi</string>
     <string name="activate_server_error">Server membalas %1$s. Mencoba lagi…</string>
     <string name="activate_offline">Tidak ada koneksi internet. Mencoba lagi…</string>

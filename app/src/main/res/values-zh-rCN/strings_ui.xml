@@ -22,6 +22,8 @@
     <string name="activate_enter_code">并输入代码</string>
     <string name="activate_requesting">正在获取代码…</string>
     <string name="activate_qr">或用相机扫描二维码</string>
+    <string name="activate_no_account">还没有账户？可以在同一页面上创建。</string>
+    <string name="create_account">创建账户</string>
     <string name="activate_qr_description">用于激活的二维码</string>
     <string name="activate_server_error">服务器返回 %1$s，正在重试…</string>
     <string name="activate_offline">没有网络连接，正在重试…</string>

@@ -22,6 +22,8 @@
     <string name="activate_enter_code">にアクセスし、コードを入力してください</string>
     <string name="activate_requesting">コードを取得しています…</string>
     <string name="activate_qr">または、カメラで QR コードをスキャンしてください</string>
+    <string name="activate_no_account">アカウントをお持ちでないですか？同じページで作成できます。</string>
+    <string name="create_account">アカウントを作成</string>
     <string name="activate_qr_description">有効化用の QR コード</string>
     <string name="activate_server_error">サーバーが %1$s を返しました。再試行しています…</string>
     <string name="activate_offline">インターネットに接続されていません。再試行しています…</string>

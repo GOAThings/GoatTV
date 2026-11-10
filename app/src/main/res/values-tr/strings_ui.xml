@@ -22,6 +22,8 @@
     <string name="activate_enter_code">ve kodu girin</string>
     <string name="activate_requesting">Kod isteniyor…</string>
     <string name="activate_qr">Ya da QR kodunu kameranızla tarayın</string>
+    <string name="activate_no_account">Henüz hesabın yok mu? Aynı sayfada oluşturabilirsin.</string>
+    <string name="create_account">Hesap oluştur</string>
     <string name="activate_qr_description">Etkinleştirmek için QR kodu</string>
     <string name="activate_server_error">Sunucu %1$s yanıtını verdi. Yeniden deneniyor…</string>
     <string name="activate_offline">İnternet bağlantısı yok. Yeniden deneniyor…</string>

@@ -61,6 +61,8 @@ class Strings(context: Context) {
     val activateRequesting get() = s(R.string.activate_requesting)
     val activateQr get() = s(R.string.activate_qr)
     val activateQrDescription get() = s(R.string.activate_qr_description)
+    val activateNoAccount get() = s(R.string.activate_no_account)
+    val createAccount get() = s(R.string.create_account)
     fun activateServerError(code: Int) = s(R.string.activate_server_error, code)
     val activateOffline get() = s(R.string.activate_offline)
     val activateBadResponse get() = s(R.string.activate_bad_response)

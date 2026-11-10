@@ -52,6 +52,9 @@ struct ActivationView: View {
                     RoundedRectangle(cornerRadius: 28).fill(Color.white.opacity(0.08)).frame(width: 468, height: 468)
                 }
                 Text(s.activateScan).foregroundStyle(Theme.textFaint)
+                Text(s.r("activate_no_account"))
+                    .font(.callout).foregroundStyle(Theme.textFaint)
+                    .multilineTextAlignment(.center).frame(maxWidth: 468)
             }
         }
         .padding(100)
