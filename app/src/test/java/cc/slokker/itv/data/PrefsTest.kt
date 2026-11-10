@@ -152,6 +152,25 @@ class PrefsTest {
     }
 
     @Test
+    fun `removing a playlist drops it as a backup too`() {
+        val settings = JsonParser.parseString(
+            """
+            {"backup_playlist": {"p1": "p2", "p3": "p1", "p4": "p2"},
+             "backup_channels": {"p1:101": "9", "p3:5": "off", "p4:7": "8"}}
+            """,
+        ).asJsonObject
+        assertTrue(Prefs.removePlaylist(settings, "p1"))
+        assertEquals(JsonParser.parseString("""{"backup_playlist": {"p4": "p2"}, "backup_channels": {"p4:7": "8"}}"""), settings)
+    }
+
+    @Test
+    fun `a playlist is never its own backup`() {
+        val p = prefs("""{"backup_playlist": {"p1": "p1", "p2": "", "p3": "p1"}, "backup_channels": {"p1:1": "", "p1:2": "off"}}""")
+        assertEquals(mapOf("p3" to "p1"), p.backupPlaylist)
+        assertEquals(mapOf("p1:2" to "off"), p.backupChannels)
+    }
+
+    @Test
     fun `afr mode keeps reading the old on-off key`() {
         // Gravado antes de haver modos: ligado era "sempre".
         assertEquals(Prefs.AfrMode.ALWAYS, prefs("""{"afr":true}""").afrMode)

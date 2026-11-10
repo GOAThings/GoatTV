@@ -258,6 +258,8 @@ class PersistedFormatTest {
         "logoSource" to (Prefs.Key.LOGO_SOURCE to "pt"),
         "channelLogos" to (Prefs.Key.CHANNEL_LOGOS to mapOf("p1:101" to "https://logos.example.com/rtp1.png", "p1:102" to "")),
         "extraEpg" to (Prefs.Key.EXTRA_EPG to mapOf("p1" to "https://epg.example.com/extra.xml")),
+        "backupPlaylist" to (Prefs.Key.BACKUP_PLAYLIST to mapOf("p1" to "p2")),
+        "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off")),
         "outlineColor" to (Prefs.Key.OUTLINE_COLOR to "pink"),
         "panelTimeout" to (Prefs.Key.PANEL_TIMEOUT to 30),
         "sort" to (Prefs.Key.SORT to Prefs.Sort.NAME),
@@ -313,11 +315,12 @@ class PersistedFormatTest {
             """
             {"hidden_groups": ["p1:7", "p1:Outros"], "group_order": {"p1": ["3", "1"]}, "channel_order": {"p1:1": ["102", "101"]},
              "channel_logos": {"p1:101": "https://logos.example.com/rtp1.png", "p1:102": ""},
-             "extra_epg": {"p1": "https://epg.example.com/extra.xml"}, "reconnect_seconds": 10, "afr": true,
+             "extra_epg": {"p1": "https://epg.example.com/extra.xml"}, "backup_playlist": {"p1": "p2"},
+             "backup_channels": {"p1:101": "2001", "p1:102": "off"}, "reconnect_seconds": 10, "afr": true,
              "parental_pin_sha256": "${Prefs.hashPin("1234")}", "epg_offset_min": -90, "language": "pt-BR"}
             """,
             JsonObject().apply {
-                listOf("hidden_groups", "group_order", "channel_order", "channel_logos", "extra_epg", "reconnect_seconds", "afr", "parental_pin_sha256", "epg_offset_min", "language")
+                listOf("hidden_groups", "group_order", "channel_order", "channel_logos", "extra_epg", "backup_playlist", "backup_channels", "reconnect_seconds", "afr", "parental_pin_sha256", "epg_offset_min", "language")
                     .forEach { add(it, settings.get(it)) }
             }.toString(),
         )

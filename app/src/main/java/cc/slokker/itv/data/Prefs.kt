@@ -100,6 +100,17 @@ data class Prefs(
     val channelLogos: Map<String, String> = emptyMap(),
     /** Guia XMLTV extra por lista: playlistId → URL (para os canais que o guia da lista não tem). */
     val extraEpg: Map<String, String> = emptyMap(),
+    /**
+     * Lista de reserva por lista: playlistId → playlistId. Quando um canal em direto não abre na lista, dá o mesmo
+     * canal da reserva (ver ChannelMatch). Fica no `settings` da conta como o guia extra: um mapa que as versões
+     * antigas, o site e a Apple TV guardam intacto (o `settings` grava-se inteiro e só se manda o que mudou).
+     */
+    val backupPlaylist: Map<String, String> = emptyMap(),
+    /**
+     * O canal da reserva escolhido à mão: "playlistId:channelKey" → channelKey na reserva, ou "off" (este canal não
+     * muda de lista). Ganha ao que o ChannelMatch encontra. Apaga-se ao mudar de reserva.
+     */
+    val backupChannels: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
     val panelTimeout: Int = 15,
@@ -205,6 +216,8 @@ data class Prefs(
         const val LOGO_SOURCE = "logo_source"
         const val CHANNEL_LOGOS = "channel_logos"
         const val EXTRA_EPG = "extra_epg"
+        const val BACKUP_PLAYLIST = "backup_playlist"
+        const val BACKUP_CHANNELS = "backup_channels"
         const val OUTLINE_COLOR = "outline_color"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
@@ -415,6 +428,8 @@ data class Prefs(
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
+                backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
+                backupChannels = stringMap(s, Key.BACKUP_CHANNELS).filterValues { it.isNotEmpty() },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, Sort.ALL),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
@@ -483,7 +498,8 @@ data class Prefs(
 
         /**
          * Tira de [settings] o que é só da lista [playlistId] (grupos e canais escondidos, bloqueados e ordenados,
-         * logótipos escolhidos, guia extra), quando ela é apagada. Devolve true se mudou alguma coisa.
+         * logótipos escolhidos, guia extra, reserva e canais de reserva), quando ela é apagada; e a reserva das listas
+         * que a tinham como reserva. Devolve true se mudou alguma coisa.
          */
         fun removePlaylist(settings: JsonObject, playlistId: String): Boolean {
             val prefix = "$playlistId:"
@@ -496,11 +512,21 @@ data class Prefs(
                     changed = true
                 }
             }
-            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true)) {
+            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true)) {
                 val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
                 val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
                 gone.forEach { obj.remove(it) }
                 if (gone.isNotEmpty()) changed = true
+            }
+            // As listas que a tinham como reserva ficam sem reserva (e sem os canais escolhidos nela).
+            val backups = settings.get(Key.BACKUP_PLAYLIST)?.takeIf { it.isJsonObject }?.asJsonObject
+            val orphans = backups?.entrySet()?.filter { it.value.isJsonPrimitive && it.value.asString == playlistId }?.map { it.key }.orEmpty()
+            for (main in orphans) {
+                backups?.remove(main)
+                settings.get(Key.BACKUP_CHANNELS)?.takeIf { it.isJsonObject }?.asJsonObject?.let { ch ->
+                    ch.keySet().filter { it.startsWith("$main:") }.forEach(ch::remove)
+                }
+                changed = true
             }
             return changed
         }
