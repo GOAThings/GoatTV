@@ -28,6 +28,8 @@ internal class AppPlaybackHost(
     override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
+    override suspend fun backupFor(request: PlaybackRequest): BackupStream? = vm.backupStream(latestData(), request.channel)
+    override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(I18n.s.backupPlaying(origin.mainName, origin.backupName))
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()
@@ -57,8 +59,15 @@ internal class SecondPlaybackHost(private val vm: AppViewModel, private val late
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo? = null
 }
 
-/** O título do cartão de erro: a explicação, ou "não foi possível abrir" enquanto se analisa. */
-internal fun PlaybackFailure.titleCard(s: Strings): ErrorInfo = explained ?: ErrorInfo(s.cantOpenChannel.removeSuffix("."))
+/**
+ * O título do cartão de erro: a explicação, ou "não foi possível abrir" enquanto se analisa. Se a reserva também
+ * falhou, a causa diz as duas listas.
+ */
+internal fun PlaybackFailure.titleCard(s: Strings): ErrorInfo {
+    val info = explained ?: ErrorInfo(s.cantOpenChannel.removeSuffix("."))
+    val backup = backupFailed ?: return info
+    return info.copy(cause = listOfNotNull(info.cause, s.backupAlsoFailed(backup)).joinToString("\n"))
+}
 
 /** A linha de estado do cartão de erro: a analisar, a próxima tentativa, ou nada (OK tenta outra vez). */
 internal fun PlaybackFailure.status(s: Strings): String? = when {

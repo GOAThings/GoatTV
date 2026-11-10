@@ -32,6 +32,10 @@ import androidx.lifecycle.viewModelScope
 import cc.slokker.itv.ItvApp
 import cc.slokker.itv.data.Audience
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.ui.player.engine.BackupStream
+import cc.slokker.itv.ui.player.engine.PlaybackRequest
+import kotlinx.coroutines.withTimeoutOrNull
 import cc.slokker.itv.data.ChannelCatalog
 import cc.slokker.itv.data.GroupNames
 import cc.slokker.itv.data.EpgEntry
@@ -1624,6 +1628,153 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeSecond() = playback.closeSecond()
 
+    // ---- Lista de reserva ------------------------------------------------------------------------
+
+    /** A lista de reserva de [playlistId] (Prefs.backupPlaylist), se ainda existir e não for ela própria. */
+    fun backupOf(playlistId: String): Playlist? {
+        val id = prefs.value.backupPlaylist[playlistId] ?: return null
+        return playlists.value.firstOrNull { it.id == id && it.id != playlistId }
+    }
+
+    /** Muda a reserva de [playlistId] (null = nenhuma). Os canais escolhidos à mão eram da reserva anterior: saem. */
+    fun setBackupPlaylist(playlistId: String, backupId: String?) {
+        val p = prefs.value
+        val target = backupId?.takeIf { it != playlistId }
+        if (p.backupPlaylist[playlistId] == target) return
+        val map = if (target == null) p.backupPlaylist - playlistId else p.backupPlaylist + (playlistId to target)
+        val channels = p.backupChannels.filterKeys { !it.startsWith("$playlistId:") }
+        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to channels))
+        _backupCoverage.value = _backupCoverage.value - playlistId
+    }
+
+    /** O canal da reserva escolhido à mão para [channelKey] de [playlistId]: uma chave, [ChannelMatch.OFF], ou null (automático). */
+    fun backupChoice(playlistId: String, channelKey: String): String? = prefs.value.backupChannels["$playlistId:$channelKey"]
+
+    /** Grava a escolha à mão ([value] null = volta ao automático). */
+    fun setBackupChoice(playlistId: String, channelKey: String, value: String?) {
+        val current = prefs.value.backupChannels
+        val key = "$playlistId:$channelKey"
+        setPref(Prefs.Key.BACKUP_CHANNELS, if (value == null) current - key else current + (key to value))
+        _backupCoverage.value = _backupCoverage.value - playlistId
+    }
+
+    /** Os canais da reserva (da cache, ou descarregados como os do segundo canal), ou null se não carregarem a tempo. */
+    private suspend fun backupContent(backup: Playlist): PlaylistContent? =
+        withTimeoutOrNull(BACKUP_LOAD_MS) { runCatching { lists.loadForSecond(backup) }.getOrNull() }
+
+    /** O índice da última reserva procurada (partir os nomes de milhares de canais faz-se uma vez). */
+    private var backupMatcher: Pair<PlaylistContent, ChannelMatch.Matcher>? = null
+
+    private suspend fun matcherFor(content: PlaylistContent): ChannelMatch.Matcher {
+        backupMatcher?.takeIf { it.first === content }?.let { return it.second }
+        val m = withContext(Dispatchers.Default) { ChannelMatch.Matcher(content.channels.map(ChannelMatch::entry)) }
+        backupMatcher = content to m
+        return m
+    }
+
+    /**
+     * O canal [channel] de [main] na reserva, pronto a abrir ([choice]: um canal já escolhido no painel "experimentar
+     * agora"); null sem reserva, sem o canal (ou na dúvida), ou quando abrir a reserva passava o limite de ligações
+     * dela (o segundo canal já está nessa conta).
+     */
+    internal suspend fun backupStream(main: PlaylistContent, channel: Channel, choice: Channel? = null): BackupStream? {
+        if (streamsDisabled) return null
+        val backup = backupOf(main.playlist.id) ?: return null
+        // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
+        if (backup.sharesConnectionsWith(main.playlist)) return null
+        val content = backupContent(backup) ?: return null.also { Log.i(TAG_BACKUP, "Reserva ${backup.name}: os canais não carregaram") }
+        playback.second.value?.content?.playlist?.let { sp ->
+            val limit = content.account?.maxConnections
+            val one = backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && (limit ?: 1) < 2
+            if (sp.sharesConnectionsWith(backup) && one) return null.also { Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela") }
+        }
+        val target = choice ?: run {
+            val result = matcherFor(content).find(channel.name, channel.epgId, backupChoice(main.playlist.id, channel.key))
+            (result as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
+                ?: return null.also { Log.i(TAG_BACKUP, "Reserva: ${if (result is ChannelMatch.Result.Unsure) "em dúvida" else "sem canal"} para \"${channel.name}\"") }
+        }
+        Log.i(TAG_BACKUP, "Reserva: \"${channel.name}\" → \"${target.name}\" (${backup.name})")
+        val request = PlaybackRequest.of(content, target, null, streamFormat.value, stalkerLinks)
+        return BackupStream(request, main.playlist.name, backup.name)
+    }
+
+    /** A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva"). */
+    sealed interface BackupCoverage {
+        data object Checking : BackupCoverage
+        data class Ready(val backupId: String, val coverage: ChannelMatch.Coverage) : BackupCoverage
+        data object Unavailable : BackupCoverage
+    }
+
+    private val _backupCoverage = MutableStateFlow<Map<String, BackupCoverage>>(emptyMap())
+    val backupCoverage: StateFlow<Map<String, BackupCoverage>> = _backupCoverage.asStateFlow()
+
+    /**
+     * Conta, por trás, quantos canais de [playlistId] têm o seu na reserva (as listas da cache, ou descarregadas como as
+     * do segundo canal). Os nomes dos que faltam ou ficam em dúvida vão para o registo (só os nomes), para o relatório.
+     */
+    fun checkBackupCoverage(playlistId: String) {
+        val backup = backupOf(playlistId) ?: return
+        val known = _backupCoverage.value[playlistId]
+        if (known == BackupCoverage.Checking || known is BackupCoverage.Ready && known.backupId == backup.id) return
+        val main = playlists.value.firstOrNull { it.id == playlistId } ?: return
+        _backupCoverage.value = _backupCoverage.value + (playlistId to BackupCoverage.Checking)
+        viewModelScope.launch {
+            val mainContent = content.value?.takeIf { it.playlist.id == playlistId } ?: backupContent(main)
+            val backupContent = backupContent(backup)
+            val result = if (mainContent == null || backupContent == null) {
+                BackupCoverage.Unavailable
+            } else {
+                val overrides = prefs.value.backupChannels.filterKeys { it.startsWith("$playlistId:") }.mapKeys { it.key.removePrefix("$playlistId:") }
+                val matcher = matcherFor(backupContent)
+                val cov = withContext(Dispatchers.Default) { ChannelMatch.coverage(mainContent.channels.map(ChannelMatch::entry), matcher, overrides) }
+                logCoverage(main.name, backup.name, cov)
+                BackupCoverage.Ready(backup.id, cov)
+            }
+            _backupCoverage.value = _backupCoverage.value + (playlistId to result)
+        }
+    }
+
+    private fun logCoverage(main: String, backup: String, cov: ChannelMatch.Coverage) {
+        Log.i(TAG_BACKUP, "Cobertura $main → $backup: ${cov.matched}/${cov.total}, ${cov.unsure} em dúvida, ${cov.missing} sem canal")
+        // Só os nomes dos canais (nunca endereços), aos bocados para o logcat não os cortar.
+        for ((label, names) in listOf("Em dúvida" to cov.unsureNames, "Sem canal" to cov.missingNames)) {
+            names.take(MAX_LOGGED_NAMES).chunked(40).forEach { Log.i(TAG_BACKUP, "$label: " + it.joinToString(" | ")) }
+            if (names.size > MAX_LOGGED_NAMES) Log.i(TAG_BACKUP, "$label: … mais ${names.size - MAX_LOGGED_NAMES}")
+        }
+    }
+
+    /** O painel "Canal de reserva" de [channel] (da lista principal): o automático, os parecidos e a escolha à mão. */
+    class BackupChoices(
+        val backup: Playlist,
+        val content: PlaylistContent,
+        val auto: ChannelMatch.Result,
+        val similar: List<Channel>,
+        /** A escolha à mão: uma chave da reserva, [ChannelMatch.OFF], ou null (automático). */
+        val choice: String?,
+    ) {
+        val autoChannel: Channel? get() = (auto as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
+        val chosenChannel: Channel? get() = choice?.takeIf { it != ChannelMatch.OFF }?.let { content.byKey[it] }
+    }
+
+    suspend fun backupChoices(channel: Channel): BackupChoices? {
+        val main = content.value ?: return null
+        val backup = backupOf(main.playlist.id) ?: return null
+        val backupContent = backupContent(backup) ?: return null
+        val matcher = matcherFor(backupContent)
+        return withContext(Dispatchers.Default) {
+            val auto = matcher.find(channel.name, channel.epgId)
+            val similar = matcher.ranked(channel.name, channel.epgId, BACKUP_SIMILAR).mapNotNull { backupContent.channels.getOrNull(it) }
+            BackupChoices(backup, backupContent, auto, similar, backupChoice(main.playlist.id, channel.key))
+        }
+    }
+
+    /** Pesquisa nos canais da reserva (pelo nome, sem acentos nem maiúsculas). */
+    fun searchBackup(choices: BackupChoices, query: String): List<Channel> {
+        val q = searchKey(query.trim())
+        if (q.length < 2) return emptyList()
+        return choices.content.channels.asSequence().filter { q in searchKey(it.name) }.take(MAX_SEARCH).toList()
+    }
+
     // ---- Atualizações da app -----------------------------------------------------------------
 
     val appVersion: String get() = c.updater.currentVersion
@@ -1878,6 +2029,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val TAG = "GoatTV"
+        /** O registo da lista de reserva (vai no relatório: só nomes de canais e de listas). */
+        const val TAG_BACKUP = "GoatTV.Backup"
+        const val BACKUP_LOAD_MS = 20_000L
+        const val BACKUP_SIMILAR = 8
+        const val MAX_LOGGED_NAMES = 400
         const val UPDATE_FIRST_CHECK_MS = 20_000L
         const val UPDATE_INTERVAL_MS = 12 * 3600_000L
         /** Canais na linha da GoatTV no ecrã inicial. */

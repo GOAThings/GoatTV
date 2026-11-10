@@ -100,6 +100,11 @@ class ChannelPlaybackTest {
         override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
         var recording: String? = null
         override fun recordingUrl(channel: Channel): String? = recording
+        var backup: BackupStream? = null
+        var backupAsked = 0
+        val backupNotices = mutableListOf<String>()
+        override suspend fun backupFor(request: PlaybackRequest): BackupStream? { backupAsked++; return backup }
+        override fun onBackupPlaying(origin: BackupOrigin) { backupNotices += "${origin.mainName}>${origin.backupName}" }
     }
 
     private val time = FakeTime()
@@ -698,5 +703,114 @@ class ChannelPlaybackTest {
         assertEquals(0, failure.retry)
         time.advance(60_000)
         assertTrue(engine.opened.isEmpty())
+    }
+
+    // ---- Lista de reserva ----------------------------------------------------------------------
+
+    private val backupChannel = Channel(uid = 7, key = "b7", num = 7, name = "Um HD", logo = null, categoryId = "g", url = "http://y/7.ts")
+    private val backupTs = StreamCandidate("http://y/7.ts", StreamFormat.TS)
+    private fun backupStream() = BackupStream(PlaybackRequest(backupChannel, null, 0L, listOf(backupTs)), "Principal", "Reserva")
+
+    @Test
+    fun falhaNaPrincipalPassaParaAReservaComOAviso() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live())
+        p.onError(engine, ioError)
+        p.onError(engine, ioError)
+        // Os dois formatos da principal falharam: abre o da reserva, sem cartão de erro.
+        assertEquals(listOf(ts, hls, backupTs), engine.opened)
+        assertNull(p.failure)
+        assertEquals("Reserva", p.onBackup?.backupName)
+        assertEquals("k1", p.request?.shownKey)
+        p.onState(engine, Player.STATE_READY)
+        assertEquals(listOf("Principal>Reserva"), host.backupNotices)
+        // O formato da reserva é de outra conta: não se aprende.
+        assertTrue(host.learned.isEmpty())
+    }
+
+    @Test
+    fun oCanalSeguinteVoltaAPrincipal() {
+        host.backup = backupStream()
+        host.prefs = host.prefs.copy(zapDelayMs = Prefs.ZapDelay.OFF)
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, ioError)
+        assertEquals(backupTs, engine.opened.last())
+        // O mesmo canal outra vez (ex.: o ecrã reabriu) começa pela principal.
+        p.tuneNow(live(ts))
+        assertEquals(ts, engine.opened.last())
+        assertNull(p.onBackup)
+    }
+
+    @Test
+    fun aReservaTambemFalhaMostraOErroDaPrincipalComAsDuas() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, error(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        p.onError(engine, ioError)
+        val f = p.failure!!
+        assertEquals(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, f.error.errorCode)
+        assertEquals("Reserva", f.backupFailed)
+        assertEquals(1, f.retry)
+        assertNull(p.onBackup)
+        // A tentativa seguinte começa outra vez pela principal (e volta a passar à reserva se falhar).
+        time.advance(5_000)
+        assertEquals(listOf(ts, backupTs, ts), engine.opened)
+        p.onError(engine, ioError)
+        assertEquals(listOf(ts, backupTs, ts, backupTs), engine.opened)
+    }
+
+    @Test
+    fun semCanalNaReservaMostraOErroNormal() {
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, ioError)
+        assertEquals(1, host.backupAsked)
+        assertNull(p.failure!!.backupFailed)
+        assertEquals(listOf(ts), engine.opened)
+    }
+
+    @Test
+    fun catchUpESegundoCanalNaoPassamParaAReserva() {
+        host.backup = backupStream()
+        val cu = Catchup(channel, "P", 0L, 3_600_000L)
+        val p = playback()
+        p.tuneNow(PlaybackRequest(channel, cu, 0L, listOf(ts)))
+        p.onError(engine, ioError)
+        assertEquals(0, host.backupAsked)
+        val e2 = FakeEngine()
+        val second = playback(PlaybackPolicy.SECOND, e2)
+        second.tuneNow(live(ts))
+        second.onError(e2, ioError)
+        assertEquals(0, host.backupAsked)
+    }
+
+    @Test
+    fun experimentarAgoraDaJaAReservaEOProximoCanalVoltaAPrincipal() {
+        host.prefs = host.prefs.copy(zapDelayMs = Prefs.ZapDelay.OFF)
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onState(engine, Player.STATE_READY)
+        p.playBackup(backupStream())
+        assertEquals(backupTs, engine.opened.last())
+        assertNull(p.onBackup?.mainError)
+        val other = Channel(uid = 2, key = "k2", num = 2, name = "Dois", logo = null, categoryId = "g", url = "http://x/2.ts")
+        val ts2 = StreamCandidate("http://x/2.ts", StreamFormat.TS)
+        p.tuneNow(PlaybackRequest(other, null, 0L, listOf(ts2)))
+        assertEquals(ts2, engine.opened.last())
+        assertNull(p.onBackup)
+    }
+
+    @Test
+    fun voltarDoSegundoPlanoNaReservaTentaAPrincipal() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, ioError)
+        p.stop()
+        p.onStart()
+        assertEquals(listOf(ts, backupTs, ts), engine.opened)
     }
 }

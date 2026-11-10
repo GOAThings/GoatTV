@@ -122,6 +122,13 @@ internal class ChannelPlayback(
     private var held = false
     private var retryJob: Job? = null
     private var linkJob: Job? = null
+
+    /** À procura do canal na lista de reserva (ver [failOver]). */
+    private var backupJob: Job? = null
+
+    /** A dar o canal da lista de reserva no lugar do da principal (o aviso e o painel "canal de reserva"); null na principal. */
+    var onBackup by mutableStateOf<BackupOrigin?>(null)
+        private set
     private var tickJob: Job? = null
 
     init {
@@ -184,6 +191,7 @@ internal class ChannelPlayback(
 
     /** O ecrã saiu: nada fica a correr. */
     fun release() {
+        backupJob?.cancel()
         retryJob?.cancel()
         linkJob?.cancel()
         tickJob?.cancel()
@@ -207,7 +215,8 @@ internal class ChannelPlayback(
      */
     suspend fun tune(request: PlaybackRequest) {
         val previous = this.request
-        val same = previous?.channel?.key == request.channel.key
+        // A dar da reserva, conta o canal do ecrã (o da lista principal).
+        val same = previous?.shownKey == request.channel.key
         // Parado a meio de uma passagem de canais ([held]), voltar ao mesmo canal também é mais uma tecla.
         val zap = request.live && previous != null && (!same || held)
         val back = !zap && request.live && previous?.live == true && same &&
@@ -244,9 +253,46 @@ internal class ChannelPlayback(
         wasPlaying = false
         tracks.onOpen(request.channel.key)
         retryJob?.cancel()
+        backupJob?.cancel()
+        // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
+        onBackup = null
         reconnects = 0
         nextTryAt = 0L
         start(0)
+    }
+
+    /**
+     * Passa a dar [backup] (o mesmo canal na lista de reserva) no lugar do pedido atual da lista principal, que falhou
+     * com [error] (null: escolhido à mão). A ligação à principal fecha antes de abrir a da reserva: é outra geração do
+     * [gate], que fecha as anteriores antes de ligar. O ecrã continua na lista principal; o próximo canal volta a ela.
+     */
+    private fun openBackup(backup: BackupStream, error: PlaybackException?) {
+        val main = request?.let { it.backup?.main ?: it } ?: return
+        val origin = BackupOrigin(main, error, currentCandidate?.format, backup.mainName, backup.backupName)
+        val req = backup.request.asBackup(origin)
+        held = false
+        request = req
+        candidates = req.candidates
+        archiveStartMs = 0L
+        seekMs = 0L
+        linkFresh = false
+        wasPlaying = false
+        failure = null
+        retryJob?.cancel()
+        reconnects = 0
+        nextTryAt = 0L
+        onBackup = origin
+        start(0)
+    }
+
+    /**
+     * "Experimentar agora" (painel do canal de reserva): dá já [backup] no lugar do canal da lista principal, com o
+     * mesmo aviso; o próximo canal volta à principal.
+     */
+    fun playBackup(backup: BackupStream) {
+        if (request == null) return
+        backupJob?.cancel()
+        openBackup(backup, null)
     }
 
     /** A passar canais: pára o canal que está a dar e larga a ligação, com a última imagem no ecrã. */
@@ -266,6 +312,7 @@ internal class ChannelPlayback(
     /** OK no cartão de erro: tenta outra vez desde o primeiro formato. */
     fun retry() {
         retries = 0
+        backupJob?.cancel()
         start(0)
     }
 
@@ -274,12 +321,17 @@ internal class ChannelPlayback(
 
     /** App outra vez à vista: o canal parado recomeça. */
     fun onStart() {
-        if (engine?.idle == true && request != null) start(attempt)
+        if (engine?.idle != true) return
+        val req = request ?: return
+        // A dar da reserva: ao voltar, tenta-se outra vez a lista principal primeiro.
+        val main = req.backup?.main
+        if (main != null) open(main) else start(attempt)
     }
 
     /** Box em segundo plano, ecrã desligado ou (telemóvel) nas Definições: pára e liberta a ligação. */
     fun stop() {
         // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça em [onStart].
+        backupJob?.cancel()
         retryJob?.cancel()
         linkJob?.cancel()
         nextTryAt = 0L
@@ -386,7 +438,8 @@ internal class ChannelPlayback(
 
     /** O ExoPlayer não descodifica este canal: o VLC talvez sim (o player recria-se, e o canal volta a abrir). */
     private fun useVlc(engine: StreamEngine) {
-        val key = request?.channel?.key ?: return
+        // A chave do ecrã: o player recria-se com o VLC para o canal da lista principal (e volta a passar à reserva).
+        val key = request?.shownKey ?: return
         if (!policy.vlcFallback || engine.isVlc || vlcFor == key) return
         vlcFor = key
         host.onVlcFallback()
@@ -422,7 +475,10 @@ internal class ChannelPlayback(
             nextTryAt = 0L
             // O fallback encontrou um formato que funciona (no direto; as tentativas do catch-up não são formatos).
             val candidate = currentCandidate
-            if (policy.learnFormat && attempt > 0 && candidate != null && live && !fellBackOnRefusal) host.onFormatWorked(candidate.format)
+            // O formato da reserva é de outra conta: não se aprende.
+            val backup = request?.backup
+            if (policy.learnFormat && attempt > 0 && candidate != null && live && !fellBackOnRefusal && backup == null) host.onFormatWorked(candidate.format)
+            if (backup != null) host.onBackupPlaying(backup)
         }
     }
 
@@ -497,17 +553,50 @@ internal class ChannelPlayback(
         }
     }
 
-    /** Não arrancou: mostra o erro (primeiro "a analisar") e tenta mais umas vezes, sem martelar o servidor. */
+    /**
+     * Não arrancou: mostra o erro (primeiro "a analisar") e tenta mais umas vezes, sem martelar o servidor.
+     *
+     * Um canal em direto da lista principal passa antes para o mesmo canal da lista de reserva, se houver (só depois
+     * de as tentativas de sempre desistirem: os formatos, e as esperas do OpenRetry em cada um). Se a reserva também
+     * falhar, volta-se ao pedido da principal (as tentativas seguintes começam por ela) e o cartão diz as duas.
+     */
     private fun fail(error: PlaybackException, req: PlaybackRequest, delayMs: Long?) {
+        if (policy.failover && req.live && req.backup == null && backupJob?.isActive != true) {
+            val shown = currentCandidate?.format
+            backupJob = scope.launch {
+                val backup = runCatching { host.backupFor(req) }.getOrNull()
+                if (request !== req) return@launch
+                if (backup != null) {
+                    openBackup(backup, error)
+                } else {
+                    showFailure(error, req, delayMs, null, shown)
+                }
+            }
+            return
+        }
+        val origin = req.backup
+        if (origin != null) {
+            // A reserva também não abriu: o cartão é o da principal (com o erro dela), e as tentativas recomeçam nela.
+            request = origin.main
+            candidates = origin.main.candidates
+            attempt = 0
+            onBackup = null
+            showFailure(origin.mainError ?: error, origin.main, delayMs, origin.backupName, origin.mainFormat)
+            return
+        }
+        showFailure(error, req, delayMs, null, currentCandidate?.format)
+    }
+
+    private fun showFailure(error: PlaybackException, req: PlaybackRequest, delayMs: Long?, backupFailed: String?, format: String?) {
         freeze = null
         val retry = delayMs != null && retries < policy.maxStartRetries
         if (retry) retries++
-        val format = currentCandidate?.format
         val shown = PlaybackFailure(
             error,
             retry = if (retry) retries else 0,
             maxRetries = policy.maxStartRetries,
             retrySeconds = ((delayMs ?: 0L) / 1_000).toInt(),
+            backupFailed = backupFailed,
         )
         failure = shown
         retryLater {

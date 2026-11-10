@@ -40,12 +40,14 @@ internal data class PlaybackPolicy(
     val surroundDefault: Boolean,
     /** Liga as legendas na língua preferida (o segundo canal não mostra legendas). */
     val subtitleLanguage: Boolean,
+    /** Um canal em direto que não abre passa para o mesmo canal da lista de reserva (ver [PlaybackHost.backupFor]). */
+    val failover: Boolean,
 ) {
     companion object {
         val TV = PlaybackPolicy(
             maxStartRetries = 3, reconnectFloorMs = 1_000L, alwaysRetry = false, timeshift = true,
             vlcFallback = true, learnFormat = true, diagnostics = true, passthrough = true,
-            surroundDefault = true, subtitleLanguage = true,
+            surroundDefault = true, subtitleLanguage = true, failover = true,
         )
 
         /** Como a TV; a medição da ligação não tem onde aparecer no telemóvel, nem o surround por defeito (é da TV). */
@@ -58,7 +60,7 @@ internal data class PlaybackPolicy(
         val SECOND = PlaybackPolicy(
             maxStartRetries = Int.MAX_VALUE, reconnectFloorMs = 3_000L, alwaysRetry = true, timeshift = false,
             vlcFallback = false, learnFormat = false, diagnostics = false, passthrough = false,
-            surroundDefault = false, subtitleLanguage = false,
+            surroundDefault = false, subtitleLanguage = false, failover = false,
         )
     }
 }
@@ -76,8 +78,16 @@ internal class PlaybackRequest(
      * programa, que pode começar noutro instante e pedir um salto: ver [FreshLinks]).
      */
     val freshLinks: (suspend () -> FreshLinks)? = null,
+    /** Este é o canal da lista de reserva, a dar no lugar do da lista principal (ver [BackupOrigin]). */
+    val backup: BackupOrigin? = null,
 ) {
     val live: Boolean get() = catchup == null
+
+    /** A chave do canal que o ecrã mostra (o da lista principal, também quando dá o da reserva). */
+    val shownKey: String get() = backup?.main?.channel?.key ?: channel.key
+
+    /** O mesmo pedido, a dar no lugar de [origin]. */
+    fun asBackup(origin: BackupOrigin) = PlaybackRequest(channel, catchup, archiveStartMs, candidates, freshLinks, origin)
 
     companion object {
         /**
@@ -116,6 +126,21 @@ internal class PlaybackRequest(
     }
 }
 
+/** O mesmo canal na lista de reserva: o pedido para ele e o nome das duas listas (para o aviso). */
+internal class BackupStream(val request: PlaybackRequest, val mainName: String, val backupName: String)
+
+/**
+ * De onde veio um pedido da reserva: o da lista principal ([main], ao qual se volta), o erro com que ele falhou (null
+ * quando se escolheu à mão, "experimentar agora") e o formato que estava a tentar.
+ */
+internal class BackupOrigin(
+    val main: PlaybackRequest,
+    val mainError: PlaybackException?,
+    val mainFormat: String?,
+    val mainName: String,
+    val backupName: String,
+)
+
 /**
  * Os links pedidos ao abrir. No catch-up do Stalker, a gravação é a do programa inteiro: [archiveStartMs] é onde ela
  * começa e [seekMs] o salto até ao ponto pedido. Sem [candidates], o portal não tem gravação (erro de catch-up).
@@ -140,6 +165,8 @@ internal data class PlaybackFailure(
     val retry: Int,
     val maxRetries: Int,
     val retrySeconds: Int,
+    /** A lista de reserva também não abriu este canal (o nome dela, para o cartão dizer as duas). */
+    val backupFailed: String? = null,
 )
 
 /** O que o [ChannelPlayback] pede à app. */
@@ -168,6 +195,15 @@ internal interface PlaybackHost {
      * a pausa do direto) e lê da gravação. null sem gravação nesse canal.
      */
     fun recordingUrl(channel: Channel): String? = null
+
+    /**
+     * O canal de [request] (direto, da lista principal) na lista de reserva, com o pedido para o abrir; null sem
+     * reserva, sem esse canal lá (ou na dúvida), ou se a reserva não carregar. Pode descarregar a lista da reserva.
+     */
+    suspend fun backupFor(request: PlaybackRequest): BackupStream? = null
+
+    /** O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>."). */
+    fun onBackupPlaying(origin: BackupOrigin) = Unit
 }
 
 /** Como abrir uma tentativa (ver [loadStream]). */
