@@ -721,6 +721,13 @@ private struct VideoPane: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 liveButton
+                                // Catch-up ou atrás do direto: a velocidade (1× → 1,25× → 1,5× → 2×).
+                                if model.catchup != nil || model.player.timeshift.shifted {
+                                    hudPill("gauge.with.dots.needle.67percent", "\(s.r("playback_speed")) \(speedLabel(model.player.speed))") {
+                                        model.player.speed = PlaybackSpeed.next(model.player.speed)
+                                        touched += 1
+                                    }
+                                }
                                 hudPill("calendar", s.r("tab_guide")) { onGuide(); touched += 1 }
                                 hudPill(model.isFavorite(channel) ? "star.fill" : "star", s.r("favorite")) {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()

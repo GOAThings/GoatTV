@@ -228,6 +228,7 @@ class Strings(context: Context) {
     val backKeyName get() = s(R.string.back_key_name)
     val backToLive get() = s(R.string.back_to_live)
     val sleepTimer get() = s(R.string.sleep_timer)
+    val playbackSpeed get() = s(R.string.playback_speed)
     val keyRed get() = s(R.string.key_red)
     val keyGreen get() = s(R.string.key_green)
     val keyYellow get() = s(R.string.key_yellow)

@@ -110,6 +110,7 @@
     <string name="back_key_name">Zurück</string>
     <string name="back_to_live">zurück zu live</string>
     <string name="sleep_timer">Sleep-Timer</string>
+    <string name="playback_speed">Tempo</string>
     <string name="key_red">Rote Taste</string>
     <string name="key_green">Grüne Taste</string>
     <string name="key_yellow">Gelbe Taste</string>

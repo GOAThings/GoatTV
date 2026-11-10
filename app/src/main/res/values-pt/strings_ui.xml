@@ -110,6 +110,7 @@
     <string name="back_key_name">Voltar</string>
     <string name="back_to_live">voltar ao direto</string>
     <string name="sleep_timer">Desligar</string>
+    <string name="playback_speed">Velocidade</string>
     <string name="key_red">Botão vermelho</string>
     <string name="key_green">Botão verde</string>
     <string name="key_yellow">Botão amarelo</string>

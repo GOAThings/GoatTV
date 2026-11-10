@@ -278,6 +278,11 @@ fun PlayerScreen(vm: AppViewModel) {
     )
     val latestSeekTarget by rememberUpdatedState(archive ?: ring)
 
+    /** A velocidade (ver PlaybackSpeed): volta a 1× noutro canal, noutro catch-up e ao chegar ao direto. */
+    var speed by remember(current.key, catchup) { mutableFloatStateOf(1f) }
+    if (catchup == null && timeshift.atLive && speed != 1f) speed = 1f
+    LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
+
     /** A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal). */
     fun tsActive() = catchup == null && second == null && timeshift.available
 
@@ -832,8 +837,9 @@ fun PlayerScreen(vm: AppViewModel) {
                                 seek.step(archive, forward = !back)
                                 return@onKeyEvent true
                             }
-                            // No catch-up as setas não mudam de canal (é um programa gravado): só mostram a barra.
+                            // No catch-up as setas não mudam de canal (é um programa gravado): ↑ ↓ mudam a velocidade.
                             AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                speed = if (code == AndroidKeyEvent.KEYCODE_DPAD_UP) PlaybackSpeed.faster(speed) else PlaybackSpeed.slower(speed)
                                 seek.showBar()
                                 return@onKeyEvent true
                             }
@@ -873,7 +879,9 @@ fun PlayerScreen(vm: AppViewModel) {
                                     tsSeek(forward = code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT)
                                     return@onKeyEvent true
                                 }
+                                // ↑ ↓ mudam a velocidade (até chegar ao direto, onde volta a 1×).
                                 AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    speed = if (code == AndroidKeyEvent.KEYCODE_DPAD_UP) PlaybackSpeed.faster(speed) else PlaybackSpeed.slower(speed)
                                     seek.showBar(); return@onKeyEvent true
                                 }
                                 AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -1098,7 +1106,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         enter = fadeIn() + slideInVertically { it / 3 },
                         exit = fadeOut() + slideOutVertically { it / 3 },
                     ) {
-                        CatchupBar(cu, catchupPosition, seek.pending, seek.paused)
+                        CatchupBar(cu, catchupPosition, seek.pending, seek.paused, speed)
                     }
                     if (playback.ready || playback.failure != null) {
                         val s = LocalStrings.current
@@ -1115,7 +1123,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     enter = fadeIn() + slideInVertically { it / 3 },
                     exit = fadeOut() + slideOutVertically { it / 3 },
                 ) {
-                    TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, seek.pending, seek.paused, timeshift.atLive)
+                    TimeshiftBar(current.name, timeshift.behindMs, timeshift.windowMs, seek.pending, seek.paused, timeshift.atLive, speed)
                 }
                 // Atrás do direto, a cápsula no canto diz quanto (como a do catch-up).
                 if (shifted && playback.ready && playback.failure == null) {

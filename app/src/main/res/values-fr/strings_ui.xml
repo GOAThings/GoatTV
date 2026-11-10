@@ -110,6 +110,7 @@
     <string name="back_key_name">Retour</string>
     <string name="back_to_live">retour au direct</string>
     <string name="sleep_timer">Minuterie de mise en veille</string>
+    <string name="playback_speed">Vitesse</string>
     <string name="key_red">Touche rouge</string>
     <string name="key_green">Touche verte</string>
     <string name="key_yellow">Touche jaune</string>

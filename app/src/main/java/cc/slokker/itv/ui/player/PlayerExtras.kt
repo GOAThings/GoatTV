@@ -1,6 +1,8 @@
 package cc.slokker.itv.ui.player
 
 import cc.slokker.itv.ui.theme.ItvShapes
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -64,6 +66,7 @@ import cc.slokker.itv.ui.glass.GlassRow
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
+import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.Dispatchers
@@ -208,7 +211,7 @@ internal fun CatchupPill(paused: Boolean, modifier: Modifier = Modifier, label: 
 
 /** Barra do catch-up: programa, posição e as teclas (← → recuar/avançar, OK pausa, Voltar direto). */
 @Composable
-internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?, paused: Boolean, modifier: Modifier = Modifier) {
+internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?, paused: Boolean, speed: Float = 1f, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
     val shown = pendingSeekMs ?: positionMs
     Column(
@@ -238,6 +241,7 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            if (speed != 1f) Text(PlaybackSpeed.label(speed, s), style = MaterialTheme.typography.titleMedium.tabular, modifier = Modifier.padding(start = 12.dp))
             if (paused) Icon(ItvIcons.Pause, contentDescription = null, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(14.dp))
@@ -250,6 +254,7 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             KeyHint("← →", s.seekMinute)
             KeyHint("OK", if (paused) s.resume else s.pause)
+            KeyHint("↑ ↓", s.playbackSpeed)
             KeyHint(s.backKeyName, s.backToLive)
         }
     }
@@ -260,7 +265,7 @@ internal fun CatchupBar(catchup: Catchup, positionMs: Long, pendingSeekMs: Long?
  * teclas (← → recuar/avançar, OK pausa, Voltar direto). [pendingBehindMs]: o salto por confirmar.
  */
 @Composable
-internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendingBehindMs: Long?, paused: Boolean, atLive: Boolean, modifier: Modifier = Modifier) {
+internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendingBehindMs: Long?, paused: Boolean, atLive: Boolean, speed: Float = 1f, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
     val behind = pendingBehindMs ?: behindMs
     val live = atLive && pendingBehindMs == null
@@ -290,6 +295,7 @@ internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendi
                 Text(channel, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(s.timeshiftSaved(((windowMs + 59_999) / 60_000).toInt().coerceAtLeast(1)), color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
             }
+            if (speed != 1f) Text(PlaybackSpeed.label(speed, s), style = MaterialTheme.typography.titleMedium.tabular, modifier = Modifier.padding(start = 12.dp))
             if (paused) Icon(ItvIcons.Pause, contentDescription = null, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(14.dp))
@@ -306,9 +312,28 @@ internal fun TimeshiftBar(channel: String, behindMs: Long, windowMs: Long, pendi
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             KeyHint("← →", s.timeshiftSeek)
             KeyHint("OK", if (paused) s.resume else s.pause)
+            if (!live) KeyHint("↑ ↓", s.playbackSpeed)
             if (!live) KeyHint(s.backKeyName, s.backToLive)
         }
     }
+}
+
+/**
+ * A velocidade no catch-up, nas gravações e atrás do direto (no direto é sempre 1×: não há mais para ler).
+ * TV: ↑ ↓ na barra; telemóvel: o botão da velocidade.
+ */
+internal object PlaybackSpeed {
+    val STEPS = listOf(1f, 1.25f, 1.5f, 2f)
+
+    fun faster(speed: Float) = STEPS.firstOrNull { it > speed } ?: STEPS.last()
+
+    fun slower(speed: Float) = STEPS.lastOrNull { it < speed } ?: STEPS.first()
+
+    /** Dá a volta: 1× → 1,25× → 1,5× → 2× → 1×. */
+    fun next(speed: Float) = STEPS.firstOrNull { it > speed } ?: STEPS.first()
+
+    /** "1,25×" (com a vírgula ou o ponto da língua). */
+    fun label(speed: Float, s: Strings): String = DecimalFormat("0.##", DecimalFormatSymbols(s.locale)).format(speed) + "×"
 }
 
 /** "−1:05": quanto a pausa do direto vai atrás (para a cápsula no canto). */

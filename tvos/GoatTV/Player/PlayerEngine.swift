@@ -89,6 +89,21 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var deinterlace = "yadif2x"
     /// O atraso do som (Prefs.audioDelayMs), no VLC.
     @ObservationIgnored var audioDelayMs = 0
+    /// A velocidade no catch-up e atrás do direto (1; 1,25; 1,5; 2): volta a 1 noutro canal e ao chegar ao direto.
+    var speed: Float = 1 {
+        didSet {
+            guard speed != oldValue else { return }
+            // O relógio do anel conta o que já deu à velocidade antiga.
+            if let since = ringPlayingSince {
+                let now = Self.uptimeMs()
+                ringPlayedMs += Int64(Double(now - since) * Double(oldValue))
+                ringPlayingSince = now
+            }
+            vlc.rate = speed
+            avPlayer.defaultRate = speed
+            if avPlayer.rate != 0 { avPlayer.rate = speed }
+        }
+    }
     /// Quando a TV muda de frame rate (e de HDR) para a do canal (`afr_mode`): desligado, só no primeiro canal ou em
     /// cada canal (ver AfrSession).
     @ObservationIgnored var afrMode = Prefs.AfrMode.off {
@@ -272,6 +287,7 @@ final class PlayerEngine: NSObject {
     func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
               pausable: Bool = false, startMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         let same = openedKey == channelKey
+        if !same || live != openedLive { speed = 1 }
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
         let zap = live && openedKey != nil && (!same || held)
         let back = !zap && live && openedLive && same && openedCandidates == candidates && (state == .opening || state == .playing)
@@ -658,6 +674,8 @@ final class PlayerEngine: NSObject {
         // O som chega antes da imagem: só se ouve quando ela aparecer.
         vlc.audio?.isMuted = true
         vlc.play()
+        // Cada stream novo (ex.: um salto no catch-up) começa a 1×: fica a velocidade escolhida.
+        if speed != 1 { vlc.rate = speed }
     }
 
     fileprivate func vlcStateChanged() {
@@ -1376,6 +1394,7 @@ extension PlayerEngine {
 
     /// O estado da pausa do direto, de meio em meio segundo.
     private func updateTimeshift() {
+        defer { if openedLive, timeshift.atLive, speed != 1 { speed = 1 } }
         if timeshift.usesRing {
             guard backend == .vlc else { return timeshift.unavailable() }
             ringClock()
@@ -1397,7 +1416,7 @@ extension PlayerEngine {
 
     /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ver [ringPlayedMs]).
     private var ringPosition: Int64 {
-        ringPlayedMs + (ringPlayingSince.map { Self.uptimeMs() - $0 } ?? 0)
+        ringPlayedMs + (ringPlayingSince.map { Int64(Double(Self.uptimeMs() - $0) * Double(speed)) } ?? 0)
     }
 
     /// Acerta o relógio do anel com o estado do VLC: conta só a dar, com imagem e sem pausa.
@@ -1407,7 +1426,7 @@ extension PlayerEngine {
         if running {
             if ringPlayingSince == nil { ringPlayingSince = now }
         } else if let since = ringPlayingSince {
-            ringPlayedMs += now - since
+            ringPlayedMs += Int64(Double(now - since) * Double(speed))
             ringPlayingSince = nil
         }
     }

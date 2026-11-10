@@ -110,6 +110,7 @@
     <string name="back_key_name">Kembali</string>
     <string name="back_to_live">kembali ke siaran langsung</string>
     <string name="sleep_timer">Timer tidur</string>
+    <string name="playback_speed">Kecepatan</string>
     <string name="key_red">Tombol merah</string>
     <string name="key_green">Tombol hijau</string>
     <string name="key_yellow">Tombol kuning</string>

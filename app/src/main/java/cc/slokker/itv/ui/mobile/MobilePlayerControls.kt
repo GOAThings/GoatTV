@@ -73,6 +73,7 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.player.TuningPill
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.PlaybackSpeed
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VlcPlayer
 import cc.slokker.itv.ui.player.behindLabel
@@ -402,6 +403,8 @@ internal fun VideoArea(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             LiveButton(catchup == null && !ts.shifted, behind = behindLabel(ts.behindMs).takeIf { catchup == null }) { if (catchup != null) vm.exitCatchup() else ts.goLive(playback.player) }
+                            // Catch-up ou atrás do direto: a velocidade (1× → 1,25× → 1,5× → 2×).
+                            if (catchup != null || ts.shifted) HudPill(ItvIcons.Replay, "${s.playbackSpeed} ${PlaybackSpeed.label(playback.speed, s)}") { playback.speed = PlaybackSpeed.next(playback.speed); touched++ }
                             HudPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
                             HudPill(if (vm.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline, s.favorite) {
                                 view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -581,6 +584,7 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         // Atrás do direto (catch-up ou a pausa do direto): o botão volta a ele.
         val ts = playback.timeshift
         LiveButton(catchup == null && !ts.shifted, behind = behindLabel(ts.behindMs).takeIf { catchup == null }) { if (catchup != null) vm.exitCatchup() else ts.goLive(playback.player) }
+        if (catchup != null || ts.shifted) ActionPill(ItvIcons.Replay, "${s.playbackSpeed} ${PlaybackSpeed.label(playback.speed, s)}") { playback.speed = PlaybackSpeed.next(playback.speed) }
         ActionPill(ItvIcons.Calendar, s.tabGuide, onClick = onGuide)
         val favorite = rows.isFavorite(channel)
         ActionPill(if (favorite) ItvIcons.Star else ItvIcons.StarOutline, s.favorite, tint = if (favorite) PhoneColors.FavoriteGold else ItvColors.Text) { vm.toggleFavorite(channel) }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,9 @@ internal class MobilePlayback(val core: ChannelPlayback, viewState: MutableState
     val reconnects: Int get() = core.reconnects
     val nextTryAt: Long get() = core.nextTryAt
     val retryDelayMs: Long get() = core.retryDelayMs
+
+    /** A velocidade no catch-up e atrás do direto (ver PlaybackSpeed); a 1× em direto. */
+    var speed by mutableFloatStateOf(1f)
 }
 
 /**
@@ -87,6 +91,11 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         }
         core.tune(PlaybackRequest.of(data, channel, catchup, streamFormat, vm.stalkerLinks, latestPrefs.catchupOffsetMin))
     }
+
+    // A velocidade volta a 1× noutro canal, noutro catch-up e ao chegar ao direto (como na TV).
+    LaunchedEffect(channel.key, catchup) { playback.speed = 1f }
+    if (catchup == null && playback.timeshift.atLive && playback.speed != 1f) playback.speed = 1f
+    LaunchedEffect(player, playback.speed) { player.setPlaybackSpeed(playback.speed) }
 
     LaunchedEffect(playback.view, prefs.aspect) {
         playback.view?.setResizeMode(resizeModeFor(prefs.aspect))

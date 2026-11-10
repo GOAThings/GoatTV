@@ -110,6 +110,7 @@
     <string name="back_key_name">رجوع</string>
     <string name="back_to_live">العودة إلى البث المباشر</string>
     <string name="sleep_timer">مؤقت النوم</string>
+    <string name="playback_speed">السرعة</string>
     <string name="key_red">الزر الأحمر</string>
     <string name="key_green">الزر الأخضر</string>
     <string name="key_yellow">الزر الأصفر</string>

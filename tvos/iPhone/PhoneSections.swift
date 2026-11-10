@@ -60,6 +60,11 @@ struct NowStrip: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(live)
+                        if !live {
+                            pill("gauge.with.dots.needle.67percent", "\(s.r("playback_speed")) \(speedLabel(model.player.speed))") {
+                                model.player.speed = PlaybackSpeed.next(model.player.speed)
+                            }
+                        }
                         pill("calendar", s.r("tab_guide"), action: onGuide)
                         pill(favorite ? "star.fill" : "star", s.r("favorite"), tint: favorite ? Theme.hex(0xF5C04A) : Theme.text) { model.toggleFavorite(channel) }
                         // Gravar o programa a dar (do anel da pausa do direto), ou parar a gravação deste canal.

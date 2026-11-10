@@ -110,6 +110,7 @@
     <string name="back_key_name">Назад</string>
     <string name="back_to_live">вернуться в эфир</string>
     <string name="sleep_timer">Таймер сна</string>
+    <string name="playback_speed">Скорость</string>
     <string name="key_red">Красная кнопка</string>
     <string name="key_green">Зелёная кнопка</string>
     <string name="key_yellow">Жёлтая кнопка</string>

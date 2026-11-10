@@ -89,6 +89,20 @@ func hhmm(_ date: Date) -> String {
     date.formatted(date: .omitted, time: .shortened)
 }
 
+/// Os passos da velocidade no catch-up e atrás do direto (os mesmos do Android): ↑ ↓ na TV, o botão no iPhone.
+enum PlaybackSpeed {
+    static let steps: [Float] = [1, 1.25, 1.5, 2]
+    static func faster(_ speed: Float) -> Float { steps.first { $0 > speed } ?? steps.last! }
+    static func slower(_ speed: Float) -> Float { steps.last { $0 < speed } ?? steps.first! }
+    /// Dá a volta: 1× → 1,25× → 1,5× → 2× → 1×.
+    static func next(_ speed: Float) -> Float { steps.first { $0 > speed } ?? steps.first! }
+}
+
+/// "1,25×" (com a vírgula ou o ponto da língua).
+func speedLabel(_ speed: Float) -> String {
+    Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
+}
+
 /// "1 dia", "1½ dias", "7 dias" (as janelas do guia, em horas; como no Android).
 func guideDays(_ s: Strings, _ hours: Int) -> String {
     hours == 24 ? s.r("guide_one_day") : s.r("guide_days", hours % 24 == 0 ? "\(hours / 24)" : "\(hours / 24)½")

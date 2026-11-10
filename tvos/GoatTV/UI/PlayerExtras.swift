@@ -115,6 +115,7 @@ struct CatchupBar: View {
                         .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
                 }
                 Spacer()
+                if model.player.speed != 1 { Text(speedLabel(model.player.speed)).font(.system(size: 30, weight: .semibold).monospacedDigit()) }
                 if paused { Image(systemName: "pause.fill").font(.system(size: 40)) }
             }
             HStack(spacing: 22) {
@@ -126,6 +127,7 @@ struct CatchupBar: View {
             HStack(spacing: 40) {
                 KeyHint(key: "← →", label: s.t("1 minute", "1 minuto"))
                 KeyHint(key: "OK", label: paused ? s.t("Resume", "Continuar") : s.t("Pause", "Pausa"))
+                KeyHint(key: "↑ ↓", label: s.r("playback_speed"))
                 KeyHint(key: "MENU", label: s.t("Back to live", "Voltar ao direto"))
             }
         }
@@ -174,6 +176,7 @@ struct TimeshiftBar: View {
                         .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
                 }
                 Spacer()
+                if model.player.speed != 1 { Text(speedLabel(model.player.speed)).font(.system(size: 30, weight: .semibold).monospacedDigit()) }
                 if paused { Image(systemName: "pause.fill").font(.system(size: 40)) }
             }
             HStack(spacing: 22) {
@@ -186,6 +189,7 @@ struct TimeshiftBar: View {
             HStack(spacing: 40) {
                 KeyHint(key: "← →", label: s.r("timeshift_seek"))
                 KeyHint(key: "OK", label: paused ? s.t("Resume", "Continuar") : s.t("Pause", "Pausa"))
+                if !live { KeyHint(key: "↑ ↓", label: s.r("playback_speed")) }
                 if !live { KeyHint(key: "MENU", label: s.t("Back to live", "Voltar ao direto")) }
             }
         }

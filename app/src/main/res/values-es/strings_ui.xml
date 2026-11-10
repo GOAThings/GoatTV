@@ -110,6 +110,7 @@
     <string name="back_key_name">Atrás</string>
     <string name="back_to_live">volver al directo</string>
     <string name="sleep_timer">Temporizador de apagado</string>
+    <string name="playback_speed">Velocidad</string>
     <string name="key_red">Botón rojo</string>
     <string name="key_green">Botón verde</string>
     <string name="key_yellow">Botón amarillo</string>

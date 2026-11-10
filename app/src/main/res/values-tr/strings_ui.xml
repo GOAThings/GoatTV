@@ -110,6 +110,7 @@
     <string name="back_key_name">Geri</string>
     <string name="back_to_live">canlı yayına dön</string>
     <string name="sleep_timer">Uyku zamanlayıcısı</string>
+    <string name="playback_speed">Hız</string>
     <string name="key_red">Kırmızı tuş</string>
     <string name="key_green">Yeşil tuş</string>
     <string name="key_yellow">Sarı tuş</string>

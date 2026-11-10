@@ -16,6 +16,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackGroup
@@ -86,6 +87,7 @@ internal class VlcPlayer(
     private var seekable = false
     private var lengthMs = 0L
     private var volume = 1f
+    private var speed = 1f
     private var params = TrackSelectionParameters.DEFAULT
     private var firstFrame = false
     private var surface: SurfaceView? = null
@@ -214,6 +216,7 @@ internal class VlcPlayer(
                 Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
                 Player.COMMAND_GET_VOLUME,
                 Player.COMMAND_SET_VOLUME,
+                Player.COMMAND_SET_SPEED_AND_PITCH,
             )
             .build()
         val builder = State.Builder()
@@ -223,6 +226,7 @@ internal class VlcPlayer(
             .setVideoSize(videoSize)
             .setTrackSelectionParameters(params)
             .setVolume(volume)
+            .setPlaybackParameters(PlaybackParameters(speed))
             .setIsLoading(playbackState == Player.STATE_BUFFERING)
         val item = mediaItem
         if (item == null) {
@@ -268,6 +272,8 @@ internal class VlcPlayer(
         vlc.media = media
         media.release()
         if (playWhenReady) vlc.play()
+        // Cada stream novo (ex.: um salto no catch-up) começa a 1×: fica a velocidade escolhida.
+        if (speed != 1f) vlc.rate = speed
         return Futures.immediateVoidFuture()
     }
 
@@ -276,6 +282,13 @@ internal class VlcPlayer(
         if (playbackState != Player.STATE_IDLE && !released) {
             if (playWhenReady) vlc.play() else vlc.pause()
         }
+        return Futures.immediateVoidFuture()
+    }
+
+    /** A velocidade do catch-up (o VLC chama-lhe "rate"; mantém o tom do som). */
+    override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
+        speed = playbackParameters.speed
+        if (!released) vlc.rate = speed
         return Futures.immediateVoidFuture()
     }
 

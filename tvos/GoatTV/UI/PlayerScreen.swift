@@ -692,6 +692,12 @@ struct PlayerScreen: View {
             model.setSleepTimer(nil)
             return
         }
+        // No catch-up e atrás do direto, ↑ ↓ mudam a velocidade (como no Android).
+        if (model.catchup != nil || tsShifted), direction == .up || direction == .down {
+            model.player.speed = direction == .up ? PlaybackSpeed.faster(model.player.speed) : PlaybackSpeed.slower(model.player.speed)
+            showCatchupBar()
+            return
+        }
         // No catch-up, ← → andam um minuto para trás e para a frente.
         if let cu = model.catchup, direction == .left || direction == .right {
             let from = pendingSeek ?? catchupPosition

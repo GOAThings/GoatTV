@@ -110,6 +110,7 @@
     <string name="back_key_name">뒤로</string>
     <string name="back_to_live">실시간으로 돌아가기</string>
     <string name="sleep_timer">취침 타이머</string>
+    <string name="playback_speed">속도</string>
     <string name="key_red">빨간 버튼</string>
     <string name="key_green">초록 버튼</string>
     <string name="key_yellow">노란 버튼</string>

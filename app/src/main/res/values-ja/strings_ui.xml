@@ -110,6 +110,7 @@
     <string name="back_key_name">戻る</string>
     <string name="back_to_live">ライブに戻る</string>
     <string name="sleep_timer">スリープタイマー</string>
+    <string name="playback_speed">速度</string>
     <string name="key_red">赤ボタン</string>
     <string name="key_green">緑ボタン</string>
     <string name="key_yellow">黄ボタン</string>
