@@ -126,6 +126,8 @@
     <string name="dismiss">تجاهل</string>
     <string name="reminder_set">تم ضبط التذكير: %1$s</string>
     <string name="reminder_removed">تمت إزالة التذكير</string>
+    <string name="reminder_switch">التذكيرات تغيّر القناة تلقائيًا</string>
+    <string name="reminder_switch_sub">عند بدء البرنامج، تتغير القناة بعد 10 ثوانٍ ما لم تتجاهل التذكير</string>
     <string name="back_key">زر الرجوع في المشغّل</string>
     <string name="back_opens_guide">يفتح دليل البرامج</string>
     <string name="back_exits">يخرج من التطبيق</string>

@@ -126,6 +126,8 @@
     <string name="dismiss">हटाएँ</string>
     <string name="reminder_set">रिमाइंडर सेट हुआ: %1$s</string>
     <string name="reminder_removed">रिमाइंडर हटाया गया</string>
+    <string name="reminder_switch">रिमाइंडर अपने आप चैनल बदलते हैं</string>
+    <string name="reminder_switch_sub">कार्यक्रम शुरू होने पर, 10 सेकंड बाद चैनल बदल जाता है जब तक आप उसे खारिज न करें</string>
     <string name="back_key">प्लेयर में वापस बटन</string>
     <string name="back_opens_guide">प्रोग्राम गाइड खोलता है</string>
     <string name="back_exits">ऐप से बाहर निकलता है</string>

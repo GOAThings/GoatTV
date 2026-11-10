@@ -324,6 +324,8 @@ class Strings(context: Context) {
     val dismiss get() = s(R.string.dismiss)
     fun reminderSet(title: String) = s(R.string.reminder_set, title)
     val reminderRemoved get() = s(R.string.reminder_removed)
+    val reminderSwitch get() = s(R.string.reminder_switch)
+    val reminderSwitchSub get() = s(R.string.reminder_switch_sub)
     val backKey get() = s(R.string.back_key)
     val backOpensGuide get() = s(R.string.back_opens_guide)
     val backExits get() = s(R.string.back_exits)

@@ -778,6 +778,9 @@ struct SettingsPanel: View {
                 pickItem("catchup_offset_min", subtitle: s.r("catchup_offset_sub")),
                 .toggle("epg_in_list", s.t("Current show in the list", "Programa atual na lista"), prefs.epgInList,
                         subtitle: s.t("What's on, on every channel", "O que está a dar em cada canal")) { model.setPref("epg_in_list", .bool($0)) },
+                .toggle("reminder_switch", s.r("reminder_switch"), prefs.reminderSwitch, subtitle: s.r("reminder_switch_sub")) {
+                    model.setPref("reminder_switch", .bool($0))
+                },
             ]
 
         case .parental:

@@ -126,6 +126,8 @@
     <string name="dismiss">kapat</string>
     <string name="reminder_set">Hatırlatıcı kuruldu: %1$s</string>
     <string name="reminder_removed">Hatırlatıcı kaldırıldı</string>
+    <string name="reminder_switch">Hatırlatıcılar kanalı kendisi değiştirir</string>
+    <string name="reminder_switch_sub">Program başladığında, kapatmazsanız kanal 10 sn sonra değişir</string>
     <string name="back_key">Oynatıcıda Geri tuşu</string>
     <string name="back_opens_guide">Yayın akışını açar</string>
     <string name="back_exits">Uygulamadan çıkar</string>

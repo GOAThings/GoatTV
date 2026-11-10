@@ -126,6 +126,8 @@
     <string name="dismiss">닫기</string>
     <string name="reminder_set">알림 설정됨: %1$s</string>
     <string name="reminder_removed">알림 삭제됨</string>
+    <string name="reminder_switch">알림이 자동으로 채널을 바꿈</string>
+    <string name="reminder_switch_sub">프로그램이 시작되면 닫지 않는 한 10초 후 채널이 바뀝니다</string>
     <string name="back_key">플레이어의 뒤로 버튼</string>
     <string name="back_opens_guide">편성표 열기</string>
     <string name="back_exits">앱 종료</string>

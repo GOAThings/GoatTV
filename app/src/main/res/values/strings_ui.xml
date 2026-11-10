@@ -127,6 +127,8 @@
     <string name="dismiss">dismiss</string>
     <string name="reminder_set">Reminder set: %1$s</string>
     <string name="reminder_removed">Reminder removed</string>
+    <string name="reminder_switch">Reminders change channel by themselves</string>
+    <string name="reminder_switch_sub">When the programme starts, the channel changes after 10 s unless you dismiss it</string>
     <string name="back_key">Back button in the player</string>
     <string name="back_opens_guide">Opens the TV guide</string>
     <string name="back_exits">Exits the app</string>

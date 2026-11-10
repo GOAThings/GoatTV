@@ -118,6 +118,8 @@ data class Prefs(
      */
     val catchupOffsetMin: Int = 0,
     val epgInList: Boolean = true,
+    /** Um lembrete muda sozinho para o canal ao fim de uns segundos (sem isto, só com OK). */
+    val reminderSwitch: Boolean = false,
     // Gravações
     /** Minutos a gravar antes do início e depois do fim do programa no guia (ver RecordingPlan.PADDING_OPTIONS). */
     val recordPaddingBeforeMin: Int = RecordingPlan.PADDING_BEFORE_DEFAULT,
@@ -203,6 +205,7 @@ data class Prefs(
         const val EPG_OFFSET = "epg_offset_min"
         const val CATCHUP_OFFSET = "catchup_offset_min"
         const val EPG_IN_LIST = "epg_in_list"
+        const val REMINDER_SWITCH = "reminder_switch"
         const val RECORD_PADDING_BEFORE = "record_padding_before_min"
         const val RECORD_PADDING_AFTER = "record_padding_after_min"
         const val PIN_HASH = "parental_pin_sha256"
@@ -388,6 +391,7 @@ data class Prefs(
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 catchupOffsetMin = int(Key.CATCHUP_OFFSET, d.catchupOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgInList = bool(Key.EPG_IN_LIST, d.epgInList),
+                reminderSwitch = bool(Key.REMINDER_SWITCH, d.reminderSwitch),
                 recordPaddingBeforeMin = int(Key.RECORD_PADDING_BEFORE, d.recordPaddingBeforeMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingBeforeMin,
                 recordPaddingAfterMin = int(Key.RECORD_PADDING_AFTER, d.recordPaddingAfterMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingAfterMin,
                 pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },

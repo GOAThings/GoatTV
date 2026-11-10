@@ -126,6 +126,8 @@
     <string name="dismiss">ignorer</string>
     <string name="reminder_set">Rappel programmé : %1$s</string>
     <string name="reminder_removed">Rappel supprimé</string>
+    <string name="reminder_switch">Les rappels changent de chaîne tout seuls</string>
+    <string name="reminder_switch_sub">Au début du programme, la chaîne change après 10 s sauf si vous l\'ignorez</string>
     <string name="back_key">Bouton Retour dans le lecteur</string>
     <string name="back_opens_guide">Ouvre le guide des programmes</string>
     <string name="back_exits">Quitte l\'app</string>

@@ -66,6 +66,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import android.util.Log
+import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import kotlinx.coroutines.flow.drop
@@ -251,6 +252,15 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 
     fun zap(delta: Int) = vm.zap(if (prefs.reverseZap) -delta else delta)
+
+    /** Ir para o programa do lembrete (OK, ou sozinho com a definição). */
+    fun watchReminder(r: Reminder) {
+        vm.consumeReminder(r, watch = true)
+        reminder = null
+        showGuide = false
+        showSearch = false
+    }
+    val reminderSwitchIn = reminderCountdown(reminder, prefs.reminderSwitch, ::watchReminder)
 
     /** O catch-up: ← → somam um minuto; cada salto é um pedido novo ao servidor a partir dessa posição. */
     val archive = catchup?.let { cu ->
@@ -674,12 +684,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     }
                     // Lembrete no ecrã: OK muda para o programa (Voltar ignora, mais abaixo).
                     if (reminder != null && ok) {
-                        if (e.type == KeyEventType.KeyUp) {
-                            reminder?.let { vm.consumeReminder(it, watch = true) }
-                            reminder = null
-                            showGuide = false
-                            showSearch = false
-                        }
+                        if (e.type == KeyEventType.KeyUp) reminder?.let(::watchReminder)
                         return@onPreviewKeyEvent true
                     }
                     // Cartão de versão nova: manter OK carregado instala; um toque continua a ser o OK de sempre.
@@ -1182,7 +1187,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
                 NetHintCard(vm.net, actions, netHintFocus)
             }
-            reminder?.let { ReminderCard(it, Modifier.align(Alignment.BottomEnd)) }
+            reminder?.let { ReminderCard(it, reminderSwitchIn, Modifier.align(Alignment.BottomEnd)) }
             // Com um painel ou as Definições abertas, a cápsula sai (tapava o cabeçalho deles).
             // O canto da gravação (o da cápsula de voltar a ligar): à esquerda com o segundo canal à direita.
             val recCorner = if (second != null) Alignment.TopStart else Alignment.TopEnd

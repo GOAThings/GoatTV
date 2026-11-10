@@ -126,6 +126,8 @@
     <string name="dismiss">закрыть</string>
     <string name="reminder_set">Напоминание установлено: %1$s</string>
     <string name="reminder_removed">Напоминание удалено</string>
+    <string name="reminder_switch">Напоминания сами переключают канал</string>
+    <string name="reminder_switch_sub">Когда передача начинается, канал переключится через 10 с, если вы не закроете напоминание</string>
     <string name="back_key">Кнопка «Назад» в плеере</string>
     <string name="back_opens_guide">Открывает телепрограмму</string>
     <string name="back_exits">Закрывает приложение</string>

@@ -120,9 +120,34 @@ internal fun rememberDueReminder(vm: AppViewModel): MutableState<Reminder?> {
     return state
 }
 
+/**
+ * Com "os lembretes mudam de canal" ([auto]): conta os segundos até mudar sozinho e chama [onSwitch]; devolve quantos
+ * faltam (null sem a definição ou sem lembrete). TV e telemóvel.
+ */
+@Composable
+internal fun reminderCountdown(reminder: Reminder?, auto: Boolean, onSwitch: (Reminder) -> Unit): Int? {
+    var left by remember(reminder) { mutableStateOf<Int?>(null) }
+    val switch by rememberUpdatedState(onSwitch)
+    LaunchedEffect(reminder, auto) {
+        val r = reminder
+        if (r == null || !auto) {
+            left = null
+            return@LaunchedEffect
+        }
+        for (s in REMINDER_SWITCH_SECONDS downTo 1) {
+            left = s
+            delay(1_000)
+        }
+        left = null
+        switch(r)
+    }
+    return left
+}
+
 /** O temporizador avisa no último minuto. */
 private const val SLEEP_WARNING_MS = 60_000L
 private const val REMINDER_CARD_MS = 45_000L
+private const val REMINDER_SWITCH_SECONDS = 10
 private const val BACKDROP_WIDTH = 128
 private const val BACKDROP_HEIGHT = 72
 private const val DEFAULT_BACKDROP_FPS = 30f

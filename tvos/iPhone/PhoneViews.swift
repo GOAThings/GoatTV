@@ -249,6 +249,16 @@ struct PhoneMain: View {
     /// Áudio, legendas ou temporizador, cada um no seu botão (por baixo do vídeo).
     @State private var playerOption: PlayerOption?
     @State private var showRecordings = PhoneMain.startRecordings
+    /// Um programa com lembrete vai começar (o cartão em cima, como no Android); com a definição, os segundos até mudar.
+    @State private var reminder: AppModel.Reminder?
+    @State private var reminderLeft: Int?
+
+    /// O cartão do lembrete: ver o programa (muda de canal) ou ignorar.
+    private func answerReminder(_ r: AppModel.Reminder, watch: Bool) {
+        model.consumeReminder(r, watch: watch)
+        reminder = nil
+        if watch { played() }
+    }
 
     /// Abriu-se um canal: sai do ecrã inicial.
     private func played() {
@@ -445,13 +455,41 @@ struct PhoneMain: View {
             // Um lembrete de um programa que vai começar.
             while !Task.isCancelled {
                 let now = Int64(Date().timeIntervalSince1970 * 1000)
-                if let r = model.dueReminder(now) {
-                    model.showToast("\(r.title) · \(r.channelName)")
-                    model.consumeReminder(r, watch: false)
-                }
+                if reminder == nil, let r = model.dueReminder(now) { reminder = r }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+        // Com "os lembretes mudam de canal": muda sozinho ao fim de uns segundos (o X fica neste canal).
+        .task(id: reminder?.id) {
+            reminderLeft = nil
+            guard let r = reminder, model.prefs.reminderSwitch else { return }
+            for s in stride(from: AppModel.reminderSwitchSeconds, through: 1, by: -1) {
+                reminderLeft = s
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+            }
+            answerReminder(r, watch: true)
+        }
+        .overlay(alignment: .top) {
+            if let r = reminder {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(r.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Text(reminderLeft.map { "\(r.channelName) · \(model.strings.r("recording_switching_in", "\($0)"))" } ?? r.channelName)
+                            .font(.footnote).foregroundStyle(Theme.textDim).monospacedDigit()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Button { answerReminder(r, watch: true) } label: { Image(systemName: "play.fill").frame(width: 40, height: 40) }
+                    Button { answerReminder(r, watch: false) } label: { Image(systemName: "xmark").frame(width: 40, height: 40) }
+                }
+                .foregroundStyle(Theme.text)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.16)))
+                .padding(12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: reminder?.id)
     }
 }
 
@@ -1743,6 +1781,7 @@ private struct MenuTab: View {
                 pick(s.t("Time offset", "Desvio horário"), "epg_offset_min", .number(Double(p.epgOffsetMin)), stride(from: -180, through: 180, by: 30).map { (.number(Double($0)), $0 == 0 ? "0" : String(format: "%+d min", $0)) })
                 pick(s.r("catchup_offset"), "catchup_offset_min", .number(Double(p.catchupOffsetMin)),
                      (-12...12).map { (h: Int) -> (JSON?, String) in (.number(Double(h * 60)), h == 0 ? "0" : String(format: "%+d h", h)) })
+                toggle(s.r("reminder_switch"), "reminder_switch", p.reminderSwitch)
                 if model.hasAccount { MenuRow(s.t("Guide by country", "Guia por país"), chevron: true) { pickingGuideCountry = true } }
                 if model.hasAccount, !model.epgMappings.isEmpty {
                     MenuRow(confirmingEpgReset ? s.t("Press again to confirm", "Carrega outra vez para confirmar") : s.r("epg_reset_all")) {

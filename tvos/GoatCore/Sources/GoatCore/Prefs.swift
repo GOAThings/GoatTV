@@ -86,6 +86,8 @@ public struct Prefs: Equatable, Sendable {
     public var epgRefreshHours = 12
     public var epgOffsetMin = 0
     public var epgInList = true
+    /// Um lembrete muda sozinho para o canal ao fim de uns segundos (sem isto, só com "Ver").
+    public var reminderSwitch = false
     /// Correção da hora pedida no catch-up, em minutos (o relógio ou o fuso do fornecedor errado).
     public var catchupOffsetMin = 0
     // Gravações
@@ -245,6 +247,7 @@ public struct Prefs: Equatable, Sendable {
         epgRefreshHours = Prefs.refreshOptions.contains(epgRefresh) ? epgRefresh : d.epgRefreshHours
         epgOffsetMin = clamp(int("epg_offset_min", d.epgOffsetMin), -12 * 60, 12 * 60)
         epgInList = bool("epg_in_list", d.epgInList)
+        reminderSwitch = bool("reminder_switch", d.reminderSwitch)
         catchupOffsetMin = clamp(int("catchup_offset_min", d.catchupOffsetMin), -12 * 60, 12 * 60)
         let before = int("record_padding_before_min", d.recordPaddingBeforeMin)
         recordPaddingBeforeMin = Prefs.paddingOptions.contains(before) ? before : d.recordPaddingBeforeMin

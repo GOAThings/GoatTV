@@ -126,6 +126,8 @@
     <string name="dismiss">schließen</string>
     <string name="reminder_set">Erinnerung gesetzt: %1$s</string>
     <string name="reminder_removed">Erinnerung entfernt</string>
+    <string name="reminder_switch">Erinnerungen wechseln selbst den Sender</string>
+    <string name="reminder_switch_sub">Wenn die Sendung beginnt, wechselt der Sender nach 10 s, außer du schließt die Erinnerung</string>
     <string name="back_key">Zurück-Taste im Player</string>
     <string name="back_opens_guide">Öffnet die Programmübersicht</string>
     <string name="back_exits">Beendet die App</string>

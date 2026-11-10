@@ -221,6 +221,8 @@ struct ReminderCard: View {
     let onWatch: () -> Void
     let onDismiss: () -> Void
     @FocusState private var focus: String?
+    /// Com a definição, os segundos até mudar sozinho.
+    @State private var left: Int?
 
     init(reminder: AppModel.Reminder, onWatch: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.reminder = reminder
@@ -242,6 +244,9 @@ struct ReminderCard: View {
                     Text(reminder.title).font(.system(size: 36, weight: .semibold)).lineLimit(2)
                     Text("\(hhmm(Date(timeIntervalSince1970: Double(reminder.startMs) / 1000))) · \(reminder.channelName)")
                         .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
+                    if let left {
+                        Text(s.r("recording_switching_in", "\(left)")).font(Fonts.rowSubtitle).monospacedDigit()
+                    }
                 }
             }
             HStack(spacing: 20) {
@@ -257,6 +262,17 @@ struct ReminderCard: View {
         .task {
             try? await Task.sleep(for: .milliseconds(80))
             focus = "watch"
+        }
+        // Com "os lembretes mudam de canal": conta até mudar sozinho (Ignorar fica neste canal).
+        .task(id: reminder.id) {
+            guard model.prefs.reminderSwitch else { return }
+            for s in stride(from: AppModel.reminderSwitchSeconds, through: 1, by: -1) {
+                left = s
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+            }
+            left = nil
+            onWatch()
         }
     }
 }

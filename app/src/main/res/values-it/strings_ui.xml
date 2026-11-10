@@ -126,6 +126,8 @@
     <string name="dismiss">ignora</string>
     <string name="reminder_set">Promemoria impostato: %1$s</string>
     <string name="reminder_removed">Promemoria rimosso</string>
+    <string name="reminder_switch">I promemoria cambiano canale da soli</string>
+    <string name="reminder_switch_sub">Quando inizia il programma, il canale cambia dopo 10 s a meno che non lo ignori</string>
     <string name="back_key">Tasto Indietro nel player</string>
     <string name="back_opens_guide">Apre la guida TV</string>
     <string name="back_exits">Esce dall\'app</string>

@@ -405,7 +405,7 @@ internal fun SleepWarning(secondsLeft: Int, modifier: Modifier = Modifier) {
 
 /** Um programa com lembrete vai começar. */
 @Composable
-internal fun ReminderCard(reminder: Reminder, modifier: Modifier = Modifier) {
+internal fun ReminderCard(reminder: Reminder, switchingIn: Int?, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
     val pulse by rememberInfiniteTransition(label = "bell").animateFloat(
         initialValue = 0.5f,
@@ -433,6 +433,11 @@ internal fun ReminderCard(reminder: Reminder, modifier: Modifier = Modifier) {
                 Text(reminder.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${formatTime(reminder.startMs)} · ${reminder.channelName}", color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium)
             }
+        }
+        // A mudar sozinho: quantos segundos faltam (Voltar fica neste canal).
+        if (switchingIn != null) {
+            Spacer(Modifier.height(12.dp))
+            Text(s.recordingSwitchingIn(switchingIn), style = MaterialTheme.typography.bodyMedium.tabular)
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {

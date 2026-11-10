@@ -126,6 +126,8 @@
     <string name="dismiss">descartar</string>
     <string name="reminder_set">Recordatorio creado: %1$s</string>
     <string name="reminder_removed">Recordatorio eliminado</string>
+    <string name="reminder_switch">Los recordatorios cambian de canal solos</string>
+    <string name="reminder_switch_sub">Cuando empieza el programa, el canal cambia a los 10 s salvo que lo descartes</string>
     <string name="back_key">Botón Atrás en el reproductor</string>
     <string name="back_opens_guide">Abre la guía de TV</string>
     <string name="back_exits">Sale de la app</string>

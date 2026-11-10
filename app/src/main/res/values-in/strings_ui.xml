@@ -126,6 +126,8 @@
     <string name="dismiss">tutup</string>
     <string name="reminder_set">Pengingat diatur: %1$s</string>
     <string name="reminder_removed">Pengingat dihapus</string>
+    <string name="reminder_switch">Pengingat mengganti saluran sendiri</string>
+    <string name="reminder_switch_sub">Saat acara dimulai, saluran berganti setelah 10 dtk kecuali Anda mengabaikannya</string>
     <string name="back_key">Tombol Kembali di pemutar</string>
     <string name="back_opens_guide">Membuka panduan acara</string>
     <string name="back_exits">Keluar dari aplikasi</string>

@@ -126,6 +126,8 @@
     <string name="dismiss">ignorar</string>
     <string name="reminder_set">Lembrete: %1$s</string>
     <string name="reminder_removed">Lembrete removido</string>
+    <string name="reminder_switch">Os lembretes mudam de canal sozinhos</string>
+    <string name="reminder_switch_sub">Quando o programa começa, o canal muda ao fim de 10 s, a não ser que o dispenses</string>
     <string name="back_key">Botão Voltar no player</string>
     <string name="back_opens_guide">Abre o guia TV</string>
     <string name="back_exits">Sai da app</string>

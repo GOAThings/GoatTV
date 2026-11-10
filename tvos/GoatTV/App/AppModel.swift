@@ -1299,6 +1299,9 @@ final class AppModel {
         play(channel, from: groupFor(channel))
     }
 
+    /// Com "os lembretes mudam de canal": os segundos até o lembrete mudar sozinho (como no Android).
+    static let reminderSwitchSeconds = 10
+
     // MARK: Temporizador
 
     func setSleepTimer(_ minutes: Int?, announce: Bool = true) {

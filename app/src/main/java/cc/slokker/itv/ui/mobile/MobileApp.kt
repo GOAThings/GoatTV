@@ -55,6 +55,7 @@ import cc.slokker.itv.MainActivity
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.ui.player.behindLabel
+import cc.slokker.itv.ui.player.reminderCountdown
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
@@ -252,6 +253,12 @@ fun MobileMain(vm: AppViewModel) {
             delay(15_000)
         }
     }
+    // Com a definição, o lembrete muda sozinho de canal ao fim de uns segundos (o X fica neste).
+    val reminderSwitchIn = reminderCountdown(reminder, prefs.reminderSwitch) { r ->
+        vm.consumeReminder(r, watch = true)
+        reminder = null
+        played()
+    }
     // Gravações: mudar de canal com uma a decorrer (pergunta-se), e uma marcada noutro canal quase a começar.
     val switchPrompt by vm.switchPrompt.collectAsStateWithLifecycle()
     val recordingPrompt by vm.recordingPrompt.collectAsStateWithLifecycle()
@@ -288,7 +295,7 @@ fun MobileMain(vm: AppViewModel) {
             Row(Modifier.fillMaxWidth().clip(PhoneShapes.Card).background(PhoneColors.Reminder).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(r.title, color = ItvColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(r.channelName, color = ItvColors.TextDim, fontSize = 13.sp)
+                    Text(reminderSwitchIn?.let { "${r.channelName} · ${strings.recordingSwitchingIn(it)}" } ?: r.channelName, color = ItvColors.TextDim, fontSize = 13.sp)
                 }
                 ControlButton(ItvIcons.Play) { vm.consumeReminder(r, watch = true); reminder = null; played() }
                 ControlButton(ItvIcons.Close) { vm.consumeReminder(r, watch = false); reminder = null }

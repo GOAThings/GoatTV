@@ -126,6 +126,8 @@
     <string name="dismiss">忽略</string>
     <string name="reminder_set">已设置提醒：%1$s</string>
     <string name="reminder_removed">提醒已取消</string>
+    <string name="reminder_switch">提醒自动换台</string>
+    <string name="reminder_switch_sub">节目开始时，除非您关闭提醒，否则 10 秒后自动换台</string>
     <string name="back_key">播放器中的返回键</string>
     <string name="back_opens_guide">打开节目指南</string>
     <string name="back_exits">退出应用</string>

@@ -126,6 +126,8 @@
     <string name="dismiss">閉じる</string>
     <string name="reminder_set">リマインダーを設定しました：%1$s</string>
     <string name="reminder_removed">リマインダーを削除しました</string>
+    <string name="reminder_switch">リマインダーで自動的にチャンネルを切り替える</string>
+    <string name="reminder_switch_sub">番組が始まると、閉じない限り 10 秒後にチャンネルが切り替わります</string>
     <string name="back_key">プレーヤーでの戻るボタン</string>
     <string name="back_opens_guide">番組ガイドを開く</string>
     <string name="back_exits">アプリを終了</string>
