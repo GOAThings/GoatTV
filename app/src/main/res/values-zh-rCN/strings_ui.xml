@@ -110,6 +110,11 @@
     <string name="back_key_name">返回</string>
     <string name="back_to_live">回到直播</string>
     <string name="sleep_timer">睡眠定时</string>
+    <string name="key_red">红色键</string>
+    <string name="key_green">绿色键</string>
+    <string name="key_yellow">黄色键</string>
+    <string name="key_blue">蓝色键</string>
+    <string name="key_action_last">上一个频道</string>
     <string name="sleep_remaining">%1$s 分钟后关闭</string>
     <string name="minutes_left">还剩 %1$s 分钟</string>
     <string name="section_watching">观看</string>

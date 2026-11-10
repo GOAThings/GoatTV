@@ -110,6 +110,11 @@
     <string name="back_key_name">Geri</string>
     <string name="back_to_live">canlı yayına dön</string>
     <string name="sleep_timer">Uyku zamanlayıcısı</string>
+    <string name="key_red">Kırmızı tuş</string>
+    <string name="key_green">Yeşil tuş</string>
+    <string name="key_yellow">Sarı tuş</string>
+    <string name="key_blue">Mavi tuş</string>
+    <string name="key_action_last">Önceki kanal</string>
     <string name="sleep_remaining">%1$s dk sonra kapanır</string>
     <string name="minutes_left">%1$s dk kaldı</string>
     <string name="section_watching">İzleme</string>

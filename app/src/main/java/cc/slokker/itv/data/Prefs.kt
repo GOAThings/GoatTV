@@ -78,6 +78,11 @@ data class Prefs(
     // Mudança de canal
     val upDown: String = UpDown.ZAP,
     val reverseZap: Boolean = false,
+    /** O que fazem os botões de cor do comando no player (ver KeyAction). */
+    val keyRed: String = KeyAction.RECORD,
+    val keyGreen: String = KeyAction.GUIDE,
+    val keyYellow: String = KeyAction.AUDIO,
+    val keyBlue: String = KeyAction.SUBTITLES,
     /** O atraso ao mudar de canal, em ms ([ZapDelay]: automático, desligado ou um tempo fixo). */
     val zapDelayMs: Int = ZapDelay.AUTO,
     val infoSeconds: Int = 4,
@@ -187,6 +192,10 @@ data class Prefs(
         const val CHANNEL_ORDER = "channel_order"
         const val UP_DOWN = "up_down"
         const val REVERSE_ZAP = "reverse_zap"
+        const val KEY_RED = "key_red"
+        const val KEY_GREEN = "key_green"
+        const val KEY_YELLOW = "key_yellow"
+        const val KEY_BLUE = "key_blue"
         const val ZAP_DELAY = "zap_delay_ms"
         const val INFO_SECONDS = "info_seconds"
         const val STARTUP = "startup"
@@ -305,6 +314,15 @@ data class Prefs(
         val ALL = setOf(AUTO, OFF, 1_000, 2_000)
     }
 
+    /** O que um botão de cor faz no player. */
+    object KeyAction {
+        const val NONE = "none"; const val RECORD = "record"; const val GUIDE = "guide"; const val CHANNELS = "channels"
+        const val FAVORITE = "favorite"; const val PREVIOUS = "previous"; const val RECORDINGS = "recordings"
+        const val SEARCH = "search"; const val AUDIO = "audio"; const val SUBTITLES = "subtitles"; const val SLEEP = "sleep"
+        /** Por esta ordem nas definições. */
+        val OPTIONS = listOf(NONE, RECORD, GUIDE, CHANNELS, FAVORITE, PREVIOUS, RECORDINGS, SEARCH, AUDIO, SUBTITLES, SLEEP)
+        val ALL = OPTIONS.toSet()
+    }
     object UpDown {
         const val ZAP = "zap"; const val LIST = "list"
         val ALL = setOf(ZAP, LIST)
@@ -382,6 +400,10 @@ data class Prefs(
                 channelOrder = stringListMap(s, Key.CHANNEL_ORDER),
                 upDown = str(Key.UP_DOWN, d.upDown, UpDown.ALL),
                 reverseZap = bool(Key.REVERSE_ZAP, d.reverseZap),
+                keyRed = str(Key.KEY_RED, d.keyRed, KeyAction.ALL),
+                keyGreen = str(Key.KEY_GREEN, d.keyGreen, KeyAction.ALL),
+                keyYellow = str(Key.KEY_YELLOW, d.keyYellow, KeyAction.ALL),
+                keyBlue = str(Key.KEY_BLUE, d.keyBlue, KeyAction.ALL),
                 zapDelayMs = int(Key.ZAP_DELAY, d.zapDelayMs).takeIf { it in ZapDelay.ALL } ?: d.zapDelayMs,
                 infoSeconds = int(Key.INFO_SECONDS, d.infoSeconds).coerceIn(0, 30),
                 startup = str(Key.STARTUP, d.startup, Startup.ALL),

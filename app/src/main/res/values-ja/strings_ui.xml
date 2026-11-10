@@ -110,6 +110,11 @@
     <string name="back_key_name">戻る</string>
     <string name="back_to_live">ライブに戻る</string>
     <string name="sleep_timer">スリープタイマー</string>
+    <string name="key_red">赤ボタン</string>
+    <string name="key_green">緑ボタン</string>
+    <string name="key_yellow">黄ボタン</string>
+    <string name="key_blue">青ボタン</string>
+    <string name="key_action_last">前のチャンネル</string>
     <string name="sleep_remaining">%1$s 分後にオフ</string>
     <string name="minutes_left">残り %1$s 分</string>
     <string name="section_watching">視聴</string>

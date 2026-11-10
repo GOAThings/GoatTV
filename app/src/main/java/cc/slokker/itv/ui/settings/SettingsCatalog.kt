@@ -219,6 +219,11 @@ object SettingsCatalog {
         read = { it.prefs.upDown },
         tv = Place(TvPage.ZAPPING, 10),
     )
+    /** Os botões de cor (só na TV: os comandos da Apple TV e os telemóveis não os têm). */
+    val KEY_RED = keyChoice(Prefs.Key.KEY_RED, { it.keyRed }, { it.prefs.keyRed }, 60)
+    val KEY_GREEN = keyChoice(Prefs.Key.KEY_GREEN, { it.keyGreen }, { it.prefs.keyGreen }, 61)
+    val KEY_YELLOW = keyChoice(Prefs.Key.KEY_YELLOW, { it.keyYellow }, { it.prefs.keyYellow }, 62)
+    val KEY_BLUE = keyChoice(Prefs.Key.KEY_BLUE, { it.keyBlue }, { it.prefs.keyBlue }, 63)
     val REVERSE_ZAP = Setting.Toggle(
         Prefs.Key.REVERSE_ZAP, { it.reverseUpDown }, { it.reverseUpDownSub },
         read = { it.reverseZap },
@@ -409,7 +414,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
@@ -428,6 +433,27 @@ object SettingsCatalog {
             .map { (section, rows) -> section to rows.sortedBy { it.second.order }.map { it.first } }
 
     private val AUDIO_DELAYS = listOf(-300, -200, -150, -100, -50, 0, 50, 100, 150, 200, 300, 400, 500)
+
+    private fun keyChoice(key: String, title: (Strings) -> String, read: (SettingValues) -> Any?, order: Int) = Setting.Choice(
+        key, title,
+        options = { s -> Prefs.KeyAction.OPTIONS.map { it to keyActionLabel(it, s) } },
+        read = read,
+        tv = Place(TvPage.ZAPPING, order),
+    )
+
+    private fun keyActionLabel(action: String, s: Strings) = when (action) {
+        Prefs.KeyAction.RECORD -> s.record
+        Prefs.KeyAction.GUIDE -> s.guide
+        Prefs.KeyAction.CHANNELS -> s.sectionChannelList
+        Prefs.KeyAction.FAVORITE -> s.favorite
+        Prefs.KeyAction.PREVIOUS -> s.keyActionLast
+        Prefs.KeyAction.RECORDINGS -> s.recordings
+        Prefs.KeyAction.SEARCH -> s.search
+        Prefs.KeyAction.AUDIO -> s.audio
+        Prefs.KeyAction.SUBTITLES -> s.subtitles
+        Prefs.KeyAction.SLEEP -> s.sleepTimer
+        else -> s.none
+    }
 
     private fun decoders(s: Strings) = listOf<Pair<Any?, String>>(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw)
 

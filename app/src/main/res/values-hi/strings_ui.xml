@@ -110,6 +110,11 @@
     <string name="back_key_name">वापस</string>
     <string name="back_to_live">लाइव पर लौटें</string>
     <string name="sleep_timer">स्लीप टाइमर</string>
+    <string name="key_red">लाल बटन</string>
+    <string name="key_green">हरा बटन</string>
+    <string name="key_yellow">पीला बटन</string>
+    <string name="key_blue">नीला बटन</string>
+    <string name="key_action_last">पिछला चैनल</string>
     <string name="sleep_remaining">%1$s मिनट में बंद</string>
     <string name="minutes_left">%1$s मिनट बाकी</string>
     <string name="section_watching">देखना</string>

@@ -110,6 +110,11 @@
     <string name="back_key_name">Atrás</string>
     <string name="back_to_live">volver al directo</string>
     <string name="sleep_timer">Temporizador de apagado</string>
+    <string name="key_red">Botón rojo</string>
+    <string name="key_green">Botón verde</string>
+    <string name="key_yellow">Botón amarillo</string>
+    <string name="key_blue">Botón azul</string>
+    <string name="key_action_last">Canal anterior</string>
     <string name="sleep_remaining">Se apaga en %1$s min</string>
     <string name="minutes_left">Quedan %1$s min</string>
     <string name="section_watching">Ver</string>

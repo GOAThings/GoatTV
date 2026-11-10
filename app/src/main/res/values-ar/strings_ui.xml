@@ -110,6 +110,11 @@
     <string name="back_key_name">رجوع</string>
     <string name="back_to_live">العودة إلى البث المباشر</string>
     <string name="sleep_timer">مؤقت النوم</string>
+    <string name="key_red">الزر الأحمر</string>
+    <string name="key_green">الزر الأخضر</string>
+    <string name="key_yellow">الزر الأصفر</string>
+    <string name="key_blue">الزر الأزرق</string>
+    <string name="key_action_last">القناة السابقة</string>
     <string name="sleep_remaining">إيقاف خلال %1$s د</string>
     <string name="minutes_left">متبقي %1$s د</string>
     <string name="section_watching">المشاهدة</string>

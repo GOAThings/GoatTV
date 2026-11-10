@@ -110,6 +110,11 @@
     <string name="back_key_name">Kembali</string>
     <string name="back_to_live">kembali ke siaran langsung</string>
     <string name="sleep_timer">Timer tidur</string>
+    <string name="key_red">Tombol merah</string>
+    <string name="key_green">Tombol hijau</string>
+    <string name="key_yellow">Tombol kuning</string>
+    <string name="key_blue">Tombol biru</string>
+    <string name="key_action_last">Saluran sebelumnya</string>
     <string name="sleep_remaining">Mati dalam %1$s mnt</string>
     <string name="minutes_left">Sisa %1$s mnt</string>
     <string name="section_watching">Menonton</string>

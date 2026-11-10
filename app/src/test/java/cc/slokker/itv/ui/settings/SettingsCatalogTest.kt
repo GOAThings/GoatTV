@@ -63,7 +63,7 @@ class SettingsCatalogTest {
             tv(TvPage.PLAYBACK),
         )
         assertEquals(listOf(TvSection.MAIN to listOf(k.AUTO_START, k.EXIT_CONFIRM, k.USER_AGENT)), tv(TvPage.GENERAL))
-        assertEquals(listOf(TvSection.MAIN to listOf(k.UP_DOWN, k.REVERSE_ZAP, k.ZAP_DELAY, k.INFO_SECONDS, k.STARTUP, k.BACK_ACTION)), tv(TvPage.ZAPPING))
+        assertEquals(listOf(TvSection.MAIN to listOf(k.UP_DOWN, k.REVERSE_ZAP, k.ZAP_DELAY, k.INFO_SECONDS, k.STARTUP, k.BACK_ACTION, k.KEY_RED, k.KEY_GREEN, k.KEY_YELLOW, k.KEY_BLUE)), tv(TvPage.ZAPPING))
         assertEquals(
             listOf(
                 TvSection.LANGUAGE_TEXT to listOf(k.LANGUAGE, k.UI_SCALE, k.TEXT_SIZE),

@@ -110,6 +110,11 @@
     <string name="back_key_name">Voltar</string>
     <string name="back_to_live">voltar ao direto</string>
     <string name="sleep_timer">Desligar</string>
+    <string name="key_red">Botão vermelho</string>
+    <string name="key_green">Botão verde</string>
+    <string name="key_yellow">Botão amarelo</string>
+    <string name="key_blue">Botão azul</string>
+    <string name="key_action_last">Canal anterior</string>
     <string name="sleep_remaining">Desliga em %1$s min</string>
     <string name="minutes_left">Faltam %1$s min</string>
     <string name="section_watching">Ver TV</string>

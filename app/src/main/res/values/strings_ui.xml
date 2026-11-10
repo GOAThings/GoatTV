@@ -111,6 +111,11 @@
     <string name="back_key_name">Back</string>
     <string name="back_to_live">back to live</string>
     <string name="sleep_timer">Sleep timer</string>
+    <string name="key_red">Red button</string>
+    <string name="key_green">Green button</string>
+    <string name="key_yellow">Yellow button</string>
+    <string name="key_blue">Blue button</string>
+    <string name="key_action_last">Previous channel</string>
     <string name="sleep_remaining">Off in %1$s min</string>
     <string name="minutes_left">%1$s min left</string>
     <string name="section_watching">Watching</string>

@@ -110,6 +110,11 @@
     <string name="back_key_name">Indietro</string>
     <string name="back_to_live">torna alla diretta</string>
     <string name="sleep_timer">Timer di spegnimento</string>
+    <string name="key_red">Tasto rosso</string>
+    <string name="key_green">Tasto verde</string>
+    <string name="key_yellow">Tasto giallo</string>
+    <string name="key_blue">Tasto blu</string>
+    <string name="key_action_last">Canale precedente</string>
     <string name="sleep_remaining">Si spegne tra %1$s min</string>
     <string name="minutes_left">Mancano %1$s min</string>
     <string name="section_watching">Visione</string>

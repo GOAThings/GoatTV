@@ -307,6 +307,28 @@ fun PlayerScreen(vm: AppViewModel) {
         panel = Panel.Channels
     }
 
+    /** O que faz um botão de cor (Prefs.KeyAction); false = nada (a tecla segue para quem a quiser). */
+    fun runKeyAction(action: String): Boolean {
+        infoVisible = false
+        when (action) {
+            Prefs.KeyAction.RECORD -> if (vm.recordingOf(current) != null) vm.stopRecording(current) else vm.recordNow(current, timeshift.feed)
+            Prefs.KeyAction.GUIDE -> {
+                guideFromBack = false
+                showGuide = true
+            }
+            Prefs.KeyAction.CHANNELS -> openChannels()
+            Prefs.KeyAction.FAVORITE -> vm.toggleFavorite(current)
+            Prefs.KeyAction.PREVIOUS -> if (!vm.playPrevious()) vm.showToast(I18n.s.noPreviousChannel)
+            Prefs.KeyAction.RECORDINGS -> showRecordings = true
+            Prefs.KeyAction.SEARCH -> showSearch = true
+            Prefs.KeyAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
+            Prefs.KeyAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
+            Prefs.KeyAction.SLEEP -> showSleep = true
+            else -> return false
+        }
+        return true
+    }
+
     // O cartão de versão nova desaparece sozinho (não conta enquanto se mantém OK, nem a descarregar).
     LaunchedEffect(showUpdate, updateBusy, updateNotice) {
         if (!showUpdate || updateBusy) return@LaunchedEffect
@@ -760,6 +782,17 @@ fun PlayerScreen(vm: AppViewModel) {
                         }
                         AndroidKeyEvent.KEYCODE_SEARCH -> {
                             showSearch = true; return@onKeyEvent true
+                        }
+                        // Os botões de cor: o que as definições disserem (Definições → Zapping).
+                        AndroidKeyEvent.KEYCODE_PROG_RED, AndroidKeyEvent.KEYCODE_PROG_GREEN,
+                        AndroidKeyEvent.KEYCODE_PROG_YELLOW, AndroidKeyEvent.KEYCODE_PROG_BLUE -> {
+                            val action = when (code) {
+                                AndroidKeyEvent.KEYCODE_PROG_RED -> prefs.keyRed
+                                AndroidKeyEvent.KEYCODE_PROG_GREEN -> prefs.keyGreen
+                                AndroidKeyEvent.KEYCODE_PROG_YELLOW -> prefs.keyYellow
+                                else -> prefs.keyBlue
+                            }
+                            return@onKeyEvent runKeyAction(action)
                         }
                         // Comandos com a tecla de gravar (ou o GoatRemote): grava ou pára, como o botão do HUD.
                         AndroidKeyEvent.KEYCODE_MEDIA_RECORD -> {

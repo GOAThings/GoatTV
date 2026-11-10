@@ -110,6 +110,11 @@
     <string name="back_key_name">Retour</string>
     <string name="back_to_live">retour au direct</string>
     <string name="sleep_timer">Minuterie de mise en veille</string>
+    <string name="key_red">Touche rouge</string>
+    <string name="key_green">Touche verte</string>
+    <string name="key_yellow">Touche jaune</string>
+    <string name="key_blue">Touche bleue</string>
+    <string name="key_action_last">Chaîne précédente</string>
     <string name="sleep_remaining">Arrêt dans %1$s min</string>
     <string name="minutes_left">Encore %1$s min</string>
     <string name="section_watching">Visionnage</string>

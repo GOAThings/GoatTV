@@ -110,6 +110,11 @@
     <string name="back_key_name">Zurück</string>
     <string name="back_to_live">zurück zu live</string>
     <string name="sleep_timer">Sleep-Timer</string>
+    <string name="key_red">Rote Taste</string>
+    <string name="key_green">Grüne Taste</string>
+    <string name="key_yellow">Gelbe Taste</string>
+    <string name="key_blue">Blaue Taste</string>
+    <string name="key_action_last">Vorheriger Sender</string>
     <string name="sleep_remaining">Aus in %1$s Min.</string>
     <string name="minutes_left">Noch %1$s Min.</string>
     <string name="section_watching">Fernsehen</string>
