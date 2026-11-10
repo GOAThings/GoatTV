@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.LaunchedEffect
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
@@ -58,6 +59,7 @@ import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.settings.PhonePage
+import cc.slokker.itv.ui.settings.backupSubtitle
 import cc.slokker.itv.ui.settings.PhoneSection
 import cc.slokker.itv.ui.settings.Setting
 import cc.slokker.itv.ui.settings.SettingValues
@@ -294,12 +296,27 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
     val isCurrent = playlist.id == content?.playlist?.id
+    // A lista de reserva (como na TV): escolhe-se numa página própria; o subtítulo diz quantos canais ela tem.
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val coverage by vm.backupCoverage.collectAsStateWithLifecycle()
+    var pickBackup by remember { mutableStateOf(false) }
+    val others = playlists.filter { it.id != playlist.id }
+    val backup = vm.backupOf(playlist.id)
+    LaunchedEffect(playlist.id, prefs.backupPlaylist[playlist.id], prefs.backupChannels) { vm.checkBackupCoverage(playlist.id) }
+    if (pickBackup) {
+        val options = listOf<Pair<Any?, String>>(null to s.backupPlaylistNone) + others.map { it.id to it.name }
+        return PickPage(Picking(s.backupPlaylist, options, backup?.id) { v -> vm.setBackupPlaylist(playlist.id, v as String?) }) { pickBackup = false }
+    }
     BackHandler(onBack = onClose)
     SubPage(playlist.name, onClose) {
         if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist); onClose() }
         MenuRow(s.reloadChannels, null) {
             if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(playlist)
             onClose()
+        }
+        if (others.isNotEmpty()) {
+            MenuRow(s.backupPlaylist, backup?.name ?: s.backupPlaylistNone, chevron = true, subtitle = backupSubtitle(s, backup, coverage[playlist.id])) { pickBackup = true }
         }
         MenuRow(s.edit, null, chevron = true, onClick = onEdit)
         MenuRow(
