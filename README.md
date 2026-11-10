@@ -64,4 +64,6 @@ The license covers the code only. The names "GOAT" and "GoatTV" and their logos 
 forks must use their own name and artwork.
 
 Third-party: [Adwaita Sans](third_party/adwaita-sans-OFL.txt) (SIL Open Font License 1.1). The Apple TV app also
-uses [VLCKit](https://code.videolan.org/videolan/VLCKit) (LGPL 2.1).
+uses [VLCKit](https://code.videolan.org/videolan/VLCKit) (LGPL 2.1). The Apple apps' experimental engine is
+[AetherEngine](https://github.com/superuser404notfound/AetherEngine) (LGPL 3.0 with an App Store exception), with FFmpeg
+(LGPL 2.1) and libdovi (MIT): see [third_party/aetherengine-NOTICE.txt](third_party/aetherengine-NOTICE.txt).

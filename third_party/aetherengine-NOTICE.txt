@@ -1,0 +1,29 @@
+AetherEngine and its dependencies (Apple TV and iPhone apps, experimental player engine)
+=========================================================================================
+
+The Apple TV and iPhone apps link AetherEngine as an optional, experimental player engine
+(Settings > Player > AetherEngine). It is built into the GoatAether framework inside the app,
+with none of its optional package traits enabled.
+
+AetherEngine 7.62.1
+  https://github.com/superuser404notfound/AetherEngine/tree/7.62.1
+  Copyright (C) 2026 Vincent Herbst
+  GNU Lesser General Public License v3.0 with an App Store / DRM exception: see
+  aetherengine-LICENSE.txt. Used unmodified; the source is at the tag above.
+
+FFmpegBuild 3.14.x (resolved by AetherEngine 7.62.1)
+  https://github.com/superuser404notfound/FFmpegBuild
+  FFmpeg (libavcodec, libavformat, libavutil, libswresample, libswscale, libavfilter):
+  LGPL-2.1-or-later, embedded as dynamic frameworks (AetherLib*.framework).
+  dav1d: BSD-2-Clause. zimg: WTFPL. libzvbi: LGPL-2.0-or-later.
+  The licence texts are in FFmpegBuild's LICENSES/ folder; the FFmpeg source is linked from
+  FFmpegBuild's README.
+
+LibDovi 2.2.x (resolved by AetherEngine 7.62.1)
+  https://github.com/superuser404notfound/LibDovi
+  libdovi (the dolby_vision crate from dovi_tool, https://github.com/quietvoid/dovi_tool),
+  Copyright (c) quietvoid and contributors, used under the MIT licence.
+  Packaging and build scripts Copyright (c) 2026 Vincent Herbst, MIT.
+
+SMBClient 0.3.x and LibTrueHD 3.2.x are resolved by the package but not linked: the apps link
+only the AetherEngine product (no AetherEngineSMB, no TrueHDObjectAudio trait).
