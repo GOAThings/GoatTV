@@ -19,6 +19,8 @@ public enum M3UParser {
         var header: [String: String] = [:]
 
         var pending: (attrs: [String: String], name: String)?
+        // O número do canal anterior: um canal sem tvg-chno fica com o seguinte (sem nenhum, 1, 2, 3…).
+        var lastNum = 0
         var group: String?
         var userAgent: String?
         var referrer: String?
@@ -70,19 +72,31 @@ public enum M3UParser {
                 usedKeys.insert(key)
 
                 let index = channels.count
+                let num = channelNumber(info.attrs) ?? lastNum + 1
+                lastNum = num
                 var name = info.name
                 if name.isEmpty { name = info.attrs["tvg-name"] ?? "" }
                 if name.isEmpty { name = channelName(index + 1) }
                 let logo = info.attrs["tvg-logo"].flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
                 let catchup = M3uCatchup.spec(info.attrs, header: header, url: line)
                 channels.append(Channel(
-                    uid: index, key: key, num: index + 1, name: name, logo: logo, categoryId: category,
+                    uid: index, key: key, num: num, name: name, logo: logo, categoryId: category,
                     url: line, userAgent: userAgent, referrer: referrer, epgId: tvgId.isEmpty ? nil : tvgId,
                     archiveDays: catchup?.days ?? 0, catchupType: catchup?.type, catchupSource: catchup?.source
                 ))
             }
         }
         return Result(categories: groups.map { Category(id: $0, name: $0) }, channels: channels, epgUrl: epgUrl)
+    }
+
+    /// O número que a lista dá ao canal (tvg-chno, ou os nomes que outras listas usam); igual no Android.
+    static func channelNumber(_ attrs: [String: String]) -> Int? {
+        for name in ["tvg-chno", "channel-number", "tvg-num"] {
+            if let n = attrs[name].flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) {
+                return (1...99_999).contains(n) ? n : nil
+            }
+        }
+        return nil
     }
 
     /// Heurística para filmes e séries: `/movie/`, `/series/`, `.mp4` ou `.mkv`.

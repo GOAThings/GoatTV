@@ -25,6 +25,8 @@ object M3uParser {
         var header: Map<String, String> = emptyMap()
 
         var pending: Extinf? = null
+        // O número do canal anterior: um canal sem tvg-chno fica com o seguinte (sem nenhum, 1, 2, 3…).
+        var lastNum = 0
         var group: String? = null
         var userAgent: String? = null
         var referrer: String? = null
@@ -72,10 +74,12 @@ object M3uParser {
 
                     val index = channels.size
                     val catchup = M3uCatchup.spec(info.attrs, header, line)
+                    val num = channelNumber(info.attrs) ?: (lastNum + 1)
+                    lastNum = num
                     channels += Channel(
                         uid = index,
                         key = key,
-                        num = index + 1,
+                        num = num,
                         name = info.name.ifEmpty { info.attrs["tvg-name"].orEmpty() }.ifEmpty { I18n.s.channelName((index + 1).toString()) },
                         logo = info.attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
                         categoryId = category,
@@ -94,6 +98,13 @@ object M3uParser {
     }
 
     private class Extinf(val attrs: Map<String, String>, val name: String)
+
+    /** O número que a lista dá ao canal (tvg-chno, ou os nomes que outras listas usam); igual na Apple TV. */
+    internal fun channelNumber(attrs: Map<String, String>): Int? =
+        listOf("tvg-chno", "channel-number", "tvg-num").firstNotNullOfOrNull { attrs[it]?.trim()?.toIntOrNull() }
+            ?.takeIf { it in 1..MAX_CHANNEL_NUMBER }
+
+    private const val MAX_CHANNEL_NUMBER = 99_999
 
     private fun parseExtinf(line: String): Extinf {
         // O nome vem depois da primeira vírgula fora de aspas (os atributos podem ter vírgulas).

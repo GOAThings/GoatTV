@@ -212,4 +212,26 @@ class M3uParserTest {
         assertEquals("VLC/3.0 é", SafeInput.stripControl("VLC/3.0 é"))
         assertEquals("VLC/3.0 ", SafeInput.headerSafe("VLC/3.0 é\n"))
     }
+
+    @Test
+    fun `channel numbers come from tvg-chno, the rest follow on`() {
+        val r = parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 tvg-chno="101",A
+            http://h/a.ts
+            #EXTINF:-1,B
+            http://h/b.ts
+            #EXTINF:-1 channel-number=" 7 ",C
+            http://h/c.ts
+            #EXTINF:-1 tvg-chno="abc",D
+            http://h/d.ts
+            #EXTINF:-1 tvg-chno="0",E
+            http://h/e.ts
+            """.trimIndent(),
+        )
+        assertEquals(listOf(101, 102, 7, 8, 9), r.channels.map { it.num })
+        // Sem números na lista: 1, 2, 3… como sempre.
+        assertEquals(listOf(1, 2), parse("#EXTM3U\n#EXTINF:-1,A\nhttp://h/a.ts\n#EXTINF:-1,B\nhttp://h/b.ts").channels.map { it.num })
+    }
 }

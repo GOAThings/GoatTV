@@ -19,6 +19,7 @@ enum CoreTests {
         ("appUpdate", appUpdate),
         ("m3u", m3u),
         ("m3uKeys", m3uKeys),
+        ("m3uNumbers", m3uNumbers),
         ("xtream", xtream),
         ("xtreamUrls", xtreamUrls),
         ("xmltv", xmltv),
@@ -607,5 +608,15 @@ enum CoreTests {
         let body = try JSON.parse(index.body())
         try expect(body["channels"]?.array?.count, 2)
         try expect(body["channels"]?.array?[1]["logo"] == nil, true)
+    }
+
+    /// Os números do tvg-chno (iguais aos do Android, ver M3uParserTest).
+    static func m3uNumbers() throws {
+        let text = "#EXTM3U\n#EXTINF:-1 tvg-chno=\"101\",A\nhttp://h/a.ts\n#EXTINF:-1,B\nhttp://h/b.ts\n" +
+            "#EXTINF:-1 channel-number=\" 7 \",C\nhttp://h/c.ts\n#EXTINF:-1 tvg-chno=\"abc\",D\nhttp://h/d.ts\n" +
+            "#EXTINF:-1 tvg-chno=\"0\",E\nhttp://h/e.ts\n"
+        try expect(M3UParser.parse(Data(text.utf8)).channels.map(\.num), [101, 102, 7, 8, 9])
+        let plain = "#EXTM3U\n#EXTINF:-1,A\nhttp://h/a.ts\n#EXTINF:-1,B\nhttp://h/b.ts\n"
+        try expect(M3UParser.parse(Data(plain.utf8)).channels.map(\.num), [1, 2])
     }
 }
