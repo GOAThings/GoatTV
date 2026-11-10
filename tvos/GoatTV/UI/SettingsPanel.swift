@@ -982,6 +982,10 @@ struct SettingsPanel: View {
             return [
                 .info("goattv", "GoatTV", "GPL-3.0"),
                 .info("vlc", "VLC (TVVLCKit)", "LGPL-2.1"),
+                // O motor experimental (Definições → Player) e o que ele traz.
+                .info("aether", "AetherEngine", "LGPL-3.0"),
+                .info("ffmpeg", "FFmpeg (FFmpegBuild)", "LGPL-2.1"),
+                .info("dovi", "libdovi", "MIT"),
             ]
 
         case .pick(let key):
@@ -1362,7 +1366,8 @@ struct SettingsPanel: View {
         case "engine":
             return (s.t("Player", "Player"),
                     [o("exo", s.t("Default (Apple player for HLS, VLC for the rest)", "Normal (o da Apple nos HLS, o VLC no resto)")),
-                     o("vlc", s.t("VLC (for streams that don't open)", "VLC (para streams que não abram)"))],
+                     o("vlc", s.t("VLC (for streams that don't open)", "VLC (para streams que não abram)")),
+                     o("aether", s.r("engine_aether"))],
                     .string(p.engine))
         case "decoder":
             return (s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"),
