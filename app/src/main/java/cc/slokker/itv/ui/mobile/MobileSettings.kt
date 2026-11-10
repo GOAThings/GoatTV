@@ -43,6 +43,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.BuildConfig
+import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
@@ -88,6 +89,11 @@ fun MobileMenu(vm: AppViewModel) {
     var parentalGate by remember { mutableStateOf(false) }
     var logoutGate by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
+    // A lista aberta (usar, recarregar, editar, remover) e a que se está a editar.
+    var opened by remember { mutableStateOf<Playlist?>(null) }
+    var editing by remember { mutableStateOf<Playlist?>(null) }
+    var confirmLogout by remember { mutableStateOf(false) }
+    var confirmPinOff by remember { mutableStateOf(false) }
     var reporting by remember { mutableStateOf(false) }
     var managingGroups by remember { mutableStateOf(false) }
     var editingAgent by remember { mutableStateOf(false) }
@@ -95,6 +101,8 @@ fun MobileMenu(vm: AppViewModel) {
     val format by vm.streamFormat.collectAsStateWithLifecycle()
     var message by remember { mutableStateOf("") }
     if (adding) return PlaylistFormPage(vm) { adding = false }
+    editing?.let { p -> return PlaylistFormPage(vm, p) { editing = null; opened = null } }
+    opened?.let { p -> return PlaylistPage(vm, p, onEdit = { editing = p }) { opened = null } }
     if (choosingPin) {
         return PinDialog(s.choosePin, onClose = { choosingPin = false }) { pin ->
             vm.setPin(pin)
@@ -133,14 +141,13 @@ fun MobileMenu(vm: AppViewModel) {
                 // A lista em uso em destaque, como o canal atual nas Definições da TV; as outras por baixo.
                 content?.let { c ->
                     val type = c.playlist.type.kind.label
-                    PlaylistCard(c.playlist.name, "$type · ${s.groupChannels(c.channels.size)}")
+                    PlaylistCard(c.playlist.name, "$type · ${s.groupChannels(c.channels.size)}") { opened = c.playlist }
                 }
+                // Como na TV: cada lista abre-se (usar, recarregar, editar, remover) e há sempre "Adicionar lista".
                 val others = playlists.filter { it.id != content?.playlist?.id }
-                if (others.isNotEmpty() || local) {
-                    Section(s.playlists) {
-                        others.forEach { p -> MenuRow(p.name, null, ItvIcons.Playlist) { vm.switchPlaylist(p) } }
-                        if (local) MenuRow(s.addPlaylist, null, ItvIcons.Playlist, chevron = true) { adding = true }
-                    }
+                Section(s.playlists) {
+                    others.forEach { p -> MenuRow(p.name, p.type.kind.label, ItvIcons.Playlist, chevron = true) { opened = p } }
+                    MenuRow(s.addPlaylist, null, ItvIcons.Playlist, chevron = true) { adding = true }
                 }
                 Section(s.sectionWatching) {
                     MenuRow(s.playback, label(SettingsCatalog.STREAM_FORMAT).substringBefore(" ") + ", " + label(SettingsCatalog.BUFFER).substringBefore(" ("), ItvIcons.PlayCircle, chevron = true) { page = MenuPage.Playback }
@@ -159,7 +166,14 @@ fun MobileMenu(vm: AppViewModel) {
                         Field(s.sendReportSub, message, Modifier.padding(horizontal = 12.dp)) { message = it }
                         MenuRow(s.sendReport, "→") { vm.sendReport(message); reporting = false; message = "" }
                     }
-                    if (!local) MenuRow(s.logout, email?.let(::maskEmail), ItvIcons.Account) { if (vm.logoutNeedsPin()) logoutGate = true else vm.logoutThisTv() }
+                    // Carregar outra vez para confirmar (como na TV).
+                    if (!local) MenuRow(if (confirmLogout) s.pressAgainToConfirm else s.logout, email?.let(::maskEmail), ItvIcons.Account) {
+                        when {
+                            !confirmLogout -> confirmLogout = true
+                            vm.logoutNeedsPin() -> { confirmLogout = false; logoutGate = true }
+                            else -> vm.logoutThisTv()
+                        }
+                    }
                     // Sem conta: ligar a conta passa as definições deste telemóvel para lá e sincroniza tudo.
                     else MenuRow(s.connectAccount, null, ItvIcons.Account, chevron = true, onClick = vm::connectAccount)
                     when (val u = update) {
@@ -233,7 +247,13 @@ fun MobileMenu(vm: AppViewModel) {
                     } else {
                         ToggleRow(s.protectSettings, prefs.settingsPin) { vm.setPref(Prefs.Key.SETTINGS_PIN, it) }
                         MenuRow(s.changePin, null) { choosingPin = true }
-                        MenuRow(s.parentalOff, null) { vm.setPin(null) }
+                        MenuRow(if (confirmPinOff) s.pressAgainToConfirm else s.parentalOff, null) {
+                            if (confirmPinOff) {
+                                vm.setPin(null)
+                                vm.showToast(s.parentalOffToast)
+                            }
+                            confirmPinOff = !confirmPinOff
+                        }
                         vm.orderedGroups(includeHidden = true).forEach { g ->
                             ToggleRow("🔒 " + g.name, vm.isGroupLockedSetting(g.id)) { vm.toggleGroupLock(g.id) }
                         }
@@ -246,11 +266,11 @@ fun MobileMenu(vm: AppViewModel) {
 
 /** A lista em uso, no topo das Definições. */
 @Composable
-private fun PlaylistCard(name: String, detail: String) {
+private fun PlaylistCard(name: String, detail: String, onClick: () -> Unit) {
     val accent = LocalAccent.current
     Row(
         Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(PhoneShapes.Card)
-            .background(Brush.linearGradient(listOf(PhoneColors.HeroTop, PhoneColors.PlaylistCardBottom))).padding(16.dp),
+            .background(Brush.linearGradient(listOf(PhoneColors.HeroTop, PhoneColors.PlaylistCardBottom))).clickable(onClick = onClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(accent.brush), contentAlignment = Alignment.Center) {
@@ -260,6 +280,42 @@ private fun PlaylistCard(name: String, detail: String) {
         Column(Modifier.weight(1f)) {
             Text(name, color = ItvColors.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(detail, color = ItvColors.TextDim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(ItvIcons.Chevron, null, tint = ItvColors.TextDim, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Uma lista: usá-la, recarregar os canais, editar e remover (como Listas → a lista, na TV). */
+@Composable
+private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Unit, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    val content by vm.content.collectAsStateWithLifecycle()
+    val local by vm.local.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var confirmDelete by remember { mutableStateOf(false) }
+    val isCurrent = playlist.id == content?.playlist?.id
+    BackHandler(onBack = onClose)
+    SubPage(playlist.name, onClose) {
+        if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist); onClose() }
+        MenuRow(s.reloadChannels, null) {
+            if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(playlist)
+            onClose()
+        }
+        MenuRow(s.edit, null, chevron = true, onClick = onEdit)
+        MenuRow(
+            if (confirmDelete) s.removePlaylistConfirm else s.removePlaylist,
+            if (confirmDelete) null else if (local) s.removePlaylistSub else s.removePlaylistAccountSub,
+        ) {
+            if (!confirmDelete) {
+                confirmDelete = true
+            } else {
+                confirmDelete = false
+                scope.launch {
+                    val error = vm.deletePlaylist(playlist)
+                    vm.showToast(error ?: s.playlistRemoved)
+                    if (error == null) onClose()
+                }
+            }
         }
     }
 }
@@ -359,25 +415,30 @@ private fun SubPage(title: String, onClose: () -> Unit, rows: @Composable () -> 
     }
 }
 
-/** Nova lista neste aparelho (sem conta). */
+/** Nova lista ([editing] null) ou editar uma: neste aparelho (sem conta) ou na conta. */
 @Composable
-fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
+fun PlaylistFormPage(vm: AppViewModel, editing: Playlist? = null, onDone: () -> Unit) {
     val s = LocalStrings.current
     val scope = rememberCoroutineScope()
-    var form by remember { mutableStateOf(PlaylistForm()) }
+    val local by vm.local.collectAsStateWithLifecycle()
+    var form by remember { mutableStateOf(editing?.let(PlaylistForm::from) ?: PlaylistForm()) }
+    // Na conta, o tipo de uma lista não muda (como na TV: para outro tipo cria-se uma lista nova).
+    val typeLocked = editing != null && !local
     var error by remember { mutableStateOf<String?>(null) }
     BackHandler(onBack = onDone)
     Column(
         Modifier.fillMaxSize().background(ItvColors.Background).statusBarsPadding().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(s.addPlaylist, color = ItvColors.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(if (editing != null) s.edit else s.addPlaylist, color = ItvColors.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (listOf(PlaylistType.XTREAM to "Xtream", PlaylistType.M3U to "M3U") + if (vm.canAddStalker) listOf(PlaylistType.STALKER to "Stalker") else emptyList()).forEach { (type, label) ->
+            val types = listOf(PlaylistType.XTREAM to "Xtream", PlaylistType.M3U to "M3U") +
+                if (vm.canAddStalker || form.type == PlaylistType.STALKER) listOf(PlaylistType.STALKER to "Stalker") else emptyList()
+            types.filter { !typeLocked || it.first == form.type }.forEach { (type, label) ->
                 val on = form.type == type
                 Text(
                     label, color = if (on) Color.Black else ItvColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PhoneColors.Card).clickable { form = form.withType(type, vm.deviceMac) }.padding(horizontal = 18.dp, vertical = 9.dp),
+                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PhoneColors.Card).clickable(enabled = !typeLocked) { form = form.withType(type, vm.deviceMac) }.padding(horizontal = 18.dp, vertical = 9.dp),
                 )
             }
         }
@@ -407,7 +468,7 @@ fun PlaylistFormPage(vm: AppViewModel, onDone: () -> Unit) {
                     error = problem
                 } else {
                     scope.launch {
-                        error = vm.savePlaylist(null, form)
+                        error = vm.savePlaylist(editing?.id, form)
                         if (error == null) onDone()
                     }
                 }

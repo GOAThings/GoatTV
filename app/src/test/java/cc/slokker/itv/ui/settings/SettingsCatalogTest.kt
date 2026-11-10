@@ -80,7 +80,7 @@ class SettingsCatalogTest {
         val k = Prefs.Key
         assertEquals(
             listOf(
-                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.AUDIO_DELAY, k.SUBTITLE_LANGUAGE),
+                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.SUBTITLE_LANGUAGE),
                 PhoneSection.CONNECTION to listOf(k.BUFFER, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY),
                 PhoneSection.ADVANCED to listOf("format", k.ENGINE, k.DECODER, k.DEINTERLACE, k.AUDIO_DECODER, k.USER_AGENT),
                 PhoneSection.RECORDINGS to listOf(k.RECORD_PADDING_BEFORE, k.RECORD_PADDING_AFTER),

@@ -16,10 +16,11 @@ import java.io.IOException
  * Uma ligação ao fornecedor de cada vez (o fornecedor só deixa uma). Ao mudar de canal, de formato ou ao voltar a
  * ligar, o ExoPlayer abria a stream nova 3–100 ms antes de a antiga acabar de fechar (o servidor via as duas).
  *
- * Cada tentativa de abrir é uma geração nova ([next]); as ligações dela passam por [factory] e, ao abrir, esperam
- * que fechem as das gerações anteriores. Se a antiga não fecha sozinha (leitura presa num servidor parado), é
- * fechada por fora ao fim de [graceMs]; ao fim de [maxWaitMs] abre-se na mesma (melhor do que um canal que nunca
- * abre). Uma abertura de uma geração ultrapassada é recusada: o canal anterior já não volta a ligar.
+ * Cada tentativa de abrir é uma geração nova ([next]); as ligações dela passam por [factory] e, ao abrir, fecham já
+ * as das gerações anteriores (já não servem) antes de ligar. Dentro da mesma geração espera-se que a anterior feche
+ * sozinha; se não fecha (leitura presa num servidor parado), é fechada por fora ao fim de [graceMs]; ao fim de
+ * [maxWaitMs] abre-se na mesma (melhor do que um canal que nunca abre). Uma abertura de uma geração ultrapassada é
+ * recusada: o canal anterior já não volta a ligar.
  *
  * Dentro da mesma geração o HLS pode ter dois pedidos ao mesmo tempo (a lista e um bocado, como sempre); uma
  * stream contínua (TS) não: um salto dentro dela também espera que a leitura anterior feche.
@@ -71,6 +72,9 @@ internal class StreamGate(
                 }
             }
             val waited = clock() - started
+            // As de um canal anterior já não servem: fecham-se logo, sem esperar que a leitura delas acabe sozinha
+            // (numa stream lenta esperava-se 150–300 ms pelo próximo bocado, medido na SHIELD).
+            if (self != null) blocking.filter { it.gen < self.gen }.forEach { it.forceClose() }
             if (waited >= maxWaitMs) {
                 Log.w(TAG, "A ligação anterior não fechou em $maxWaitMs ms: abre-se na mesma")
                 synchronized(lock) { if (self != null) open += self }

@@ -58,36 +58,32 @@ class StreamGateTest {
     private fun thread(block: () -> Unit) = Thread(block).apply { isDaemon = true; start() }
 
     @Test
-    fun aNovaEsperaQueAAntigaFeche() {
-        val gate = gate()
+    fun aNovaFechaLogoADeUmCanalAnterior() {
+        val gate = gate(graceMs = 5_000, maxWaitMs = 10_000)
         val server = Server()
         gate.next()
-        val a = gate.factory(server.factory("a"), exclusive = true).createDataSource()
-        a.open(spec)
+        gate.factory(server.factory("a"), exclusive = true).createDataSource().open(spec)
         gate.next()
-        val b = gate.factory(server.factory("b"), exclusive = true).createDataSource()
-        val done = CountDownLatch(1)
-        thread { b.open(spec); done.countDown() }
-        // Enquanto a antiga está aberta, a nova não abre.
-        assertTrue(!done.await(200, TimeUnit.MILLISECONDS))
-        a.close()
-        assertTrue(done.await(2, TimeUnit.SECONDS))
+        val started = System.nanoTime()
+        gate.factory(server.factory("b"), exclusive = true).createDataSource().open(spec)
+        // Não espera pela folga: a antiga já não serve, fecha-se antes de abrir a nova (nunca as duas ao mesmo tempo).
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 500)
         assertEquals(listOf("open a", "close a", "open b"), server.events.toList())
         assertEquals(1, server.peak.get())
     }
 
     @Test
-    fun aAntigaPresaFechaSePorForaDepoisDaFolga() {
+    fun naMesmaGeracaoAPresaFechaSePorForaDepoisDaFolga() {
         val gate = gate(graceMs = 100, maxWaitMs = 5_000)
         val server = Server()
         gate.next()
-        gate.factory(server.factory("presa"), exclusive = true).createDataSource().open(spec)
-        gate.next()
+        val f = gate.factory(server.factory("ts"), exclusive = true)
+        f.createDataSource().open(spec)
         val started = System.nanoTime()
-        gate.factory(server.factory("nova"), exclusive = true).createDataSource().open(spec)
+        f.createDataSource().open(spec)
         val waitedMs = (System.nanoTime() - started) / 1_000_000
         assertTrue("esperou $waitedMs ms", waitedMs in 90..2_000)
-        assertEquals(listOf("open presa", "close presa", "open nova"), server.events.toList())
+        assertEquals(listOf("open ts", "close ts", "open ts"), server.events.toList())
         assertEquals(1, server.peak.get())
     }
 

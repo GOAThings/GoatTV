@@ -616,6 +616,8 @@ private fun parentalItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     val content by vm.content.collectAsStateWithLifecycle()
     val s = LocalStrings.current
     val push = nav.push
+    // Tirar o PIN: carregar outra vez para confirmar (como sair da conta).
+    var confirmPinOff by remember(route) { mutableStateOf(false) }
     return when (route) {
         Route.Parental -> buildList {
             if (prefs.pinHash == null) {
@@ -627,10 +629,15 @@ private fun parentalItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                 add(Item.Toggle(Prefs.Key.SETTINGS_PIN, s.protectSettings, prefs.settingsPin, s.protectSettingsSub) { vm.setPref(Prefs.Key.SETTINGS_PIN, it) })
                 add(Item.Action("newpin", s.changePin) { push(Route.NewPin, "newpin") })
                 add(
-                    Item.Action("nopin", s.parentalOff, s.parentalOffSub) {
-                        vm.setPin(null)
-                        vm.showToast(s.parentalOffToast)
-                        nav.pop()
+                    Item.Action("nopin", if (confirmPinOff) s.pressAgainToConfirm else s.parentalOff, s.parentalOffSub) {
+                        if (!confirmPinOff) {
+                            confirmPinOff = true
+                        } else {
+                            confirmPinOff = false
+                            vm.setPin(null)
+                            vm.showToast(s.parentalOffToast)
+                            nav.pop()
+                        }
                     },
                 )
             }

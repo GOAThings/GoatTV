@@ -134,6 +134,7 @@ object SettingsCatalog {
         Prefs.Key.SURROUND_DEFAULT, { it.surroundDefault }, { it.surroundDefaultSub },
         read = { it.surroundDefault },
         tv = Place(TvPage.PLAYBACK, 20, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 32, PhoneSection.PICTURE_SOUND),
     )
     /** Automático: a língua da app, quando o canal a tem (ver ChannelPlayback). */
     val AUDIO_LANGUAGE = Setting.Choice(
