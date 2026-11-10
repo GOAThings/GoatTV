@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
         if (BuildConfig.DEBUG && savedInstanceState == null) {
             intent.getStringExtra("demo_m3u")?.let { url ->
-                lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = "Demo", url = url)) }
+                lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = intent.getStringExtra("demo_name") ?: "Demo", url = url)) }
             }
         }
         // O GoatRemote no telemóvel vê os canais e escolhe um através do estado desta atividade.
