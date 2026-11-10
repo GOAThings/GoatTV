@@ -181,7 +181,7 @@ private struct PhoneActivation: View {
                 Text(a.url ?? text).font(.caption).foregroundStyle(Theme.textFaint)
             }
             Spacer()
-            Button(s.r("use_without_account")) { model.leaveActivation() }
+            Button(model.isLocal ? s.r("back_key_name") : s.r("use_without_account")) { model.leaveActivation() }
                 .font(.subheadline).foregroundStyle(Theme.textDim).padding(.top, 16)
         }
         .padding(24)
@@ -195,6 +195,7 @@ private struct PhoneError: View {
     let info: ErrorInfo
     @State private var adding = false
     @State private var askingSignOut = false
+    @State private var showingSettings = false
 
     var body: some View {
         let s = model.strings
@@ -206,10 +207,14 @@ private struct PhoneError: View {
                 Group {
                     if model.isLocal || model.playlists.isEmpty { MenuRow(s.r("add_playlist")) { adding = true } }
                     MenuRow(s.r("retry")) { model.retry() }
+                    // Como na TV: com listas, as Definições (mudar de lista, editá-la, removê-la); sem conta, ligar uma.
+                    if !model.playlists.isEmpty { MenuRow(s.r("settings")) { showingSettings = true } }
                     if model.hasAccount {
                         MenuRow(s.r("logout")) {
                             if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
                         }
+                    } else {
+                        MenuRow(s.r("connect_account")) { model.connectAccount() }
                     }
                 }
                 .background(cardFill, in: cardShape)
@@ -217,6 +222,7 @@ private struct PhoneError: View {
             .padding(20)
         }
         .sheet(isPresented: $adding) { PlaylistFormPage { adding = false } }
+        .sheet(isPresented: $showingSettings) { MenuTab() }
         .modifier(SignOutPrompt(isPresented: $askingSignOut))
     }
 }
@@ -1469,6 +1475,12 @@ private struct MenuTab: View {
         }
     }
     @State private var managingGroups = false
+    /// A lista tocada (usar, recarregar, editar, remover), a que se edita e a que se vai remover.
+    @State private var openedPlaylist: Playlist?
+    @State private var editingPlaylist: Playlist?
+    @State private var removingPlaylist: Playlist?
+    @State private var confirmingSignOut = false
+    @State private var confirmingPinOff = false
     @State private var pickingGuideCountry = false
     @State private var confirmingEpgReset = false
     @State private var pickingLogoSource = false
@@ -1581,11 +1593,57 @@ private struct MenuTab: View {
             }
         }
         .sheet(isPresented: $pickingGuideCountry) { PhoneEpgCountries(logo: false) { pickingGuideCountry = false } }
+        .confirmationDialog(openedPlaylist?.name ?? "", isPresented: Binding(get: { openedPlaylist != nil }, set: { if !$0 { openedPlaylist = nil } }), titleVisibility: .visible, presenting: openedPlaylist) { pl in
+            let current = pl.id == model.content?.playlist.id
+            if !current { Button(s.r("use_playlist")) { model.switchPlaylist(pl) } }
+            Button(s.r("reload_channels")) { if current { model.reloadPlaylist() } else { model.switchPlaylist(pl) } }
+            Button(s.r("edit")) { editingPlaylist = pl }
+            Button(s.r("remove_playlist"), role: .destructive) { removingPlaylist = pl }
+            Button(s.r("cancel"), role: .cancel) {}
+        }
+        .alert(s.r("remove_playlist"), isPresented: Binding(get: { removingPlaylist != nil }, set: { if !$0 { removingPlaylist = nil } }), presenting: removingPlaylist) { pl in
+            Button(s.r("remove_playlist"), role: .destructive) {
+                Task {
+                    let error = await model.deletePlaylist(pl)
+                    model.showToast(error ?? s.r("playlist_removed"))
+                }
+            }
+            Button(s.r("cancel"), role: .cancel) {}
+        } message: { pl in
+            Text(model.hasAccount ? s.r("remove_playlist_account_sub") : pl.name)
+        }
+        .sheet(isPresented: Binding(get: { editingPlaylist != nil }, set: { if !$0 { editingPlaylist = nil } })) {
+            if let pl = editingPlaylist { PlaylistFormPage(editing: pl) { editingPlaylist = nil } }
+        }
+        .alert(s.r("logout"), isPresented: $confirmingSignOut) {
+            Button(s.r("logout"), role: .destructive) {
+                if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
+            }
+            Button(s.r("cancel"), role: .cancel) {}
+        } message: {
+            Text(model.email.map(phoneMaskEmail) ?? "")
+        }
+        .alert(s.r("parental_off"), isPresented: $confirmingPinOff) {
+            Button(s.t("Remove PIN", "Tirar o PIN"), role: .destructive) {
+                model.setPin(nil)
+                model.showToast(s.r("parental_off_toast"))
+            }
+            Button(s.r("cancel"), role: .cancel) {}
+        }
         .sheet(isPresented: $pickingLogoSource) { PhoneEpgCountries(logo: true) { pickingLogoSource = false } }
         .sheet(isPresented: $managingGroups) {
             NavigationStack {
-                List(model.allGroups, id: \.id) { g in
-                    Toggle(g.name, isOn: Binding(get: { !model.isGroupHidden(g.id) }, set: { model.setGroupHidden(g.id, !$0) }))
+                List {
+                    Section {
+                        Toggle(s.r("favorites_star"), isOn: Binding(get: { model.prefs.showFavoritesGroup }, set: { model.setPref("show_favorites_group", .bool($0)) }))
+                        Toggle(s.r("all"), isOn: Binding(get: { model.prefs.showAllGroup }, set: { model.setPref("show_all_group", .bool($0)) }))
+                        Toggle(s.r("recents"), isOn: Binding(get: { model.prefs.showRecentGroup }, set: { model.setPref("show_recent_group", .bool($0)) }))
+                    }
+                    Section {
+                        ForEach(model.allGroups, id: \.id) { g in
+                            Toggle(g.name, isOn: Binding(get: { !model.isGroupHidden(g.id) }, set: { model.setGroupHidden(g.id, !$0) }))
+                        }
+                    }
                 }
                 .navigationTitle(s.t("Visible groups", "Grupos visíveis"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -1682,18 +1740,17 @@ private struct MenuTab: View {
             }
             .padding(16)
             .background(LinearGradient(colors: [Theme.hex(0x1D2236), Theme.hex(0x12151D)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(Rectangle())
+            .onTapGesture { openedPlaylist = content.playlist }
             .padding(.horizontal, 12)
         }
+        // Como na TV: cada lista abre-se (usar, recarregar, editar, remover) e há sempre "Adicionar lista".
         let others = model.playlists.filter { $0.id != model.content?.playlist.id }
-        if !others.isEmpty || model.isLocal {
-            section(s.r("playlists")) {
-                ForEach(others, id: \.id) { pl in
-                    Button { model.switchPlaylist(pl) } label: { MenuRowLabel(title: pl.name, icon: "list.bullet") }.buttonStyle(.plain)
-                }
-                if model.isLocal {
-                    Button { adding = true } label: { MenuRowLabel(title: s.r("add_playlist"), icon: "plus", chevron: true) }.buttonStyle(.plain)
-                }
+        section(s.r("playlists")) {
+            ForEach(others, id: \.id) { pl in
+                Button { openedPlaylist = pl } label: { MenuRowLabel(title: pl.name, value: playlistTypeName(pl.type), icon: "list.bullet", chevron: true) }.buttonStyle(.plain)
             }
+            Button { adding = true } label: { MenuRowLabel(title: s.r("add_playlist"), icon: "plus", chevron: true) }.buttonStyle(.plain)
         }
         section(s.r("section_watching")) {
             let format = formatOptions.first { $0.0 == p.streamFormat.map { JSON.string($0) } }?.1 ?? ""
@@ -1721,10 +1778,12 @@ private struct MenuTab: View {
             } label: {
                 MenuRowLabel(title: s.r("send_report"), icon: "bubble.left", chevron: true)
             }
+            if model.updateVersion == nil {
+                MenuRow(s.r("check_updates"), value: model.appVersion) { model.checkForUpdate(force: true) }
+            }
             if model.hasAccount {
-                MenuRow(s.r("logout"), value: model.email.map(phoneMaskEmail)) {
-                    if model.signOutNeedsPin { askingSignOut = true } else { model.signOut() }
-                }
+                // Pede confirmação (na TV é carregar outra vez).
+                MenuRow(s.r("logout"), value: model.email.map(phoneMaskEmail)) { confirmingSignOut = true }
             } else {
                 // Sem conta: ligar a conta passa as definições deste telemóvel para lá e sincroniza tudo.
                 Button { model.connectAccount() } label: {
@@ -1821,7 +1880,7 @@ private struct MenuTab: View {
                 } else {
                     toggle(s.t("Protect settings", "Proteger as Definições"), "settings_pin", p.settingsPin)
                     MenuRow(s.t("Change PIN", "Mudar o PIN")) { choosingPin = true }
-                    MenuRow(s.t("Remove PIN", "Tirar o PIN")) { model.setPin(nil) }
+                    MenuRow(s.t("Remove PIN", "Tirar o PIN")) { confirmingPinOff = true }
                     ForEach(model.allGroups, id: \.id) { g in
                         MenuRow(g.name, value: model.isGroupLocked(g.id) ? "🔒" : nil) { model.toggleGroupLock(g.id) }
                     }
@@ -1886,20 +1945,31 @@ private struct MenuTab: View {
 /// Nova lista neste aparelho (sem conta).
 private struct PlaylistFormPage: View {
     @Environment(AppModel.self) private var model
+    /// A lista a editar (nil: uma nova).
+    let editing: Playlist?
     let onDone: () -> Void
-    @State private var form = PlaylistForm()
+    @State private var form: PlaylistForm
     @State private var error: String?
+
+    init(editing: Playlist? = nil, onDone: @escaping () -> Void) {
+        self.editing = editing
+        self.onDone = onDone
+        _form = State(initialValue: editing.map { PlaylistForm($0) } ?? PlaylistForm())
+    }
 
     var body: some View {
         let s = model.strings
         NavigationStack {
             Form {
-                Picker("", selection: Binding(get: { form.type }, set: { form.setType($0, deviceMac: model.deviceMac) })) {
-                    Text("Xtream").tag(PlaylistType.xtream)
-                    Text("M3U").tag(PlaylistType.m3u)
-                    if !model.hasAccount { Text("Stalker").tag(PlaylistType.stalker) }
+                // Na conta, o tipo de uma lista não muda (como na TV: para outro tipo cria-se uma lista nova).
+                if editing == nil || !model.hasAccount {
+                    Picker("", selection: Binding(get: { form.type }, set: { form.setType($0, deviceMac: model.deviceMac) })) {
+                        Text("Xtream").tag(PlaylistType.xtream)
+                        Text("M3U").tag(PlaylistType.m3u)
+                        if !model.hasAccount || form.type == .stalker { Text("Stalker").tag(PlaylistType.stalker) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
                 TextField(s.r("name"), text: $form.name)
                 if form.type == .xtream {
                     TextField(s.r("server"), text: $form.server).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -1919,14 +1989,14 @@ private struct PlaylistFormPage: View {
                 TextField(s.r("epg_url"), text: $form.epgUrl).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 if let error { Text(error).foregroundStyle(Theme.error) }
             }
-            .navigationTitle(s.r("add_playlist"))
+            .navigationTitle(editing == nil ? s.r("add_playlist") : s.r("edit"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel"), action: onDone) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(s.r("save")) {
                         Task {
-                            error = await model.savePlaylist(id: nil, form: form)
+                            error = await model.savePlaylist(id: editing?.id, form: form)
                             if error == nil { onDone() }
                         }
                     }

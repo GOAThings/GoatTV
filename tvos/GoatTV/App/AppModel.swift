@@ -2147,13 +2147,15 @@ final class AppModel {
 
     /// Vê se há versão nova (no máximo de 12 em 12 h). Na Apple TV não se instala por dentro da app: avisa uma vez
     /// por versão (o cartão no player da TV, a folha no iPhone) e as Definições dizem onde a ir buscar.
-    func checkForUpdate() {
+    /// [force]: pedida nas Definições ("Procurar atualizações"): procura já e diz se não há nada novo.
+    func checkForUpdate(force: Bool = false) {
         #if DEBUG
         if UserDefaults.standard.string(forKey: "UITestPlaylist") != nil { return }
         #endif
-        if let at = updateCheckedAt, Date().timeIntervalSince(at) < 12 * 3600 { return }
+        if !force, let at = updateCheckedAt, Date().timeIntervalSince(at) < 12 * 3600 { return }
         updateCheckedAt = Date()
         let current = appVersion
+        if force { showToast(strings.r("checking")) }
         Task { [weak self] in
             var request = URLRequest(url: AppUpdate.latestRelease)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -2161,10 +2163,17 @@ final class AppModel {
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   (response as? HTTPURLResponse)?.statusCode == 200,
                   let json = try? JSON.parse(data),
-                  let version = AppUpdate.version(fromLatest: json),
-                  AppUpdate.isNewer(version, than: current) else { return }
+                  let version = AppUpdate.version(fromLatest: json) else {
+                if force { self?.showToast(self?.strings.r("update_check_failed") ?? "") }
+                return
+            }
+            guard AppUpdate.isNewer(version, than: current) else {
+                if force { self?.showToast(self?.strings.r("up_to_date") ?? "") }
+                return
+            }
             let highlights = AppUpdate.highlights(AppUpdate.notes(fromLatest: json))
             guard let self else { return }
+            if force { self.showToast(self.strings.r("update_to", version)) }
             self.updateVersion = version
             guard UserDefaults.standard.string(forKey: "update.notified") != version else { return }
             UserDefaults.standard.set(version, forKey: "update.notified")

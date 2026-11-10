@@ -82,6 +82,7 @@
     <string name="installing">Installazione… conferma sulla schermata di Android</string>
     <string name="update_failed_title">Aggiornamento non riuscito: premi per riprovare</string>
     <string name="check_updates">Cerca aggiornamenti</string>
+    <string name="update_check_failed">Impossibile cercare aggiornamenti. Riprova più tardi.</string>
     <string name="checking">Verifica in corso…</string>
     <string name="up_to_date">Hai l\'ultima versione</string>
     <string name="update_failed">Impossibile aggiornare: %1$s</string>

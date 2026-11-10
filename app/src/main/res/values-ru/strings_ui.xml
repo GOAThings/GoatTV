@@ -82,6 +82,7 @@
     <string name="installing">Установка… подтвердите на экране Android</string>
     <string name="update_failed_title">Обновление не удалось: нажмите, чтобы повторить</string>
     <string name="check_updates">Проверить обновления</string>
+    <string name="update_check_failed">Не удалось проверить обновления. Попробуйте позже.</string>
     <string name="checking">Проверка…</string>
     <string name="up_to_date">У вас последняя версия</string>
     <string name="update_failed">Не удалось обновить: %1$s</string>

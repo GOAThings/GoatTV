@@ -82,6 +82,7 @@
     <string name="installing">설치 중… Android 화면에서 확인하세요</string>
     <string name="update_failed_title">업데이트 실패: 눌러서 다시 시도</string>
     <string name="check_updates">업데이트 확인</string>
+    <string name="update_check_failed">업데이트를 확인하지 못했어요. 나중에 다시 시도하세요.</string>
     <string name="checking">확인 중…</string>
     <string name="up_to_date">최신 버전을 사용 중이에요</string>
     <string name="update_failed">업데이트할 수 없어요: %1$s</string>

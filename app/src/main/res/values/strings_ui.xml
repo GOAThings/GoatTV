@@ -83,6 +83,7 @@
     <string name="installing">Installing… confirm on the Android screen</string>
     <string name="update_failed_title">The update failed: press to try again</string>
     <string name="check_updates">Check for updates</string>
+    <string name="update_check_failed">Couldn\'t check for updates. Try again later.</string>
     <string name="checking">Checking…</string>
     <string name="up_to_date">You\'re on the latest version</string>
     <string name="update_failed">Couldn\'t update: %1$s</string>

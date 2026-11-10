@@ -82,6 +82,7 @@
     <string name="installing">جارٍ التثبيت… أكّد على شاشة Android</string>
     <string name="update_failed_title">فشل التحديث: اضغط لإعادة المحاولة</string>
     <string name="check_updates">التحقق من وجود تحديثات</string>
+    <string name="update_check_failed">تعذّر البحث عن تحديثات. حاول لاحقًا.</string>
     <string name="checking">جارٍ التحقق…</string>
     <string name="up_to_date">لديك أحدث إصدار</string>
     <string name="update_failed">تعذّر التحديث: %1$s</string>

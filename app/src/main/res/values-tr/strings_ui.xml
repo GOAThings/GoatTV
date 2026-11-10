@@ -82,6 +82,7 @@
     <string name="installing">Yükleniyor… Android ekranında onaylayın</string>
     <string name="update_failed_title">Güncelleme başarısız oldu: tekrar denemek için basın</string>
     <string name="check_updates">Güncellemeleri denetle</string>
+    <string name="update_check_failed">Güncellemeler denetlenemedi. Daha sonra tekrar dene.</string>
     <string name="checking">Denetleniyor…</string>
     <string name="up_to_date">En son sürümü kullanıyorsunuz</string>
     <string name="update_failed">Güncellenemedi: %1$s</string>

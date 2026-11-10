@@ -82,6 +82,7 @@
     <string name="installing">इंस्टॉल हो रहा है… Android स्क्रीन पर पुष्टि करें</string>
     <string name="update_failed_title">अपडेट नहीं हो सका: फिर से कोशिश करने के लिए दबाएँ</string>
     <string name="check_updates">अपडेट जाँचें</string>
+    <string name="update_check_failed">अपडेट नहीं खोजे जा सके। बाद में फिर कोशिश करें।</string>
     <string name="checking">जाँच हो रही है…</string>
     <string name="up_to_date">आपके पास सबसे नया वर्शन है</string>
     <string name="update_failed">अपडेट नहीं हो सका: %1$s</string>

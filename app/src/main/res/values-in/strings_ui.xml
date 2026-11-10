@@ -82,6 +82,7 @@
     <string name="installing">Memasang… konfirmasi di layar Android</string>
     <string name="update_failed_title">Pembaruan gagal: tekan untuk mencoba lagi</string>
     <string name="check_updates">Periksa pembaruan</string>
+    <string name="update_check_failed">Tidak bisa memeriksa pembaruan. Coba lagi nanti.</string>
     <string name="checking">Memeriksa…</string>
     <string name="up_to_date">Anda memakai versi terbaru</string>
     <string name="update_failed">Gagal memperbarui: %1$s</string>

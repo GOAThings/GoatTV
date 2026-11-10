@@ -937,7 +937,7 @@ struct SettingsPanel: View {
                 .info("email", s.account, s.t("No account (this TV only)", "Sem conta (só nesta TV)")),
                 .action("connect", s.t("Connect a GOAT account", "Ligar uma conta GOAT"),
                         subtitle: s.t("Playlists and settings on every device", "Listas e definições em todos os aparelhos")) { model.connectAccount() },
-                .info("version", s.t("Version", "Versão"), model.appVersion),
+                .action("version", s.r("check_updates"), subtitle: model.appVersion) { model.checkForUpdate(force: true) },
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
                 reportItem,
             ]
@@ -957,7 +957,7 @@ struct SettingsPanel: View {
                         model.signOut()
                     }
                 },
-                .info("version", s.t("Version", "Versão"), model.appVersion),
+                .action("version", s.r("check_updates"), subtitle: model.appVersion) { model.checkForUpdate(force: true) },
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
                 reportItem,
             ]

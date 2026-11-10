@@ -82,6 +82,7 @@
     <string name="installing">Installation… confirmez sur l\'écran d\'Android</string>
     <string name="update_failed_title">La mise à jour a échoué : appuyez pour réessayer</string>
     <string name="check_updates">Rechercher des mises à jour</string>
+    <string name="update_check_failed">Impossible de rechercher les mises à jour. Réessayez plus tard.</string>
     <string name="checking">Vérification…</string>
     <string name="up_to_date">Vous avez la dernière version</string>
     <string name="update_failed">Mise à jour impossible : %1$s</string>

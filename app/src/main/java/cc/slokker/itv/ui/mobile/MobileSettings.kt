@@ -304,7 +304,7 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
         MenuRow(s.edit, null, chevron = true, onClick = onEdit)
         MenuRow(
             if (confirmDelete) s.removePlaylistConfirm else s.removePlaylist,
-            if (confirmDelete) null else if (local) s.removePlaylistSub else s.removePlaylistAccountSub,
+            if (confirmDelete || local) null else s.removePlaylistAccountSub,
         ) {
             if (!confirmDelete) {
                 confirmDelete = true

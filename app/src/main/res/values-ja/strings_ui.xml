@@ -82,6 +82,7 @@
     <string name="installing">インストール中… Android の画面で承認してください</string>
     <string name="update_failed_title">アップデートに失敗しました：押して再試行</string>
     <string name="check_updates">アップデートを確認</string>
+    <string name="update_check_failed">アップデートを確認できませんでした。後でもう一度お試しください。</string>
     <string name="checking">確認中…</string>
     <string name="up_to_date">最新バージョンです</string>
     <string name="update_failed">アップデートできませんでした：%1$s</string>
