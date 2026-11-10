@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Без чёрного экрана между каналами</string>
     <string name="timeshift">Пауза прямого эфира</string>
     <string name="timeshift_sub">Сохраняет текущую передачу на этом устройстве, чтобы ставить на паузу и перематывать назад. Удаляется при смене канала или передачи</string>
+    <string name="protect_paused">Спрашивать перед выходом из паузы</string>
+    <string name="protect_paused_sub">На паузе или с отставанием от эфира смена канала сначала спросит, потому что сохранённое удалится</string>
+    <string name="behind_switch_title">Вы отстаёте от эфира</string>
+    <string name="behind_switch_text">Смена канала удалит то, что вы поставили на паузу или перемотали.</string>
+    <string name="behind_switch_go">Сменить канал</string>
+    <string name="behind_switch_stay">Остаться</string>
     <string name="reconnect">Переподключаться при сбое потока</string>
     <string name="no">Нет</string>
     <string name="after_seconds">Через %1$s с</string>

@@ -47,6 +47,8 @@ data class Prefs(
     val netWarnings: Boolean = true,
     /** Pausar o direto: os últimos minutos do canal guardados na cache, para pausar e recuar (só no ExoPlayer). */
     val timeshift: Boolean = true,
+    /** Em pausa ou atrás do direto, mudar de canal pergunta primeiro (o que está guardado perde-se). */
+    val protectPaused: Boolean = true,
     // Geral
     /** User-Agent para os servidores IPTV; vazio = o predefinido. */
     val userAgent: String = "",
@@ -157,6 +159,7 @@ data class Prefs(
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
         const val TIMESHIFT = "timeshift"
+        const val PROTECT_PAUSED = "protect_paused"
         const val USER_AGENT = "user_agent"
         const val AUTO_START = "auto_start"
         const val EXIT_CONFIRM = "exit_confirm"
@@ -328,6 +331,7 @@ data class Prefs(
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),
+                protectPaused = bool(Key.PROTECT_PAUSED, d.protectPaused),
                 userAgent = s.get(Key.USER_AGENT)?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty(),
                 autoStart = bool(Key.AUTO_START, d.autoStart),
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),

@@ -168,6 +168,23 @@ struct RecordingSwitchCard: View {
     }
 }
 
+/// Mudar de canal em pausa ou atrás do direto, na mesma forma: o que está guardado do canal apaga-se ao mudar.
+/// OK muda, Voltar fica (e continua onde estava).
+struct BehindLiveSwitchCard: View {
+    @Environment(AppModel.self) private var model
+    let prompt: AppModel.SwitchPrompt
+
+    var body: some View {
+        let s = model.strings
+        RecordingCard(text: s.r("behind_switch_text"), ok: s.r("behind_switch_go"), back: s.r("behind_switch_stay"),
+                      onOk: { model.answerSwitch(stop: true) }, onBack: { model.answerSwitch(stop: false) }) {
+            RecHeader(title: s.r("behind_switch_title"), name: prompt.title, detail: behindLabel(model.player.timeshift.behindMs)) {
+                Image(systemName: "pause.fill").font(.system(size: 26, weight: .semibold))
+            }
+        }
+    }
+}
+
 /// Uma marcada noutro canal quase a começar, na mesma forma: o anel conta até à mudança, com os segundos no meio. OK
 /// muda para esse canal (e grava), Voltar não grava. Sem resposta até à hora, muda-se (conta-se até lá).
 struct RecordingPromptCard: View {

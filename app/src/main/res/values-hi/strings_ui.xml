@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">चैनलों के बीच काली स्क्रीन नहीं</string>
     <string name="timeshift">लाइव टीवी रोकें</string>
     <string name="timeshift_sub">आप जो कार्यक्रम देख रहे हैं उसे इस डिवाइस पर रखता है, ताकि रोक सकें और पीछे जा सकें। चैनल या कार्यक्रम बदलने पर मिट जाता है</string>
+    <string name="protect_paused">रोक छोड़ने से पहले पूछें</string>
+    <string name="protect_paused_sub">रुके होने या लाइव से पीछे होने पर, चैनल बदलने से पहले पूछता है, क्योंकि रखा गया हिस्सा मिट जाता है</string>
+    <string name="behind_switch_title">आप लाइव से पीछे हैं</string>
+    <string name="behind_switch_text">चैनल बदलने से रोका या पीछे किया गया हिस्सा मिट जाता है।</string>
+    <string name="behind_switch_go">चैनल बदलें</string>
+    <string name="behind_switch_stay">यहीं रहें</string>
     <string name="reconnect">स्ट्रीम फ़ेल होने पर फिर से कनेक्ट करें</string>
     <string name="no">नहीं</string>
     <string name="after_seconds">%1$s सेकंड बाद</string>

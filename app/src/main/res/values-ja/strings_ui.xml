@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">チャンネル間で黒い画面になりません</string>
     <string name="timeshift">ライブを一時停止</string>
     <string name="timeshift_sub">視聴中の番組をこの端末に保存し、一時停止や巻き戻しができます。チャンネルや番組が変わると削除されます</string>
+    <string name="protect_paused">一時停止中は確認してから切り替える</string>
+    <string name="protect_paused_sub">一時停止中やライブより遅れているとき、チャンネル切り替えの前に確認します（保存した部分は削除されます）</string>
+    <string name="behind_switch_title">ライブより遅れています</string>
+    <string name="behind_switch_text">チャンネルを切り替えると、一時停止や巻き戻しした部分は削除されます。</string>
+    <string name="behind_switch_go">チャンネルを切り替える</string>
+    <string name="behind_switch_stay">このまま見る</string>
     <string name="reconnect">ストリームが途切れたら再接続</string>
     <string name="no">しない</string>
     <string name="after_seconds">%1$s 秒後</string>

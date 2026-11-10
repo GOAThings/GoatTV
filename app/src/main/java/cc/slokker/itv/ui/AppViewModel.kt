@@ -1316,8 +1316,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O canal cuja ligação é de uma gravação: o player abre-o pelo anel dela (ver RecordingManager.ringFor). */
     val recordingRing: StateFlow<RecordingPlan.Busy?> get() = recordings.ringFor
 
-    /** Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta. */
-    class SwitchPrompt(val title: String, val action: () -> Unit)
+    /**
+     * Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta.
+     * [live]: não há gravação, mas está-se em pausa ou atrás do direto, e o que está guardado perde-se.
+     */
+    class SwitchPrompt(val title: String, val action: () -> Unit, val live: Boolean = false)
     private val _switchPrompt = MutableStateFlow<SwitchPrompt?>(null)
     val switchPrompt: StateFlow<SwitchPrompt?> = _switchPrompt.asStateFlow()
 
@@ -1399,16 +1402,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val active = activeRecordings.value
         val playlistId = content.value?.playlist?.id
         val same = channel != null && active.all { it.playlistId == playlistId && it.channelKey == channel.key }
-        if (active.isEmpty() || same) return action()
-        _switchPrompt.value = SwitchPrompt(active.first().info.title, action)
+        if (active.isNotEmpty() && !same) {
+            _switchPrompt.value = SwitchPrompt(active.first().info.title, action)
+            return
+        }
+        // Em pausa ou atrás do direto: mudar apaga o anel. O mesmo canal não muda nada.
+        val leaving = channel == null || channel.key != playback.playing.value?.key
+        if (leaving && prefs.value.protectPaused && liveShifted()) {
+            _switchPrompt.value = SwitchPrompt("", action, live = true)
+            return
+        }
+        action()
     }
+
+    /** O player diz se se está em pausa ou atrás do direto (ver Timeshift.worthAsking); sem player, nunca. */
+    var liveShifted: () -> Boolean = { false }
 
     /** A resposta: parar a gravação e fazer o que se pediu, ou ficar a gravar ([stop] false). */
     fun answerSwitch(stop: Boolean) {
         val p = _switchPrompt.value ?: return
         _switchPrompt.value = null
         if (!stop) return
-        recordings.stopAll()
+        if (!p.live) recordings.stopAll()
         p.action()
     }
 

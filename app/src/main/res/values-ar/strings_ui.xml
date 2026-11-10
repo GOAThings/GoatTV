@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">بلا شاشة سوداء بين القنوات</string>
     <string name="timeshift">إيقاف البث المباشر مؤقتًا</string>
     <string name="timeshift_sub">يحتفظ بالبرنامج الذي تشاهده على هذا الجهاز للإيقاف المؤقت والرجوع. يُحذف عند تغيير القناة أو البرنامج</string>
+    <string name="protect_paused">اسأل قبل ترك الإيقاف المؤقت</string>
+    <string name="protect_paused_sub">عند الإيقاف المؤقت أو التأخر عن البث المباشر، يسأل تغيير القناة أولاً لأن ما تم حفظه يُحذف</string>
+    <string name="behind_switch_title">أنت متأخر عن البث المباشر</string>
+    <string name="behind_switch_text">تغيير القناة يحذف الجزء الذي أوقفته أو أرجعته.</string>
+    <string name="behind_switch_go">تغيير القناة</string>
+    <string name="behind_switch_stay">البقاء هنا</string>
     <string name="reconnect">إعادة الاتصال إذا فشل البث</string>
     <string name="no">لا</string>
     <string name="after_seconds">بعد %1$s ث</string>

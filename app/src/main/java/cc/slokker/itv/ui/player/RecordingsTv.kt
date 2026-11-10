@@ -171,6 +171,27 @@ internal fun RecordingSwitchCard(prompt: AppViewModel.SwitchPrompt, info: Record
 }
 
 /**
+ * Mudar de canal em pausa ou atrás do direto, na mesma forma: o que está guardado do canal apaga-se ao mudar.
+ * OK muda, Voltar fica (e continua onde estava).
+ */
+@Composable
+internal fun BehindLiveSwitchCard(channel: String, behind: String, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
+    CapsuleCard(
+        header = {
+            RecHeader(
+                { Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { Icon(ItvIcons.Pause, null, Modifier.size(22.dp)) } },
+                s.behindSwitchTitle, channel, behind,
+            )
+        },
+        text = s.behindSwitchText,
+        ok = s.behindSwitchGo,
+        back = s.behindSwitchStay,
+        modifier = modifier,
+    )
+}
+
+/**
  * Uma marcada noutro canal quase a começar, na mesma forma: o anel conta até à mudança, com os segundos no meio. OK
  * muda para esse canal (e grava), Voltar não grava. Sem resposta até à hora, muda-se ([secondsLeft] conta até lá).
  */

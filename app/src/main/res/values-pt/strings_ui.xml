@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Sem ecrã preto entre canais</string>
     <string name="timeshift">Pausar o direto</string>
     <string name="timeshift_sub">Guarda o programa que estás a ver neste aparelho, para pausar e recuar. Apaga-se ao mudar de canal ou de programa</string>
+    <string name="protect_paused">Perguntar antes de sair da pausa</string>
+    <string name="protect_paused_sub">Em pausa ou atrás do direto, mudar de canal pergunta primeiro, porque o que foi guardado é apagado</string>
+    <string name="behind_switch_title">Estás atrás do direto</string>
+    <string name="behind_switch_text">Mudar de canal apaga a parte que pausaste ou recuaste.</string>
+    <string name="behind_switch_go">Mudar de canal</string>
+    <string name="behind_switch_stay">Ficar aqui</string>
     <string name="reconnect">Reconectar se a stream falhar</string>
     <string name="no">Não</string>
     <string name="after_seconds">Ao fim de %1$s s</string>

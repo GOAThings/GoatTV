@@ -336,7 +336,9 @@ struct PlayerScreen: View {
                 VStack {
                     HStack(alignment: .top) {
                         if model.second == nil { Spacer() }
-                        if let prompt = model.switchPrompt {
+                        if let prompt = model.switchPrompt, prompt.live {
+                            BehindLiveSwitchCard(prompt: prompt)
+                        } else if let prompt = model.switchPrompt {
                             RecordingSwitchCard(prompt: prompt, info: model.recordings.active.first)
                         } else if let soon = model.recordings.prompt {
                             RecordingPromptCard(recording: soon)

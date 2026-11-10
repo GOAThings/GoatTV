@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Kein schwarzer Bildschirm zwischen den Sendern</string>
     <string name="timeshift">Live-TV pausieren</string>
     <string name="timeshift_sub">Speichert die laufende Sendung auf diesem Gerät, zum Pausieren und Zurückspulen. Wird beim Sender- oder Sendungswechsel gelöscht</string>
+    <string name="protect_paused">Vor dem Verlassen der Pause fragen</string>
+    <string name="protect_paused_sub">Bei Pause oder hinter Live fragt ein Senderwechsel zuerst, weil das Gespeicherte gelöscht wird</string>
+    <string name="behind_switch_title">Du bist hinter Live</string>
+    <string name="behind_switch_text">Ein Senderwechsel löscht den pausierten oder zurückgespulten Teil.</string>
+    <string name="behind_switch_go">Sender wechseln</string>
+    <string name="behind_switch_stay">Hier bleiben</string>
     <string name="reconnect">Neu verbinden, wenn der Stream abbricht</string>
     <string name="no">Nein</string>
     <string name="after_seconds">Nach %1$s s</string>

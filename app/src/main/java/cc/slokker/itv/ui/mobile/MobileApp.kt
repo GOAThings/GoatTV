@@ -54,6 +54,7 @@ import androidx.tv.material3.Text
 import cc.slokker.itv.MainActivity
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Reminder
+import cc.slokker.itv.ui.player.behindLabel
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.LocalStrings
@@ -82,6 +83,11 @@ fun MobileMain(vm: AppViewModel) {
     val video = nav.video
     val big = nav.big
     val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = video)
+    // Mudar de canal em pausa ou atrás do direto pergunta primeiro (ver AppViewModel.guarded).
+    DisposableEffect(playback) {
+        vm.liveShifted = { playback.core.timeshift?.worthAsking == true }
+        onDispose { vm.liveShifted = { false } }
+    }
     val activity = LocalContext.current as? Activity
     val main = activity as? MainActivity
     val pip = main?.inPip == true
@@ -256,7 +262,14 @@ fun MobileMain(vm: AppViewModel) {
     LaunchedEffect(wantsNotifications) {
         if (wantsNotifications && activity != null) askNotificationsOnce(activity)
     }
-    if (!pip) switchPrompt?.let { p ->
+    if (!pip) switchPrompt?.takeIf { it.live }?.let {
+        PhonePromptCard(
+            overline = behindLabel(playback.timeshift.behindMs), title = strings.behindSwitchTitle, text = strings.behindSwitchText,
+            primary = strings.behindSwitchGo, secondary = strings.behindSwitchStay,
+            onPrimary = { vm.answerSwitch(stop = true); played() }, onSecondary = { vm.answerSwitch(stop = false) },
+        )
+    }
+    if (!pip) switchPrompt?.takeIf { !it.live }?.let { p ->
         PhonePromptCard(
             overline = strings.recBadge, title = strings.recordingSwitchTitle(p.title), text = strings.recordingSwitchText,
             primary = strings.recordingStopAndSwitch, secondary = strings.recordingKeep,

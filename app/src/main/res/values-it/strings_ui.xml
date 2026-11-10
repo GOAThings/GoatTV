@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Nessuno schermo nero tra i canali</string>
     <string name="timeshift">Metti in pausa la diretta</string>
     <string name="timeshift_sub">Salva il programma che stai guardando su questo dispositivo, per mettere in pausa e tornare indietro. Si cancella cambiando canale o programma</string>
+    <string name="protect_paused">Chiedi prima di lasciare la pausa</string>
+    <string name="protect_paused_sub">In pausa o indietro rispetto alla diretta, cambiare canale chiede prima, perché ciò che è stato salvato viene cancellato</string>
+    <string name="behind_switch_title">Sei indietro rispetto alla diretta</string>
+    <string name="behind_switch_text">Cambiare canale cancella la parte messa in pausa o riavvolta.</string>
+    <string name="behind_switch_go">Cambia canale</string>
+    <string name="behind_switch_stay">Resta qui</string>
     <string name="reconnect">Riconnetti se lo stream si interrompe</string>
     <string name="no">No</string>
     <string name="after_seconds">Dopo %1$s s</string>

@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Kanallar arasında siyah ekran yok</string>
     <string name="timeshift">Canlı yayını duraklat</string>
     <string name="timeshift_sub">İzlediğiniz programı duraklatıp geri sarmak için bu cihazda tutar. Kanal veya program değişince silinir</string>
+    <string name="protect_paused">Duraklatmadan çıkmadan önce sor</string>
+    <string name="protect_paused_sub">Duraklatıldığında veya canlının gerisindeyken kanal değiştirmek önce sorar, çünkü saklanan kısım silinir</string>
+    <string name="behind_switch_title">Canlının gerisindesiniz</string>
+    <string name="behind_switch_text">Kanal değiştirmek duraklattığınız veya geri sardığınız kısmı siler.</string>
+    <string name="behind_switch_go">Kanalı değiştir</string>
+    <string name="behind_switch_stay">Burada kal</string>
     <string name="reconnect">Yayın kesilirse yeniden bağlan</string>
     <string name="no">Hayır</string>
     <string name="after_seconds">%1$s sn sonra</string>

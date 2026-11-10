@@ -332,6 +332,12 @@
     <string name="freeze_frame_sub">Sem tela preta entre canais</string>
     <string name="timeshift">Pausar a TV ao vivo</string>
     <string name="timeshift_sub">Guarda o programa que você está vendo neste aparelho, para pausar e voltar. É apagado ao trocar de canal ou de programa</string>
+    <string name="protect_paused">Perguntar antes de sair da pausa</string>
+    <string name="protect_paused_sub">Pausado ou atrás do ao vivo, trocar de canal pergunta antes, porque o que foi guardado é apagado</string>
+    <string name="behind_switch_title">Você está atrás do ao vivo</string>
+    <string name="behind_switch_text">Trocar de canal apaga a parte que você pausou ou voltou.</string>
+    <string name="behind_switch_go">Trocar de canal</string>
+    <string name="behind_switch_stay">Ficar aqui</string>
     <string name="reconnect">Reconectar se o stream falhar</string>
     <string name="no">Não</string>
     <string name="after_seconds">Após %1$s s</string>

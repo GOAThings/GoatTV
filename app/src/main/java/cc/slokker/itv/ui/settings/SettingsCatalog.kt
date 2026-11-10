@@ -81,6 +81,12 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 70),
         phone = Place(PhonePage.PLAYBACK, 30, PhoneSection.CONNECTION),
     )
+    val PROTECT_PAUSED = Setting.Toggle(
+        Prefs.Key.PROTECT_PAUSED, { it.protectPaused }, { it.protectPausedSub },
+        read = { it.protectPaused },
+        tv = Place(TvPage.PLAYBACK, 75),
+        phone = Place(PhonePage.PLAYBACK, 35, PhoneSection.CONNECTION),
+    )
     val RECONNECT = Setting.Choice(
         Prefs.Key.RECONNECT_SECONDS, { it.reconnect },
         options = { s -> listOf(0 to s.no) + listOf(2, 5, 10, 30).map { it to s.afterSeconds(it) } },
@@ -364,7 +370,7 @@ object SettingsCatalog {
 
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
-        STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
+        STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,

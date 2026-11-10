@@ -149,6 +149,11 @@ fun PlayerScreen(vm: AppViewModel) {
     val afr = remember { AfrSession() }
     /** Pausar o direto (ver Timeshift): o anel em disco do canal a dar. */
     val timeshift = checkNotNull(playback.timeshift)
+    // Mudar de canal em pausa ou atrás do direto pergunta primeiro (ver AppViewModel.guarded).
+    DisposableEffect(timeshift) {
+        vm.liveShifted = { timeshift.worthAsking }
+        onDispose { vm.liveShifted = { false } }
+    }
     val backdrop = remember { GlassBackdrop() }
 
     var panel by remember { mutableStateOf(if (vm.consumeOpenPanelOnStart()) Panel.Channels else Panel.None) }
@@ -1199,7 +1204,10 @@ fun PlayerScreen(vm: AppViewModel) {
                 RecordingPromptCard(r, left, Modifier.align(recCorner).padding(top = recPillTop()))
             }
             // A cápsula da gravação abre-se no canto com a pergunta (e sai enquanto ela está lá).
-            switchPrompt?.let { RecordingSwitchCard(it, activeRecordings.firstOrNull()?.info, Modifier.align(recCorner).padding(top = recPillTop())) }
+            switchPrompt?.let {
+                if (it.live) BehindLiveSwitchCard(current.name, behindLabel(timeshift.behindMs), Modifier.align(recCorner).padding(top = recPillTop()))
+                else RecordingSwitchCard(it, activeRecordings.firstOrNull()?.info, Modifier.align(recCorner).padding(top = recPillTop()))
+            }
 
             var lastNotice by remember { mutableStateOf<AppRelease?>(null) }
             updateNotice?.let { lastNotice = it }

@@ -224,6 +224,7 @@ class PersistedFormatTest {
         "netGraph" to (Prefs.Key.NET_GRAPH to true),
         "netWarnings" to (Prefs.Key.NET_WARNINGS to false),
         "timeshift" to (Prefs.Key.TIMESHIFT to false),
+        "protectPaused" to (Prefs.Key.PROTECT_PAUSED to false),
         "userAgent" to (Prefs.Key.USER_AGENT to "VLC/3.0"),
         "autoStart" to (Prefs.Key.AUTO_START to true),
         "exitConfirm" to (Prefs.Key.EXIT_CONFIRM to false),

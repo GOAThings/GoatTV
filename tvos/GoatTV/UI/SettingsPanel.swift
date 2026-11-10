@@ -717,6 +717,9 @@ struct SettingsPanel: View {
                 .toggle("timeshift", s.r("timeshift"), prefs.timeshift, subtitle: s.r("timeshift_sub")) {
                     model.setPref("timeshift", .bool($0))
                 },
+                .toggle("protect_paused", s.r("protect_paused"), prefs.protectPaused, subtitle: s.r("protect_paused_sub")) {
+                    model.setPref("protect_paused", .bool($0))
+                },
                 pickItem("reconnect_seconds"),
                 pickItem("afr", subtitle: afrHint),
                 pickItem("afr_fallback", subtitle: s.r("afr_fallback_sub")),

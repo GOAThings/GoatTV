@@ -71,6 +71,9 @@ internal class Timeshift(context: Context) {
     var atLive by mutableStateOf(true)
         private set
 
+    /** Em pausa ou atrás do direto há uns segundos: mudar de canal perde o que está guardado. */
+    val worthAsking: Boolean get() = shifted && behindMs >= ASK_BEHIND_MS
+
     /** O player está a recomeçar noutro ponto do anel: a espera que se segue não é uma paragem da rede. */
     var seeking = false
 
@@ -412,6 +415,9 @@ internal class Timeshift(context: Context) {
 
         /** Atrás do direto, chegar a menos disto do atraso normal é estar outra vez no direto. */
         private const val LIVE_SLACK_MS = 3_000L
+
+        /** Menos atrás do que isto não vale a pergunta antes de mudar de canal (ver [worthAsking]). */
+        private const val ASK_BEHIND_MS = 5_000L
 
         private const val HLS_MIN_WINDOW_MS = 20_000L
         private const val HLS_LIVE_SLACK_MS = 6_000L

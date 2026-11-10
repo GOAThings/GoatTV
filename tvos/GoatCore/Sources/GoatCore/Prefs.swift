@@ -41,6 +41,8 @@ public struct Prefs: Equatable, Sendable {
     public var freezeFrame = true
     /// Pausar o direto: o programa a ver guardado na cache, para pausar e recuar (ver Timeshift).
     public var timeshift = true
+    /// Em pausa ou atrás do direto, mudar de canal pergunta primeiro (o que está guardado perde-se).
+    public var protectPaused = true
     /// Faixa surround por defeito.
     public var surroundDefault = false
     /// A língua preferida do áudio (ISO 639-1); vazio = automático (a da app, quando o canal a tem).
@@ -197,6 +199,7 @@ public struct Prefs: Equatable, Sendable {
         audioPassthrough = bool("audio_passthrough", d.audioPassthrough)
         freezeFrame = bool("freeze_frame", d.freezeFrame)
         timeshift = bool("timeshift", d.timeshift)
+        protectPaused = bool("protect_paused", d.protectPaused)
         surroundDefault = bool("surround_default", d.surroundDefault)
         audioLanguage = Prefs.language(s["audio_language"])
         subtitleLanguage = Prefs.language(s["subtitle_language"])

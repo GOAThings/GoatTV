@@ -442,6 +442,8 @@ enum CoreTests {
         // Pausar o direto: ligado por defeito, como no Android.
         try expect(p.timeshift, true)
         try expect(Prefs(settings: .object(["timeshift": false])).timeshift, false)
+        try expect(Prefs().protectPaused, true)
+        try expect(Prefs(settings: .object(["protect_paused": false])).protectPaused, false)
     }
 
     static func library() throws {

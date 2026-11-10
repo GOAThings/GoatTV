@@ -357,12 +357,14 @@ struct PhoneMain: View {
         .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0) }
         .sheet(isPresented: $showRecordings) { PhoneRecordings().environment(\.played, played) }
         // Mudar de canal com uma gravação a decorrer: o fornecedor só deixa uma ligação.
-        .alert(model.switchPrompt.map { model.strings.r("recording_switch_title", $0.title) } ?? "",
+        // Em pausa ou atrás do direto, o mesmo cartão com outras palavras: o que está guardado apaga-se.
+        .alert(model.switchPrompt.map { $0.live ? model.strings.r("behind_switch_title") : model.strings.r("recording_switch_title", $0.title) } ?? "",
                isPresented: Binding(get: { model.switchPrompt != nil }, set: { if !$0, model.switchPrompt != nil { model.answerSwitch(stop: false) } })) {
-            Button(model.strings.r("recording_stop_and_switch"), role: .destructive) { model.answerSwitch(stop: true) }
-            Button(model.strings.r("recording_keep"), role: .cancel) { model.answerSwitch(stop: false) }
+            let live = model.switchPrompt?.live == true
+            Button(model.strings.r(live ? "behind_switch_go" : "recording_stop_and_switch"), role: .destructive) { model.answerSwitch(stop: true) }
+            Button(model.strings.r(live ? "behind_switch_stay" : "recording_keep"), role: .cancel) { model.answerSwitch(stop: false) }
         } message: {
-            Text(model.strings.r("recording_switch_text"))
+            Text(model.strings.r(model.switchPrompt?.live == true ? "behind_switch_text" : "recording_switch_text"))
         }
         // Uma marcada noutro canal quase a começar: mudar para gravar, ou não gravar (sem resposta, muda à hora).
         .alert(model.recordings.prompt.map { model.strings.r("recording_soon", $0.channelName) } ?? "",
@@ -1704,6 +1706,7 @@ private struct MenuTab: View {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)
                 pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
                 toggle(s.r("timeshift"), "timeshift", p.timeshift)
+                toggle(s.r("protect_paused"), "protect_paused", p.protectPaused)
                 pick(s.r("zap_delay"), "zap_delay_ms", .number(Double(p.zapDelayMs)),
                      zapDelayOptions)
             }

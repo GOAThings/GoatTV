@@ -68,6 +68,8 @@ final class AppModel {
         let id = UUID()
         let title: String
         let action: () -> Void
+        /// Não há gravação, mas está-se em pausa ou atrás do direto, e o que está guardado perde-se.
+        var live = false
     }
 
     private(set) var switchPrompt: SwitchPrompt?
@@ -2308,11 +2310,18 @@ extension AppModel {
     /// servidor, outra lista). Com uma gravação de outra coisa a decorrer, pergunta primeiro e devolve true.
     fileprivate func guardRecording(_ channel: Channel?, _ action: @escaping () -> Void) -> Bool {
         let active = recordings.active
-        guard let first = active.first else { return false }
         let id = content?.playlist.id
-        if let channel, active.allSatisfy({ $0.playlistId == id && $0.channelKey == channel.key }) { return false }
-        switchPrompt = SwitchPrompt(title: first.title, action: action)
-        return true
+        if let first = active.first, !(channel.map { c in active.allSatisfy { $0.playlistId == id && $0.channelKey == c.key } } ?? false) {
+            switchPrompt = SwitchPrompt(title: first.title, action: action)
+            return true
+        }
+        // Em pausa ou atrás do direto: mudar apaga o anel. O mesmo canal não muda nada.
+        let leaving = channel == nil || channel?.key != current?.key
+        if leaving, prefs.protectPaused, catchup == nil, player.timeshift.worthAsking {
+            switchPrompt = SwitchPrompt(title: current?.name ?? "", action: action, live: true)
+            return true
+        }
+        return false
     }
 
     /// A resposta ao cartão: parar a gravação e fazer o que se pediu, ou ficar a gravar ([stop] false).
@@ -2320,7 +2329,7 @@ extension AppModel {
         guard let p = switchPrompt else { return }
         switchPrompt = nil
         guard stop else { return }
-        recordings.stopAll()
+        if !p.live { recordings.stopAll() }
         p.action()
     }
 

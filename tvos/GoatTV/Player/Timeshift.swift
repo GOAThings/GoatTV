@@ -34,6 +34,8 @@ final class Timeshift {
 
     /// Em pausa ou atrás do direto.
     var shifted: Bool { available && !atLive }
+    /// Em pausa ou atrás do direto há uns segundos: mudar de canal perde o que está guardado.
+    var worthAsking: Bool { shifted && behindMs >= 5_000 }
 
     /// O leitor está a recomeçar noutro ponto: a espera que se segue não é uma paragem da rede.
     @ObservationIgnored var seeking = false
