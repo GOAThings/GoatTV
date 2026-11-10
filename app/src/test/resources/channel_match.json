@@ -1,0 +1,1222 @@
+{
+ "normalize": [
+  {
+   "name": "RTP 1",
+   "base": "rtp1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "PT: RTP 1 HD",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "PT| RTP 1 FHD",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 4,
+   "shift": 0
+  },
+  {
+   "name": "[PT] RTP 1",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "|PT| RTP1 ᴴᴰ",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "PT ▎ RTP 1 UHD",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 5,
+   "shift": 0
+  },
+  {
+   "name": "PT - RTP 1",
+   "base": "rtp1",
+   "country": "pt",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "(PT) RTP 2",
+   "base": "rtp2",
+   "country": "pt",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "RTP 3 (PT)",
+   "base": "rtp3",
+   "country": "pt",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "RTP Memória",
+   "base": "rtpmemoria",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SIC",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SIC Notícias",
+   "base": "sicnoticias",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "sic noticias",
+   "base": "sicnoticias",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SIC NOTÍCIAS ᶠᴴᴰ",
+   "base": "sicnoticias",
+   "country": null,
+   "quality": 4,
+   "shift": 0
+  },
+  {
+   "name": "SIC +1",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "SIC+1",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "SIC + 1",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "SIC (+1)",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "SIC +1h",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "SICᴴᴰ",
+   "base": "sic",
+   "country": null,
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "SIC Mulher",
+   "base": "sicmulher",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "TVI",
+   "base": "tvi",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "TVI Reality",
+   "base": "tvireality",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "TVI 24",
+   "base": "tvi24",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "CNN Portugal",
+   "base": "cnnportugal",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "CMTV",
+   "base": "cmtv",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "CM TV HD",
+   "base": "cmtv",
+   "country": null,
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "Sport TV 1",
+   "base": "sporttv1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SportTV1 HEVC",
+   "base": "sporttv1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "PT: SPORT TV 1 4K",
+   "base": "sporttv1",
+   "country": "pt",
+   "quality": 5,
+   "shift": 0
+  },
+  {
+   "name": "Sport TV 2 H.265",
+   "base": "sporttv2",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Sport TV 3 50FPS",
+   "base": "sporttv3",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SPORTTV 5 SD",
+   "base": "sporttv5",
+   "country": null,
+   "quality": 1,
+   "shift": 0
+  },
+  {
+   "name": "Sport TV+",
+   "base": "sporttv",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Eleven Sports 1",
+   "base": "elevensports1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "ELEVEN SPORTS 2 [FHD]",
+   "base": "elevensports2",
+   "country": null,
+   "quality": 4,
+   "shift": 0
+  },
+  {
+   "name": "Benfica TV",
+   "base": "benficatv",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "BTV 1",
+   "base": "btv1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Canal+ 1",
+   "base": "canal1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Canal+ Sport",
+   "base": "canalsport",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "UK: BBC One HD",
+   "base": "bbcone",
+   "country": "gb",
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "UK| Sky Sports Main Event UHD",
+   "base": "skysportsmainevent",
+   "country": "gb",
+   "quality": 5,
+   "shift": 0
+  },
+  {
+   "name": "GB: ITV 1",
+   "base": "itv1",
+   "country": "gb",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "ITV1 +1",
+   "base": "itv1",
+   "country": null,
+   "quality": 2,
+   "shift": 1
+  },
+  {
+   "name": "US: ESPN",
+   "base": "espn",
+   "country": "us",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "USA| ESPN 2 HD",
+   "base": "espn2",
+   "country": "us",
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "US - FOX NEWS",
+   "base": "foxnews",
+   "country": "us",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "BR: Globo",
+   "base": "globo",
+   "country": "br",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "VIP| SIC",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "PT VIP| TVI",
+   "base": "tvi",
+   "country": "pt",
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "[PT] [FHD] SIC",
+   "base": "sic",
+   "country": "pt",
+   "quality": 4,
+   "shift": 0
+  },
+  {
+   "name": "4K| Sport TV 1",
+   "base": "sporttv1",
+   "country": null,
+   "quality": 5,
+   "shift": 0
+  },
+  {
+   "name": "Discovery Channel 1080p",
+   "base": "discoverychannel",
+   "country": null,
+   "quality": 4,
+   "shift": 0
+  },
+  {
+   "name": "Eurosport 1 ⁴ᴷ",
+   "base": "eurosport1",
+   "country": null,
+   "quality": 5,
+   "shift": 0
+  },
+  {
+   "name": "Ｓｉｃ",
+   "base": "sic",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "★ RTP 1 ★",
+   "base": "rtp1",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "TV Record",
+   "base": "tvrecord",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Fox Life (Backup)",
+   "base": "foxlifebackup",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "SIC Radical HD ",
+   "base": "sicradical",
+   "country": null,
+   "quality": 3,
+   "shift": 0
+  },
+  {
+   "name": "Panda Kids",
+   "base": "pandakids",
+   "country": null,
+   "quality": 2,
+   "shift": 0
+  },
+  {
+   "name": "Hollywood: FHD",
+   "base": "hollywood",
+   "country": null,
+   "quality": 4,
+   "shift": 0
+  }
+ ],
+ "match": [
+  {
+   "case": "same EPG id, other name style",
+   "target": {
+    "name": "RTP 1",
+    "epg": "RTP1.pt"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 2",
+     "epg": "RTP2.pt"
+    },
+    {
+     "name": "PT| RTP 1 HD",
+     "epg": "rtp1.pt"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "EPG id case-insensitive with a different name",
+   "target": {
+    "name": "SporTV 1",
+    "epg": "sporttv1.pt"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 1 HD",
+     "epg": "SportTV1.pt"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "name match without EPG",
+   "target": {
+    "name": "SIC Notícias"
+   },
+   "pool": [
+    {
+     "name": "SIC"
+    },
+    {
+     "name": "PT: SIC NOTICIAS HD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "+1 is not the same channel",
+   "target": {
+    "name": "SIC"
+   },
+   "pool": [
+    {
+     "name": "SIC +1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "+1 finds +1",
+   "target": {
+    "name": "SIC +1"
+   },
+   "pool": [
+    {
+     "name": "SIC HD"
+    },
+    {
+     "name": "SIC+1"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "+1 sharing the EPG id is still not the same",
+   "target": {
+    "name": "SIC",
+    "epg": "SIC.pt"
+   },
+   "pool": [
+    {
+     "name": "SIC +1",
+     "epg": "SIC.pt"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "EPG and +1: picks the one without +1",
+   "target": {
+    "name": "TVI",
+    "epg": "TVI.pt"
+   },
+   "pool": [
+    {
+     "name": "TVI +1",
+     "epg": "TVI.pt"
+    },
+    {
+     "name": "TVI HD",
+     "epg": "TVI.pt"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "higher quality wins",
+   "target": {
+    "name": "Sport TV 1"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 1 SD"
+    },
+    {
+     "name": "Sport TV 1 FHD"
+    },
+    {
+     "name": "Sport TV 1 HD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "UHD beats FHD",
+   "target": {
+    "name": "PT: Sport TV 2"
+   },
+   "pool": [
+    {
+     "name": "PT: SPORT TV 2 FHD"
+    },
+    {
+     "name": "PT: SPORT TV 2 UHD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "same country preferred",
+   "target": {
+    "name": "PT: Eurosport 1"
+   },
+   "pool": [
+    {
+     "name": "UK: Eurosport 1 HD"
+    },
+    {
+     "name": "PT: Eurosport 1"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "other country is not a candidate",
+   "target": {
+    "name": "PT: Eurosport 1"
+   },
+   "pool": [
+    {
+     "name": "UK: Eurosport 1 HD"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "no country on target, two countries: unsure",
+   "target": {
+    "name": "Eurosport 1"
+   },
+   "pool": [
+    {
+     "name": "UK: Eurosport 1"
+    },
+    {
+     "name": "PT: Eurosport 1"
+    }
+   ],
+   "expect": null,
+   "kind": "unsure"
+  },
+  {
+   "case": "target country, backup has none",
+   "target": {
+    "name": "PT: CMTV"
+   },
+   "pool": [
+    {
+     "name": "CMTV HD"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "same country beats no country",
+   "target": {
+    "name": "PT: CMTV"
+   },
+   "pool": [
+    {
+     "name": "CMTV UHD"
+    },
+    {
+     "name": "PT: CMTV"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "one country plus unmarked is fine",
+   "target": {
+    "name": "CMTV"
+   },
+   "pool": [
+    {
+     "name": "PT: CMTV"
+    },
+    {
+     "name": "CM TV FHD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "duplicates: the first of the best",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD"
+    },
+    {
+     "name": "PT: RTP 1 HD"
+    },
+    {
+     "name": "RTP 1"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "nothing similar",
+   "target": {
+    "name": "Benfica TV"
+   },
+   "pool": [
+    {
+     "name": "Sporting TV"
+    },
+    {
+     "name": "Porto Canal"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "Benfica TV vs BTV is not guessed",
+   "target": {
+    "name": "Benfica TV"
+   },
+   "pool": [
+    {
+     "name": "BTV 1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "accents and case",
+   "target": {
+    "name": "RTP Memória"
+   },
+   "pool": [
+    {
+     "name": "RTP MEMORIA HD"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "spacing differences",
+   "target": {
+    "name": "SportTV 3"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 3 HEVC"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "superscript quality",
+   "target": {
+    "name": "SIC Mulher"
+   },
+   "pool": [
+    {
+     "name": "SIC Mulher ᴴᴰ"
+    },
+    {
+     "name": "SIC Mulher ᵁᴴᴰ"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "CNN Portugal vs CNN International",
+   "target": {
+    "name": "CNN Portugal"
+   },
+   "pool": [
+    {
+     "name": "CNN International"
+    },
+    {
+     "name": "CNN Portugal FHD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "TVI vs TVI 24 vs TVI Reality",
+   "target": {
+    "name": "TVI 24"
+   },
+   "pool": [
+    {
+     "name": "TVI"
+    },
+    {
+     "name": "TVI Reality"
+    },
+    {
+     "name": "TVI24 HD"
+    }
+   ],
+   "expect": 2,
+   "kind": "match"
+  },
+  {
+   "case": "Sport TV 1 vs Sport TV 11",
+   "target": {
+    "name": "Sport TV 1"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 11"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "Eleven 1 vs Eleven Sports 1 not guessed",
+   "target": {
+    "name": "Eleven 1"
+   },
+   "pool": [
+    {
+     "name": "Eleven Sports 1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "EPG id on two different names: unsure",
+   "target": {
+    "name": "Eleven 3",
+    "epg": "eleven.pt"
+   },
+   "pool": [
+    {
+     "name": "Eleven Sports 1",
+     "epg": "eleven.pt"
+    },
+    {
+     "name": "Eleven Sports 2",
+     "epg": "eleven.pt"
+    }
+   ],
+   "expect": null,
+   "kind": "unsure"
+  },
+  {
+   "case": "EPG id points elsewhere but the name exists: unsure",
+   "target": {
+    "name": "SIC Notícias",
+    "epg": "SIC.pt"
+   },
+   "pool": [
+    {
+     "name": "SIC",
+     "epg": "SIC.pt"
+    },
+    {
+     "name": "SIC Notícias",
+     "epg": "SICNoticias.pt"
+    }
+   ],
+   "expect": null,
+   "kind": "unsure"
+  },
+  {
+   "case": "blank and none EPG ids are ignored",
+   "target": {
+    "name": "Canal 11",
+    "epg": "none"
+   },
+   "pool": [
+    {
+     "name": "Benfica TV",
+     "epg": "none"
+    },
+    {
+     "name": "Canal 11 HD",
+     "epg": ""
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "UK channels",
+   "target": {
+    "name": "UK: BBC One"
+   },
+   "pool": [
+    {
+     "name": "UK| BBC ONE FHD",
+     "epg": "BBCOne.uk"
+    },
+    {
+     "name": "UK| BBC Two FHD"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "UK and GB are the same country",
+   "target": {
+    "name": "UK: Sky Sports Main Event"
+   },
+   "pool": [
+    {
+     "name": "GB: Sky Sports Main Event HD"
+    },
+    {
+     "name": "US: Sky Sports Main Event"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "US ESPN 2",
+   "target": {
+    "name": "US: ESPN 2"
+   },
+   "pool": [
+    {
+     "name": "USA| ESPN HD"
+    },
+    {
+     "name": "USA| ESPN 2 HD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "ITV1 +1",
+   "target": {
+    "name": "ITV 1 +1"
+   },
+   "pool": [
+    {
+     "name": "ITV1"
+    },
+    {
+     "name": "ITV1 +1 HD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "Canal+ 1 is not Canal +1",
+   "target": {
+    "name": "Canal+ 1"
+   },
+   "pool": [
+    {
+     "name": "Canal"
+    },
+    {
+     "name": "CANAL+ 1 HD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "empty target name",
+   "target": {
+    "name": "★"
+   },
+   "pool": [
+    {
+     "name": "RTP 1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "override to a key",
+   "target": {
+    "name": "Benfica TV"
+   },
+   "pool": [
+    {
+     "name": "BTV 1",
+     "key": "b1"
+    },
+    {
+     "name": "Porto Canal",
+     "key": "pc"
+    }
+   ],
+   "expect": 0,
+   "kind": "match",
+   "override": "b1"
+  },
+  {
+   "case": "override off",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing",
+   "override": "off"
+  },
+  {
+   "case": "override to a key that is gone: automatic",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r1"
+    }
+   ],
+   "expect": 0,
+   "kind": "match",
+   "override": "gone"
+  },
+  {
+   "case": "group prefix only",
+   "target": {
+    "name": "VIP| SIC"
+   },
+   "pool": [
+    {
+     "name": "SIC FHD"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "Globo needs BR: not PT",
+   "target": {
+    "name": "PT: Globo"
+   },
+   "pool": [
+    {
+     "name": "BR: Globo"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  }
+ ],
+ "coverage": [
+  {
+   "case": "three matched, one unsure, one missing",
+   "main": [
+    {
+     "name": "RTP 1",
+     "key": "a"
+    },
+    {
+     "name": "SIC",
+     "key": "b"
+    },
+    {
+     "name": "TVI",
+     "key": "c"
+    },
+    {
+     "name": "Eurosport 1",
+     "key": "d"
+    },
+    {
+     "name": "Canal Panda",
+     "key": "e"
+    }
+   ],
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "x1"
+    },
+    {
+     "name": "SIC FHD",
+     "key": "x2"
+    },
+    {
+     "name": "TVI",
+     "key": "x3"
+    },
+    {
+     "name": "UK: Eurosport 1",
+     "key": "x4"
+    },
+    {
+     "name": "PT: Eurosport 1",
+     "key": "x5"
+    }
+   ],
+   "matched": 3,
+   "unsure": 1,
+   "missing": 1,
+   "unsureNames": [
+    "Eurosport 1"
+   ],
+   "missingNames": [
+    "Canal Panda"
+   ]
+  },
+  {
+   "case": "overrides count",
+   "main": [
+    {
+     "name": "Canal Panda",
+     "key": "e"
+    },
+    {
+     "name": "RTP 1",
+     "key": "a"
+    }
+   ],
+   "pool": [
+    {
+     "name": "Panda Kids",
+     "key": "p"
+    },
+    {
+     "name": "RTP 1",
+     "key": "r"
+    }
+   ],
+   "overrides": {
+    "e": "p",
+    "a": "off"
+   },
+   "matched": 1,
+   "unsure": 0,
+   "missing": 1,
+   "unsureNames": [],
+   "missingNames": [
+    "RTP 1"
+   ]
+  }
+ ],
+ "ranked": [
+  {
+   "case": "ranks by name, best quality first among equals",
+   "target": {
+    "name": "Sport TV 1"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 2"
+    },
+    {
+     "name": "Sport TV 1 HD"
+    },
+    {
+     "name": "Porto Canal"
+    },
+    {
+     "name": "Sport TV 1 FHD"
+    },
+    {
+     "name": "Sport TV 1 +1"
+    },
+    {
+     "name": "SportTV 11"
+    }
+   ],
+   "limit": 4,
+   "expect": [
+    3,
+    1,
+    5,
+    0
+   ]
+  },
+  {
+   "case": "EPG id lifts a different name",
+   "target": {
+    "name": "Benfica TV",
+    "epg": "benficatv.pt"
+   },
+   "pool": [
+    {
+     "name": "BTV 1",
+     "epg": "BenficaTV.pt"
+    },
+    {
+     "name": "Sporting TV"
+    },
+    {
+     "name": "Benfica TV 2"
+    }
+   ],
+   "limit": 8,
+   "expect": [
+    2,
+    0
+   ]
+  },
+  {
+   "case": "other country is lower",
+   "target": {
+    "name": "PT: Eurosport 1"
+   },
+   "pool": [
+    {
+     "name": "UK: Eurosport 1"
+    },
+    {
+     "name": "PT: Eurosport 1 HD"
+    },
+    {
+     "name": "Eurosport 2"
+    }
+   ],
+   "limit": 8,
+   "expect": [
+    1,
+    2,
+    0
+   ]
+  }
+ ]
+}
