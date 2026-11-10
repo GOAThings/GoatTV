@@ -179,6 +179,15 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 30, TvSection.AUDIO),
         phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.ADVANCED),
     )
+    /** + atrasa o som, − adianta-o (ver AvSyncVideoRenderer). */
+    val AUDIO_DELAY = Setting.Choice(
+        Prefs.Key.AUDIO_DELAY, { it.audioDelay },
+        options = { s -> AUDIO_DELAYS.map { it to (if (it == 0) s.off else "%+d ms".format(it)) } },
+        read = { it.prefs.audioDelayMs },
+        subtitle = { it.audioDelaySub },
+        tv = Place(TvPage.PLAYBACK, 25, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 35, PhoneSection.PICTURE_SOUND),
+    )
     /** Telemóvel: só aparece quando o aparelho tem janela pequena (o telemóvel esconde-a sem ela). */
     val PIP = Setting.Toggle(
         Prefs.Key.PIP_ENABLED, { it.pictureInPicture },
@@ -379,7 +388,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, ENGINE, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
@@ -396,6 +405,8 @@ object SettingsCatalog {
     private fun <P, S : Enum<S>> layout(placed: List<Pair<Setting, Place<P, S>>>): List<Pair<S, List<Setting>>> =
         placed.groupBy { it.second.section }.toSortedMap(compareBy { it.ordinal })
             .map { (section, rows) -> section to rows.sortedBy { it.second.order }.map { it.first } }
+
+    private val AUDIO_DELAYS = listOf(-300, -200, -150, -100, -50, 0, 50, 100, 150, 200, 300, 400, 500)
 
     private fun decoders(s: Strings) = listOf<Pair<Any?, String>>(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw)
 

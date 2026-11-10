@@ -24,6 +24,7 @@ import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ForwardingRenderer
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.audio.AudioCapabilities
@@ -71,7 +72,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         }
         // Se o VLC não arrancar (biblioteca nativa, box sem suporte…), fica o ExoPlayer em vez de fechar a app.
         try {
-            return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching, deinterlace = prefs.deinterlace).apply {
+            return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching, deinterlace = prefs.deinterlace, audioDelayMs = prefs.audioDelayMs).apply {
                 playWhenReady = true
             }
         } catch (e: Throwable) {
@@ -79,7 +80,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
-    val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio)
+    val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio, audioDelayMs = prefs.audioDelayMs)
         .setEnableDecoderFallback(true)
     if (softwareVideo || softwareAudio) renderers.setMediaCodecSelector(decoderSelector(softwareVideo, softwareAudio))
     // Pequeno: arranca depressa; grande: aguenta melhor quebras de rede.
@@ -135,6 +136,7 @@ private class ItvRenderersFactory(
     private val passthrough: Boolean,
     private val hdr: String,
     private val ffmpegFirst: Boolean,
+    private val audioDelayMs: Int,
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioRenderers(
         context: Context,
@@ -173,6 +175,7 @@ private class ItvRenderersFactory(
         out.add(HdrVideoRenderer(builder, context.applicationContext, hdr))
         // FFmpeg depois do descodificador da box: abre por software o vídeo que ela não descodifica (MPEG-2, HEVC 10-bit, AV1…).
         out.add(FfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY))
+        if (audioDelayMs != 0) out.replaceAll { AvSyncVideoRenderer(it, audioDelayMs * 1_000L) }
     }
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink? =
@@ -187,6 +190,15 @@ private class ItvRenderersFactory(
                 .setEnableAudioOutputPlaybackParameters(enableAudioTrackPlaybackParams)
                 .build()
         }
+}
+
+/**
+ * Sincronia labial no ExoPlayer: o som manda no relógio, por isso mexe-se no vídeo. Para o som sair [offsetUs] mais
+ * tarde, a imagem mostra-se esse tanto mais cedo (o vídeo vê o relógio adiantado); com − a imagem fica para trás.
+ * O som não é tocado (nem reamostrado), e o relógio do player continua o mesmo.
+ */
+private class AvSyncVideoRenderer(renderer: Renderer, private val offsetUs: Long) : ForwardingRenderer(renderer) {
+    override fun render(positionUs: Long, elapsedRealtimeUs: Long) = super.render(positionUs + offsetUs, elapsedRealtimeUs)
 }
 
 /**

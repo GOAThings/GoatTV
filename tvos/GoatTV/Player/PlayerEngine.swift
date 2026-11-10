@@ -87,6 +87,8 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var softwareDecoder = false
     /// Desentrelaçar no VLC: "yadif2x" (50/60 imagens por segundo, mais suave), "yadif" ou "off".
     @ObservationIgnored var deinterlace = "yadif2x"
+    /// O atraso do som (Prefs.audioDelayMs), no VLC.
+    @ObservationIgnored var audioDelayMs = 0
     /// Quando a TV muda de frame rate (e de HDR) para a do canal (`afr_mode`): desligado, só no primeiro canal ou em
     /// cada canal (ver AfrSession).
     @ObservationIgnored var afrMode = Prefs.AfrMode.off {
@@ -641,6 +643,7 @@ final class PlayerEngine: NSObject {
             if openStartMs > 0 { media.addOption(":start-time=\(Double(openStartMs) / 1000)") }
         }
         if softwareDecoder { media.addOption(":codec=avcodec") }
+        if audioDelayMs != 0 { media.addOption(":audio-desync=\(audioDelayMs)") }
         // A língua preferida (o libVLC entende ISO 639-1 e 639-2); as etiquetas e o surround escolhem-se depois
         // ([chooseTracks]). Uma escolha feita à mão neste canal ganha.
         let audio = audioLanguage.isEmpty ? (appLanguage ?? "") : audioLanguage

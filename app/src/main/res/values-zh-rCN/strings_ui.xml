@@ -462,6 +462,8 @@
     <string name="subtitle_language">字幕语言</string>
     <string name="subtitle_language_sub">频道提供时开启该语言的字幕</string>
     <string name="audio_decoder">音频解码器</string>
+    <string name="audio_delay">音频延迟（口型同步）</string>
+    <string name="audio_delay_sub">声音早于画面：延后（+）。声音晚：提前（−）</string>
     <string name="accent">强调色</string>
     <string name="accent_name">紫罗兰</string>
     <string name="accent_name_2">薄荷</string>

@@ -462,6 +462,8 @@
     <string name="subtitle_language">Idioma das legendas</string>
     <string name="subtitle_language_sub">Ativa as legendas neste idioma quando o canal tiver</string>
     <string name="audio_decoder">Decodificador de áudio</string>
+    <string name="audio_delay">Atraso do áudio (sincronia labial)</string>
+    <string name="audio_delay_sub">Som antes da imagem: atrase (+). Som atrasado: adiante (−)</string>
     <string name="accent">Cor de destaque</string>
     <string name="accent_name">Violeta</string>
     <string name="accent_name_2">Menta</string>

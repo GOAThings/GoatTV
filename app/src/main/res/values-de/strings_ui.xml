@@ -462,6 +462,8 @@
     <string name="subtitle_language">Untertitelsprache</string>
     <string name="subtitle_language_sub">Schaltet Untertitel in dieser Sprache ein, wenn der Sender sie anbietet</string>
     <string name="audio_decoder">Audio-Decoder</string>
+    <string name="audio_delay">Tonverzögerung (Lippensynchronität)</string>
+    <string name="audio_delay_sub">Ton vor dem Bild: verzögern (+). Ton zu spät: vorziehen (−)</string>
     <string name="accent">Akzentfarbe</string>
     <string name="accent_name">Violett</string>
     <string name="accent_name_2">Minze</string>

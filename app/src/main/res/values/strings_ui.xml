@@ -463,6 +463,8 @@
     <string name="subtitle_language">Subtitle language</string>
     <string name="subtitle_language_sub">Turns subtitles on in this language when the channel has them</string>
     <string name="audio_decoder">Audio decoder</string>
+    <string name="audio_delay">Audio delay (lip sync)</string>
+    <string name="audio_delay_sub">Sound before the picture: delay it (+). Sound late: bring it forward (−)</string>
     <string name="accent">Accent colour</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Mint</string>

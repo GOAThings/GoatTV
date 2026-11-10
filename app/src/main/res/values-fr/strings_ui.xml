@@ -462,6 +462,8 @@
     <string name="subtitle_language">Langue des sous-titres</string>
     <string name="subtitle_language_sub">Active les sous-titres dans cette langue quand la chaîne en propose</string>
     <string name="audio_decoder">Décodeur audio</string>
+    <string name="audio_delay">Décalage audio (synchro labiale)</string>
+    <string name="audio_delay_sub">Son avant l\'image : retardez-le (+). Son en retard : avancez-le (−)</string>
     <string name="accent">Couleur d\'accent</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Menthe</string>

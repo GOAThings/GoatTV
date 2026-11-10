@@ -733,6 +733,7 @@ struct SettingsPanel: View {
                 .toggle("surround_default", s.r("surround_default"), prefs.surroundDefault, subtitle: s.r("surround_default_sub")) {
                     model.setPref("surround_default", .bool($0))
                 },
+                pickItem("audio_delay_ms", subtitle: s.r("audio_delay_sub")),
                 .header("hsubs", s.r("subtitles")),
                 pickItem("subtitle_language", subtitle: s.r("subtitle_language_sub")),
                 .header("hrec", s.r("recordings")),
@@ -1389,6 +1390,10 @@ struct SettingsPanel: View {
             return (s.t("Aspect ratio", "Proporção"),
                     [o("fit", s.t("Fit", "Ajustar")), o("zoom", s.t("Fill (crop)", "Preencher (cortar)")), o("fill", s.t("Stretch", "Esticar"))],
                     .string(p.aspect))
+        case "audio_delay_ms":
+            return (s.r("audio_delay"),
+                    Prefs.audioDelayOptions.map { o(n($0), $0 == 0 ? s.r("off") : String(format: "%+d ms", $0)) },
+                    n(p.audioDelayMs))
         case "reconnect_seconds":
             return (s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"),
                     [o(n(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { o(n($0), after($0)) },

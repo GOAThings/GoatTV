@@ -462,6 +462,8 @@
     <string name="subtitle_language">Altyazı dili</string>
     <string name="subtitle_language_sub">Kanalda varsa altyazıları bu dilde açar</string>
     <string name="audio_decoder">Ses kod çözücü</string>
+    <string name="audio_delay">Ses gecikmesi (dudak senkronu)</string>
+    <string name="audio_delay_sub">Ses görüntüden önce: geciktirin (+). Ses geç: öne alın (−)</string>
     <string name="accent">Vurgu rengi</string>
     <string name="accent_name">Mor</string>
     <string name="accent_name_2">Nane</string>

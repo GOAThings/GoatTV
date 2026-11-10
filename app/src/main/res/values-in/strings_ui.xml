@@ -462,6 +462,8 @@
     <string name="subtitle_language">Bahasa subtitle</string>
     <string name="subtitle_language_sub">Menyalakan subtitle dalam bahasa ini jika saluran memilikinya</string>
     <string name="audio_decoder">Decoder audio</string>
+    <string name="audio_delay">Tunda audio (sinkron bibir)</string>
+    <string name="audio_delay_sub">Suara sebelum gambar: tunda (+). Suara terlambat: majukan (−)</string>
     <string name="accent">Warna aksen</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Mint</string>

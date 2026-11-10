@@ -211,6 +211,7 @@ class PersistedFormatTest {
         "buffer" to (Prefs.Key.BUFFER to Prefs.Buffer.LARGE),
         "decoder" to (Prefs.Key.DECODER to Prefs.Decoder.SOFTWARE),
         "deinterlace" to (Prefs.Key.DEINTERLACE to Prefs.Deinterlace.OFF),
+        "audioDelayMs" to (Prefs.Key.AUDIO_DELAY to 150),
         "aspect" to (Prefs.Key.ASPECT to Prefs.Aspect.ZOOM),
         "freezeFrame" to (Prefs.Key.FREEZE_FRAME to false),
         "reconnectSeconds" to (Prefs.Key.RECONNECT_SECONDS to 10),

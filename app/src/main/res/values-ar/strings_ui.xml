@@ -462,6 +462,8 @@
     <string name="subtitle_language">لغة الترجمة</string>
     <string name="subtitle_language_sub">يشغّل الترجمة بهذه اللغة عندما تتيحها القناة</string>
     <string name="audio_decoder">وحدة فك ترميز الصوت</string>
+    <string name="audio_delay">تأخير الصوت (مزامنة الشفاه)</string>
+    <string name="audio_delay_sub">الصوت قبل الصورة: أخّره (+). الصوت متأخر: قدّمه (−)</string>
     <string name="accent">لون التمييز</string>
     <string name="accent_name">بنفسجي</string>
     <string name="accent_name_2">نعناعي</string>

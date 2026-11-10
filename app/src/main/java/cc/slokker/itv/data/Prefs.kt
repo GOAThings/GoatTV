@@ -41,6 +41,8 @@ data class Prefs(
     /** Telemóvel: o vídeo continua numa janela pequena ao sair da app. */
     val pipEnabled: Boolean = false,
     val audioDecoder: String = Decoder.HARDWARE,
+    /** Atraso do som em ms (sincronia labial): + o som mais tarde, − mais cedo; 0 = nenhum. */
+    val audioDelayMs: Int = 0,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
     /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
@@ -158,6 +160,7 @@ data class Prefs(
         const val SUBTITLE_LANGUAGE = "subtitle_language"
         const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
+        const val AUDIO_DELAY = "audio_delay_ms"
         const val HDR = "hdr"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
@@ -217,6 +220,11 @@ data class Prefs(
         val ALL = setOf(HARDWARE, SOFTWARE)
     }
     /** Os nomes do VLC (iguais aos da Apple TV). */
+    /** Atraso do som (as opções das definições vão de −300 a +500). */
+    object AudioDelay {
+        const val MAX_MS = 1_000
+    }
+
     object Deinterlace {
         const val SMOOTH = "yadif2x"; const val NORMAL = "yadif"; const val OFF = "off"
         val ALL = setOf(SMOOTH, NORMAL, OFF)
@@ -336,6 +344,7 @@ data class Prefs(
                 subtitleLanguage = language(s, Key.SUBTITLE_LANGUAGE),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
+                audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),

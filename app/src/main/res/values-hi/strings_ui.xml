@@ -462,6 +462,8 @@
     <string name="subtitle_language">सबटाइटल की भाषा</string>
     <string name="subtitle_language_sub">चैनल में हों तो इस भाषा के सबटाइटल चालू करता है</string>
     <string name="audio_decoder">ऑडियो डिकोडर</string>
+    <string name="audio_delay">ऑडियो देरी (लिप सिंक)</string>
+    <string name="audio_delay_sub">आवाज़ तस्वीर से पहले: देर करें (+)। आवाज़ देर से: आगे करें (−)</string>
     <string name="accent">एक्सेंट रंग</string>
     <string name="accent_name">बैंगनी</string>
     <string name="accent_name_2">मिंट</string>

@@ -933,6 +933,8 @@ class Strings(context: Context) {
     val subtitleLanguage get() = s(R.string.subtitle_language)
     val subtitleLanguageSub get() = s(R.string.subtitle_language_sub)
     val audioDecoder get() = s(R.string.audio_decoder)
+    val audioDelay get() = s(R.string.audio_delay)
+    val audioDelaySub get() = s(R.string.audio_delay_sub)
 
     // ---- Aspeto: vidro e grupos ----
     val accent get() = s(R.string.accent)

@@ -462,6 +462,8 @@
     <string name="subtitle_language">Язык субтитров</string>
     <string name="subtitle_language_sub">Включает субтитры на этом языке, если они есть на канале</string>
     <string name="audio_decoder">Аудиодекодер</string>
+    <string name="audio_delay">Задержка звука (синхронизация губ)</string>
+    <string name="audio_delay_sub">Звук раньше картинки — задержите (+). Звук опаздывает — сдвиньте вперёд (−)</string>
     <string name="accent">Цвет акцента</string>
     <string name="accent_name">Фиолетовый</string>
     <string name="accent_name_2">Мятный</string>

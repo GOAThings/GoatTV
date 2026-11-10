@@ -462,6 +462,8 @@
     <string name="subtitle_language">字幕の言語</string>
     <string name="subtitle_language_sub">チャンネルにあればこの言語の字幕をオンにします</string>
     <string name="audio_decoder">音声デコーダー</string>
+    <string name="audio_delay">音声の遅延（リップシンク）</string>
+    <string name="audio_delay_sub">音が映像より早い：遅らせる（+）。音が遅い：早める（−）</string>
     <string name="accent">アクセントカラー</string>
     <string name="accent_name">バイオレット</string>
     <string name="accent_name_2">ミント</string>

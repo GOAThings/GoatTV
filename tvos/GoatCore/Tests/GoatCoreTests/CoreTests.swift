@@ -444,6 +444,8 @@ enum CoreTests {
         try expect(Prefs(settings: .object(["timeshift": false])).timeshift, false)
         try expect(Prefs().protectPaused, true)
         try expect(Prefs(settings: .object(["protect_paused": false])).protectPaused, false)
+        try expect(Prefs(settings: .object(["audio_delay_ms": 150])).audioDelayMs, 150)
+        try expect(Prefs(settings: .object(["audio_delay_ms": 9_000])).audioDelayMs, 1_000)
     }
 
     static func library() throws {

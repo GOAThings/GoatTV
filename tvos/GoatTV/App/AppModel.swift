@@ -584,6 +584,7 @@ final class AppModel {
             engine.engine = prefs.engine
             engine.softwareDecoder = prefs.decoder == "sw"
             engine.deinterlace = prefs.deinterlace
+            engine.audioDelayMs = prefs.audioDelayMs
             engine.hdr = prefs.hdr
         }
         secondPlayer.controlsDisplay = false

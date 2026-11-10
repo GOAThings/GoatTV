@@ -43,6 +43,10 @@ public struct Prefs: Equatable, Sendable {
     public var timeshift = true
     /// Em pausa ou atrás do direto, mudar de canal pergunta primeiro (o que está guardado perde-se).
     public var protectPaused = true
+    /// Atraso do som em ms (sincronia labial): + o som mais tarde, − mais cedo. Só no VLC (o AVPlayer não deixa).
+    public var audioDelayMs = 0
+    /// As opções do atraso do som (as mesmas do Android).
+    public static let audioDelayOptions = [-300, -200, -150, -100, -50, 0, 50, 100, 150, 200, 300, 400, 500]
     /// Faixa surround por defeito.
     public var surroundDefault = false
     /// A língua preferida do áudio (ISO 639-1); vazio = automático (a da app, quando o canal a tem).
@@ -200,6 +204,7 @@ public struct Prefs: Equatable, Sendable {
         freezeFrame = bool("freeze_frame", d.freezeFrame)
         timeshift = bool("timeshift", d.timeshift)
         protectPaused = bool("protect_paused", d.protectPaused)
+        audioDelayMs = min(max(int("audio_delay_ms", d.audioDelayMs), -1_000), 1_000)
         surroundDefault = bool("surround_default", d.surroundDefault)
         audioLanguage = Prefs.language(s["audio_language"])
         subtitleLanguage = Prefs.language(s["subtitle_language"])

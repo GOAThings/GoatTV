@@ -462,6 +462,8 @@
     <string name="subtitle_language">자막 언어</string>
     <string name="subtitle_language_sub">채널에 있으면 이 언어의 자막을 켜요</string>
     <string name="audio_decoder">오디오 디코더</string>
+    <string name="audio_delay">오디오 지연 (립싱크)</string>
+    <string name="audio_delay_sub">소리가 화면보다 빠르면 늦추고(+), 늦으면 앞당기세요(−)</string>
     <string name="accent">강조 색상</string>
     <string name="accent_name">바이올렛</string>
     <string name="accent_name_2">민트</string>

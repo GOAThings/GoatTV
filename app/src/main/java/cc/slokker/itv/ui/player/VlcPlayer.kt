@@ -46,6 +46,8 @@ internal class VlcPlayer(
     private val networkCachingMs: Int,
     /** Prefs.Deinterlace: o filtro do VLC, ou desligado. */
     deinterlace: String,
+    /** O atraso do som (Prefs.audioDelayMs): + mais tarde, − mais cedo. */
+    private val audioDelayMs: Int = 0,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
 
     // O LibVLC junta as suas opções a esta lista: tem de poder ser alterada (com buildList fechava a app).
@@ -256,6 +258,7 @@ internal class VlcPlayer(
         val media = Media(libVlc, Uri.parse(url)).apply {
             setHWDecoderEnabled(!softwareVideo, false)
             addOption(":network-caching=$networkCachingMs")
+            if (audioDelayMs != 0) addOption(":audio-desync=$audioDelayMs")
             userAgent?.let { addOption(":http-user-agent=$it") }
             referrer?.let { addOption(":http-referrer=$it") }
             if (startMs > 0) addOption(":start-time=${startMs / 1000.0}")
