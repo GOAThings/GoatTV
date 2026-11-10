@@ -335,6 +335,7 @@
     <string name="engine">Lecteur</string>
     <string name="engine_exo">ExoPlayer (recommandé)</string>
     <string name="engine_vlc">VLC (ouvre plus de formats)</string>
+    <string name="engine_aether">AetherEngine (expérimental)</string>
     <string name="using_vlc">Cette chaîne est lue avec VLC</string>
     <string name="decoder">Décodeur vidéo</string>
     <string name="deinterlace">Désentrelacement (VLC)</string>

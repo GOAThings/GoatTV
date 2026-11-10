@@ -335,6 +335,7 @@
     <string name="engine">Oynatıcı</string>
     <string name="engine_exo">ExoPlayer (önerilen)</string>
     <string name="engine_vlc">VLC (daha çok biçim açar)</string>
+    <string name="engine_aether">AetherEngine (deneysel)</string>
     <string name="using_vlc">Bu kanal VLC ile oynatılıyor</string>
     <string name="decoder">Video kod çözücü</string>
     <string name="deinterlace">Taramasız dönüştürme (VLC)</string>
