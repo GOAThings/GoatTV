@@ -71,7 +71,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         }
         // Se o VLC não arrancar (biblioteca nativa, box sem suporte…), fica o ExoPlayer em vez de fechar a app.
         try {
-            return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching).apply {
+            return VlcPlayer(context, passthrough = prefs.audioPassthrough, softwareVideo = softwareVideo, networkCachingMs = caching, deinterlace = prefs.deinterlace).apply {
                 playWhenReady = true
             }
         } catch (e: Throwable) {

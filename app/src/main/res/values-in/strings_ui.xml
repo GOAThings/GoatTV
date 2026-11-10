@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (membuka lebih banyak format)</string>
     <string name="using_vlc">Saluran ini diputar dengan VLC</string>
     <string name="decoder">Decoder video</string>
+    <string name="deinterlace">Deinterlace (VLC)</string>
+    <string name="deinterlace_sub">Untuk saluran 576i dan 1080i. Dengan ExoPlayer, TV yang melakukannya</string>
+    <string name="deinterlace_smooth">Halus (50/60 bingkai)</string>
+    <string name="deinterlace_normal">Normal (25/30 bingkai)</string>
     <string name="decoder_hw">Hardware (disarankan)</string>
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Pertahankan gambar saat ganti saluran</string>

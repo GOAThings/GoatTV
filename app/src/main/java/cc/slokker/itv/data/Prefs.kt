@@ -16,6 +16,8 @@ data class Prefs(
     val engine: String = Engine.EXO,
     val buffer: String = Buffer.NORMAL,
     val decoder: String = Decoder.HARDWARE,
+    /** Desentrelaçar no VLC (no ExoPlayer é a TV que o faz). */
+    val deinterlace: String = Deinterlace.SMOOTH,
     val aspect: String = Aspect.FIT,
     val freezeFrame: Boolean = true,
     /** Segundos até voltar a ligar quando a stream falha (0 = não tentar). */
@@ -143,6 +145,7 @@ data class Prefs(
         const val ENGINE = "engine"
         const val BUFFER = "buffer"
         const val DECODER = "decoder"
+        const val DEINTERLACE = "deinterlace"
         const val ASPECT = "aspect"
         const val FREEZE_FRAME = "freeze_frame"
         const val RECONNECT_SECONDS = "reconnect_seconds"
@@ -212,6 +215,11 @@ data class Prefs(
     object Decoder {
         const val HARDWARE = "hw"; const val SOFTWARE = "sw"
         val ALL = setOf(HARDWARE, SOFTWARE)
+    }
+    /** Os nomes do VLC (iguais aos da Apple TV). */
+    object Deinterlace {
+        const val SMOOTH = "yadif2x"; const val NORMAL = "yadif"; const val OFF = "off"
+        val ALL = setOf(SMOOTH, NORMAL, OFF)
     }
     object Engine {
         const val EXO = "exo"; const val VLC = "vlc"
@@ -315,6 +323,7 @@ data class Prefs(
                 engine = str(Key.ENGINE, d.engine, Engine.ALL),
                 buffer = str(Key.BUFFER, d.buffer, Buffer.ALL),
                 decoder = str(Key.DECODER, d.decoder, Decoder.ALL),
+                deinterlace = str(Key.DEINTERLACE, d.deinterlace, Deinterlace.ALL),
                 aspect = str(Key.ASPECT, d.aspect, Aspect.ALL),
                 freezeFrame = bool(Key.FREEZE_FRAME, d.freezeFrame),
                 reconnectSeconds = int(Key.RECONNECT_SECONDS, d.reconnectSeconds).coerceIn(0, 120),

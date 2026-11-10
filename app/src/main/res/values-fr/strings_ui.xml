@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (ouvre plus de formats)</string>
     <string name="using_vlc">Cette chaîne est lue avec VLC</string>
     <string name="decoder">Décodeur vidéo</string>
+    <string name="deinterlace">Désentrelacement (VLC)</string>
+    <string name="deinterlace_sub">Pour les chaînes 576i et 1080i. Avec ExoPlayer, c\'est la TV qui s\'en charge</string>
+    <string name="deinterlace_smooth">Fluide (50/60 images)</string>
+    <string name="deinterlace_normal">Normal (25/30 images)</string>
     <string name="decoder_hw">Matériel (recommandé)</string>
     <string name="decoder_sw">Logiciel</string>
     <string name="freeze_frame">Garder l\'image en changeant de chaîne</string>

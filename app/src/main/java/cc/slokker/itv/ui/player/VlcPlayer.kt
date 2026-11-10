@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import android.view.SurfaceView
 import android.view.View
@@ -43,6 +44,8 @@ internal class VlcPlayer(
     private val softwareVideo: Boolean,
     /** Quanto o VLC guarda antes de começar e depois de uma paragem (o "Buffer" das definições). */
     private val networkCachingMs: Int,
+    /** Prefs.Deinterlace: o filtro do VLC, ou desligado. */
+    deinterlace: String,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
 
     // O LibVLC junta as suas opções a esta lista: tem de poder ser alterada (com buildList fechava a app).
@@ -51,10 +54,16 @@ internal class VlcPlayer(
         arrayListOf(
             "--http-reconnect",
             "--audio-time-stretch",
-            // Canais entrelaçados (1080i, 576i): desentrelaça só esses, a 50/60 imagens por segundo.
-            "--deinterlace=-1",
-            "--deinterlace-mode=yadif2x",
-        ).apply { if (passthrough) add("--spdif") },
+        ).apply {
+            // Canais entrelaçados (1080i, 576i): desentrelaça só esses (yadif2x: a 50/60 imagens por segundo).
+            if (deinterlace == Prefs.Deinterlace.OFF) {
+                add("--deinterlace=0")
+            } else {
+                add("--deinterlace=-1")
+                add("--deinterlace-mode=$deinterlace")
+            }
+            if (passthrough) add("--spdif")
+        },
     )
     private val vlc = MediaPlayer(libVlc)
     private val main = Handler(Looper.getMainLooper())

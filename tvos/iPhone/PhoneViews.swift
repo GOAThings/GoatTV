@@ -1714,7 +1714,7 @@ private struct MenuTab: View {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)
                 pick(s.t("Player", "Player"), "engine", p.engine, [("exo", s.t("Default (Apple player for HLS, VLC for the rest)", "Normal (o da Apple nos HLS, o VLC no resto)")), ("vlc", s.t("VLC (for streams that don't open)", "VLC (para streams que não abram)"))])
                 pick(s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"), "decoder", p.decoder, [("hw", "Hardware"), ("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))])
-                pick(s.t("Deinterlace (VLC)", "Desentrelaçar (VLC)"), "deinterlace", p.deinterlace, [("yadif2x", s.t("Smooth (50/60 frames)", "Suave (50/60 imagens)")), ("yadif", "Normal"), ("off", s.t("Off", "Desligado"))])
+                pick(s.r("deinterlace"), "deinterlace", p.deinterlace, [("yadif2x", s.r("deinterlace_smooth")), ("yadif", s.r("deinterlace_normal")), ("off", s.r("off"))])
                 MenuRow(s.t("User agent", "User agent"), value: p.userAgent.isEmpty ? s.t("Default", "Normal") : p.userAgent, chevron: true) {
                     agentText = p.userAgent
                     editingAgent = true

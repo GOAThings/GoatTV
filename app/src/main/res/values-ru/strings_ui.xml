@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (открывает больше форматов)</string>
     <string name="using_vlc">Этот канал воспроизводится через VLC</string>
     <string name="decoder">Видеодекодер</string>
+    <string name="deinterlace">Деинтерлейсинг (VLC)</string>
+    <string name="deinterlace_sub">Для каналов 576i и 1080i. С ExoPlayer это делает телевизор</string>
+    <string name="deinterlace_smooth">Плавно (50/60 кадров)</string>
+    <string name="deinterlace_normal">Обычно (25/30 кадров)</string>
     <string name="decoder_hw">Аппаратный (рекомендуется)</string>
     <string name="decoder_sw">Программный</string>
     <string name="freeze_frame">Сохранять картинку при переключении</string>

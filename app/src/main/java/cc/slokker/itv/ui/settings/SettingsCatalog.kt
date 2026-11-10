@@ -63,6 +63,14 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 40),
         phone = Place(PhonePage.PLAYBACK, 30, PhoneSection.ADVANCED),
     )
+    val DEINTERLACE = Setting.Choice(
+        Prefs.Key.DEINTERLACE, { it.deinterlace },
+        options = { s -> listOf(Prefs.Deinterlace.SMOOTH to s.deinterlaceSmooth, Prefs.Deinterlace.NORMAL to s.deinterlaceNormal, Prefs.Deinterlace.OFF to s.off) },
+        read = { it.prefs.deinterlace },
+        subtitle = { it.deinterlaceSub },
+        tv = Place(TvPage.PLAYBACK, 45),
+        phone = Place(PhonePage.PLAYBACK, 35, PhoneSection.ADVANCED),
+    )
     val ASPECT = Setting.Choice(
         Prefs.Key.ASPECT, { it.aspect },
         options = { s -> listOf(Prefs.Aspect.FIT to s.aspectFit, Prefs.Aspect.ZOOM to s.aspectZoom, Prefs.Aspect.FILL to s.aspectFill) },
@@ -370,7 +378,7 @@ object SettingsCatalog {
 
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
-        STREAM_FORMAT, BUFFER, ENGINE, DECODER, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
+        STREAM_FORMAT, BUFFER, ENGINE, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,

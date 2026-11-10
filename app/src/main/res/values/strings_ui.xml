@@ -327,6 +327,10 @@
     <string name="engine_vlc">VLC (opens more formats)</string>
     <string name="using_vlc">This channel plays with VLC</string>
     <string name="decoder">Video decoder</string>
+    <string name="deinterlace">Deinterlace (VLC)</string>
+    <string name="deinterlace_sub">For 576i and 1080i channels. With ExoPlayer the TV does it</string>
+    <string name="deinterlace_smooth">Smooth (50/60 frames)</string>
+    <string name="deinterlace_normal">Normal (25/30 frames)</string>
     <string name="decoder_hw">Hardware (recommended)</string>
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Keep picture when switching</string>

@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (daha çok biçim açar)</string>
     <string name="using_vlc">Bu kanal VLC ile oynatılıyor</string>
     <string name="decoder">Video kod çözücü</string>
+    <string name="deinterlace">Taramasız dönüştürme (VLC)</string>
+    <string name="deinterlace_sub">576i ve 1080i kanallar için. ExoPlayer\'da bunu TV yapar</string>
+    <string name="deinterlace_smooth">Akıcı (50/60 kare)</string>
+    <string name="deinterlace_normal">Normal (25/30 kare)</string>
     <string name="decoder_hw">Donanım (önerilen)</string>
     <string name="decoder_sw">Yazılım</string>
     <string name="freeze_frame">Kanal değiştirirken görüntüyü koru</string>

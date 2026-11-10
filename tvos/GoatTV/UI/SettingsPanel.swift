@@ -1363,9 +1363,8 @@ struct SettingsPanel: View {
                     [o("hw", s.t("Hardware", "Hardware")), o("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))],
                     .string(p.decoder))
         case "deinterlace":
-            return (s.t("Deinterlace (VLC)", "Desentrelaçar (VLC)"),
-                    [o("yadif2x", s.t("Smooth (50/60 frames)", "Suave (50/60 imagens)")), o("yadif", s.t("Normal", "Normal")),
-                     o("off", s.t("Off", "Desligado"))],
+            return (s.r("deinterlace"),
+                    [o("yadif2x", s.r("deinterlace_smooth")), o("yadif", s.r("deinterlace_normal")), o("off", s.r("off"))],
                     .string(p.deinterlace))
         case "hdr":
             return (s.t("HDR channels", "Canais HDR"),

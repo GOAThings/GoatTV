@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (يفتح صيغًا أكثر)</string>
     <string name="using_vlc">تُشغَّل هذه القناة باستخدام VLC</string>
     <string name="decoder">وحدة فك ترميز الفيديو</string>
+    <string name="deinterlace">إزالة التشابك (VLC)</string>
+    <string name="deinterlace_sub">لقنوات 576i و1080i. مع ExoPlayer يتولى التلفاز ذلك</string>
+    <string name="deinterlace_smooth">سلس (50/60 إطارًا)</string>
+    <string name="deinterlace_normal">عادي (25/30 إطارًا)</string>
     <string name="decoder_hw">العتاد (يُنصح به)</string>
     <string name="decoder_sw">البرمجيات</string>
     <string name="freeze_frame">الإبقاء على الصورة عند التبديل</string>

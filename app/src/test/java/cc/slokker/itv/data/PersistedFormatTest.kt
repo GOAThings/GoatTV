@@ -210,6 +210,7 @@ class PersistedFormatTest {
         "engine" to (Prefs.Key.ENGINE to Prefs.Engine.VLC),
         "buffer" to (Prefs.Key.BUFFER to Prefs.Buffer.LARGE),
         "decoder" to (Prefs.Key.DECODER to Prefs.Decoder.SOFTWARE),
+        "deinterlace" to (Prefs.Key.DEINTERLACE to Prefs.Deinterlace.OFF),
         "aspect" to (Prefs.Key.ASPECT to Prefs.Aspect.ZOOM),
         "freezeFrame" to (Prefs.Key.FREEZE_FRAME to false),
         "reconnectSeconds" to (Prefs.Key.RECONNECT_SECONDS to 10),

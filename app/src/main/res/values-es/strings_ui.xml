@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC (abre más formatos)</string>
     <string name="using_vlc">Este canal se reproduce con VLC</string>
     <string name="decoder">Decodificador de vídeo</string>
+    <string name="deinterlace">Desentrelazado (VLC)</string>
+    <string name="deinterlace_sub">Para canales 576i y 1080i. Con ExoPlayer lo hace la TV</string>
+    <string name="deinterlace_smooth">Fluido (50/60 imágenes)</string>
+    <string name="deinterlace_normal">Normal (25/30 imágenes)</string>
     <string name="decoder_hw">Hardware (recomendado)</string>
     <string name="decoder_sw">Software</string>
     <string name="freeze_frame">Mantener la imagen al cambiar</string>

@@ -326,6 +326,10 @@
     <string name="engine_vlc">VLC（支持更多格式）</string>
     <string name="using_vlc">此频道使用 VLC 播放</string>
     <string name="decoder">视频解码器</string>
+    <string name="deinterlace">去隔行（VLC）</string>
+    <string name="deinterlace_sub">用于 576i 和 1080i 频道。使用 ExoPlayer 时由电视处理</string>
+    <string name="deinterlace_smooth">流畅（50/60 帧）</string>
+    <string name="deinterlace_normal">普通（25/30 帧）</string>
     <string name="decoder_hw">硬件（推荐）</string>
     <string name="decoder_sw">软件</string>
     <string name="freeze_frame">切换时保留画面</string>
