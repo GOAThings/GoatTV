@@ -111,6 +111,11 @@ data class Prefs(
      * muda de lista). Ganha ao que o ChannelMatch encontra. Apaga-se ao mudar de reserva.
      */
     val backupChannels: Map<String, String> = emptyMap(),
+    /**
+     * Como se escolhe o canal da reserva, por lista: "manual" = só os canais escolhidos à mão ([backupChannels]) passam
+     * para a reserva; sem entrada = automático. Sai ao mudar ou tirar a reserva, e com a lista.
+     */
+    val backupMode: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
     val panelTimeout: Int = 15,
@@ -218,6 +223,7 @@ data class Prefs(
         const val EXTRA_EPG = "extra_epg"
         const val BACKUP_PLAYLIST = "backup_playlist"
         const val BACKUP_CHANNELS = "backup_channels"
+        const val BACKUP_MODE = "backup_mode"
         const val OUTLINE_COLOR = "outline_color"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
@@ -430,6 +436,7 @@ data class Prefs(
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
                 backupChannels = stringMap(s, Key.BACKUP_CHANNELS).filterValues { it.isNotEmpty() },
+                backupMode = stringMap(s, Key.BACKUP_MODE).filterValues { it == ChannelMatch.MODE_MANUAL },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, Sort.ALL),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
@@ -512,7 +519,7 @@ data class Prefs(
                     changed = true
                 }
             }
-            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true)) {
+            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true)) {
                 val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
                 val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
                 gone.forEach { obj.remove(it) }
@@ -523,6 +530,7 @@ data class Prefs(
             val orphans = backups?.entrySet()?.filter { it.value.isJsonPrimitive && it.value.asString == playlistId }?.map { it.key }.orEmpty()
             for (main in orphans) {
                 backups?.remove(main)
+                settings.get(Key.BACKUP_MODE)?.takeIf { it.isJsonObject }?.asJsonObject?.remove(main)
                 settings.get(Key.BACKUP_CHANNELS)?.takeIf { it.isJsonObject }?.asJsonObject?.let { ch ->
                     ch.keySet().filter { it.startsWith("$main:") }.forEach(ch::remove)
                 }

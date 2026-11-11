@@ -17,8 +17,11 @@ object ChannelMatch {
     /** Um nome partido: a [base] que se compara, o país (código de 2 letras), a qualidade ([Quality]) e o `+N`. */
     data class Parsed(val base: String, val country: String?, val quality: Int, val shift: Int)
 
-    /** Um canal da lista de reserva (ou o que se procura). */
-    data class Entry(val key: String, val name: String, val epgId: String?)
+    /**
+     * Um canal da lista de reserva (ou o que se procura). [group]: o nome do grupo dele, para desempatar cópias iguais
+     * do mesmo canal em grupos diferentes (ex.: "SIC K" em "Portugal" e em "PT Backup").
+     */
+    data class Entry(val key: String, val name: String, val epgId: String?, val group: String? = null)
 
     sealed interface Result {
         /** O canal [index] da lista de reserva. */
@@ -260,6 +263,10 @@ object ChannelMatch {
         private val byEpg = HashMap<String, MutableList<Int>>()
         private val byBase = HashMap<String, MutableList<Int>>()
         private val byKey = HashMap<String, Int>()
+        private val groups = pool.map { it.group?.let(::groupKey) }
+
+        /** A posição do canal [key] nesta lista, ou null. */
+        fun indexOfKey(key: String): Int? = byKey[key]
 
         init {
             pool.forEachIndexed { i, e ->
@@ -269,8 +276,11 @@ object ChannelMatch {
             }
         }
 
-        /** O canal [name] (id do guia [epgId]) nesta lista; [override]: a escolha à mão ([OFF] ou uma chave daqui). */
-        fun find(name: String, epgId: String?, override: String? = null): Result {
+        /**
+         * O canal [name] (id do guia [epgId], no grupo [group]) nesta lista; [override]: a escolha à mão ([OFF] ou
+         * uma chave daqui).
+         */
+        fun find(name: String, epgId: String?, override: String? = null, group: String? = null): Result {
             if (override == OFF) return Result.Missing
             override?.let { key -> byKey[key]?.let { return Result.Match(it) } }
             val t = parse(name)
@@ -279,15 +289,22 @@ object ChannelMatch {
                 val c = parsed[i]
                 return c.shift == t.shift && (t.country == null || c.country == null || c.country == t.country)
             }
+            val g = group?.let(::groupKey)
             val byName = byBase[t.base].orEmpty().filter(::compatible)
-            val named = choose(t, byName)
+            val named = choose(t, byName, g)
             val epg = epgKey(epgId)?.let { byEpg[it] }.orEmpty().filter(::compatible)
             if (epg.isNotEmpty()) {
                 val sameName = epg.filter { parsed[it].base == t.base }
-                if (sameName.isNotEmpty()) return choose(t, sameName)
+                if (sameName.isNotEmpty()) return choose(t, sameName, g)
+                // O mesmo id do guia e o nome a uma letra de distância (um erro de escrita: "TVI REALLITY"): conta como
+                // o mesmo nome, mas só em nomes com 4 letras ou mais.
+                if (byName.isEmpty() && t.base.length >= 4) {
+                    val near = epg.filter { levenshtein(parsed[it].base, t.base) <= 1 }
+                    if (near.isNotEmpty()) return choose(t, near, g)
+                }
                 // O id do guia aponta para um canal com outro nome: só vale se não houver nenhum com o mesmo nome
                 // (um id errado num dos fornecedores não pode ganhar ao nome).
-                if (byName.isEmpty()) return choose(t, epg)
+                if (byName.isEmpty()) return choose(t, epg, g)
                 return Result.Unsure(byName.size + epg.size)
             }
             return named
@@ -325,15 +342,21 @@ object ChannelMatch {
             return s
         }
 
-        /** Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida. */
-        private fun choose(t: Parsed, candidates: List<Int>): Result {
+        /**
+         * Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida. Cópias
+         * iguais do mesmo canal não são dúvida: fica a do grupo com o nome do grupo do canal principal ([group]), ou a
+         * primeira.
+         */
+        private fun choose(t: Parsed, candidates: List<Int>, group: String? = null): Result {
             if (candidates.isEmpty()) return Result.Missing
             var set = candidates
             if (t.country != null) set.filter { parsed[it].country == t.country }.takeIf { it.isNotEmpty() }?.let { set = it }
             if (set.mapNotNull { parsed[it].country }.distinct().size > 1) return Result.Unsure(set.size)
             if (set.map { parsed[it].base }.distinct().size > 1) return Result.Unsure(set.size)
             val best = set.maxOf { parsed[it].quality }
-            return Result.Match(set.first { parsed[it].quality == best })
+            val top = set.filter { parsed[it].quality == best }
+            val sameGroup = group?.let { g -> top.firstOrNull { groups[it] == g } }
+            return Result.Match(sameGroup ?: top.first())
         }
     }
 
@@ -359,6 +382,73 @@ object ChannelMatch {
         return prev[b.length]
     }
 
+    /** O nome de um grupo para comparar (sem acentos, maiúsculas, espaços nem pontuação). */
+    fun groupKey(name: String): String = words(fold(name)).joinToString("")
+
+    /** Os modos da reserva de uma lista (Prefs.backupMode): automático (o padrão) ou só os canais escolhidos à mão. */
+    const val MODE_MANUAL = "manual"
+
+    /**
+     * A decisão de passar para a reserva: o canal [main] (com a escolha à mão [override]) nesta reserva. Em [manual],
+     * só os canais escolhidos à mão passam; os outros mostram o erro como sempre.
+     */
+    fun decide(main: Entry, matcher: Matcher, override: String?, manual: Boolean): Result {
+        if (!manual) return matcher.find(main.name, main.epgId, override, main.group)
+        // Manual: só uma escolha que ainda exista na reserva.
+        val index = override?.takeIf { it != OFF }?.let(matcher::indexOfKey) ?: return Result.Missing
+        return Result.Match(index)
+    }
+
+    /** Como fica cada canal da lista principal na reserva (a lista "Canais de reserva"). */
+    enum class State {
+        /** Encontrado sozinho. */
+        AUTO,
+        /** Escolhido à mão. */
+        CHOSEN,
+        /** "Nenhum": escolhido à mão para não mudar. */
+        OFF,
+        UNSURE,
+        MISSING,
+        /** Modo manual, sem escolha: não muda (a sugestão fica em [ReviewRow.suggestion]). */
+        NOT_SET,
+    }
+
+    /** Um canal da lista principal ([main], a posição) e o da reserva ([backup], a posição) ou a [suggestion] automática. */
+    data class ReviewRow(val main: Int, val state: State, val backup: Int?, val suggestion: Int?)
+
+    /** Os filtros da lista "Canais de reserva". */
+    enum class Filter { ALL, MATCHED, UNSURE, MISSING, CHOSEN }
+
+    fun ReviewRow.passes(filter: Filter): Boolean = when (filter) {
+        Filter.ALL -> true
+        Filter.MATCHED -> state == State.AUTO || state == State.CHOSEN
+        Filter.UNSURE -> state == State.UNSURE
+        Filter.MISSING -> state == State.MISSING || state == State.OFF || state == State.NOT_SET
+        Filter.CHOSEN -> state == State.CHOSEN || state == State.OFF
+    }
+
+    /** Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → escolha) e o modo. */
+    fun review(main: List<Entry>, matcher: Matcher, overrides: Map<String, String> = emptyMap(), manual: Boolean = false): List<ReviewRow> =
+        main.mapIndexed { i, c ->
+            val override = overrides[c.key]
+            val chosen = override?.takeIf { it != OFF }?.let(matcher::indexOfKey)
+            when {
+                override == OFF -> ReviewRow(i, State.OFF, null, null)
+                chosen != null -> ReviewRow(i, State.CHOSEN, chosen, null)
+                else -> {
+                    // Uma escolha que já não existe na reserva conta como sem escolha.
+                    val auto = matcher.find(c.name, c.epgId, null, c.group)
+                    val index = (auto as? Result.Match)?.index
+                    when {
+                        manual -> ReviewRow(i, State.NOT_SET, null, index)
+                        index != null -> ReviewRow(i, State.AUTO, index, null)
+                        auto is Result.Unsure -> ReviewRow(i, State.UNSURE, null, null)
+                        else -> ReviewRow(i, State.MISSING, null, null)
+                    }
+                }
+            }
+        }
+
     /** Quantos canais de uma lista têm o seu na reserva, quantos ficam em dúvida e quantos faltam (com os nomes). */
     data class Coverage(
         val total: Int,
@@ -369,20 +459,23 @@ object ChannelMatch {
         val missingNames: List<String>,
     )
 
-    /** A cobertura da reserva [matcher] para os canais [main] (nome e id do guia); [overrides]: chave → escolha à mão. */
-    fun coverage(main: List<Entry>, matcher: Matcher, overrides: Map<String, String> = emptyMap()): Coverage {
-        var matched = 0
-        val unsure = ArrayList<String>()
-        val missing = ArrayList<String>()
-        for (c in main) {
-            when (matcher.find(c.name, c.epgId, overrides[c.key])) {
-                is Result.Match -> matched++
-                is Result.Unsure -> unsure += c.name
-                Result.Missing -> missing += c.name
-            }
-        }
+    /**
+     * A cobertura da reserva [matcher] para os canais [main]; [overrides]: chave → escolha à mão. Em [manual], os
+     * encontrados são os escolhidos à mão (e a dúvida não conta). Com [rows] já feitas ([review]), não se procura outra vez.
+     */
+    fun coverage(
+        main: List<Entry>,
+        matcher: Matcher,
+        overrides: Map<String, String> = emptyMap(),
+        manual: Boolean = false,
+        rows: List<ReviewRow> = review(main, matcher, overrides, manual),
+    ): Coverage {
+        val matched = rows.count { it.state == State.AUTO || it.state == State.CHOSEN }
+        val unsure = rows.filter { it.state == State.UNSURE }.map { main[it.main].name }
+        val missing = rows.filter { it.state == State.MISSING || it.state == State.OFF || it.state == State.NOT_SET }.map { main[it.main].name }
         return Coverage(main.size, matched, unsure.size, missing.size, unsure, missing)
     }
 
-    fun entry(c: Channel) = Entry(c.key, c.name, c.epgId)
+    /** O canal como entrada do ChannelMatch, com o nome do grupo dele em [content] (para desempatar cópias). */
+    fun entry(c: Channel, content: PlaylistContent? = null) = Entry(c.key, c.name, c.epgId, content?.categoryName(c.categoryId))
 }

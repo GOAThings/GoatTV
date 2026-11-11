@@ -156,11 +156,12 @@ class PrefsTest {
         val settings = JsonParser.parseString(
             """
             {"backup_playlist": {"p1": "p2", "p3": "p1", "p4": "p2"},
-             "backup_channels": {"p1:101": "9", "p3:5": "off", "p4:7": "8"}}
+             "backup_channels": {"p1:101": "9", "p3:5": "off", "p4:7": "8"},
+             "backup_mode": {"p1": "manual", "p3": "manual", "p4": "manual"}}
             """,
         ).asJsonObject
         assertTrue(Prefs.removePlaylist(settings, "p1"))
-        assertEquals(JsonParser.parseString("""{"backup_playlist": {"p4": "p2"}, "backup_channels": {"p4:7": "8"}}"""), settings)
+        assertEquals(JsonParser.parseString("""{"backup_playlist": {"p4": "p2"}, "backup_channels": {"p4:7": "8"}, "backup_mode": {"p4": "manual"}}"""), settings)
     }
 
     @Test
@@ -168,6 +169,8 @@ class PrefsTest {
         val p = prefs("""{"backup_playlist": {"p1": "p1", "p2": "", "p3": "p1"}, "backup_channels": {"p1:1": "", "p1:2": "off"}}""")
         assertEquals(mapOf("p3" to "p1"), p.backupPlaylist)
         assertEquals(mapOf("p1:2" to "off"), p.backupChannels)
+        // Só "manual" conta; o resto é o automático (sem entrada).
+        assertEquals(mapOf("p1" to "manual"), prefs("""{"backup_mode": {"p1": "manual", "p2": "auto", "p3": ""}}""").backupMode)
     }
 
     @Test

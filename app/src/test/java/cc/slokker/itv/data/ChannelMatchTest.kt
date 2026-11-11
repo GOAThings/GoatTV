@@ -18,7 +18,7 @@ class ChannelMatchTest {
 
     private fun entries(o: JsonObject, k: String) = o.getAsJsonArray(k).mapIndexed { i, e ->
         val c = e.asJsonObject
-        ChannelMatch.Entry(c.str("key") ?: "k$i", c.str("name")!!, c.str("epg"))
+        ChannelMatch.Entry(c.str("key") ?: "k$i", c.str("name")!!, c.str("epg"), c.str("group"))
     }
 
     @Test
@@ -40,7 +40,9 @@ class ChannelMatchTest {
         for (e in list) {
             val c = e.asJsonObject
             val t = c.getAsJsonObject("target")
-            val result = ChannelMatch.Matcher(entries(c, "pool")).find(t.str("name")!!, t.str("epg"), c.str("override"))
+            val target = ChannelMatch.Entry("main", t.str("name")!!, t.str("epg"), t.str("group"))
+            val manual = c.get("manual")?.asBoolean == true
+            val result = ChannelMatch.decide(target, ChannelMatch.Matcher(entries(c, "pool")), c.str("override"), manual)
             val kind = when (result) {
                 is ChannelMatch.Result.Match -> "match"
                 is ChannelMatch.Result.Unsure -> "unsure"
@@ -57,7 +59,7 @@ class ChannelMatchTest {
         for (e in cases.getAsJsonArray("coverage")) {
             val c = e.asJsonObject
             val overrides = c.getAsJsonObject("overrides")?.entrySet()?.associate { it.key to it.value.asString }.orEmpty()
-            val cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatch.Matcher(entries(c, "pool")), overrides)
+            val cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatch.Matcher(entries(c, "pool")), overrides, c.get("manual")?.asBoolean == true)
             val label = c.str("case")!!
             assertEquals(label, c.getAsJsonArray("main").size(), cov.total)
             assertEquals(label, c.get("matched").asInt, cov.matched)
@@ -84,5 +86,25 @@ class ChannelMatchTest {
         assertEquals(3, ChannelMatch.levenshtein("", "sic"))
         assertEquals(1, ChannelMatch.levenshtein("sporttv1", "sporttv2"))
         assertEquals(3, ChannelMatch.levenshtein("kitten", "sitting"))
+    }
+
+    @Test
+    fun `the review list says how each channel is covered`() {
+        for (e in cases.getAsJsonArray("review")) {
+            val c = e.asJsonObject
+            val label = c.str("case")!!
+            val overrides = c.getAsJsonObject("overrides")?.entrySet()?.associate { it.key to it.value.asString }.orEmpty()
+            val rows = ChannelMatch.review(entries(c, "main"), ChannelMatch.Matcher(entries(c, "pool")), overrides, c.get("manual").asBoolean)
+            val expected = c.getAsJsonArray("expect").map { r ->
+                val a = r.asJsonArray
+                Triple(a[0].asString, a[1].takeIf { !it.isJsonNull }?.asInt, a[2].takeIf { !it.isJsonNull }?.asInt)
+            }
+            assertEquals(label, expected, rows.map { Triple(it.state.name.lowercase(), it.backup, it.suggestion) })
+            assertEquals(label, rows.indices.toList(), rows.map { it.main })
+            for ((name, count) in c.getAsJsonObject("filters").entrySet()) {
+                val filter = ChannelMatch.Filter.valueOf(name.uppercase())
+                assertEquals("$label/$name", count.asInt, rows.count { with(ChannelMatch) { it.passes(filter) } })
+            }
+        }
     }
 }

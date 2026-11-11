@@ -1043,6 +1043,175 @@
    ],
    "expect": null,
    "kind": "missing"
+  },
+  {
+   "case": "a typo with the same EPG id is the same name",
+   "target": {
+    "name": "TVI REALLITY",
+    "epg": "tvireality.pt"
+   },
+   "pool": [
+    {
+     "name": "TVI REALITY CAMERA 1",
+     "epg": "tvireality.pt"
+    },
+    {
+     "name": "TVI REALITY",
+     "epg": "TVIReality.pt"
+    },
+    {
+     "name": "TVI REALITY CAMERA 2",
+     "epg": "tvireality.pt"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "the typo rule needs the same EPG id",
+   "target": {
+    "name": "TVI REALLITY"
+   },
+   "pool": [
+    {
+     "name": "TVI REALITY"
+    }
+   ],
+   "expect": null,
+   "kind": "missing"
+  },
+  {
+   "case": "the typo rule needs 4 letters or more",
+   "target": {
+    "name": "TV1",
+    "epg": "tv.pt"
+   },
+   "pool": [
+    {
+     "name": "TV2",
+     "epg": "tv.pt"
+    },
+    {
+     "name": "TV1 CAMERA",
+     "epg": "tv.pt"
+    }
+   ],
+   "expect": null,
+   "kind": "unsure"
+  },
+  {
+   "case": "identical duplicates pick the main channel's group",
+   "target": {
+    "name": "SIC K ᴴᴰ",
+    "epg": "sick.pt",
+    "group": "Portugal"
+   },
+   "pool": [
+    {
+     "name": "SIC K",
+     "epg": "sick.pt",
+     "group": "PT Backup"
+    },
+    {
+     "name": "SIC K",
+     "epg": "sick.pt",
+     "group": "Portugal"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "identical duplicates without a group match: the first",
+   "target": {
+    "name": "SIC K",
+    "epg": "sick.pt",
+    "group": "Kids"
+   },
+   "pool": [
+    {
+     "name": "SIC K",
+     "epg": "sick.pt",
+     "group": "PT Backup"
+    },
+    {
+     "name": "SIC K",
+     "epg": "sick.pt",
+     "group": "Portugal"
+    }
+   ],
+   "expect": 0,
+   "kind": "match"
+  },
+  {
+   "case": "group names compare without case or accents",
+   "target": {
+    "name": "RTP Memória",
+    "group": "NOTÍCIAS"
+   },
+   "pool": [
+    {
+     "name": "RTP Memoria",
+     "group": "Desporto"
+    },
+    {
+     "name": "RTP MEMÓRIA",
+     "group": "noticias"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "manual: no choice, no failover",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing",
+   "manual": true
+  },
+  {
+   "case": "manual: a chosen channel fails over",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r1"
+    },
+    {
+     "name": "RTP 2",
+     "key": "r2"
+    }
+   ],
+   "expect": 1,
+   "kind": "match",
+   "override": "r2",
+   "manual": true
+  },
+  {
+   "case": "manual: none stays none",
+   "target": {
+    "name": "RTP 1"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r1"
+    }
+   ],
+   "expect": null,
+   "kind": "missing",
+   "override": "off",
+   "manual": true
   }
  ],
  "coverage": [
@@ -1135,6 +1304,50 @@
    "missingNames": [
     "RTP 1"
    ]
+  },
+  {
+   "case": "manual counts only the chosen channels",
+   "main": [
+    {
+     "name": "RTP 1",
+     "key": "a"
+    },
+    {
+     "name": "SIC",
+     "key": "b"
+    },
+    {
+     "name": "TVI",
+     "key": "c"
+    }
+   ],
+   "pool": [
+    {
+     "name": "RTP 1",
+     "key": "r"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    },
+    {
+     "name": "TVI",
+     "key": "t"
+    }
+   ],
+   "overrides": {
+    "a": "r",
+    "c": "off"
+   },
+   "manual": true,
+   "matched": 1,
+   "unsure": 0,
+   "missing": 2,
+   "unsureNames": [],
+   "missingNames": [
+    "SIC",
+    "TVI"
+   ]
   }
  ],
  "ranked": [
@@ -1217,6 +1430,167 @@
     2,
     0
    ]
+  }
+ ],
+ "review": [
+  {
+   "case": "automatic states",
+   "manual": false,
+   "main": [
+    {
+     "name": "RTP 1",
+     "key": "a"
+    },
+    {
+     "name": "SIC",
+     "key": "b"
+    },
+    {
+     "name": "Eurosport 1",
+     "key": "c"
+    },
+    {
+     "name": "Canal Panda",
+     "key": "d"
+    },
+    {
+     "name": "TVI",
+     "key": "e"
+    },
+    {
+     "name": "CMTV",
+     "key": "f"
+    }
+   ],
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    },
+    {
+     "name": "UK: Eurosport 1",
+     "key": "u"
+    },
+    {
+     "name": "PT: Eurosport 1",
+     "key": "p"
+    },
+    {
+     "name": "Panda Kids",
+     "key": "k"
+    },
+    {
+     "name": "TVI",
+     "key": "t"
+    }
+   ],
+   "overrides": {
+    "d": "k",
+    "e": "off",
+    "f": "gone"
+   },
+   "expect": [
+    [
+     "auto",
+     0,
+     null
+    ],
+    [
+     "auto",
+     1,
+     null
+    ],
+    [
+     "unsure",
+     null,
+     null
+    ],
+    [
+     "chosen",
+     4,
+     null
+    ],
+    [
+     "off",
+     null,
+     null
+    ],
+    [
+     "missing",
+     null,
+     null
+    ]
+   ],
+   "filters": {
+    "all": 6,
+    "matched": 3,
+    "unsure": 1,
+    "missing": 2,
+    "chosen": 2
+   }
+  },
+  {
+   "case": "manual states keep the suggestion",
+   "manual": true,
+   "main": [
+    {
+     "name": "RTP 1",
+     "key": "a"
+    },
+    {
+     "name": "SIC",
+     "key": "b"
+    },
+    {
+     "name": "Canal Panda",
+     "key": "d"
+    }
+   ],
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    },
+    {
+     "name": "Panda Kids",
+     "key": "k"
+    }
+   ],
+   "overrides": {
+    "b": "s"
+   },
+   "expect": [
+    [
+     "not_set",
+     null,
+     0
+    ],
+    [
+     "chosen",
+     1,
+     null
+    ],
+    [
+     "not_set",
+     null,
+     null
+    ]
+   ],
+   "filters": {
+    "all": 3,
+    "matched": 1,
+    "unsure": 0,
+    "missing": 2,
+    "chosen": 1
+   }
   }
  ]
 }
