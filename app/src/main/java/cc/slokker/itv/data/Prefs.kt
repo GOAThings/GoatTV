@@ -101,6 +101,15 @@ data class Prefs(
     /** Guia XMLTV extra por lista: playlistId → URL (para os canais que o guia da lista não tem). */
     val extraEpg: Map<String, String> = emptyMap(),
     /**
+     * As listas com as variantes do mesmo canal juntas ("RTP 1 HD", "RTP 1 SD"… numa linha só; ver ChannelVariants):
+     * playlistId → true. Desligado por defeito.
+     */
+    val mergeVariants: Set<String> = emptySet(),
+    /** Regras para limpar os nomes dos canais, por lista: playlistId → localizar/substituir, pela ordem (ver ChannelNames). */
+    val nameRules: Map<String, List<NameRule>> = emptyMap(),
+    /** Nome escolhido canal a canal: "playlistId:channelKey" → nome. Ganha às [nameRules]. */
+    val channelNames: Map<String, String> = emptyMap(),
+    /**
      * Lista de reserva por lista: playlistId → playlistId. Quando um canal em direto não abre na lista, dá o mesmo
      * canal da reserva (ver ChannelMatch). Fica no `settings` da conta como o guia extra: um mapa que as versões
      * antigas, o site e a Apple TV guardam intacto (o `settings` grava-se inteiro e só se manda o que mudou).
@@ -224,6 +233,9 @@ data class Prefs(
         const val LOGO_SOURCE = "logo_source"
         const val CHANNEL_LOGOS = "channel_logos"
         const val EXTRA_EPG = "extra_epg"
+        const val MERGE_VARIANTS = "merge_variants"
+        const val NAME_RULES = "name_rules"
+        const val CHANNEL_NAMES = "channel_names"
         const val BACKUP_PLAYLIST = "backup_playlist"
         const val BACKUP_CHANNELS = "backup_channels"
         const val BACKUP_MODE = "backup_mode"
@@ -437,6 +449,10 @@ data class Prefs(
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
+                mergeVariants = s.get(Key.MERGE_VARIANTS)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
+                    ?.filter { (_, v) -> v.isJsonPrimitive && v.asJsonPrimitive.isBoolean && v.asBoolean }?.map { it.key }?.toSet().orEmpty(),
+                nameRules = nameRules(s),
+                channelNames = stringMap(s, Key.CHANNEL_NAMES).mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
                 backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
                 backupChannels = failoverMap(s, Key.BACKUP_CHANNELS),
                 backupMode = stringMap(s, Key.BACKUP_MODE).filterValues { it == ChannelMatch.MODE_MANUAL },
@@ -493,17 +509,26 @@ data class Prefs(
                 is String -> settings.addProperty(key, value)
                 is Boolean -> settings.addProperty(key, value)
                 is Int -> settings.addProperty(key, value)
-                is Collection<*> -> settings.add(key, JsonArray().apply { value.forEach { add(it.toString()) } })
-                is Map<*, *> -> settings.add(
-                    key,
-                    JsonObject().apply {
-                        value.forEach { (k, v) ->
-                            if (v is Collection<*>) add(k.toString(), JsonArray().apply { v.forEach { add(it.toString()) } }) else addProperty(k.toString(), v.toString())
-                        }
-                    },
-                )
+                is Collection<*> -> settings.add(key, array(value))
+                is Map<*, *> -> settings.add(key, obj(value))
                 else -> error("Tipo não suportado: ${value::class}")
             }
+        }
+
+        /** Os valores de um mapa: listas, mapas (ex.: as regras de nomes) e true/false ficam como são; o resto, texto. */
+        private fun obj(map: Map<*, *>): JsonObject = JsonObject().apply {
+            map.forEach { (k, v) ->
+                when (v) {
+                    is Collection<*> -> add(k.toString(), array(v))
+                    is Map<*, *> -> add(k.toString(), obj(v))
+                    is Boolean -> addProperty(k.toString(), v)
+                    else -> addProperty(k.toString(), v.toString())
+                }
+            }
+        }
+
+        private fun array(list: Collection<*>): JsonArray = JsonArray().apply {
+            list.forEach { if (it is Map<*, *>) add(obj(it)) else add(it.toString()) }
         }
 
         /**
@@ -522,7 +547,11 @@ data class Prefs(
                     changed = true
                 }
             }
-            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true)) {
+            for ((key, perGroup) in listOf(
+                Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false,
+                Key.MERGE_VARIANTS to false, Key.NAME_RULES to false,
+                Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true, Key.CHANNEL_NAMES to true,
+            )) {
                 val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
                 val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
                 gone.forEach { obj.remove(it) }
@@ -561,6 +590,17 @@ data class Prefs(
                     else -> null
                 }
                 list?.let { k to it }
+            }?.toMap().orEmpty()
+
+        /** As regras de cada lista: um array de {"find", "replace"}; uma regra sem "find" fica de fora. */
+        private fun nameRules(s: JsonObject): Map<String, List<NameRule>> =
+            s.get(Key.NAME_RULES)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.mapNotNull { (id, v) ->
+                val rules = v.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { e ->
+                    val o = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+                    val find = o.get("find")?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    NameRule(find, o.get("replace")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty())
+                }.orEmpty()
+                rules.takeIf { it.isNotEmpty() }?.let { id to it }
             }?.toMap().orEmpty()
 
         /** Os failovers [list] como se gravam (ver [backupChannels]). */

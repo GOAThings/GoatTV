@@ -794,4 +794,10 @@
     <string name="recording_padding_sub">편성표 시간은 정확하지 않을 때가 많아요</string>
     <string name="recording_exact_alarm">앱이 닫혀 있어도 녹화가 제시간에 시작되도록 알람 및 리마인더를 허용하세요</string>
     <string name="recording_allow">허용</string>
+    <string name="merge_variants">같은 채널의 버전 합치기</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD, FHD가 하나의 채널이 됩니다: 가장 좋은 것이 열리고 나머지는 페일오버가 됩니다</string>
+    <string name="channel_rename">채널 이름</string>
+    <string name="channel_name_sub">비워 두면 목록의 이름을 사용합니다</string>
+    <string name="name_rules">이름 규칙</string>
+    <string name="name_rules_sub">thegoat.systems에서 편집</string>
 </resources>

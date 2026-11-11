@@ -797,4 +797,10 @@
     <string name="recording_padding_sub">Guide times are rarely exact</string>
     <string name="recording_exact_alarm">To start recordings on time with the app closed, allow alarms and reminders</string>
     <string name="recording_allow">Allow</string>
+    <string name="merge_variants">Merge versions of the same channel</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD and FHD become one channel: the best one opens, the others are its failovers</string>
+    <string name="channel_rename">Channel name</string>
+    <string name="channel_name_sub">Leave it empty to use the playlist\'s name</string>
+    <string name="name_rules">Name rules</string>
+    <string name="name_rules_sub">Edit them at thegoat.systems</string>
 </resources>

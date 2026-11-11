@@ -129,8 +129,28 @@ class ChannelMatchTest {
             val target = ChannelMatch.Entry(t.str("key") ?: "main", t.str("name")!!, t.str("epg"), t.str("group"))
             val mainKeys = c.getAsJsonArray("mainKeys")?.map { it.asString }?.toSet().orEmpty()
             val chosen = c.get("chosen")?.takeIf { !it.isJsonNull }?.asJsonArray?.map { it.asString }
-            val result = ChannelMatch.failovers(target, ChannelMatch.Matcher(entries(c, "pool")), chosen, c.get("manual")?.asBoolean == true, mainKeys::contains)
+            val variants = c.getAsJsonArray("variants")?.map { it.asString }.orEmpty()
+            val result = ChannelMatch.failovers(target, ChannelMatch.Matcher(entries(c, "pool")), chosen, c.get("manual")?.asBoolean == true, variants, mainKeys::contains)
             assertEquals(c.str("case"), c.getAsJsonArray("expect").map { it.asString }, result)
+        }
+    }
+
+    @Test
+    fun `name rules clean the names the same way as on Apple`() {
+        for (e in cases.getAsJsonArray("names")) {
+            val c = e.asJsonObject
+            val rules = c.getAsJsonArray("rules").map { r -> r.asJsonObject.let { NameRule(it.str("find")!!, it.str("replace").orEmpty()) } }
+            assertEquals(c.str("case"), c.str("expect"), ChannelNames.apply(c.str("name")!!, rules))
+        }
+    }
+
+    @Test
+    fun `versions of the same channel are merged under the best one`() {
+        for (e in cases.getAsJsonArray("variants")) {
+            val c = e.asJsonObject
+            val channels = c.getAsJsonArray("channels").map { it.asJsonObject.let { o -> o.str("key")!! to o.str("name")!! } }
+            val expect = c.getAsJsonObject("expect").entrySet().associate { (k, v) -> k to v.asJsonArray.map { it.asString } }
+            assertEquals(c.str("case"), expect, ChannelVariants.of(channels))
         }
     }
 }

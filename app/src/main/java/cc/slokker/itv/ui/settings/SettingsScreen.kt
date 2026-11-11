@@ -238,6 +238,12 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
         val isFav = ch.key in favorites[content?.playlist?.id].orEmpty()
         add(Item.Toggle("fav", s.favorite, isFav, ch.name) { vm.toggleFavorite(ch) })
         add(Item.Nav("audio", s.audio, tracks.audioLabel()) { push(Route.Audio, "audio") })
+        // O nome que se mostra (vazio volta ao da lista, com as regras dela).
+        add(
+            Item.Nav("name", s.channelRename, value = ch.name, subtitle = s.channelNameSub) {
+                push(Route.TextEdit(s.channelRename, vm.channelNameChoice(ch).orEmpty(), TextKind.PLAIN) { v -> vm.setChannelName(ch, v) }, "name")
+            },
+        )
         add(Item.Nav("subs", s.subtitles, tracks.textLabel(player)) { push(Route.Subtitles, "subs") })
         add(nav.choice(SettingsCatalog.ASPECT, SettingValues(prefs, null), s))
         add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
@@ -783,6 +789,8 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             }
             // Organizar: esconder e reordenar grupos e canais (precisa dos canais, por isso só na lista em uso).
             add(Item.Header("horg", s.organize))
+            add(Item.Toggle("merge", s.mergeVariants, p.id in prefs.mergeVariants, s.mergeVariantsSub) { vm.setMergeVariants(p.id, it) })
+            prefs.nameRules[p.id]?.let { rules -> add(Item.Info("rules", s.nameRules, "${rules.size}", s.nameRulesSub)) }
             if (isCurrent) {
                 val hidden = prefs.hiddenGroupCount(p.id)
                 add(Item.Nav("groups", s.manageGroups, subtitle = s.manageGroupsSub(hidden)) { push(Route.GroupsManage, "groups") })

@@ -1920,6 +1920,270 @@
    "expect": [
     "s"
    ]
+  },
+  {
+   "case": "variants first in automatic",
+   "target": {
+    "name": "RTP 1 HD",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "b",
+    "c"
+   ],
+   "variants": [
+    "b",
+    "c"
+   ],
+   "chosen": null,
+   "expect": [
+    "main:b",
+    "main:c",
+    "r"
+   ]
+  },
+  {
+   "case": "variants also in manual mode without a choice",
+   "manual": true,
+   "target": {
+    "name": "RTP 1 HD",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "b"
+   ],
+   "variants": [
+    "b"
+   ],
+   "chosen": null,
+   "expect": [
+    "main:b"
+   ]
+  },
+  {
+   "case": "a choice wins over the variants",
+   "target": {
+    "name": "RTP 1 HD",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "b"
+   ],
+   "variants": [
+    "b"
+   ],
+   "chosen": [
+    "r"
+   ],
+   "expect": [
+    "r"
+   ]
+  },
+  {
+   "case": "none chosen: no variants either",
+   "target": {
+    "name": "RTP 1 HD",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "b"
+   ],
+   "variants": [
+    "b"
+   ],
+   "chosen": [],
+   "expect": []
+  }
+ ],
+ "names": [
+  {
+   "case": "no rules",
+   "name": "PT: RTP 1 HD",
+   "rules": [],
+   "expect": "PT: RTP 1 HD"
+  },
+  {
+   "case": "remove a prefix",
+   "name": "PT: RTP 1 HD",
+   "rules": [
+    {
+     "find": "PT: ",
+     "replace": ""
+    }
+   ],
+   "expect": "RTP 1 HD"
+  },
+  {
+   "case": "ignore case, in order, spaces collapsed",
+   "name": "pt: SIC  ᴴᴰ",
+   "rules": [
+    {
+     "find": "PT:",
+     "replace": ""
+    },
+    {
+     "find": "ᴴᴰ",
+     "replace": "HD"
+    }
+   ],
+   "expect": "SIC HD"
+  },
+  {
+   "case": "every occurrence",
+   "name": "VIP RTP VIP 1",
+   "rules": [
+    {
+     "find": "vip",
+     "replace": ""
+    }
+   ],
+   "expect": "RTP 1"
+  },
+  {
+   "case": "nothing left: the original",
+   "name": "FHD",
+   "rules": [
+    {
+     "find": "FHD",
+     "replace": ""
+    }
+   ],
+   "expect": "FHD"
+  }
+ ],
+ "variants": [
+  {
+   "case": "HD, SD and FHD of one channel",
+   "channels": [
+    {
+     "key": "a",
+     "name": "PT: RTP 1 HD"
+    },
+    {
+     "key": "b",
+     "name": "PT: RTP 1 SD"
+    },
+    {
+     "key": "c",
+     "name": "PT: RTP 1 FHD"
+    },
+    {
+     "key": "d",
+     "name": "PT: SIC"
+    }
+   ],
+   "expect": {
+    "c": [
+     "a",
+     "b"
+    ]
+   }
+  },
+  {
+   "case": "same quality: the first one stays",
+   "channels": [
+    {
+     "key": "a",
+     "name": "SIC K"
+    },
+    {
+     "key": "b",
+     "name": "SIC K"
+    }
+   ],
+   "expect": {
+    "a": [
+     "b"
+    ]
+   }
+  },
+  {
+   "case": "+1 is another channel",
+   "channels": [
+    {
+     "key": "a",
+     "name": "SIC HD"
+    },
+    {
+     "key": "b",
+     "name": "SIC +1"
+    }
+   ],
+   "expect": {}
+  },
+  {
+   "case": "another country is another channel",
+   "channels": [
+    {
+     "key": "a",
+     "name": "PT: Eurosport 1"
+    },
+    {
+     "key": "b",
+     "name": "UK: Eurosport 1"
+    }
+   ],
+   "expect": {}
+  },
+  {
+   "case": "different channels stay apart",
+   "channels": [
+    {
+     "key": "a",
+     "name": "RTP 1"
+    },
+    {
+     "key": "b",
+     "name": "RTP 2"
+    },
+    {
+     "key": "c",
+     "name": "RTP 1 Madeira"
+    }
+   ],
+   "expect": {}
+  },
+  {
+   "case": "no name besides the quality: left alone",
+   "channels": [
+    {
+     "key": "a",
+     "name": "HD"
+    },
+    {
+     "key": "b",
+     "name": "SD"
+    }
+   ],
+   "expect": {}
   }
  ]
 }

@@ -804,4 +804,10 @@
     <string name="recording_padding_sub">أوقات الدليل نادرًا ما تكون دقيقة</string>
     <string name="recording_exact_alarm">لبدء التسجيلات في الوقت المحدد والتطبيق مغلق، اسمح بالمنبّهات والتذكيرات</string>
     <string name="recording_allow">سماح</string>
+    <string name="merge_variants">دمج نسخ القناة نفسها</string>
+    <string name="merge_variants_sub">تصبح RTP 1 HD وSD وFHD قناة واحدة: تُفتح الأفضل والباقي بدائل لها</string>
+    <string name="channel_rename">اسم القناة</string>
+    <string name="channel_name_sub">اتركه فارغًا لاستخدام اسم القائمة</string>
+    <string name="name_rules">قواعد الأسماء</string>
+    <string name="name_rules_sub">تُعدَّل في thegoat.systems</string>
 </resources>

@@ -180,11 +180,15 @@ internal fun MenuRow(title: String, value: String?, icon: ImageVector? = null, c
 }
 
 @Composable
-internal fun ToggleRow(title: String, on: Boolean, onChange: (Boolean) -> Unit) {
+internal fun ToggleRow(title: String, on: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
     val accent = LocalAccent.current
     Column(Modifier.fillMaxWidth().clickable { onChange(!on) }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null) Text(subtitle, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(10.dp))
             Box(
                 Modifier.size(44.dp, 26.dp).clip(CircleShape).then(if (on) Modifier.background(accent.brush) else Modifier.background(Color.White.copy(alpha = 0.18f))).padding(3.dp),
                 contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,

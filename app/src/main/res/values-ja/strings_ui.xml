@@ -794,4 +794,10 @@
     <string name="recording_padding_sub">番組表の時刻はめったに正確ではありません</string>
     <string name="recording_exact_alarm">アプリを閉じていても録画を時間どおりに始めるには、アラームとリマインダーを許可してください</string>
     <string name="recording_allow">許可</string>
+    <string name="merge_variants">同じチャンネルのバージョンをまとめる</string>
+    <string name="merge_variants_sub">RTP 1 HD・SD・FHD が1つのチャンネルになり、最良のものが開き、他はフェイルオーバーになります</string>
+    <string name="channel_rename">チャンネル名</string>
+    <string name="channel_name_sub">空欄でリストの名前に戻ります</string>
+    <string name="name_rules">名前のルール</string>
+    <string name="name_rules_sub">thegoat.systems で編集</string>
 </resources>

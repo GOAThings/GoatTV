@@ -337,6 +337,8 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
                 MenuRow(s.backupChannels, null, chevron = true, subtitle = s.backupChannelsSub) { reviewing = true }
             }
         }
+        ToggleRow(s.mergeVariants, playlist.id in prefs.mergeVariants, s.mergeVariantsSub) { vm.setMergeVariants(playlist.id, it) }
+        prefs.nameRules[playlist.id]?.let { rules -> MenuRow(s.nameRules, "${rules.size}", subtitle = s.nameRulesSub) {} }
         MenuRow(s.edit, null, chevron = true, onClick = onEdit)
         MenuRow(
             if (confirmDelete) s.removePlaylistConfirm else s.removePlaylist,

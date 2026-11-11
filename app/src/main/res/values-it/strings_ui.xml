@@ -798,4 +798,10 @@
     <string name="recording_padding_sub">Gli orari della guida sono raramente esatti</string>
     <string name="recording_exact_alarm">Per avviare le registrazioni in orario con l\'app chiusa, consenti sveglie e promemoria</string>
     <string name="recording_allow">Consenti</string>
+    <string name="merge_variants">Unisci le versioni dello stesso canale</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD e FHD diventano un solo canale: si apre il migliore, gli altri sono i suoi failover</string>
+    <string name="channel_rename">Nome del canale</string>
+    <string name="channel_name_sub">Vuoto = il nome della lista</string>
+    <string name="name_rules">Regole dei nomi</string>
+    <string name="name_rules_sub">Si modificano su thegoat.systems</string>
 </resources>

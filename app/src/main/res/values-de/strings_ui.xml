@@ -796,4 +796,10 @@
     <string name="recording_padding_sub">Die Zeiten im Programmführer stimmen selten genau</string>
     <string name="recording_exact_alarm">Damit Aufnahmen bei geschlossener App pünktlich starten, erlaube Wecker und Erinnerungen</string>
     <string name="recording_allow">Erlauben</string>
+    <string name="merge_variants">Versionen desselben Senders zusammenfassen</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD und FHD werden ein Sender: der beste öffnet sich, die anderen sind seine Failover</string>
+    <string name="channel_rename">Sendername</string>
+    <string name="channel_name_sub">Leer = Name aus der Liste</string>
+    <string name="name_rules">Namensregeln</string>
+    <string name="name_rules_sub">Bearbeiten auf thegoat.systems</string>
 </resources>

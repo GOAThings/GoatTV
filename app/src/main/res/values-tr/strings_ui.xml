@@ -796,4 +796,10 @@
     <string name="recording_padding_sub">Rehber saatleri nadiren tam doğrudur</string>
     <string name="recording_exact_alarm">Uygulama kapalıyken kayıtların zamanında başlaması için alarmlara ve hatırlatıcılara izin verin</string>
     <string name="recording_allow">İzin ver</string>
+    <string name="merge_variants">Aynı kanalın sürümlerini birleştir</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD ve FHD tek kanal olur: en iyisi açılır, diğerleri yedekleri olur</string>
+    <string name="channel_rename">Kanal adı</string>
+    <string name="channel_name_sub">Boş bırakırsanız listedeki ad kullanılır</string>
+    <string name="name_rules">Ad kuralları</string>
+    <string name="name_rules_sub">thegoat.systems üzerinden düzenlenir</string>
 </resources>

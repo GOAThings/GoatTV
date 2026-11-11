@@ -170,11 +170,16 @@ class PlaylistContent(
     val guideUrl: String? = null,
     /** Quando os canais foram descarregados (para o intervalo de atualização). */
     val fetchedAt: Long = System.currentTimeMillis(),
+    /** Com "Juntar variantes" (ver ContentView): as variantes que não se mostram, só abertas como failover. */
+    val hidden: List<Channel> = emptyList(),
+    /** A melhor variante de cada canal → as outras (chaves em [hidden]), da melhor para a pior. */
+    val variants: Map<String, List<String>> = emptyMap(),
 ) {
     /** Sem ids repetidos nem os dos grupos especiais: as listas do ecrã usam o id como chave única. Vale também para as cópias em cache. */
     val categories: List<Category> = categories.filter { it.id !in SpecialCategory.RESERVED }.distinctBy { it.id }
     val byCategory: Map<String, List<Channel>> = channels.groupBy { it.categoryId }
-    val byKey: Map<String, Channel> = channels.reversed().associateBy { it.key }
+    /** Também as variantes escondidas ([hidden]): um favorito, o último canal ou um failover que seja uma delas abre-a. */
+    val byKey: Map<String, Channel> = (channels + hidden).reversed().associateBy { it.key }
     private val categoryNames = categories.associate { it.id to it.name }
 
     /** Os grupos pela ordem escolhida ([order]: ids); os novos ficam no fim, pela ordem da lista. */

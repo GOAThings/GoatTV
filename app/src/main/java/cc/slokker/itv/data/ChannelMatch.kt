@@ -427,12 +427,17 @@ object ChannelMatch {
      * [chosen]: a lista escolhida à mão (vazia = "nenhum"; null = automático: o que o [matcher] encontrar, e nada no
      * [manual]). Os escolhidos que já não existem (na reserva, ou na principal segundo [inMain]) ficam de fora, e o
      * próprio canal também; se não sobrar nenhum, conta como sem escolha (como na lista "Canais de reserva").
+     * No automático, primeiro as [variants] do canal na própria lista (chaves; ver ChannelVariants), também no [manual].
      */
-    fun failovers(main: Entry, matcher: Matcher, chosen: List<String>?, manual: Boolean, inMain: (String) -> Boolean): List<String> {
+    fun failovers(
+        main: Entry, matcher: Matcher, chosen: List<String>?, manual: Boolean, variants: List<String> = emptyList(),
+        inMain: (String) -> Boolean,
+    ): List<String> {
         val kept = chosen?.let { existing(it, main.key, matcher, inMain) }
         if (kept.isNullOrEmpty() && chosen?.isEmpty() != true) {
-            val index = (decide(main, matcher, null, manual) as? Result.Match)?.index ?: return emptyList()
-            return listOf(matcher.pool[index].key)
+            val own = variants.filter { it != main.key && inMain(it) }.distinct().map(::mainFailover)
+            val index = (decide(main, matcher, null, manual) as? Result.Match)?.index ?: return own
+            return own + matcher.pool[index].key
         }
         return kept.orEmpty()
     }

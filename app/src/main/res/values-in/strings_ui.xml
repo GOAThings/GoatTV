@@ -794,4 +794,10 @@
     <string name="recording_padding_sub">Waktu di panduan jarang tepat</string>
     <string name="recording_exact_alarm">Agar rekaman mulai tepat waktu saat aplikasi ditutup, izinkan alarm dan pengingat</string>
     <string name="recording_allow">Izinkan</string>
+    <string name="merge_variants">Gabungkan versi dari saluran yang sama</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD, dan FHD menjadi satu saluran: yang terbaik dibuka, sisanya menjadi failover-nya</string>
+    <string name="channel_rename">Nama saluran</string>
+    <string name="channel_name_sub">Kosongkan untuk memakai nama dari daftar</string>
+    <string name="name_rules">Aturan nama</string>
+    <string name="name_rules_sub">Diubah di thegoat.systems</string>
 </resources>

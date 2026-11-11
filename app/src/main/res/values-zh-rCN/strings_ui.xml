@@ -794,4 +794,10 @@
     <string name="recording_padding_sub">节目单时间很少完全准确</string>
     <string name="recording_exact_alarm">要在应用关闭时准时开始录制，请允许“闹钟和提醒”</string>
     <string name="recording_allow">允许</string>
+    <string name="merge_variants">合并同一频道的不同版本</string>
+    <string name="merge_variants_sub">RTP 1 HD、SD 和 FHD 合并为一个频道：打开最好的，其余作为备用</string>
+    <string name="channel_rename">频道名称</string>
+    <string name="channel_name_sub">留空则使用列表中的名称</string>
+    <string name="name_rules">名称规则</string>
+    <string name="name_rules_sub">在 thegoat.systems 上编辑</string>
 </resources>

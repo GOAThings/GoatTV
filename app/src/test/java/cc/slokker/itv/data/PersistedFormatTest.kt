@@ -258,6 +258,9 @@ class PersistedFormatTest {
         "logoSource" to (Prefs.Key.LOGO_SOURCE to "pt"),
         "channelLogos" to (Prefs.Key.CHANNEL_LOGOS to mapOf("p1:101" to "https://logos.example.com/rtp1.png", "p1:102" to "")),
         "extraEpg" to (Prefs.Key.EXTRA_EPG to mapOf("p1" to "https://epg.example.com/extra.xml")),
+        "mergeVariants" to (Prefs.Key.MERGE_VARIANTS to mapOf("p1" to true)),
+        "nameRules" to (Prefs.Key.NAME_RULES to mapOf("p1" to listOf(mapOf("find" to "PT: ", "replace" to ""), mapOf("find" to "ᴴᴰ", "replace" to "HD")))),
+        "channelNames" to (Prefs.Key.CHANNEL_NAMES to mapOf("p1:101" to "RTP 1")),
         "backupPlaylist" to (Prefs.Key.BACKUP_PLAYLIST to mapOf("p1" to "p2")),
         "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off", "p1:103" to listOf("2001", "main:104"))),
         "backupMode" to (Prefs.Key.BACKUP_MODE to mapOf("p1" to "manual")),
@@ -383,6 +386,12 @@ class PersistedFormatTest {
     /** O exemplo como o [Prefs] o guarda: o AppViewModel grava os conjuntos como listas. */
     private fun asStored(value: Any, field: Any?): Any = when {
         field is Set<*> && value is List<*> -> value.toSet()
+        // Juntar variantes: {"p1": true} lê-se como o conjunto das listas.
+        field is Set<*> && value is Map<*, *> -> value.filterValues { it == true }.keys
+        // As regras de nomes: [{"find", "replace"}] lêem-se como NameRule.
+        field is Map<*, *> && field.values.any { (it as? List<*>)?.firstOrNull() is NameRule } -> (value as Map<*, *>).mapValues { (_, v) ->
+            (v as List<*>).map { r -> (r as Map<*, *>).let { NameRule(it["find"] as String, it["replace"] as String) } }
+        }
         // Os failovers: uma chave ou "off" leem-se como listas (ver Prefs.backupChannels).
         field is Map<*, *> && value is Map<*, *> && field.values.all { it is List<*> } ->
             value.mapValues { (_, v) -> if (v == "off") emptyList<String>() else if (v is String) listOf(v) else v }

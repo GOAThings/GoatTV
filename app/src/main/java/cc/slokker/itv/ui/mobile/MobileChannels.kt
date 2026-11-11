@@ -189,6 +189,10 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
     val recordingNow by vm.activeRecordings.collectAsStateWithLifecycle()
     val recordMarks = remember(schedule, recordingNow) { java.util.Objects.hash(schedule, recordingNow.map { it.info.id }) }
     val list = rememberLazyListState()
+    // A mudar o nome (o texto escrito), e o nome como está agora (muda logo ao gravar).
+    var renaming by remember { mutableStateOf<String?>(null) }
+    val content by vm.content.collectAsStateWithLifecycle()
+    val shownName = content?.byKey?.get(channel.key)?.name ?: channel.name
     // Abre no programa que está a dar; o passado fica acima (para o catch-up).
     LaunchedEffect(entries) { entries.indexOfFirst { it.endMs > now }.takeIf { it > 0 }?.let { list.scrollToItem(it) } }
     Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
@@ -199,8 +203,19 @@ internal fun EpgSheet(vm: AppViewModel, channel: Channel, onPick: (logo: Boolean
                 .padding(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(channel.name, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                ControlButton(if (rows.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel) }
+                val editing = renaming
+                if (editing != null) {
+                    // O nome do canal (vazio volta ao da lista).
+                    Field(s.channelNameSub, editing, Modifier.weight(1f)) { renaming = it }
+                    ControlButton(ItvIcons.Check) {
+                        vm.setChannelName(channel, editing)
+                        renaming = null
+                    }
+                } else {
+                    Text(shownName, color = ItvColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    ControlButton(ItvIcons.Edit) { renaming = vm.channelNameChoice(channel).orEmpty() }
+                    ControlButton(if (rows.isFavorite(channel)) ItvIcons.Star else ItvIcons.StarOutline) { vm.toggleFavorite(channel) }
+                }
                 ControlButton(ItvIcons.Close, onClick = onClose)
             }
             if (vm.epgPickerAvailable) {

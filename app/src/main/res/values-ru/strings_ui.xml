@@ -800,4 +800,10 @@
     <string name="recording_padding_sub">Время в телегиде редко бывает точным</string>
     <string name="recording_exact_alarm">Чтобы записи начинались вовремя при закрытом приложении, разрешите будильники и напоминания</string>
     <string name="recording_allow">Разрешить</string>
+    <string name="merge_variants">Объединять версии одного канала</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD и FHD становятся одним каналом: открывается лучший, остальные — его резервные</string>
+    <string name="channel_rename">Название канала</string>
+    <string name="channel_name_sub">Пусто — название из списка</string>
+    <string name="name_rules">Правила названий</string>
+    <string name="name_rules_sub">Изменяются на thegoat.systems</string>
 </resources>

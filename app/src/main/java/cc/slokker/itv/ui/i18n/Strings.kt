@@ -769,6 +769,12 @@ class Strings(context: Context) {
         },
     )
     val epgExtra get() = s(R.string.epg_extra)
+    val mergeVariants get() = s(R.string.merge_variants)
+    val mergeVariantsSub get() = s(R.string.merge_variants_sub)
+    val channelRename get() = s(R.string.channel_rename)
+    val channelNameSub get() = s(R.string.channel_name_sub)
+    val nameRules get() = s(R.string.name_rules)
+    val nameRulesSub get() = s(R.string.name_rules_sub)
     val epgExtraSub get() = s(R.string.epg_extra_sub)
     val epgExtraNone get() = s(R.string.epg_extra_none)
     val epgExtraRemove get() = s(R.string.epg_extra_remove)

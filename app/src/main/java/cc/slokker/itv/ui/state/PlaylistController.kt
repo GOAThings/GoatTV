@@ -3,6 +3,7 @@ package cc.slokker.itv.ui.state
 import android.util.Log
 import cc.slokker.itv.data.CacheStore
 import cc.slokker.itv.data.ChannelIndex
+import cc.slokker.itv.data.ContentView
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
@@ -24,7 +25,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 /**
  * Os canais da lista aberta: lê-los da cache ou do fornecedor, renová-los por trás pelo intervalo das definições,
  * mandar o índice à conta, e as listas carregadas só para o segundo canal. Não decide o que se mostra: o ViewModel
- * abre a lista ([show]) e reage aos canais novos ([onRefreshed]).
+ * abre a lista ([show]) e reage aos canais novos ([onRefreshed]). O [content] é a lista como se mostra (nomes limpos e
+ * variantes juntas, ver ContentView); a cache e o índice da conta ficam com os canais como vêm do fornecedor.
  */
 class PlaylistController(
     private val scope: CoroutineScope,
@@ -43,8 +45,33 @@ class PlaylistController(
     private val _content = MutableStateFlow<PlaylistContent?>(null)
     val content: StateFlow<PlaylistContent?> = _content.asStateFlow()
 
-    /** Listas carregadas só para o segundo canal (a principal está em [content]). */
+    /** A lista aberta como veio do fornecedor (o [content] é ela com as opções da lista aplicadas). */
+    private var raw: PlaylistContent? = null
+
+    /** Listas carregadas só para o segundo canal (a principal está em [content]), como vieram. */
     private val secondContents = HashMap<String, PlaylistContent>()
+
+    /** A última vista de cada lista do segundo canal (ou da reserva), para não a refazer a cada pedido. */
+    private val secondViews = HashMap<String, Pair<ContentView.Options, PlaylistContent>>()
+
+    /** As opções com que a lista aberta foi feita. */
+    private var shownOptions: ContentView.Options? = null
+
+    /** As definições mudaram: se as opções da lista aberta (juntar variantes, regras, nomes) são outras, ela refaz-se. */
+    fun reapplyOptions() {
+        val r = raw ?: return
+        if (ContentView.options(prefs.value, r.playlist.id) == shownOptions) return
+        val viewed = view(r)
+        _content.value = viewed
+        onRefreshed(viewed, false)
+    }
+
+    /** [loaded] com as opções da lista dele (ver ContentView). */
+    fun view(loaded: PlaylistContent): PlaylistContent {
+        val options = ContentView.options(prefs.value, loaded.playlist.id)
+        if (loaded === raw) shownOptions = options
+        return ContentView.apply(loaded, options)
+    }
 
     private var refreshJob: Job? = null
     private var indexJob: Job? = null
@@ -62,9 +89,11 @@ class PlaylistController(
         return loaded
     }
 
-    /** [loaded] passa a ser a lista aberta (e o índice dela vai para a conta, se mudou). */
-    fun show(loaded: PlaylistContent) {
-        _content.value = loaded
+    /** [loaded] passa a ser a lista aberta, como [viewed] (e o índice dela vai para a conta, se mudou). */
+    fun show(loaded: PlaylistContent, viewed: PlaylistContent = view(loaded)) {
+        raw = loaded
+        shownOptions = ContentView.options(prefs.value, loaded.playlist.id)
+        _content.value = viewed
         uploadIndex(loaded)
     }
 
@@ -92,9 +121,11 @@ class PlaylistController(
             if (_content.value?.playlist != playlist || fresh.channels.isEmpty()) return@launch
             cache.savePlaylist(fresh)
             val guideChanged = fresh.guideUrl != _content.value?.guideUrl
-            _content.value = fresh
+            raw = fresh
+            val viewed = view(fresh)
+            _content.value = viewed
             uploadIndex(fresh)
-            onRefreshed(fresh, guideChanged)
+            onRefreshed(viewed, guideChanged)
             if (notify) toast(I18n.s.playlistUpdated)
         }
     }
@@ -130,15 +161,17 @@ class PlaylistController(
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
     suspend fun loadForSecond(playlist: Playlist): PlaylistContent {
         _content.value?.takeIf { it.playlist.id == playlist.id }?.let { return it }
-        secondContents[playlist.id]?.let { return it }
-        val loaded = cache.loadPlaylist(playlist) ?: load(playlist).also { cache.savePlaylist(it) }
-        secondContents[playlist.id] = loaded
-        return loaded
+        val loaded = secondContents[playlist.id]
+            ?: (cache.loadPlaylist(playlist) ?: load(playlist).also { cache.savePlaylist(it) }).also { secondContents[playlist.id] = it }
+        val options = ContentView.options(prefs.value, playlist.id)
+        secondViews[playlist.id]?.takeIf { it.first == options && it.second.fetchedAt == loaded.fetchedAt }?.let { return it.second }
+        return ContentView.apply(loaded, options).also { secondViews[playlist.id] = options to it }
     }
 
     /** A lista [playlistId] foi apagada: o segundo canal esquece-a. */
     fun forget(playlistId: String) {
         secondContents.remove(playlistId)
+        secondViews.remove(playlistId)
     }
 
     /** Para o que está a correr por trás (renovar, mandar o índice). */
@@ -150,6 +183,8 @@ class PlaylistController(
     /** Nada aberto, e as listas do segundo canal (têm credenciais) esquecidas. */
     fun close() {
         secondContents.clear()
+        secondViews.clear()
+        raw = null
         _content.value = null
     }
 

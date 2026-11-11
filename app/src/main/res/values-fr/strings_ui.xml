@@ -798,4 +798,10 @@
     <string name="recording_padding_sub">Les horaires du guide sont rarement exacts</string>
     <string name="recording_exact_alarm">Pour démarrer les enregistrements à l\'heure avec l\'appli fermée, autorisez les alarmes et rappels</string>
     <string name="recording_allow">Autoriser</string>
+    <string name="merge_variants">Fusionner les versions d\'une même chaîne</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD et FHD deviennent une seule chaîne : la meilleure s\'ouvre, les autres sont ses failovers</string>
+    <string name="channel_rename">Nom de la chaîne</string>
+    <string name="channel_name_sub">Vide = le nom de la liste</string>
+    <string name="name_rules">Règles de noms</string>
+    <string name="name_rules_sub">À modifier sur thegoat.systems</string>
 </resources>

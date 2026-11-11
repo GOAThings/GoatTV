@@ -796,4 +796,10 @@
     <string name="recording_padding_sub">गाइड के समय शायद ही सटीक होते हैं</string>
     <string name="recording_exact_alarm">ऐप बंद होने पर भी रिकॉर्डिंग समय पर शुरू हो, इसके लिए अलार्म और रिमाइंडर की अनुमति दें</string>
     <string name="recording_allow">अनुमति दें</string>
+    <string name="merge_variants">एक ही चैनल के संस्करण मिलाएँ</string>
+    <string name="merge_variants_sub">RTP 1 HD, SD और FHD एक चैनल बन जाते हैं: सबसे अच्छा खुलता है, बाकी उसके फ़ेलओवर हैं</string>
+    <string name="channel_rename">चैनल का नाम</string>
+    <string name="channel_name_sub">खाली छोड़ें तो सूची का नाम</string>
+    <string name="name_rules">नाम के नियम</string>
+    <string name="name_rules_sub">thegoat.systems पर बदलें</string>
 </resources>

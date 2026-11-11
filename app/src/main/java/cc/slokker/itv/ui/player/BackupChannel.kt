@@ -119,7 +119,7 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
             val chosen = choice?.filter { c.channelOf(it) != null }
             // Uma escolha cujos canais já não existem conta como sem escolha (como na lista "Canais de reserva").
             if (choice?.isEmpty() == true || !chosen.isNullOrEmpty()) return chosen.orEmpty()
-            return if (manual) emptyList() else listOfNotNull(c.autoChannel?.key)
+            return c.variants + if (manual) emptyList() else listOfNotNull(c.autoChannel?.key)
         }
 
     /** Os failovers ainda são os do automático (nada escolhido à mão). */

@@ -219,6 +219,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             prefs.collect { p ->
                 c.userAgent = SafeInput.headerSafe(p.userAgent).ifBlank { IPTV_USER_AGENT }
                 if (content.value != null) c.session.setAutoStart(p.autoStart)
+                // Juntar variantes, regras ou nomes da lista aberta mudaram (aqui ou noutro sítio): ela refaz-se.
+                lists.reapplyOptions()
             }
         }
     }
@@ -622,6 +624,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         content.value?.takeIf { it.playlist.id == playlistId }?.let { guide.openExtra(it, force = true) }
     }
 
+    /** "Juntar versões do mesmo canal" na lista [playlistId] (ver ContentView). */
+    fun setMergeVariants(playlistId: String, on: Boolean) {
+        val current = prefs.value.mergeVariants.associateWith { true }
+        setPref(Prefs.Key.MERGE_VARIANTS, if (on) current + (playlistId to true) else current - playlistId)
+    }
+
+    /** O nome de [channel] escolhido à mão na lista aberta, ou null (o da lista, com as regras dela). */
+    fun channelNameChoice(channel: Channel): String? {
+        val playlistId = content.value?.playlist?.id ?: return null
+        return prefs.value.channelNames["$playlistId:${channel.key}"]
+    }
+
+    /** Muda o nome de [channel] na lista aberta; vazio (ou null) volta ao da lista. */
+    fun setChannelName(channel: Channel, name: String?) {
+        val playlistId = content.value?.playlist?.id ?: return
+        val key = "$playlistId:${channel.key}"
+        val clean = name?.trim()?.takeIf { it.isNotEmpty() }
+        val current = prefs.value.channelNames
+        setPref(Prefs.Key.CHANNEL_NAMES, if (clean == null) current - key else current + (key to clean))
+    }
+
     /** A app voltou ao primeiro plano: conta como "abrir a app" para as atualizações. */
     fun onAppStart() {
         if (!startedOnce) {
@@ -636,7 +659,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         guide.open(content)
     }
 
-    private suspend fun showContent(loaded: PlaylistContent, resume: Boolean) {
+    private suspend fun showContent(raw: PlaylistContent, resume: Boolean) {
+        // A lista como se mostra (nomes limpos, variantes juntas): é esta que se abre daqui para a frente.
+        val loaded = lists.view(raw)
         val playlist = loaded.playlist
         playback.second.value?.let { sv ->
             // A lista principal passou a ser a da conta do segundo canal, e o plano só tem 1 ligação.
@@ -648,7 +673,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         guide.clearShort()
         guide.open(loaded)
-        lists.show(loaded)
+        lists.show(raw, loaded)
         playback.clearForNewContent()
         if (loaded.channels.isEmpty()) {
             _screen.value = Screen.Loading("", I18n.s.errPlaylistEmpty(playlist.name))
@@ -1715,7 +1740,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (busy) Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela")
         val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
         val manual = backupManual(id)
-        val list = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, chosen ?: backupChoice(id, channel.key), manual) { it in main.byKey }
+        val variants = main.variants[channel.key].orEmpty()
+        val list = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, chosen ?: backupChoice(id, channel.key), manual, variants) { it in main.byKey }
         val mainDown = providerOutage.isDown(id)
         val streams = list.mapNotNull { f ->
             val mainKey = ChannelMatch.mainKeyOf(f)
@@ -1817,6 +1843,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val choice: List<String>?,
         /** Modo manual: o automático é só uma sugestão. */
         val manual: Boolean,
+        /** As outras variantes do canal na própria lista (ChannelMatch.MAIN_PREFIX), com "Juntar variantes": o automático tenta-as primeiro. */
+        val variants: List<String> = emptyList(),
     ) {
         val autoChannel: Channel? get() = (auto as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
 
@@ -1851,7 +1879,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 ChannelMatch.Matcher(m.channels.map { ChannelMatch.entry(it, m) }).ranked(channel.name, channel.epgId, BACKUP_SIMILAR + 1)
                     .mapNotNull { m.channels.getOrNull(it) }.filter { it.key != channel.key }.take(BACKUP_SIMILAR)
             }.orEmpty()
-            BackupChoices(id, backup, backupContent, mainContent, auto, similar, similarMain, backupChoice(id, channel.key), backupManual(id))
+            val variants = mainContent?.variants?.get(channel.key).orEmpty().map(ChannelMatch::mainFailover)
+            BackupChoices(id, backup, backupContent, mainContent, auto, similar, similarMain, backupChoice(id, channel.key), backupManual(id), variants)
         }
     }
 
