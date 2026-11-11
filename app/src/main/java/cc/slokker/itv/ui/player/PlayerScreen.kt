@@ -186,6 +186,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showSearch by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showBackup by remember { mutableStateOf(false) }
+    val backupNav = remember { BackupPanelNav() }
     var showRecordings by remember { mutableStateOf(false) }
     /** Aviso "este canal está sempre a parar" (uma vez por canal; ver NetHintCard). */
     var netHint by remember { mutableStateOf(false) }
@@ -648,7 +649,7 @@ fun PlayerScreen(vm: AppViewModel) {
             TvBack.SECOND_PICKER -> if (!secondPicker.back()) showSecondPicker = false
             TvBack.CLOSE_TRACKS -> trackPicker = null
             TvBack.CLOSE_SEARCH -> showSearch = false
-            TvBack.CLOSE_BACKUP -> showBackup = false
+            TvBack.CLOSE_BACKUP -> if (!backupNav.back()) showBackup = false
             TvBack.CLOSE_RECORDINGS -> showRecordings = false
             TvBack.CLOSE_GUIDE -> {
                 showGuide = false
@@ -1099,6 +1100,7 @@ fun PlayerScreen(vm: AppViewModel) {
                             }
                             HudAction.BACKUP -> {
                                 infoVisible = false
+                                backupNav.adding = false
                                 showBackup = true
                             }
                             HudAction.SLEEP -> showSleep = true
@@ -1171,7 +1173,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInHorizontally { -it / 4 },
                 exit = fadeOut() + slideOutHorizontally { -it / 4 },
             ) {
-                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, onTry = { failovers ->
+                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, nav = backupNav, onTry = { failovers ->
                     showBackup = false
                     // Fecha a ligação à lista principal e abre os failovers, pela ordem (o aviso aparece quando der).
                     scope.launch { playback.playBackup(vm.backupStreams(data, current, failovers)) }

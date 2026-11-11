@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -74,7 +75,7 @@ import kotlinx.coroutines.delay
  * agora" dá já os failovers, pela ordem, com a ligação à lista principal fechada antes.
  */
 @Stable
-internal class BackupPanelState(private val vm: AppViewModel, val channel: Channel, private val mainId: String? = null) {
+internal class BackupPanelState(private val vm: AppViewModel, val channel: Channel, val mainId: String? = null) {
     var choices by mutableStateOf<AppViewModel.BackupChoices?>(null)
         private set
     var loading by mutableStateOf(true)
@@ -93,6 +94,12 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
         choices = vm.backupChoices(channel, mainId)
         choice = choices?.choice
         loading = false
+    }
+
+    /** Os failovers gravados (mudados noutra página ou noutro sítio). */
+    fun sync() {
+        val c = choices ?: return
+        choice = vm.backupChoice(c.mainId, channel.key)
     }
 
     fun search() {
@@ -155,19 +162,26 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
         else -> s.backupChannelNoMatch
     }
 
-    /** O subtítulo de um failover: a lista e o grupo (e "Automático" no do automático). */
-    fun subtitle(failover: String, s: Strings): String {
-        val c = choices ?: return ""
-        val ch = c.channelOf(failover)
-        return listOfNotNull(c.listName(failover), ch?.let { c.contentOf(failover)?.categoryName(it.categoryId) }, s.backupChannelAuto.takeIf { automatic && failover == c.autoChannel?.key })
-            .filter { it.isNotEmpty() }.joinToString(" · ")
-    }
+    /** A etiqueta de um failover: "Esta lista" ou o nome da reserva. */
+    fun source(failover: String, s: Strings): String =
+        if (ChannelMatch.mainKeyOf(failover) != null) s.backupThisPlaylist else choices?.backup?.name.orEmpty()
+
+    /** Os canais sugeridos para juntar: o do automático, os parecidos na reserva e na própria lista (true). */
+    val suggested: List<Pair<Channel, Boolean>>
+        get() {
+            val c = choices ?: return emptyList()
+            val backup = (listOfNotNull(c.autoChannel) + c.similar).distinctBy { it.key }.map { it to false }
+            return backup.take(5) + c.similarMain.take(3).map { it to true } + backup.drop(5)
+        }
 }
 
 @Composable
 internal fun rememberBackupPanel(vm: AppViewModel, channel: Channel, mainId: String? = null): BackupPanelState {
     val state = remember(channel.key, mainId) { BackupPanelState(vm, channel, mainId) }
     LaunchedEffect(state) { state.load() }
+    // Mudado noutra página (Juntar um canal, nas Definições) ou noutro sítio: a lista acompanha.
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    LaunchedEffect(state, prefs.backupChannels) { state.sync() }
     // Procura enquanto se escreve, com uma pequena pausa (como a pesquisa de canais).
     LaunchedEffect(state, state.query, state.choices) {
         delay(250)
@@ -176,10 +190,24 @@ internal fun rememberBackupPanel(vm: AppViewModel, channel: Channel, mainId: Str
     return state
 }
 
-/** O painel na TV, encostado à esquerda como os outros. Voltar fecha-o (ver TvBack). */
+/** Em que página está o painel da TV: os failovers, ou "Juntar um canal" (Voltar recua de uma para a outra). */
+@Stable
+internal class BackupPanelNav {
+    var adding by mutableStateOf(false)
+
+    /** Voltar: de "Juntar um canal" volta aos failovers (true); nos failovers, quem chama fecha o painel (false). */
+    fun back(): Boolean {
+        if (!adding) return false
+        adding = false
+        return true
+    }
+}
+
+/** O painel na TV, encostado à esquerda como os outros. Voltar recua (ver [BackupPanelNav]) e depois fecha-o. */
 @Composable
-internal fun BackupChannelPanel(vm: AppViewModel, channel: Channel, width: Dp, onTry: (List<String>) -> Unit, modifier: Modifier = Modifier) {
+internal fun BackupChannelPanel(vm: AppViewModel, channel: Channel, width: Dp, nav: BackupPanelNav, onTry: (List<String>) -> Unit, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
+    val state = rememberBackupPanel(vm, channel)
     Column(
         modifier
             .padding(start = 24.dp, top = 24.dp, bottom = 24.dp)
@@ -188,72 +216,63 @@ internal fun BackupChannelPanel(vm: AppViewModel, channel: Channel, width: Dp, o
             .glass(ItvShapes.Panel)
             .padding(horizontal = 12.dp, vertical = 16.dp),
     ) {
-        Text(s.backupChannel, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 8.dp))
-        BackupChannelBody(vm, channel, null, onTry)
+        Text(if (nav.adding) s.backupAddChannel else s.backupChannel, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 8.dp))
+        if (nav.adding) {
+            BackupAddBody(vm, state) { nav.adding = false }
+        } else {
+            BackupChannelBody(vm, state, onTry = onTry, onAdd = { nav.adding = true })
+        }
     }
 }
 
 /**
- * O conteúdo do painel (também nas Definições → lista → Canais de reserva, aí sem "Experimentar agora": [onTry] null).
- * [mainId]: a lista principal (null = a em uso). Os failovers: OK pega/larga um (com ele "na mão", ↑/↓ movem-no, como
- * em "Reordenar grupos"); OK longo tira-o. Os parecidos e os encontrados juntam-se (ou tiram-se) com OK.
+ * Os failovers de um canal (também nas Definições → lista → Canais de reserva, aí sem "Experimentar agora": [onTry]
+ * null): a lista numerada, com a etiqueta da lista de cada um; OK pega/larga um (com ele "na mão", ↑/↓ movem-no, como
+ * em "Reordenar grupos"), OK longo tira-o. Por baixo, "Juntar um canal" ([onAdd]), "Experimentar agora" e "Voltar ao
+ * automático" (só com uma escolha à mão).
  */
 @Composable
-internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: String?, onTry: ((List<String>) -> Unit)?) {
+internal fun BackupChannelBody(vm: AppViewModel, state: BackupPanelState, onTry: ((List<String>) -> Unit)?, onAdd: () -> Unit) {
     val s = LocalStrings.current
-    val state = rememberBackupPanel(vm, channel, mainId)
-    val firstFocus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
+    val channel = state.channel
     var moving by remember { mutableStateOf<String?>(null) }
-    // Tirar um failover tira a linha com foco: o foco passa ao que fica no lugar dele (ou ao de cima, ou a "Automático").
+    // O foco começa no primeiro failover (ou em "Juntar um canal"). Tirar um failover tira a linha com foco: o foco passa
+    // ao que fica no lugar dele (ou ao de cima, ou a "Juntar um canal").
     val rowFocus = remember { HashMap<String, FocusRequester>() }
-    val autoFocus = remember { FocusRequester() }
+    val addFocus = remember { FocusRequester() }
     var refocus by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(refocus) {
         val target = refocus ?: return@LaunchedEffect
-        focusWithRetry(if (target == "auto") autoFocus else rowFocus.getOrPut(target) { FocusRequester() })
+        focusWithRetry(if (target == ADD) addFocus else rowFocus.getOrPut(target) { FocusRequester() })
         refocus = null
     }
-    LaunchedEffect(state.loading) { if (!state.loading) focusWithRetry(firstFocus) }
+    LaunchedEffect(state.loading) { if (!state.loading) refocus = state.failovers.firstOrNull() ?: ADD }
     val choices = state.choices
     Column {
-        Text(
-            listOfNotNull(channel.name, choices?.backup?.name).joinToString(" → "),
-            color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
-        )
         when {
             state.loading -> Text(s.backupChecking, color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
-            choices == null -> Text(s.backupUnavailable((mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()), color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
+            choices == null -> Text(s.backupUnavailable((state.mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()), color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 val failovers = state.failovers
-                if (onTry != null) {
-                    item(key = "try") {
-                        GlassRow(
-                            onClick = { if (failovers.isNotEmpty()) onTry(failovers) },
-                            enabled = failovers.isNotEmpty(),
-                            modifier = Modifier.focusRequester(firstFocus),
-                            leading = { Icon(ItvIcons.Play, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
-                            title = s.backupChannelTry,
-                            subtitle = failovers.firstOrNull()?.let(choices::channelOf)?.name,
-                        )
-                    }
+                item(key = "intro") {
+                    Text(
+                        if (failovers.isEmpty()) s.backupNoneNote(channel.name) else s.backupFailoversIntro(channel.name),
+                        color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp),
+                    )
                 }
-                // Sem "Experimentar agora", o foco começa no primeiro failover (ou na linha a seguir).
-                val first = if (onTry == null) Modifier.focusRequester(firstFocus) else Modifier
-                item(key = "hf") { Header(if (failovers.isEmpty()) s.backupStateNone else s.backupFailovers) }
                 itemsIndexed(failovers, key = { _, f -> "f:$f" }) { i, f ->
                     val c = choices.channelOf(f) ?: return@itemsIndexed
                     val isMoving = moving == f
                     GlassRow(
                         onClick = { moving = if (isMoving) null else f },
                         onLongClick = {
-                            if (moving == f) moving = null
+                            moving = null
                             val rest = failovers - f
-                            refocus = rest.getOrNull(i) ?: rest.getOrNull(i - 1) ?: "auto"
+                            refocus = rest.getOrNull(i) ?: rest.getOrNull(i - 1) ?: ADD
                             state.remove(f)
                         },
                         selected = isMoving,
-                        modifier = (if (i == 0) first else Modifier).focusRequester(rowFocus.getOrPut(f) { FocusRequester() }).onPreviewKeyEvent { e ->
+                        modifier = Modifier.focusRequester(rowFocus.getOrPut(f) { FocusRequester() }).onPreviewKeyEvent { e ->
                             if (!isMoving || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 Key.DirectionUp -> { state.move(f, -1); true }
@@ -262,88 +281,127 @@ internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: Strin
                             }
                         },
                         leading = { Text("${i + 1}", color = LocalContentColor.current.copy(alpha = 0.6f), style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(24.dp)) },
-                        trailing = { Text(if (isMoving) s.moving else "↕", style = MaterialTheme.typography.bodySmall, color = if (isMoving) LocalAccent.current.start else LocalContentColor.current.copy(alpha = 0.6f)) },
+                        trailing = {
+                            if (isMoving) Text(s.moving, style = MaterialTheme.typography.bodySmall, color = LocalAccent.current.start)
+                            else SourceTag(state.source(f, s))
+                        },
                         title = c.name,
-                        subtitle = state.subtitle(f, s),
                     )
                 }
-                if (failovers.isNotEmpty()) item(key = "hint") { Text(s.backupFailoversHint, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)) }
-                val firstAfter = (if (failovers.isEmpty()) first else Modifier).focusRequester(autoFocus)
-                item(key = "auto") {
-                    when {
-                        state.manual -> GlassRow(onClick = {}, modifier = firstAfter, title = state.autoLabel(s))
-                        else -> GlassRow(
-                            onClick = state::reset, modifier = firstAfter, selected = state.automatic, trailing = check(state.automatic),
-                            title = s.backupChannelAuto, subtitle = state.autoLabel(s),
+                item(key = "add") {
+                    GlassRow(
+                        onClick = onAdd,
+                        modifier = Modifier.focusRequester(addFocus),
+                        leading = { Icon(ItvIcons.Add, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
+                        title = s.backupAddChannel,
+                    )
+                }
+                item(key = "line") { Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.12f))) }
+                if (onTry != null && failovers.isNotEmpty()) {
+                    item(key = "try") {
+                        GlassRow(
+                            onClick = { onTry(failovers) },
+                            leading = { Icon(ItvIcons.Play, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
+                            title = s.backupChannelTry,
                         )
                     }
                 }
-                item(key = "off") {
-                    GlassRow(onClick = state::clear, selected = state.none, trailing = check(state.none), title = s.backupChannelOff)
+                if (!state.automatic) {
+                    item(key = "auto") {
+                        GlassRow(
+                            onClick = { state.reset(); refocus = ADD },
+                            leading = { Icon(ItvIcons.Replay, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
+                            title = s.backupResetAuto,
+                            subtitle = state.autoLabel(s),
+                        )
+                    }
                 }
-                // Para juntar: os parecidos na reserva (com a sugestão do automático) e na própria lista.
-                val auto = choices.autoChannel
-                val similar = (listOfNotNull(auto) + choices.similar).distinctBy { it.key }
-                if (similar.isNotEmpty()) item(key = "hs") { Header(s.backupAddFrom(choices.backup.name)) }
-                items(similar, key = { "s:" + it.key }) { c -> AddRow(state, choices, c, false, s) }
-                if (choices.similarMain.isNotEmpty()) item(key = "hm") { Header(s.backupAddFrom(choices.main?.playlist?.name.orEmpty())) }
-                items(choices.similarMain, key = { "m:" + it.key }) { c -> AddRow(state, choices, c, true, s) }
-                item(key = "search") {
-                    BasicTextField(
-                        value = state.query,
-                        onValueChange = { state.query = it },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.titleSmall.copy(color = ItvColors.Text),
-                        cursorBrush = SolidColor(LocalAccent.current.start),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
-                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                        decorationBox = { field ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(ItvIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim)
-                                Spacer(Modifier.width(10.dp))
-                                Box(Modifier.weight(1f)) {
-                                    if (state.query.isEmpty()) Text(s.backupChannelSearchAll, color = ItvColors.TextFaint, style = MaterialTheme.typography.titleSmall)
-                                    field()
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .padding(top = 10.dp)
-                            .leavesWithArrows()
-                            .fillMaxWidth()
-                            .clip(ItvShapes.Control)
-                            .background(Color.White.copy(alpha = 0.12f))
-                            .padding(horizontal = 14.dp, vertical = 14.dp),
-                    )
+                if (failovers.isNotEmpty()) {
+                    item(key = "hint") { Text(s.backupFailoversHint, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 10.dp)) }
                 }
-                if (state.results.isNotEmpty()) item(key = "hr") { Header(s.backupChannelResults) }
-                items(state.results, key = { (c, fromMain) -> (if (fromMain) "rm:" else "r:") + c.key }) { (c, fromMain) -> AddRow(state, choices, c, fromMain, s) }
             }
         }
     }
+}
+
+private const val ADD = "+add"
+
+/**
+ * "Juntar um canal": a pesquisa nas duas listas e os sugeridos (o do automático e os parecidos, nas duas). OK junta o
+ * canal no fim dos failovers e volta a eles ([onDone]); os que já lá estão ficam esbatidos.
+ */
+@Composable
+internal fun BackupAddBody(vm: AppViewModel, state: BackupPanelState, onDone: () -> Unit) {
+    val s = LocalStrings.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val choices = state.choices ?: return
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusWithRetry(firstFocus) }
+    val added = state.failovers.toSet()
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+        item(key = "search") {
+            BasicTextField(
+                value = state.query,
+                onValueChange = { state.query = it },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleSmall.copy(color = ItvColors.Text),
+                cursorBrush = SolidColor(LocalAccent.current.start),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                decorationBox = { field ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(ItvIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim)
+                        Spacer(Modifier.width(10.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (state.query.isEmpty()) Text(s.backupChannelSearchAll, color = ItvColors.TextFaint, style = MaterialTheme.typography.titleSmall)
+                            field()
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .padding(top = 8.dp, bottom = 6.dp)
+                    .leavesWithArrows()
+                    .fillMaxWidth()
+                    .clip(ItvShapes.Control)
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+            )
+        }
+        val list = if (state.query.isBlank()) state.suggested else state.results
+        item(key = "h") { Header(if (state.query.isBlank()) s.backupSuggested else s.backupChannelResults) }
+        itemsIndexed(list, key = { _, (c, fromMain) -> (if (fromMain) "m:" else "b:") + c.key }) { i, (c, fromMain) ->
+            val f = choices.failoverOf(c, fromMain)
+            val already = f in added
+            GlassRow(
+                onClick = {
+                    if (!already) state.toggle(f)
+                    onDone()
+                },
+                modifier = if (i == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                title = c.name,
+                subtitle = s.backupAlreadyAdded.takeIf { already },
+                trailing = { SourceTag(state.source(f, s), dim = already) },
+            )
+        }
+    }
+}
+
+/** A etiqueta pequena com a lista de um canal ("Backup", "Esta lista"). */
+@Composable
+private fun SourceTag(text: String, dim: Boolean = false) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = LocalContentColor.current.copy(alpha = if (dim) 0.4f else 0.75f),
+        maxLines = 1,
+        modifier = Modifier.clip(ItvShapes.Control).background(LocalContentColor.current.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 @Composable
 private fun Header(text: String) {
     Text(text, color = ItvColors.TextDim, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp))
 }
-
-/** Um canal para juntar aos failovers (da reserva, ou [fromMain] da própria lista); com o visto se já lá estiver. */
-@Composable
-private fun AddRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, c: Channel, fromMain: Boolean, s: Strings) {
-    val f = choices.failoverOf(c, fromMain)
-    val added = f in state.failovers
-    GlassRow(
-        onClick = { state.toggle(f) },
-        selected = added,
-        leading = { Icon(if (added) ItvIcons.Check else ItvIcons.Add, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
-        title = c.name,
-        subtitle = state.subtitle(f, s),
-    )
-}
-
-private fun check(on: Boolean): (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? =
-    if (on) ({ Icon(ItvIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }) else null
 
 /** O que diz o estado de um canal na lista "Canais de reserva". */
 internal fun ChannelMatch.State.label(s: Strings): String = when (this) {

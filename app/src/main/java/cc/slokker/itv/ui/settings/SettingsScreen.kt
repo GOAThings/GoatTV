@@ -169,7 +169,7 @@ internal fun settingItems(
             Item.Check("o:$i", label, value == route.selected, swatch = route.swatches[value]) { route.onPick(value) }
         }
         Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit,
-        is Route.BackupChannels, is Route.BackupChannelPick -> emptyList()
+        is Route.BackupChannels, is Route.BackupChannelPick, is Route.BackupChannelAdd -> emptyList()
     }
 }
 
