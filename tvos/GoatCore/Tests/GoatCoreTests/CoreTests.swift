@@ -617,15 +617,18 @@ enum CoreTests {
             playlist: playlist,
             categories: [Category(id: "1", name: "News"), Category(id: "Outros", name: "Outros")],
             channels: [
-                Channel(uid: 0, key: "101", num: 1, name: "RTP 1", logo: "https://x/rtp1.png", categoryId: "1"),
-                Channel(uid: 1, key: "u0a1b2c", num: 2, name: "Canal ç", logo: "logo.png", categoryId: "Outros"),
+                Channel(uid: 0, key: "101", num: 1, name: "RTP 1", logo: "https://x/rtp1.png", categoryId: "1", epgId: "rtp1.pt"),
+                Channel(uid: 1, key: "u0a1b2c", num: 2, name: "Canal ç", logo: "logo.png", categoryId: "Outros", epgId: " "),
             ]
         )
         guard let index = ChannelIndex(content) else { throw Failure(description: "sem índice") }
-        try expect(index.hash, "ea9f8cc27edc2e37f03ba70062966b66b503be16")
+        // O mesmo hash do Android (ChannelIndexTest), agora com o id do guia no texto.
+        try expect(index.hash, "e208f7063796947eba103d5ae4d842c8ab8397b7")
         let body = try JSON.parse(index.body())
         try expect(body["channels"]?.array?.count, 2)
         try expect(body["channels"]?.array?[1]["logo"] == nil, true)
+        try expect(body["channels"]?.array?[0]["epg"]?.string, "rtp1.pt")
+        try expect(body["channels"]?.array?[1]["epg"] == nil, true)
     }
 
     /// Os números do tvg-chno (iguais aos do Android, ver M3uParserTest).

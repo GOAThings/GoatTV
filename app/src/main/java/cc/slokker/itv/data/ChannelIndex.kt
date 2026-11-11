@@ -41,15 +41,18 @@ class ChannelIndex private constructor(val hash: String, private val groups: Str
             val channels = JsonArray()
             for (ch in content.channels) {
                 val logo = ch.logo?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                // O id do guia: o site usa-o para emparelhar os canais com os da lista de reserva (ver ChannelMatch).
+                val epg = ch.epgId?.trim()?.takeIf { it.isNotEmpty() }
                 channels.add(JsonObject().apply {
                     addProperty("key", ch.key)
                     addProperty("name", ch.name)
                     addProperty("group", ch.categoryId)
                     addProperty("num", ch.num)
                     logo?.let { addProperty("logo", it) }
+                    epg?.let { addProperty("epg", it) }
                 })
                 canonical.append("c\t").append(ch.key).append('\t').append(ch.name).append('\t').append(ch.categoryId)
-                    .append('\t').append(ch.num).append('\t').append(logo.orEmpty()).append('\n')
+                    .append('\t').append(ch.num).append('\t').append(logo.orEmpty()).append('\t').append(epg.orEmpty()).append('\n')
             }
             val hash = MessageDigest.getInstance("SHA-1").digest(canonical.toString().toByteArray())
                 .joinToString("") { "%02x".format(it) }

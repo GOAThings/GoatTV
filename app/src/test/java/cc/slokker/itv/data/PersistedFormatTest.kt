@@ -347,15 +347,15 @@ class PersistedFormatTest {
             Playlist("p1", PlaylistType.M3U, "Demo", url = "https://example.com/list.m3u"),
             listOf(Category("1", "News"), Category("Outros", "Outros")),
             listOf(
-                Channel(0, "101", 1, "RTP 1", "https://x/rtp1.png", "1"),
-                Channel(1, "u0a1b2c", 2, "Canal ç", "logo.png", "Outros"),
+                Channel(0, "101", 1, "RTP 1", "https://x/rtp1.png", "1", epgId = "rtp1.pt"),
+                Channel(1, "u0a1b2c", 2, "Canal ç", "logo.png", "Outros", epgId = " "),
             ),
         )
         val canonical = "g\t1\tNews\n" + "g\tOutros\tOutros\n" +
-            "c\t101\tRTP 1\t1\t1\thttps://x/rtp1.png\n" + "c\tu0a1b2c\tCanal ç\tOutros\t2\t\n"
+            "c\t101\tRTP 1\t1\t1\thttps://x/rtp1.png\trtp1.pt\n" + "c\tu0a1b2c\tCanal ç\tOutros\t2\t\t\n"
         val sha1 = MessageDigest.getInstance("SHA-1").digest(canonical.toByteArray()).joinToString("") { "%02x".format(it) }
         assertEquals(sha1, ChannelIndex.of(content)!!.hash)
-        assertEquals("ea9f8cc27edc2e37f03ba70062966b66b503be16", sha1)
+        assertEquals("e208f7063796947eba103d5ae4d842c8ab8397b7", sha1)
     }
 
     // ---- Ajudas ----
