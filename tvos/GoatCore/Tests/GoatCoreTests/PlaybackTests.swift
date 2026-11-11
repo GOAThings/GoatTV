@@ -187,6 +187,8 @@ extension CoreTests {
         try expect(p(["zap_delay_ms": 2_000]).zapDelayMs, 2_000)
         try expect(p(["zap_delay_ms": 0]).zapDelayMs, Prefs.ZapDelay.off)
         try expect(p(["zap_delay_ms": 700]).zapDelayMs, Prefs.ZapDelay.auto)
+        try expect(p(["engine": "aether"]).engine, "aether")
+        try expect(p(["engine": "mpv"]).engine, "exo")
         try expect(p(["afr_fallback": "50"]).afrFallback, Prefs.AfrFallback.hz50)
         try expect(p(["afr_fallback": "48"]).afrFallback, Prefs.AfrFallback.none)
         try expect(Prefs.AfrFallback.fps(Prefs.AfrFallback.hz5994), 59.94)

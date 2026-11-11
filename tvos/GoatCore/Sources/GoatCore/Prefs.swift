@@ -20,7 +20,8 @@ public struct Prefs: Equatable, Sendable {
     public var streamFormat: String?
     public var aspect = Aspect.fit
     public var buffer = Buffer.normal
-    /// O motor: "exo" (o normal; no Apple TV, o leitor da Apple nos HLS e o VLC no resto) ou "vlc".
+    /// O motor: "exo" (o normal; no Apple TV, o leitor da Apple nos HLS e o VLC no resto), "vlc" ou "aether" (o
+    /// AetherEngine, experimental, só no Apple TV e no iPhone: o Android lê-o como "exo").
     public var engine = "exo"
     /// "hw" ou "sw" (descodificador de vídeo).
     public var decoder = "hw"
@@ -224,7 +225,7 @@ public struct Prefs: Equatable, Sendable {
         audioLanguage = Prefs.language(s["audio_language"])
         subtitleLanguage = Prefs.language(s["subtitle_language"])
         uiScale = clamp(int("ui_scale", d.uiScale), 80, 120)
-        engine = str("engine", d.engine, ["exo", "vlc"])
+        engine = str("engine", d.engine, ["exo", "vlc", "aether"])
         decoder = str("decoder", d.decoder, ["hw", "sw"])
         afr = bool("afr", d.afr)
         afrMode = Prefs.readAfrMode(s)

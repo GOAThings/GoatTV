@@ -335,6 +335,7 @@
     <string name="engine">플레이어</string>
     <string name="engine_exo">ExoPlayer (권장)</string>
     <string name="engine_vlc">VLC (더 많은 형식 지원)</string>
+    <string name="engine_aether">AetherEngine (실험적)</string>
     <string name="using_vlc">이 채널은 VLC로 재생됩니다</string>
     <string name="decoder">동영상 디코더</string>
     <string name="deinterlace">디인터레이스 (VLC)</string>

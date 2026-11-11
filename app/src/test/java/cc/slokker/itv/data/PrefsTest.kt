@@ -49,6 +49,13 @@ class PrefsTest {
     }
 
     @Test
+    fun `an engine only the Apple apps know falls back to the default`() {
+        // "aether" (o motor experimental do Apple TV e do iPhone) chega pela conta: aqui é o normal.
+        assertEquals(Prefs.Engine.EXO, prefs("""{"engine":"aether"}""").engine)
+        assertEquals(Prefs.Engine.VLC, prefs("""{"engine":"vlc"}""").engine)
+    }
+
+    @Test
     fun `groups are only locked when a pin exists`() {
         val locked = """"locked_groups":["p1:adultos"]"""
         assertFalse(prefs("{$locked}").isLocked("p1", "adultos"))

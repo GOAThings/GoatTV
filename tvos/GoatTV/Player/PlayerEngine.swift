@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import CoreMedia
 import Foundation
+import GoatAether
 import GoatCore
 import Observation
 #if os(tvOS)
@@ -18,6 +19,8 @@ import UIKit
 /// stream cair, volta a ligar ao fim de uns segundos. Com "Igualar a frame rate", a TV muda para a cadência e o
 /// HDR do canal (Definições do Apple TV → Vídeo e áudio → Igualar conteúdo).
 /// Em direto, com "Pausar o direto", um .ts é gravado num anel em disco e o VLC lê-o de lá (ver Timeshift).
+/// Experimental: com o motor "aether" (Definições → Player), os HLS abrem no da Apple e o resto no AetherEngine (ver
+/// AetherPlayback), com a pausa do direto dele; o VLC fica para o que nenhum dos dois abrir.
 @MainActor
 @Observable
 final class PlayerEngine: NSObject {
@@ -32,6 +35,8 @@ final class PlayerEngine: NSObject {
     enum Backend: Equatable {
         case vlc
         case apple
+        /// O AetherEngine (experimental).
+        case aether
     }
 
     private(set) var state: State = .idle
@@ -104,6 +109,7 @@ final class PlayerEngine: NSObject {
     /// Dolby/DTS seguem tal como vêm para o recetor ou a TV (no VLC; o da Apple trata disso sozinho).
     @ObservationIgnored var passthrough = true
     /// "exo" (o normal: o da Apple nos HLS, o VLC no resto) ou "vlc" (sempre o VLC). As mesmas chaves do Android.
+    /// "aether": o da Apple nos HLS, o AetherEngine no resto (experimental, só aqui; o Android lê-o como "exo").
     @ObservationIgnored var engine = "exo"
     /// Descodificar em software no VLC (para streams que o hardware não abre bem).
     @ObservationIgnored var softwareDecoder = false
@@ -122,6 +128,7 @@ final class PlayerEngine: NSObject {
                 ringPlayingSince = now
             }
             vlc.rate = speed
+            aetherPlayback?.rate = speed
             avPlayer.defaultRate = speed
             if avPlayer.rate != 0 { avPlayer.rate = speed }
         }
@@ -233,6 +240,19 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var pendingStart: Task<Void, Never>?
     private let vlc = VLCMediaPlayer()
     private let avPlayer = AVPlayer()
+    /// O AetherEngine só se cria na primeira vez que é preciso (com os outros motores, nunca).
+    @ObservationIgnored private var aetherPlayback: AetherPlayback?
+    private var aether: AetherPlayback {
+        if let aetherPlayback { return aetherPlayback }
+        let a = AetherPlayback()
+        a.view.frame = view.bounds
+        a.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        a.view.isHidden = true
+        view.insertSubview(a.view, belowSubview: freezeView)
+        a.onEvent = { [weak self] event in self?.aetherEvent(event) }
+        aetherPlayback = a
+        return a
+    }
 
     @ObservationIgnored private var muted = false
     /// As escolhas à mão já repostas nesta abertura.
@@ -248,6 +268,33 @@ final class PlayerEngine: NSObject {
     }
 
     @ObservationIgnored private var attempts: [Attempt] = []
+
+    // MARK: Canais HDR no AetherEngine
+
+    /// O canal aberto é HDR: o AetherEngine já lá viu HDR (ou o VLC deu-o em HEVC 4K).
+    @ObservationIgnored private var openedHDR = false
+    /// Os canais onde o AetherEngine viu HDR (ou que o VLC deu em HEVC 4K): abrem logo nele. Só neste aparelho.
+    @ObservationIgnored private var hdrChannels = Set(UserDefaults.standard.stringArray(forKey: "aether_hdr_channels") ?? [])
+
+    private func rememberHDR(_ key: String, _ hdr: Bool) {
+        guard hdrChannels.contains(key) != hdr else { return }
+        if hdr { hdrChannels.insert(key) } else { hdrChannels.remove(key) }
+        UserDefaults.standard.set(Array(hdrChannels), forKey: "aether_hdr_channels")
+        DebugLog.add("Player: \(hdr ? "HDR" : "SDR") channel, \(hdr ? "AetherEngine" : "VLC") from now on")
+    }
+
+    /// O VLC está a dar HEVC em 4K: quase sempre HDR, que ele mostra em SDR.
+    private var vlcLooksHDR: Bool {
+        let tracks = vlc.media?.tracksInformation as? [[String: Any]] ?? []
+        return tracks.contains { t in
+            guard (t[VLCMediaTracksInformationType] as? String) == VLCMediaTracksInformationTypeVideo else { return false }
+            let fourcc = (t[VLCMediaTracksInformationCodec] as? NSNumber)?.uint32Value ?? 0
+            let codec = VLCMedia.codecName(forFourCC: fourcc, trackType: VLCMediaTracksInformationTypeVideo).lowercased()
+            let h = (t[VLCMediaTracksInformationVideoHeight] as? NSNumber)?.intValue ?? 0
+            return (codec.contains("hevc") || codec.contains("265")) && h >= 2000
+        }
+    }
+
     /// Qual das [attempts] se está a abrir e se se chegou lá por uma recusa (então o formato não se aprende).
     @ObservationIgnored private var fallback = FormatFallback()
     private var index: Int { fallback.index }
@@ -291,10 +338,24 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var linkResolver: (() async -> [StreamCandidate]?)?
 
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
-        candidates.enumerated().flatMap { i, c -> [Attempt] in
-            engine != "vlc" && c.isHLS
-                ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
-                : [Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+        // AetherEngine: um HLS abre primeiro no da Apple (o mais rápido a mudar de canal) e, se não der, no AetherEngine;
+        // o resto (.ts…) abre no AetherEngine e, em último caso, no VLC.
+        if engine == "aether" {
+            return candidates.enumerated().flatMap { i, c -> [Attempt] in
+                c.isHLS
+                    ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .aether, candidateIndex: i)]
+                    : [Attempt(candidate: c, backend: .aether, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+        }
+        // Normal: um canal HDR que não é HLS abre no AetherEngine (o VLC dá sempre SDR) e, se não der, no VLC.
+        return candidates.enumerated().flatMap { i, c -> [Attempt] in
+            if engine != "vlc" && c.isHLS {
+                return [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+            if engine == "exo" && openedHDR {
+                return [Attempt(candidate: c, backend: .aether, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+            return [Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
         }
     }
 
@@ -336,6 +397,7 @@ final class PlayerEngine: NSObject {
         let agent = userAgent.map(SafeInput.stripControl) ?? ""
         self.userAgent = agent.isEmpty ? iptvUserAgent : agent
         self.referrer = referrer.map(SafeInput.stripControl)
+        openedHDR = hdrChannels.contains(channelKey)
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
         attempts = makeAttempts(candidates)
         fallback.restart()
@@ -395,6 +457,10 @@ final class PlayerEngine: NSObject {
                 self.showFreeze(image)
                 self.begin(after: pause)
             }
+        case .aether:
+            // O motor apaga a imagem ao fechar: tira-se antes uma cópia do que está no ecrã (como as outras).
+            showFreezeView(aetherPlayback?.view.snapshotView(afterScreenUpdates: false))
+            begin(after: pause)
         }
     }
 
@@ -454,7 +520,21 @@ final class PlayerEngine: NSObject {
         if let image { view.bringSubviewToFront(freezeView); _ = image }
     }
 
+    /// A última imagem do AetherEngine: uma cópia do ecrã (não há ficheiro nem imagem a pedir ao motor).
+    @ObservationIgnored private var freezeCopy: UIView?
+
+    private func showFreezeView(_ copy: UIView?) {
+        freezeCopy?.removeFromSuperview()
+        freezeCopy = copy
+        guard let copy else { return }
+        copy.frame = view.bounds
+        copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(copy, aboveSubview: freezeView)
+    }
+
     private func hideFreeze() {
+        freezeCopy?.removeFromSuperview()
+        freezeCopy = nil
         freezeView.isHidden = true
         freezeView.image = nil
         frozen = false
@@ -494,6 +574,7 @@ final class PlayerEngine: NSObject {
         for n in notifications { NotificationCenter.default.removeObserver(n) }
         notifications.removeAll()
         vlc.stop()
+        aetherPlayback?.stop()
         // O leitor da Apple fecha as ligações dele sozinho (e sem avisar quando): cancela-se já o que está a carregar.
         (avPlayer.currentItem?.asset as? AVURLAsset)?.cancelLoading()
         avPlayer.replaceCurrentItem(with: nil)
@@ -534,6 +615,7 @@ final class PlayerEngine: NSObject {
         DebugLog.add("Player: opening \(attempt.candidate.format) with \(backend) (\(index + 1)/\(attempts.count))")
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
+        if backend == .aether { aether.view.isHidden = false } else { aetherPlayback?.view.isHidden = true }
         hasPicture = false
         movingSince = nil
         state = .opening
@@ -558,9 +640,26 @@ final class PlayerEngine: NSObject {
                     self.startTimeshiftTicker()
                 }
             }
+        case .aether:
+            // O canal que uma gravação está a gravar lê-se do anel dela (é a mesma ligação), sem pausa do direto. Nos
+            // outros, a ligação é do motor e a pausa do direto é a dele (a janela em disco do AetherEngine).
+            if pausable, ChannelFeed.find(attempt.candidate.url) != nil, !attempt.candidate.isHLS,
+               let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
+                startAether(local, ring: true)
+            } else {
+                whenConnectionFree { [weak self] in
+                    guard let self else { return }
+                    self.startAether(url)
+                    if self.pausable, self.timeshiftEnabled {
+                        self.timeshift.openHls()
+                        self.startTimeshiftTicker()
+                    }
+                }
+            }
         }
-        // Se não começar a dar, tenta a forma seguinte (o leitor da Apple tem o VLC a seguir: espera-se menos).
-        let patience = backend == .apple ? 8 : 15
+        // Se não começar a dar, tenta a forma seguinte (o leitor da Apple tem o VLC a seguir: espera-se menos; o
+        // AetherEngine junta-se ao direto com mais calma).
+        let patience = backend == .apple ? 8 : (backend == .aether ? 20 : 15)
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(patience))
             guard !Task.isCancelled, let self, self.state == .opening else { return }
@@ -657,6 +756,7 @@ final class PlayerEngine: NSObject {
         if let lastHTTPStatus { return lastHTTPStatus }
         switch backend {
         case .apple: return appleHTTPStatus
+        case .aether: return aetherPlayback?.httpStatus
         case .vlc:
             guard let status = timeshift.httpStatus, !(200..<300).contains(status) else { return nil }
             return status
@@ -687,6 +787,19 @@ final class PlayerEngine: NSObject {
             hasPicture = true
             hideFreeze()
             checkApplePicture()
+        } else if backend == .aether {
+            positionValid = true
+            hasPicture = true
+            hideFreeze()
+            DebugLog.add("Player: AetherEngine route \(aether.route)")
+            // Normal: o AetherEngine diz se o canal é mesmo HDR; um SDR volta a abrir no VLC da próxima vez.
+            if engine == "exo", !onBackup, let key = openedKey {
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(3))
+                    guard let self, self.openedKey == key, self.backend == .aether, let hdr = self.aetherPlayback?.isHDR else { return }
+                    self.rememberHDR(key, hdr)
+                }
+            }
         }
         let attempt = attempts.indices.contains(index) ? attempts[index] : nil
         format = attempt?.candidate.format
@@ -837,6 +950,14 @@ final class PlayerEngine: NSObject {
         ringClock()
         vlc.audio?.isMuted = muted
         hideFreeze()
+        // Normal: o VLC está a dar HEVC 4K (quase sempre HDR, que ele mostra em SDR): abre-se outra vez no AetherEngine.
+        if engine == "exo", !openedHDR, !onBackup, let key = openedKey, vlcLooksHDR {
+            rememberHDR(key, true)
+            openedHDR = true
+            attempts = makeAttempts(openedCandidates)
+            fallback.restart()
+            start()
+        }
     }
 
     private var soundOnly: Bool {
@@ -918,13 +1039,57 @@ final class PlayerEngine: NSObject {
         if state == .playing { fail() } else { next() }
     }
 
+    // MARK: AetherEngine
+
+    /// [ring]: [url] é o anel local de uma gravação deste canal (sem pausa do direto, sem cabeçalhos).
+    private func startAether(_ url: URL, ring: Bool = false) {
+        var r = AetherPlayback.Request(url: url, live: openedLive)
+        if !ring {
+            var headers = ["User-Agent": userAgent]
+            if let referrer, !referrer.isEmpty { headers["Referer"] = referrer }
+            r.headers = headers
+            if openStartMs > 0 { r.startSeconds = Double(openStartMs) / 1000 }
+            // A pausa do direto é a janela do motor, com o mesmo limite que o anel tem sem guia.
+            if openedLive, pausable, timeshiftEnabled { r.dvrSeconds = Double(Timeshift.noEpgAgeMs / 1000) }
+        }
+        let audio = audioLanguage.isEmpty ? (appLanguage ?? "") : audioLanguage
+        if !audio.isEmpty, !trackChoice.isManual(.audio) { r.audioLanguages = [audio] }
+        if subtitlesByLanguage, !subtitleLanguage.isEmpty, !trackChoice.isManual(.text) { r.subtitleLanguages = [subtitleLanguage] }
+        r.audioDelaySeconds = Double(audioDelayMs) / 1000
+        // O motor desentrelaça sozinho o que é entrelaçado (não dá para desligar): "normal" é a 25/30 imagens.
+        r.fieldRate = deinterlace != "yadif"
+        r.singleConnection = ownsProviderConnection
+        r.secondary = !controlsDisplay
+        // O modo da TV (frame rate e HDR) muda-o o próprio motor, quando o AFR está ligado e o HDR não está em "SDR".
+        r.displayCriteria = controlsDisplay && afrMode != Prefs.AfrMode.off && hdr != "sdr"
+        r.matchContent = displayMatchingEnabled ?? true
+        let a = aether
+        a.isMuted = muted
+        a.setAspect(aspect)
+        a.rate = speed
+        a.open(r)
+    }
+
+    private func aetherEvent(_ event: AetherPlayback.Event) {
+        guard backend == .aether else { return }
+        switch event {
+        case .playing:
+            becamePlaying()
+        case .failed, .ended:
+            lastHTTPStatus = aetherPlayback?.httpStatus
+            DebugLog.add("Player: AetherEngine \(event == .ended ? "ended" : "failed") (HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
+            if state == .playing { fail() } else { next() }
+        }
+    }
+
     // MARK: Modo da TV (frame rate e HDR)
 
     /// O canal começou a dar: quando se souber a cadência dele, a TV muda para ela (conforme o modo, ver AfrSession).
     /// Sem medida ao fim de [afrMeasureMs], a cadência de recurso das Definições; sem ela, espera-se pela medida.
     private func startAfr() {
         afrTask?.cancel()
-        guard controlsDisplay, afrMode != Prefs.AfrMode.off, displayManager != nil else { return }
+        // No AetherEngine é o motor que muda o modo da TV (ver startAether).
+        guard controlsDisplay, backend != .aether, afrMode != Prefs.AfrMode.off, displayManager != nil else { return }
         let since = Self.uptimeMs()
         afrTask = Task { [weak self] in
             var counter = FrameRate.Counter()
@@ -969,6 +1134,8 @@ final class PlayerEngine: NSObject {
             let track = item.tracks.first { $0.assetTrack?.mediaType == .video }
             let fps = Double(track?.currentVideoFrameRate ?? 0)
             return fps > 1 ? FrameRate.snap(fps) : nil
+        case .aether:
+            return nil
         case .vlc:
             // A que o stream diz (como no Android, a do formato ganha); sem ela, conta-se as imagens que o VLC mostra.
             if let info = vlcVideoInfo, info.fps > 1 {
@@ -1000,6 +1167,8 @@ final class PlayerEngine: NSObject {
             // O VLC desenha sempre em SDR: só a frame rate.
             let size = vlcVideoInfo
             manager.preferredDisplayCriteria = Self.criteria(fps: target, width: size?.width ?? 1920, height: size?.height ?? 1080)
+        case .aether:
+            break
         }
     }
 
@@ -1052,6 +1221,9 @@ extension PlayerEngine {
         case .apple:
             let t = CMTimeGetSeconds(avPlayer.currentTime())
             return t.isFinite ? Int64(t * 1000) : 0
+        case .aether:
+            let t = aetherPlayback?.positionSeconds ?? 0
+            return t.isFinite ? Int64(t * 1000) : 0
         }
     }
 
@@ -1060,6 +1232,7 @@ extension PlayerEngine {
         self.muted = muted
         vlc.audio?.isMuted = muted
         avPlayer.isMuted = muted
+        aetherPlayback?.isMuted = muted
     }
 
     private func applyAudio() {
@@ -1069,6 +1242,8 @@ extension PlayerEngine {
             vlc.audio?.passthrough = passthrough
         case .apple:
             avPlayer.isMuted = muted
+        case .aether:
+            aetherPlayback?.isMuted = muted
         }
     }
 
@@ -1082,6 +1257,7 @@ extension PlayerEngine {
         switch backend {
         case .vlc: if paused { vlc.play() } else { vlc.pause() }
         case .apple: if paused { avPlayer.play() } else { avPlayer.pause() }
+        case .aether: if paused { aetherPlayback?.play() } else { aetherPlayback?.pause() }
         }
         paused.toggle()
         ringClock()
@@ -1093,6 +1269,7 @@ extension PlayerEngine {
         switch backend {
         case .vlc: h = Int(vlc.videoSize.height)
         case .apple: h = Int(avPlayer.currentItem?.presentationSize.height ?? 0)
+        case .aether: h = aetherPlayback?.videoHeight ?? 0
         }
         return h > 0 ? "\(h)p" : nil
     }
@@ -1192,6 +1369,11 @@ extension PlayerEngine {
                                    info: TrackInfo(language: o.extendedLanguageTag ?? o.locale?.identifier, label: o.displayName,
                                                    channels: surround ? 6 : 2, supported: o.isPlayable, selected: o == selected))
             }
+        case .aether:
+            return (aetherPlayback?.audioTracks ?? []).map { t in
+                TrackOption(id: Int32(truncatingIfNeeded: t.id), name: t.name,
+                            info: TrackInfo(language: t.language, label: t.name, channels: t.channels, selected: t.selected))
+            }
         }
     }
 
@@ -1212,6 +1394,11 @@ extension PlayerEngine {
                             info: TrackInfo(language: o.extendedLanguageTag ?? o.locale?.identifier, label: o.displayName,
                                             supported: o.isPlayable, selected: o == selected,
                                             forced: o.hasMediaCharacteristic(.containsOnlyForcedSubtitles)))
+            }
+        case .aether:
+            return (aetherPlayback?.subtitleTracks ?? []).map { t in
+                TrackOption(id: Int32(truncatingIfNeeded: t.id), name: t.name,
+                            info: TrackInfo(language: t.language, label: t.name, selected: t.selected, forced: t.forced))
             }
         }
     }
@@ -1274,6 +1461,8 @@ extension PlayerEngine {
             if let event = item.accessLog()?.events.last, event.indicatedBitrate > 0 {
                 rows.append(("bitrate", String(format: "%.1f Mb/s", event.indicatedBitrate / 1_000_000)))
             }
+        case .aether:
+            rows = aetherPlayback?.details ?? []
         }
         return rows
     }
@@ -1292,7 +1481,13 @@ extension PlayerEngine {
     }
 
     /// O motor em uso, para a informação do stream.
-    var backendName: String { backend == .apple ? "Apple (AVPlayer)" : "VLC" }
+    var backendName: String {
+        switch backend {
+        case .apple: return "Apple (AVPlayer)"
+        case .vlc: return "VLC"
+        case .aether: return "AetherEngine"
+        }
+    }
 
     // MARK: Faixas
 
@@ -1306,6 +1501,8 @@ extension PlayerEngine {
             return tracks(names: vlc.audioTrackNames, ids: vlc.audioTrackIndexes).filter { $0.id >= 0 }
         case .apple:
             return (appleGroup(.audible)?.options ?? []).enumerated().map { Track(id: Int32($0.offset), name: $0.element.displayName) }
+        case .aether:
+            return (aetherPlayback?.audioTracks ?? []).map { Track(id: Int32(truncatingIfNeeded: $0.id), name: $0.name) }
         }
     }
 
@@ -1317,6 +1514,8 @@ extension PlayerEngine {
                   let selected = item.currentMediaSelection.selectedMediaOption(in: group),
                   let i = group.options.firstIndex(of: selected) else { return -1 }
             return Int32(i)
+        case .aether:
+            return (aetherPlayback?.audioTracks.first { $0.selected }).map { Int32(truncatingIfNeeded: $0.id) } ?? -1
         }
     }
 
@@ -1334,6 +1533,8 @@ extension PlayerEngine {
         case .apple:
             guard let group = appleGroup(.audible), group.options.indices.contains(Int(id)) else { return }
             avPlayer.currentItem?.select(group.options[Int(id)], in: group)
+        case .aether:
+            aetherPlayback?.selectAudio(Int(id))
         }
     }
 
@@ -1345,6 +1546,10 @@ extension PlayerEngine {
         case .apple:
             guard let group = appleGroup(.legible) else { return [] }
             return [Track(id: -1, name: "")] + group.options.enumerated().map { Track(id: Int32($0.offset), name: $0.element.displayName) }
+        case .aether:
+            let tracks = aetherPlayback?.subtitleTracks ?? []
+            guard !tracks.isEmpty else { return [] }
+            return [Track(id: -1, name: "")] + tracks.map { Track(id: Int32(truncatingIfNeeded: $0.id), name: $0.name) }
         }
     }
 
@@ -1356,6 +1561,8 @@ extension PlayerEngine {
                   let selected = item.currentMediaSelection.selectedMediaOption(in: group),
                   let i = group.options.firstIndex(of: selected) else { return -1 }
             return Int32(i)
+        case .aether:
+            return (aetherPlayback?.subtitleTracks.first { $0.selected }).map { Int32(truncatingIfNeeded: $0.id) } ?? -1
         }
     }
 
@@ -1374,6 +1581,8 @@ extension PlayerEngine {
             guard let group = appleGroup(.legible) else { return }
             let option = group.options.indices.contains(Int(id)) ? group.options[Int(id)] : nil
             avPlayer.currentItem?.select(option, in: group)
+        case .aether:
+            aetherPlayback?.selectSubtitle(Int(id))
         }
     }
 
@@ -1393,6 +1602,7 @@ extension PlayerEngine {
         case "fill": appleView.playerLayer.videoGravity = .resize
         default: appleView.playerLayer.videoGravity = .resizeAspect
         }
+        aetherPlayback?.setAspect(aspect)
         let ratio = "16:9"
         switch aspect {
         case "zoom":
@@ -1419,6 +1629,8 @@ extension PlayerEngine {
             if let entry = timeshift.entry(behind: behindMs) { reopenRing(entry, live: false) }
         } else if timeshift.hls, backend == .apple {
             seekApple(to: timeshift.hlsPosition(behind: behindMs))
+        } else if timeshift.hls, backend == .aether {
+            seekAether(to: timeshift.hlsPosition(behind: behindMs))
         }
     }
 
@@ -1433,6 +1645,8 @@ extension PlayerEngine {
             }
         } else if timeshift.hls, backend == .apple {
             seekApple(to: timeshift.hlsLivePosition())
+        } else if timeshift.hls, backend == .aether {
+            seekAether(to: timeshift.hlsLivePosition())
         }
     }
 
@@ -1470,6 +1684,13 @@ extension PlayerEngine {
 
     /// O stream afinal não é TS: o gravador já largou a ligação; o VLC abre-o diretamente, sem a pausa do direto.
     fileprivate func openDirect() {
+        if backend == .aether, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) {
+            // O mesmo no AetherEngine: larga o anel e liga-se ele.
+            aetherPlayback?.stop()
+            timeshift.clear()
+            whenConnectionFree { [weak self] in self?.startAether(url) }
+            return
+        }
         guard backend == .vlc, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) else { return }
         // O VLC larga primeiro o anel (o fim da resposta local já não lhe interessa); depois fecha-se o resto.
         vlc.stop()
@@ -1521,6 +1742,10 @@ extension PlayerEngine {
             guard oldest.isFinite, live.isFinite, at.isFinite, state == .playing else { return timeshift.unavailable() }
             timeshift.updateHls(end: Int64(live * 1000), oldest: Int64(oldest * 1000), position: Int64(at * 1000), paused: paused,
                                 settled: avPlayer.timeControlStatus == .playing && !timeshift.seeking)
+        } else if timeshift.hls, backend == .aether, state == .playing, let a = aetherPlayback, let w = a.liveWindow {
+            // A janela em disco do AetherEngine, como a do HLS no leitor da Apple.
+            timeshift.updateHls(end: w.end, oldest: w.oldest, position: w.position, paused: paused,
+                                settled: a.settled && !timeshift.seeking)
         } else {
             timeshift.unavailable()
         }
@@ -1544,6 +1769,12 @@ extension PlayerEngine {
     }
 
     private static func uptimeMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
+
+    /// AetherEngine: salta para [ms] (o tempo dele) e continua a dar.
+    private func seekAether(to ms: Int64) {
+        paused = false
+        aetherPlayback?.seek(toMs: ms) { [weak self] in self?.timeshift.seeking = false }
+    }
 
     /// HLS: salta no AVPlayer para [ms] (o tempo dele) e continua a dar.
     private func seekApple(to ms: Int64) {

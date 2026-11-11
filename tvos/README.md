@@ -5,6 +5,9 @@ recent channels and settings are shared across every TV.
 
 - `GoatCore/`: playlists (M3U, Xtream), XMLTV guide, account API and settings. Plain Swift that also builds on Linux.
 - `GoatTV/`: the tvOS app (SwiftUI). Video playback uses [TVVLCKit](https://code.videolan.org/videolan/VLCKit) (LGPL 2.1).
+- `GoatAether/`: the experimental third engine, [AetherEngine](https://github.com/superuser404notfound/AetherEngine)
+  (LGPL 3.0 with an App Store exception, a Swift package pinned in project.yml and iphone.yml), in its own framework so
+  its FFmpeg stays apart from VLC's. Chosen in Settings → Player; needs tvOS/iOS 18.
 
 ## Building
 
