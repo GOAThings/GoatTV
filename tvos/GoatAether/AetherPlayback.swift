@@ -304,8 +304,17 @@ public final class AetherPlayback {
         var rows: [(String, String)] = []
         var video: [String] = []
         if let codec = engine.sourceVideoCodecName { video.append(codec.uppercased()) }
-        if engine.sourceVideoWidth > 0 { video.append("\(engine.sourceVideoWidth)×\(engine.sourceVideoHeight)") }
+        // "i" = entrelaçado (o motor desentrelaça-o em software), "p" = progressivo.
+        let scan = engine.sourceVideoScan.isInterlaced ? "i" : (engine.sourceVideoScan == .progressive ? "p" : "")
+        if engine.sourceVideoWidth > 0 { video.append("\(engine.sourceVideoWidth)×\(engine.sourceVideoHeight)\(scan)") }
         if let fps = engine.sourceVideoFrameRate, fps > 0 { video.append(String(format: "%.2f fps", fps)) }
+        switch engine.sourceVideoFormat {
+        case .sdr: video.append("SDR")
+        case .hdr10: video.append("HDR10")
+        case .hdr10Plus: video.append("HDR10+")
+        case .dolbyVision: video.append("Dolby Vision")
+        case .hlg: video.append("HLG")
+        }
         if !video.isEmpty { rows.append(("video", video.joined(separator: " · "))) }
         if let track = engine.audioTracks.first(where: { $0.id == engine.activeAudioTrackIndex }) {
             var audio = [track.codec.uppercased()]
