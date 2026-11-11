@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -227,6 +235,7 @@ internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: Strin
                         },
                         modifier = Modifier
                             .padding(top = 10.dp)
+                            .leavesWithArrows()
                             .fillMaxWidth()
                             .clip(ItvShapes.Control)
                             .background(Color.White.copy(alpha = 0.12f))
@@ -292,14 +301,21 @@ internal fun backupRowText(s: Strings, review: AppViewModel.BackupReview, row: C
  * estado, com filtros e a pesquisa pelo nome. Feita uma vez (a mesma conta da cobertura); OK abre a escolha ([onOpen]).
  */
 @Composable
-internal fun BackupChannelsPage(vm: AppViewModel, playlistId: String, enabled: Boolean, onOpen: (Channel) -> Unit) {
+internal fun BackupChannelsPage(
+    vm: AppViewModel,
+    playlistId: String,
+    enabled: Boolean,
+    filterState: MutableState<ChannelMatch.Filter>,
+    query: String,
+    onSearch: () -> Unit,
+    onOpen: (Channel) -> Unit,
+) {
     val s = LocalStrings.current
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val coverage by vm.backupCoverage.collectAsStateWithLifecycle()
     LaunchedEffect(playlistId, prefs.backupChannels, prefs.backupMode) { vm.checkBackupCoverage(playlistId) }
     val review = (coverage[playlistId] as? AppViewModel.BackupCoverage.Ready)?.review
-    var filter by remember { mutableStateOf(ChannelMatch.Filter.ALL) }
-    var query by remember { mutableStateOf("") }
+    var filter by filterState
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(review != null) { if (review != null) focusWithRetry(firstFocus) }
     if (review == null) {
@@ -312,32 +328,21 @@ internal fun BackupChannelsPage(vm: AppViewModel, playlistId: String, enabled: B
     }
     Column {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            ChannelMatch.Filter.entries.forEachIndexed { i, f ->
+            ChannelMatch.Filter.entries.forEach { f ->
                 GlassChipButton(
                     if (f == filter) ItvIcons.Check else ItvIcons.Channels, "${f.label(s)} (${counts[f]})", { filter = f },
-                    if (i == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                    // O foco começa (e volta) no filtro escolhido, não sempre no primeiro.
+                    if (f == filter) Modifier.focusRequester(firstFocus) else Modifier,
                 )
             }
         }
-        BasicTextField(
-            value = query,
-            onValueChange = { query = it },
+        // Uma linha que abre o teclado numa página à parte (como a pesquisa do guia): um campo aqui abria o teclado
+        // ao receber o foco e as setas ficavam presas nele, sem chegar aos canais.
+        GlassRow(
+            onClick = onSearch,
             enabled = enabled,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.titleSmall.copy(color = ItvColors.Text),
-            cursorBrush = SolidColor(LocalAccent.current.start),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
-            decorationBox = { field ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(ItvIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim)
-                    Spacer(Modifier.width(10.dp))
-                    Box(Modifier.weight(1f)) {
-                        if (query.isEmpty()) Text(s.backupChannelSearch(review.main.playlist.name), color = ItvColors.TextFaint, style = MaterialTheme.typography.titleSmall)
-                        field()
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth().clip(ItvShapes.Control).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 12.dp),
+            leading = { Icon(ItvIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim); Spacer(Modifier.width(12.dp)) },
+            title = query.ifEmpty { s.backupChannelSearch(review.main.playlist.name) },
         )
         LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
             items(shown, key = { it.main }) { row ->
@@ -345,5 +350,25 @@ internal fun BackupChannelsPage(vm: AppViewModel, playlistId: String, enabled: B
                 GlassRow(onClick = { onOpen(review.main.channels[row.main]) }, enabled = enabled, title = title, subtitle = subtitle)
             }
         }
+    }
+}
+
+/**
+ * As setas para cima e para baixo saem do campo de pesquisa (para os filtros ou para a lista): no Android TV o campo
+ * ficava com elas e não se chegava aos canais com o comando. O teclado fecha-se ao sair.
+ */
+@Composable
+private fun Modifier.leavesWithArrows(): Modifier {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    return onPreviewKeyEvent { e ->
+        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        val direction = when (e.key) {
+            Key.DirectionDown -> FocusDirection.Down
+            Key.DirectionUp -> FocusDirection.Up
+            else -> return@onPreviewKeyEvent false
+        }
+        keyboard?.hide()
+        focus.moveFocus(direction)
     }
 }

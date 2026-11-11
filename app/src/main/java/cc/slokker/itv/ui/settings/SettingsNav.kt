@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.ui.player.NetVerdictCard
 import cc.slokker.itv.ui.player.BackupChannelBody
 import cc.slokker.itv.ui.player.BackupChannelsPage
@@ -104,7 +105,13 @@ internal sealed interface Route {
     data object Lists : Route { override fun title(s: Strings) = s.playlists }
     class PlaylistDetail(val id: String, private val name: String) : Route { override fun title(s: Strings) = name }
     /** Os canais da lista [playlistId] na reserva: cada um, o da reserva e o estado (ver BackupChannelsPage). */
-    class BackupChannels(val playlistId: String) : Route { override fun title(s: Strings) = s.backupChannels }
+    class BackupChannels(val playlistId: String) : Route {
+        override fun title(s: Strings) = s.backupChannels
+
+        /** O filtro e a pesquisa ficam na entrada (sobrevivem a abrir um canal ou o teclado e voltar). */
+        val filter = mutableStateOf(ChannelMatch.Filter.ALL)
+        val query = mutableStateOf("")
+    }
     /** Escolher o canal da reserva de [channel] (da lista [playlistId]), como no painel do player. */
     class BackupChannelPick(val playlistId: String, val channel: Channel) : Route { override fun title(s: Strings) = channel.name }
     /**
@@ -300,7 +307,13 @@ fun SettingsContent(
                     enabled = !leaving,
                 )
                 Route.GroupsOrder -> GroupsOrderPage(vm, enabled = !leaving)
-                is Route.BackupChannels -> BackupChannelsPage(vm, entry.route.playlistId, enabled = !leaving) { channel ->
+                is Route.BackupChannels -> BackupChannelsPage(
+                    vm, entry.route.playlistId, enabled = !leaving, filterState = entry.route.filter, query = entry.route.query.value,
+                    onSearch = {
+                        val query = entry.route.query
+                        push(Route.TextEdit(I18n.s.search, query.value, TextKind.PLAIN) { v -> query.value = v.trim() }, "bcsearch")
+                    },
+                ) { channel ->
                     push(Route.BackupChannelPick(entry.route.playlistId, channel), "bc:" + channel.key)
                 }
                 is Route.BackupChannelPick -> BackupChannelBody(vm, entry.route.channel, entry.route.playlistId, onTry = null)
