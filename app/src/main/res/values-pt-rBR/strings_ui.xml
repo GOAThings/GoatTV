@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %2$d de %3$d canais encontrados · %4$d em dúvida</string>
     <string name="backup_unavailable">%1$s · não foi possível carregar os canais</string>
     <string name="backup_playing">A %1$s não está respondendo. Tocando da %2$s.</string>
-    <string name="backup_also_failed">A lista reserva (%1$s) também não conseguiu abrir.</string>
+    <string name="backup_also_failed">Os failovers também não conseguiram abrir: %1$s.</string>
+    <string name="backup_playing_channel">O %1$s não abriu. Tocando o %2$s.</string>
+    <string name="backup_failovers">Failovers, na ordem em que são tentados</string>
+    <string name="backup_failovers_hint">OK: mover · Segure OK: remover</string>
+    <string name="backup_failovers_hint_phone">Segure para remover · Arraste ≡ para ordenar</string>
+    <string name="backup_add_from">Adicionar da %1$s</string>
+    <string name="backup_channel_search_all">Pesquisar nas duas listas</string>
     <string name="backup_channel">Canal reserva</string>
     <string name="backup_channel_auto">Automático</string>
     <string name="backup_channel_auto_is">Automático: %1$s</string>

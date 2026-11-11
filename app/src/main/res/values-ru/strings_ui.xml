@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · найдено %2$d из %3$d каналов · под вопросом %4$d</string>
     <string name="backup_unavailable">%1$s · не удалось загрузить каналы</string>
     <string name="backup_playing">%1$s не отвечает. Воспроизведение из %2$s.</string>
-    <string name="backup_also_failed">Резервный плейлист (%1$s) тоже не смог его открыть.</string>
+    <string name="backup_also_failed">Резервные каналы тоже не смогли его открыть: %1$s.</string>
+    <string name="backup_playing_channel">%1$s не открылся. Воспроизводится %2$s.</string>
+    <string name="backup_failovers">Резервные каналы в порядке проверки</string>
+    <string name="backup_failovers_hint">OK: переместить · Удерживать OK: удалить</string>
+    <string name="backup_failovers_hint_phone">Удерживайте, чтобы удалить · Перетащите ≡, чтобы упорядочить</string>
+    <string name="backup_add_from">Добавить из %1$s</string>
+    <string name="backup_channel_search_all">Искать в обоих плейлистах</string>
     <string name="backup_channel">Резервный канал</string>
     <string name="backup_channel_auto">Автоматически</string>
     <string name="backup_channel_auto_is">Автоматически: %1$s</string>

@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · 채널 %3$d개 중 %2$d개 일치 · 불확실 %4$d개</string>
     <string name="backup_unavailable">%1$s · 채널을 불러오지 못했습니다</string>
     <string name="backup_playing">%1$s이(가) 응답하지 않습니다. %2$s에서 재생합니다.</string>
-    <string name="backup_also_failed">예비 재생목록(%1$s)에서도 열 수 없습니다.</string>
+    <string name="backup_also_failed">대체 채널에서도 열 수 없습니다: %1$s.</string>
+    <string name="backup_playing_channel">%1$s이(가) 열리지 않았습니다. %2$s 재생 중.</string>
+    <string name="backup_failovers">대체 채널(시도 순서)</string>
+    <string name="backup_failovers_hint">OK: 이동 · OK 길게: 삭제</string>
+    <string name="backup_failovers_hint_phone">길게 눌러 삭제 · ≡ 끌어서 순서 변경</string>
+    <string name="backup_add_from">%1$s에서 추가</string>
+    <string name="backup_channel_search_all">두 재생목록에서 검색</string>
     <string name="backup_channel">예비 채널</string>
     <string name="backup_channel_auto">자동</string>
     <string name="backup_channel_auto_is">자동: %1$s</string>

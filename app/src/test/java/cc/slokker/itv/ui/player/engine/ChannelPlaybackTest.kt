@@ -100,10 +100,13 @@ class ChannelPlaybackTest {
         override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = null
         var recording: String? = null
         override fun recordingUrl(channel: Channel): String? = recording
-        var backup: BackupStream? = null
+        var backups: List<BackupStream> = emptyList()
+        var backup: BackupStream?
+            get() = backups.firstOrNull()
+            set(value) { backups = listOfNotNull(value) }
         var backupAsked = 0
         val backupNotices = mutableListOf<String>()
-        override suspend fun backupFor(request: PlaybackRequest): BackupStream? { backupAsked++; return backup }
+        override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> { backupAsked++; return backups }
         override fun onBackupPlaying(origin: BackupOrigin) { backupNotices += "${origin.mainName}>${origin.backupName}" }
         var down = false
         val mainFailures = mutableListOf<PlaybackException>()
@@ -758,7 +761,7 @@ class ChannelPlaybackTest {
         p.onError(engine, ioError)
         val f = p.failure!!
         assertEquals(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, f.error.errorCode)
-        assertEquals("Reserva", f.backupFailed)
+        assertEquals("Um HD (Reserva)", f.backupFailed)
         assertEquals(1, f.retry)
         assertNull(p.onBackup)
         // A tentativa seguinte começa outra vez pela principal (e volta a passar à reserva se falhar).
@@ -799,7 +802,7 @@ class ChannelPlaybackTest {
         val p = playback()
         p.tuneNow(live(ts))
         p.onState(engine, Player.STATE_READY)
-        p.playBackup(backupStream())
+        p.playBackup(listOf(backupStream()))
         assertEquals(backupTs, engine.opened.last())
         assertNull(p.onBackup?.mainError)
         val other = Channel(uid = 2, key = "k2", num = 2, name = "Dois", logo = null, categoryId = "g", url = "http://x/2.ts")
@@ -857,5 +860,50 @@ class ChannelPlaybackTest {
         p.tuneNow(live(ts))
         p.onState(engine, Player.STATE_READY)
         assertEquals(1, host.mainPlaying)
+    }
+
+    private val otherChannel = Channel(uid = 8, key = "k8", num = 8, name = "Um SD", logo = null, categoryId = "g", url = "http://x/8.ts")
+    private val otherTs = StreamCandidate("http://x/8.ts", StreamFormat.TS)
+    private fun sameListStream() = BackupStream(PlaybackRequest(otherChannel, null, 0L, listOf(otherTs)), "Principal", "Um SD", sameList = true)
+
+    @Test
+    fun osFailoversTentamSePelaOrdem() {
+        host.backups = listOf(backupStream(), sameListStream())
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, ioError)
+        // O primeiro failover não abre: passa ao segundo (outro canal da própria lista), sem cartão de erro.
+        p.onError(engine, ioError)
+        assertEquals(listOf(ts, backupTs, otherTs), engine.opened)
+        assertNull(p.failure)
+        assertEquals("k1", p.request?.shownKey)
+        assertEquals(true, p.onBackup?.sameList)
+        assertEquals(1, host.backupAsked)
+    }
+
+    @Test
+    fun nenhumFailoverAbreEOCartaoDizTodos() {
+        host.backups = listOf(backupStream(), sameListStream())
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, error(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        p.onError(engine, ioError)
+        p.onError(engine, ioError)
+        val f = p.failure!!
+        assertEquals(PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS, f.error.errorCode)
+        assertEquals("Um HD (Reserva), Um SD", f.backupFailed)
+        assertNull(p.onBackup)
+        assertEquals("k1", p.request?.channel?.key)
+    }
+
+    @Test
+    fun experimentarAgoraComVariosPassaAoSeguinteSeOPrimeiroFalhar() {
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onState(engine, Player.STATE_READY)
+        p.playBackup(listOf(sameListStream(), backupStream()))
+        p.onError(engine, ioError)
+        assertEquals(listOf(ts, otherTs, backupTs), engine.opened)
+        assertEquals("Reserva", p.onBackup?.backupName)
     }
 }

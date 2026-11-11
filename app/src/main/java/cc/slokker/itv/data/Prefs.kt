@@ -107,10 +107,13 @@ data class Prefs(
      */
     val backupPlaylist: Map<String, String> = emptyMap(),
     /**
-     * O canal da reserva escolhido à mão: "playlistId:channelKey" → channelKey na reserva, ou "off" (este canal não
-     * muda de lista). Ganha ao que o ChannelMatch encontra. Apaga-se ao mudar de reserva.
+     * Os failovers escolhidos à mão: "playlistId:channelKey" → os canais a tentar, pela ordem (lista vazia = "nenhum",
+     * este canal não muda de lista). Cada um é uma chave na reserva, ou "main:" e a chave de outro canal da própria
+     * lista (ver ChannelMatch.MAIN_PREFIX). Ganha ao que o ChannelMatch encontra. Apaga-se ao mudar de reserva.
+     * Gravado como era quando cada canal tinha um só (a 0.12.0 e o site percebem-no): "off", uma chave, ou um array
+     * quando há mais de um.
      */
-    val backupChannels: Map<String, String> = emptyMap(),
+    val backupChannels: Map<String, List<String>> = emptyMap(),
     /**
      * Como se escolhe o canal da reserva, por lista: "manual" = só os canais escolhidos à mão ([backupChannels]) passam
      * para a reserva; sem entrada = automático. Sai ao mudar ou tirar a reserva, e com a lista.
@@ -435,7 +438,7 @@ data class Prefs(
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
-                backupChannels = stringMap(s, Key.BACKUP_CHANNELS).filterValues { it.isNotEmpty() },
+                backupChannels = failoverMap(s, Key.BACKUP_CHANNELS),
                 backupMode = stringMap(s, Key.BACKUP_MODE).filterValues { it == ChannelMatch.MODE_MANUAL },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, Sort.ALL),
@@ -548,6 +551,24 @@ data class Prefs(
             s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
                 ?.mapNotNull { (k, v) -> v.takeIf { it.isJsonPrimitive }?.asString?.let { k to it } }?.toMap()
                 .orEmpty()
+
+        /** Os failovers de cada canal: "off" = nenhum, uma chave, ou um array delas; um valor vazio fica de fora. */
+        private fun failoverMap(s: JsonObject, key: String): Map<String, List<String>> =
+            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.mapNotNull { (k, v) ->
+                val list = when {
+                    v.isJsonArray -> v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotEmpty() && it != ChannelMatch.OFF } }.distinct()
+                    v.isJsonPrimitive -> v.asString.takeIf { it.isNotEmpty() }?.let { if (it == ChannelMatch.OFF) emptyList() else listOf(it) }
+                    else -> null
+                }
+                list?.let { k to it }
+            }?.toMap().orEmpty()
+
+        /** Os failovers [list] como se gravam (ver [backupChannels]). */
+        fun failoverValue(list: List<String>): Any = when (list.size) {
+            0 -> ChannelMatch.OFF
+            1 -> list[0]
+            else -> list
+        }
 
         private val COUNTRY_CODE = Regex("[A-Za-z]{2,3}")
 

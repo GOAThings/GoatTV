@@ -396,7 +396,13 @@
     <string name="backup_coverage">%1$s · %2$d of %3$d channels matched · %4$d unsure</string>
     <string name="backup_unavailable">%1$s · couldn\'t load its channels</string>
     <string name="backup_playing">%1$s isn\'t answering. Playing from %2$s.</string>
-    <string name="backup_also_failed">The backup playlist (%1$s) couldn\'t open it either.</string>
+    <string name="backup_also_failed">The failovers couldn\'t open it either: %1$s.</string>
+    <string name="backup_playing_channel">%1$s didn\'t open. Playing %2$s.</string>
+    <string name="backup_failovers">Failovers, in the order they\'re tried</string>
+    <string name="backup_failovers_hint">OK: move · Hold OK: remove</string>
+    <string name="backup_failovers_hint_phone">Hold to remove · Drag ≡ to reorder</string>
+    <string name="backup_add_from">Add from %1$s</string>
+    <string name="backup_channel_search_all">Search both playlists</string>
     <string name="backup_channel">Backup channel</string>
     <string name="backup_channel_auto">Automatic</string>
     <string name="backup_channel_auto_is">Automatic: %1$s</string>

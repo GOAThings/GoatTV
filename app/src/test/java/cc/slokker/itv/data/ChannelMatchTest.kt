@@ -58,7 +58,7 @@ class ChannelMatchTest {
     fun `coverage counts matched, unsure and missing channels`() {
         for (e in cases.getAsJsonArray("coverage")) {
             val c = e.asJsonObject
-            val overrides = c.getAsJsonObject("overrides")?.entrySet()?.associate { it.key to it.value.asString }.orEmpty()
+            val overrides = overrides(c)
             val cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatch.Matcher(entries(c, "pool")), overrides, c.get("manual")?.asBoolean == true)
             val label = c.str("case")!!
             assertEquals(label, c.getAsJsonArray("main").size(), cov.total)
@@ -93,7 +93,7 @@ class ChannelMatchTest {
         for (e in cases.getAsJsonArray("review")) {
             val c = e.asJsonObject
             val label = c.str("case")!!
-            val overrides = c.getAsJsonObject("overrides")?.entrySet()?.associate { it.key to it.value.asString }.orEmpty()
+            val overrides = overrides(c)
             val rows = ChannelMatch.review(entries(c, "main"), ChannelMatch.Matcher(entries(c, "pool")), overrides, c.get("manual").asBoolean)
             val expected = c.getAsJsonArray("expect").map { r ->
                 val a = r.asJsonArray
@@ -101,10 +101,36 @@ class ChannelMatchTest {
             }
             assertEquals(label, expected, rows.map { Triple(it.state.name.lowercase(), it.backup, it.suggestion) })
             assertEquals(label, rows.indices.toList(), rows.map { it.main })
+            c.getAsJsonArray("failovers")?.let { f ->
+                assertEquals("$label/failovers", f.map { r -> r.asJsonArray.map { it.asString } }, rows.map { it.failovers })
+            }
             for ((name, count) in c.getAsJsonObject("filters").entrySet()) {
                 val filter = ChannelMatch.Filter.valueOf(name.uppercase())
                 assertEquals("$label/$name", count.asInt, rows.count { with(ChannelMatch) { it.passes(filter) } })
             }
+        }
+    }
+
+    /** As escolhas à mão de um caso: uma chave, "off" (nenhum) ou um array de failovers, como no `settings`. */
+    private fun overrides(c: JsonObject): Map<String, List<String>> =
+        c.getAsJsonObject("overrides")?.entrySet()?.associate { (k, v) ->
+            k to when {
+                v.isJsonArray -> v.asJsonArray.map { it.asString }
+                v.asString == ChannelMatch.OFF -> emptyList()
+                else -> listOf(v.asString)
+            }
+        }.orEmpty()
+
+    @Test
+    fun `failovers keep the chosen order and drop the ones that are gone`() {
+        for (e in cases.getAsJsonArray("failovers")) {
+            val c = e.asJsonObject
+            val t = c.getAsJsonObject("target")
+            val target = ChannelMatch.Entry(t.str("key") ?: "main", t.str("name")!!, t.str("epg"), t.str("group"))
+            val mainKeys = c.getAsJsonArray("mainKeys")?.map { it.asString }?.toSet().orEmpty()
+            val chosen = c.get("chosen")?.takeIf { !it.isJsonNull }?.asJsonArray?.map { it.asString }
+            val result = ChannelMatch.failovers(target, ChannelMatch.Matcher(entries(c, "pool")), chosen, c.get("manual")?.asBoolean == true, mainKeys::contains)
+            assertEquals(c.str("case"), c.getAsJsonArray("expect").map { it.asString }, result)
         }
     }
 }

@@ -1647,7 +1647,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (p.backupPlaylist[playlistId] == target) return
         val map = if (target == null) p.backupPlaylist - playlistId else p.backupPlaylist + (playlistId to target)
         val channels = p.backupChannels.filterKeys { !it.startsWith("$playlistId:") }
-        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to channels, Prefs.Key.BACKUP_MODE to p.backupMode - playlistId))
+        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to failoverPrefs(channels), Prefs.Key.BACKUP_MODE to p.backupMode - playlistId))
         _backupCoverage.value = _backupCoverage.value - playlistId
     }
 
@@ -1659,19 +1659,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         setPref(Prefs.Key.BACKUP_MODE, if (manual) current + (playlistId to ChannelMatch.MODE_MANUAL) else current - playlistId)
     }
 
-    /** O canal da reserva escolhido à mão para [channelKey] de [playlistId]: uma chave, [ChannelMatch.OFF], ou null (automático). */
-    fun backupChoice(playlistId: String, channelKey: String): String? = prefs.value.backupChannels["$playlistId:$channelKey"]
+    /**
+     * Os failovers escolhidos à mão para [channelKey] de [playlistId], pela ordem (ver Prefs.backupChannels): lista
+     * vazia = "nenhum", null = automático.
+     */
+    fun backupChoice(playlistId: String, channelKey: String): List<String>? = prefs.value.backupChannels["$playlistId:$channelKey"]
 
-    /** As escolhas à mão de [playlistId] (chave do canal → escolha). */
-    private fun backupOverrides(playlistId: String): Map<String, String> =
+    /** As escolhas à mão de [playlistId] (chave do canal → failovers). */
+    private fun backupOverrides(playlistId: String): Map<String, List<String>> =
         prefs.value.backupChannels.filterKeys { it.startsWith("$playlistId:") }.mapKeys { it.key.removePrefix("$playlistId:") }
 
-    /** Grava a escolha à mão ([value] null = volta ao automático). */
-    fun setBackupChoice(playlistId: String, channelKey: String, value: String?) {
+    /** Grava os failovers escolhidos à mão ([value] null = volta ao automático; vazia = "nenhum"). */
+    fun setBackupChoice(playlistId: String, channelKey: String, value: List<String>?) {
         val current = prefs.value.backupChannels
         val key = "$playlistId:$channelKey"
-        setPref(Prefs.Key.BACKUP_CHANNELS, if (value == null) current - key else current + (key to value))
+        setPref(Prefs.Key.BACKUP_CHANNELS, failoverPrefs(if (value == null) current - key else current + (key to value.distinct())))
     }
+
+    private fun failoverPrefs(map: Map<String, List<String>>): Map<String, Any> = map.mapValues { Prefs.failoverValue(it.value) }
 
     /** Os canais da reserva (da cache, ou descarregados como os do segundo canal), ou null se não carregarem a tempo. */
     private suspend fun backupContent(backup: Playlist): PlaylistContent? =
@@ -1691,30 +1696,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     internal val providerOutage = ProviderOutage { android.os.SystemClock.elapsedRealtime() }
 
     /**
-     * O canal [channel] de [main] na reserva, pronto a abrir ([choice]: um canal já escolhido no painel "experimentar
-     * agora"); null sem reserva, sem o canal (ou na dúvida, ou sem escolha no modo manual), ou quando abrir a reserva
-     * passava o limite de ligações dela (o segundo canal já está nessa conta).
+     * Os failovers do canal [channel] de [main], prontos a abrir pela ordem ([chosen]: os do painel, "experimentar
+     * agora"; sem eles, os escolhidos à mão ou o automático). Os da reserva ficam de fora sem reserva, quando ela não
+     * carrega, ou quando abri-la passava o limite de ligações dela (o segundo canal já está nessa conta); os da própria
+     * lista, quando ela está em baixo (ver [providerOutage]: falhavam também). Vazia se não houver nenhum.
      */
-    internal suspend fun backupStream(main: PlaylistContent, channel: Channel, choice: Channel? = null): BackupStream? {
-        if (streamsDisabled) return null
-        val backup = backupOf(main.playlist.id) ?: return null
+    internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null): List<BackupStream> {
+        if (streamsDisabled) return emptyList()
+        val id = main.playlist.id
         // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
-        if (backup.sharesConnectionsWith(main.playlist)) return null
-        val content = backupContent(backup) ?: return null.also { Log.i(TAG_BACKUP, "Reserva ${backup.name}: os canais não carregaram") }
-        playback.second.value?.content?.playlist?.let { sp ->
+        val backup = backupOf(id)?.takeUnless { it.sharesConnectionsWith(main.playlist) }
+        val content = backup?.let { b -> backupContent(b) ?: null.also { Log.i(TAG_BACKUP, "Reserva ${b.name}: os canais não carregaram") } }
+        val busy = content != null && playback.second.value?.content?.playlist?.let { sp ->
             val limit = content.account?.maxConnections
             val one = backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && (limit ?: 1) < 2
-            if (sp.sharesConnectionsWith(backup) && one) return null.also { Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela") }
+            sp.sharesConnectionsWith(backup) && one
+        } == true
+        if (busy) Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela")
+        val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
+        val manual = backupManual(id)
+        val list = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, chosen ?: backupChoice(id, channel.key), manual) { it in main.byKey }
+        val mainDown = providerOutage.isDown(id)
+        val streams = list.mapNotNull { f ->
+            val mainKey = ChannelMatch.mainKeyOf(f)
+            when {
+                mainKey != null -> main.byKey[mainKey]?.takeUnless { mainDown }?.let { c ->
+                    BackupStream(PlaybackRequest.of(main, c, null, streamFormat.value, stalkerLinks), main.playlist.name, c.name, sameList = true)
+                }
+                content != null && !busy -> content.byKey[f]?.let { c ->
+                    BackupStream(PlaybackRequest.of(content, c, null, streamFormat.value, stalkerLinks), main.playlist.name, content.playlist.name)
+                }
+                else -> null
+            }
         }
-        val target = choice ?: run {
-            val manual = backupManual(main.playlist.id)
-            val result = ChannelMatch.decide(ChannelMatch.entry(channel, main), matcherFor(content), backupChoice(main.playlist.id, channel.key), manual)
-            (result as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
-                ?: return null.also { Log.i(TAG_BACKUP, "Reserva: ${if (result is ChannelMatch.Result.Unsure) "em dúvida" else if (manual) "sem escolha (manual)" else "sem canal"} para \"${channel.name}\"") }
-        }
-        Log.i(TAG_BACKUP, "Reserva: \"${channel.name}\" → \"${target.name}\" (${backup.name})")
-        val request = PlaybackRequest.of(content, target, null, streamFormat.value, stalkerLinks)
-        return BackupStream(request, main.playlist.name, backup.name)
+        val names = streams.joinToString(" | ") { if (it.sameList) "\"${it.request.channel.name}\" (${main.playlist.name})" else "\"${it.request.channel.name}\" (${it.backupName})" }
+        Log.i(TAG_BACKUP, if (streams.isEmpty()) "Reserva: nenhum failover para \"${channel.name}\"${if (manual) " (manual)" else ""}" else "Reserva: \"${channel.name}\" → $names")
+        return streams
     }
 
     /** Os canais de uma lista na reserva: a cobertura e a lista "Canais de reserva" (cada canal e o seu estado). */
@@ -1724,7 +1741,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val rows: List<ChannelMatch.ReviewRow>,
         val coverage: ChannelMatch.Coverage,
         val manual: Boolean,
-        internal val overrides: Map<String, String>,
+        internal val overrides: Map<String, List<String>>,
     )
 
     /** A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva"). */
@@ -1782,19 +1799,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** O painel "Canal de reserva" de [channel] (de [mainId]): o automático (ou a sugestão), os parecidos e a escolha à mão. */
+    /**
+     * O painel "Canal de reserva" de [channel] (de [mainId]): os failovers dele, o automático (ou a sugestão), os
+     * parecidos na reserva e na própria lista, e a escolha à mão.
+     */
     class BackupChoices(
         val mainId: String,
         val backup: Playlist,
         val content: PlaylistContent,
+        /** A lista principal (para os failovers dela); null se não estiver carregada. */
+        val main: PlaylistContent?,
         val auto: ChannelMatch.Result,
         val similar: List<Channel>,
-        /** A escolha à mão: uma chave da reserva, [ChannelMatch.OFF], ou null (automático). */
-        val choice: String?,
+        /** Os parecidos na própria lista (sem o canal). */
+        val similarMain: List<Channel>,
+        /** Os failovers escolhidos à mão, pela ordem: lista vazia = "nenhum", null = automático. */
+        val choice: List<String>?,
         /** Modo manual: o automático é só uma sugestão. */
         val manual: Boolean,
     ) {
         val autoChannel: Channel? get() = (auto as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
+
+        /** O canal de um failover (da reserva, ou da própria lista com ChannelMatch.MAIN_PREFIX). */
+        fun channelOf(failover: String): Channel? =
+            ChannelMatch.mainKeyOf(failover).let { key -> if (key != null) main?.byKey?.get(key) else content.byKey[failover] }
+
+        /** A lista de um failover (a própria, ou a reserva). */
+        fun contentOf(failover: String): PlaylistContent? = if (ChannelMatch.mainKeyOf(failover) != null) main else content
+
+        /** O nome da lista de um failover. */
+        fun listName(failover: String): String = contentOf(failover)?.playlist?.name.orEmpty()
+
+        /** O failover de [channel], da reserva ou ([fromMain]) da própria lista. */
+        fun failoverOf(channel: Channel, fromMain: Boolean): String = if (fromMain) ChannelMatch.mainFailover(channel.key) else channel.key
     }
 
     /** As escolhas de [channel] da lista [mainId] (a em uso, se null). */
@@ -1809,15 +1846,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val entry = ChannelMatch.entry(channel, mainContent)
             val auto = matcher.find(entry.name, entry.epgId, null, entry.group)
             val similar = matcher.ranked(channel.name, channel.epgId, BACKUP_SIMILAR).mapNotNull { backupContent.channels.getOrNull(it) }
-            BackupChoices(id, backup, backupContent, auto, similar, backupChoice(id, channel.key), backupManual(id))
+            // Na própria lista: os parecidos sem o canal (o mesmo canal noutra qualidade, ou noutro grupo).
+            val similarMain = mainContent?.let { m ->
+                ChannelMatch.Matcher(m.channels.map { ChannelMatch.entry(it, m) }).ranked(channel.name, channel.epgId, BACKUP_SIMILAR + 1)
+                    .mapNotNull { m.channels.getOrNull(it) }.filter { it.key != channel.key }.take(BACKUP_SIMILAR)
+            }.orEmpty()
+            BackupChoices(id, backup, backupContent, mainContent, auto, similar, similarMain, backupChoice(id, channel.key), backupManual(id))
         }
     }
 
-    /** Pesquisa nos canais da reserva (pelo nome, sem acentos nem maiúsculas). */
-    fun searchBackup(choices: BackupChoices, query: String): List<Channel> {
+    /** Pesquisa nos canais da reserva e da própria lista (pelo nome, sem acentos nem maiúsculas): os da reserva primeiro. */
+    fun searchBackup(choices: BackupChoices, query: String): List<Pair<Channel, Boolean>> {
         val q = searchKey(query.trim())
         if (q.length < 2) return emptyList()
-        return choices.content.channels.asSequence().filter { q in searchKey(it.name) }.take(MAX_SEARCH).toList()
+        fun hits(c: PlaylistContent?) = c?.channels.orEmpty().asSequence().filter { q in searchKey(it.name) }
+        return (hits(choices.content).map { it to false } + hits(choices.main).map { it to true }).take(MAX_SEARCH).toList()
     }
 
     /** Pesquisa na lista "Canais de reserva" (pelo nome do canal principal). */

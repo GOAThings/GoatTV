@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %3$d 个频道中匹配 %2$d 个 · %4$d 个不确定</string>
     <string name="backup_unavailable">%1$s · 无法加载频道</string>
     <string name="backup_playing">%1$s 无响应。正在从 %2$s 播放。</string>
-    <string name="backup_also_failed">备用列表（%1$s）也无法打开。</string>
+    <string name="backup_also_failed">备用频道也无法打开：%1$s。</string>
+    <string name="backup_playing_channel">%1$s 无法打开。正在播放 %2$s。</string>
+    <string name="backup_failovers">备用频道（按尝试顺序）</string>
+    <string name="backup_failovers_hint">OK：移动 · 长按 OK：移除</string>
+    <string name="backup_failovers_hint_phone">长按移除 · 拖动 ≡ 排序</string>
+    <string name="backup_add_from">从 %1$s 添加</string>
+    <string name="backup_channel_search_all">在两个列表中搜索</string>
     <string name="backup_channel">备用频道</string>
     <string name="backup_channel_auto">自动</string>
     <string name="backup_channel_auto_is">自动：%1$s</string>

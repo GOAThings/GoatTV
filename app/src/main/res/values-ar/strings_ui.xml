@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · تمت مطابقة %2$d من %3$d قناة · %4$d غير مؤكدة</string>
     <string name="backup_unavailable">%1$s · تعذر تحميل القنوات</string>
     <string name="backup_playing">%1$s لا تستجيب. التشغيل من %2$s.</string>
-    <string name="backup_also_failed">ولم تتمكن القائمة الاحتياطية (%1$s) من فتحها أيضًا.</string>
+    <string name="backup_also_failed">ولم تتمكن القنوات البديلة من فتحها أيضًا: %1$s.</string>
+    <string name="backup_playing_channel">لم تُفتح %1$s. تشغيل %2$s.</string>
+    <string name="backup_failovers">القنوات البديلة، بترتيب تجربتها</string>
+    <string name="backup_failovers_hint">OK: نقل · اضغط مطولًا على OK: إزالة</string>
+    <string name="backup_failovers_hint_phone">اضغط مطولًا للإزالة · اسحب ≡ لإعادة الترتيب</string>
+    <string name="backup_add_from">إضافة من %1$s</string>
+    <string name="backup_channel_search_all">البحث في القائمتين</string>
     <string name="backup_channel">القناة الاحتياطية</string>
     <string name="backup_channel_auto">تلقائي</string>
     <string name="backup_channel_auto_is">تلقائي: %1$s</string>

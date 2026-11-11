@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %2$d di %3$d canali trovati · %4$d incerti</string>
     <string name="backup_unavailable">%1$s · impossibile caricare i canali</string>
     <string name="backup_playing">%1$s non risponde. Riproduzione da %2$s.</string>
-    <string name="backup_also_failed">Neanche la playlist di riserva (%1$s) è riuscita ad aprirlo.</string>
+    <string name="backup_also_failed">Neanche i failover sono riusciti ad aprirlo: %1$s.</string>
+    <string name="backup_playing_channel">%1$s non si è aperto. Riproduzione di %2$s.</string>
+    <string name="backup_failovers">Failover, nell\'ordine in cui vengono provati</string>
+    <string name="backup_failovers_hint">OK: sposta · Tieni premuto OK: rimuovi</string>
+    <string name="backup_failovers_hint_phone">Tieni premuto per rimuovere · Trascina ≡ per riordinare</string>
+    <string name="backup_add_from">Aggiungi da %1$s</string>
+    <string name="backup_channel_search_all">Cerca in entrambe le playlist</string>
     <string name="backup_channel">Canale di riserva</string>
     <string name="backup_channel_auto">Automatico</string>
     <string name="backup_channel_auto_is">Automatico: %1$s</string>

@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %2$d von %3$d Sendern gefunden · %4$d unsicher</string>
     <string name="backup_unavailable">%1$s · Sender konnten nicht geladen werden</string>
     <string name="backup_playing">%1$s antwortet nicht. Wiedergabe von %2$s.</string>
-    <string name="backup_also_failed">Die Ersatz-Playlist (%1$s) konnte ihn auch nicht öffnen.</string>
+    <string name="backup_also_failed">Die Failover konnten ihn auch nicht öffnen: %1$s.</string>
+    <string name="backup_playing_channel">%1$s ließ sich nicht öffnen. Wiedergabe von %2$s.</string>
+    <string name="backup_failovers">Failover, in der Reihenfolge, in der sie versucht werden</string>
+    <string name="backup_failovers_hint">OK: verschieben · OK halten: entfernen</string>
+    <string name="backup_failovers_hint_phone">Gedrückt halten zum Entfernen · ≡ ziehen zum Sortieren</string>
+    <string name="backup_add_from">Aus %1$s hinzufügen</string>
+    <string name="backup_channel_search_all">In beiden Playlists suchen</string>
     <string name="backup_channel">Ersatzsender</string>
     <string name="backup_channel_auto">Automatisch</string>
     <string name="backup_channel_auto_is">Automatisch: %1$s</string>

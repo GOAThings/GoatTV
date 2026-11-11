@@ -33,8 +33,20 @@ object ChannelMatch {
         data object Missing : Result
     }
 
-    /** Escolha à mão canal a canal (para um ecrã futuro): a chave do canal na reserva, ou [OFF] para nunca mudar. */
+    /** Escolha à mão canal a canal: "nenhum" (este canal nunca muda de lista). Gravado como o valor de uma lista vazia. */
     const val OFF = "off"
+
+    /**
+     * Um failover que é outro canal da própria lista (não da reserva): "main:" e a chave dele. Os da reserva são só a
+     * chave, como eram quando cada canal tinha um só.
+     */
+    const val MAIN_PREFIX = "main:"
+
+    /** A chave do canal [key] da lista principal como failover. */
+    fun mainFailover(key: String) = MAIN_PREFIX + key
+
+    /** A chave na lista principal, se [failover] for um canal dela; null se for um da reserva. */
+    fun mainKeyOf(failover: String): String? = failover.takeIf { it.startsWith(MAIN_PREFIX) }?.removePrefix(MAIN_PREFIX)
 
     object Quality {
         const val SD = 1
@@ -410,11 +422,30 @@ object ChannelMatch {
         return Result.Match(index)
     }
 
+    /**
+     * Os failovers do canal [main], pela ordem em que se tentam: as chaves (as da própria lista com [MAIN_PREFIX]).
+     * [chosen]: a lista escolhida à mão (vazia = "nenhum"; null = automático: o que o [matcher] encontrar, e nada no
+     * [manual]). Os escolhidos que já não existem (na reserva, ou na principal segundo [inMain]) ficam de fora, e o
+     * próprio canal também; se não sobrar nenhum, conta como sem escolha (como na lista "Canais de reserva").
+     */
+    fun failovers(main: Entry, matcher: Matcher, chosen: List<String>?, manual: Boolean, inMain: (String) -> Boolean): List<String> {
+        val kept = chosen?.let { existing(it, main.key, matcher, inMain) }
+        if (kept.isNullOrEmpty() && chosen?.isEmpty() != true) {
+            val index = (decide(main, matcher, null, manual) as? Result.Match)?.index ?: return emptyList()
+            return listOf(matcher.pool[index].key)
+        }
+        return kept.orEmpty()
+    }
+
+    /** Os failovers de [chosen] que ainda existem (na reserva, ou na principal segundo [inMain]), sem o próprio canal [self]. */
+    private fun existing(chosen: List<String>, self: String, matcher: Matcher, inMain: (String) -> Boolean): List<String> =
+        chosen.filter { f -> mainKeyOf(f)?.let { it != self && inMain(it) } ?: (matcher.indexOfKey(f) != null) }.distinct()
+
     /** Como fica cada canal da lista principal na reserva (a lista "Canais de reserva"). */
     enum class State {
         /** Encontrado sozinho. */
         AUTO,
-        /** Escolhido à mão. */
+        /** Escolhido à mão (um ou mais failovers). */
         CHOSEN,
         /** "Nenhum": escolhido à mão para não mudar. */
         OFF,
@@ -424,8 +455,11 @@ object ChannelMatch {
         NOT_SET,
     }
 
-    /** Um canal da lista principal ([main], a posição) e o da reserva ([backup], a posição) ou a [suggestion] automática. */
-    data class ReviewRow(val main: Int, val state: State, val backup: Int?, val suggestion: Int?)
+    /**
+     * Um canal da lista principal ([main], a posição) e o da reserva ([backup], a posição) ou a [suggestion] automática.
+     * Escolhidos à mão: [failovers], as chaves pela ordem (ver [failovers]); [backup] é o primeiro, se for da reserva.
+     */
+    data class ReviewRow(val main: Int, val state: State, val backup: Int?, val suggestion: Int?, val failovers: List<String> = emptyList())
 
     /** Os filtros da lista "Canais de reserva". */
     enum class Filter { ALL, MATCHED, UNSURE, MISSING, CHOSEN }
@@ -438,14 +472,19 @@ object ChannelMatch {
         Filter.CHOSEN -> state == State.CHOSEN || state == State.OFF
     }
 
-    /** Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → escolha) e o modo. */
-    fun review(main: List<Entry>, matcher: Matcher, overrides: Map<String, String> = emptyMap(), manual: Boolean = false): List<ReviewRow> =
-        main.mapIndexed { i, c ->
+    /**
+     * Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → failovers pela ordem; lista
+     * vazia = "nenhum") e o modo.
+     */
+    fun review(main: List<Entry>, matcher: Matcher, overrides: Map<String, List<String>> = emptyMap(), manual: Boolean = false): List<ReviewRow> {
+        val mainKeys = main.mapTo(HashSet()) { it.key }
+        return main.mapIndexed { i, c ->
             val override = overrides[c.key]
-            val chosen = override?.takeIf { it != OFF }?.let(matcher::indexOfKey)
+            // Só os escolhidos que ainda existem (sem nenhum, conta como sem escolha).
+            val chosen = override?.let { existing(it, c.key, matcher, mainKeys::contains) }
             when {
-                override == OFF -> ReviewRow(i, State.OFF, null, null)
-                chosen != null -> ReviewRow(i, State.CHOSEN, chosen, null)
+                override?.isEmpty() == true -> ReviewRow(i, State.OFF, null, null)
+                !chosen.isNullOrEmpty() -> ReviewRow(i, State.CHOSEN, matcher.indexOfKey(chosen.first()), null, chosen)
                 else -> {
                     // Uma escolha que já não existe na reserva conta como sem escolha.
                     val auto = matcher.find(c.name, c.epgId, null, c.group)
@@ -459,6 +498,7 @@ object ChannelMatch {
                 }
             }
         }
+    }
 
     /** Quantos canais de uma lista têm o seu na reserva, quantos ficam em dúvida e quantos faltam (com os nomes). */
     data class Coverage(
@@ -477,7 +517,7 @@ object ChannelMatch {
     fun coverage(
         main: List<Entry>,
         matcher: Matcher,
-        overrides: Map<String, String> = emptyMap(),
+        overrides: Map<String, List<String>> = emptyMap(),
         manual: Boolean = false,
         rows: List<ReviewRow> = review(main, matcher, overrides, manual),
     ): Coverage {

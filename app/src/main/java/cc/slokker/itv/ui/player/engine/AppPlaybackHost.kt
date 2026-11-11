@@ -29,8 +29,10 @@ internal class AppPlaybackHost(
     override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
-    override suspend fun backupFor(request: PlaybackRequest): BackupStream? = vm.backupStream(latestData(), request.channel)
-    override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(I18n.s.backupPlaying(origin.mainName, origin.backupName))
+    override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = vm.backupStreams(latestData(), request.channel)
+    override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(
+        if (origin.sameList) I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName) else I18n.s.backupPlaying(origin.mainName, origin.backupName),
+    )
     override fun providerDown(request: PlaybackRequest): Boolean = vm.providerOutage.isDown(latestData().playlist.id)
     override fun onMainFailed(request: PlaybackRequest, error: PlaybackException) {
         if (ProviderOutage.providerWide(OpenRetry.httpCode(error))) vm.providerOutage.markDown(latestData().playlist.id)

@@ -40,7 +40,7 @@ internal data class PlaybackPolicy(
     val surroundDefault: Boolean,
     /** Liga as legendas na língua preferida (o segundo canal não mostra legendas). */
     val subtitleLanguage: Boolean,
-    /** Um canal em direto que não abre passa para o mesmo canal da lista de reserva (ver [PlaybackHost.backupFor]). */
+    /** Um canal em direto que não abre passa para os failovers dele, pela ordem (ver [PlaybackHost.backupsFor]). */
     val failover: Boolean,
 ) {
     companion object {
@@ -126,8 +126,14 @@ internal class PlaybackRequest(
     }
 }
 
-/** O mesmo canal na lista de reserva: o pedido para ele e o nome das duas listas (para o aviso). */
-internal class BackupStream(val request: PlaybackRequest, val mainName: String, val backupName: String)
+/**
+ * Um failover: o pedido para ele e o nome das duas listas (para o aviso). [sameList]: é outro canal da própria lista
+ * principal (e [backupName] é então o nome dele).
+ */
+internal class BackupStream(val request: PlaybackRequest, val mainName: String, val backupName: String, val sameList: Boolean = false) {
+    /** Como aparece no cartão de erro: "RTP 1 HD (BackupTV)", ou só o canal se for da própria lista. */
+    val label: String get() = if (sameList) backupName else "${request.channel.name} ($backupName)"
+}
 
 /**
  * De onde veio um pedido da reserva: o da lista principal ([main], ao qual se volta), o erro com que ele falhou (null
@@ -139,6 +145,14 @@ internal class BackupOrigin(
     val mainFormat: String?,
     val mainName: String,
     val backupName: String,
+    /** Este failover é outro canal da própria lista (ver [BackupStream.sameList]). */
+    val sameList: Boolean = false,
+    /** Os failovers a tentar a seguir, se este também não abrir. */
+    val rest: List<BackupStream> = emptyList(),
+    /** Os que já falharam antes deste ([BackupStream.label]), para o cartão de erro. */
+    val failed: List<String> = emptyList(),
+    /** Este, como aparece no cartão de erro. */
+    val label: String = backupName,
 )
 
 /**
@@ -165,7 +179,7 @@ internal data class PlaybackFailure(
     val retry: Int,
     val maxRetries: Int,
     val retrySeconds: Int,
-    /** A lista de reserva também não abriu este canal (o nome dela, para o cartão dizer as duas). */
+    /** Os failovers também não abriram este canal (os nomes, para o cartão os dizer). */
     val backupFailed: String? = null,
 )
 
@@ -197,12 +211,13 @@ internal interface PlaybackHost {
     fun recordingUrl(channel: Channel): String? = null
 
     /**
-     * O canal de [request] (direto, da lista principal) na lista de reserva, com o pedido para o abrir; null sem
-     * reserva, sem esse canal lá (ou na dúvida), ou se a reserva não carregar. Pode descarregar a lista da reserva.
+     * Os failovers do canal de [request] (direto, da lista principal), pela ordem, com o pedido para abrir cada um;
+     * vazia sem nenhum (sem reserva, sem o canal lá ou na dúvida, ou se a reserva não carregar). Pode descarregar a
+     * lista da reserva.
      */
-    suspend fun backupFor(request: PlaybackRequest): BackupStream? = null
+    suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = emptyList()
 
-    /** O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>."). */
+    /** Um failover começou a dar (o aviso "<lista> não responde. A dar da <reserva>.", ou o canal da própria lista). */
     fun onBackupPlaying(origin: BackupOrigin) = Unit
 
     /** A lista de [request] esteve em baixo há pouco (ver ProviderOutage): o canal vai logo à reserva. */

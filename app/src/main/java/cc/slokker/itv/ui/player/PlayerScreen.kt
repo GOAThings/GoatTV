@@ -1170,10 +1170,10 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInHorizontally { -it / 4 },
                 exit = fadeOut() + slideOutHorizontally { -it / 4 },
             ) {
-                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, onTry = { target ->
+                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, onTry = { failovers ->
                     showBackup = false
-                    // Fecha a ligação à lista principal e abre a da reserva (o aviso aparece quando der).
-                    scope.launch { vm.backupStream(data, current, target)?.let(playback::playBackup) }
+                    // Fecha a ligação à lista principal e abre os failovers, pela ordem (o aviso aparece quando der).
+                    scope.launch { playback.playBackup(vm.backupStreams(data, current, failovers)) }
                 })
             }
 

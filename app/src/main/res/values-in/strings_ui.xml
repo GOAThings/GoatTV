@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %2$d dari %3$d saluran cocok · %4$d ragu</string>
     <string name="backup_unavailable">%1$s · saluran tidak dapat dimuat</string>
     <string name="backup_playing">%1$s tidak merespons. Memutar dari %2$s.</string>
-    <string name="backup_also_failed">Playlist cadangan (%1$s) juga tidak dapat membukanya.</string>
+    <string name="backup_also_failed">Failover juga tidak dapat membukanya: %1$s.</string>
+    <string name="backup_playing_channel">%1$s tidak terbuka. Memutar %2$s.</string>
+    <string name="backup_failovers">Failover, sesuai urutan dicoba</string>
+    <string name="backup_failovers_hint">OK: pindahkan · Tahan OK: hapus</string>
+    <string name="backup_failovers_hint_phone">Tahan untuk menghapus · Seret ≡ untuk mengurutkan</string>
+    <string name="backup_add_from">Tambah dari %1$s</string>
+    <string name="backup_channel_search_all">Cari di kedua playlist</string>
     <string name="backup_channel">Saluran cadangan</string>
     <string name="backup_channel_auto">Otomatis</string>
     <string name="backup_channel_auto_is">Otomatis: %1$s</string>

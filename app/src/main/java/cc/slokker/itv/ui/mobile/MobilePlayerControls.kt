@@ -98,6 +98,14 @@ import cc.slokker.itv.data.at
 import cc.slokker.itv.data.after
 import cc.slokker.itv.data.minutesLeft
 import cc.slokker.itv.ui.player.engine.ZapTrace
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
 
 @Composable
 internal fun VideoArea(
@@ -560,10 +568,10 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                     }
                 }
                 PlayerOption.BACKUP -> vm.playing.collectAsStateWithLifecycle().value?.let { channel ->
-                    BackupSection(vm, channel) { target ->
+                    BackupSection(vm, channel) { failovers ->
                         onClose()
                         val data = vm.content.value ?: return@BackupSection
-                        scope.launch { vm.backupStream(data, channel, target)?.let(playback.core::playBackup) }
+                        scope.launch { playback.core.playBackup(vm.backupStreams(data, channel, failovers)) }
                     }
                 }
                 PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer) {
@@ -661,9 +669,12 @@ private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val ZAP_DRAG_PX = 120f
 
-/** O canal de reserva do canal a dar (como o painel da TV, ver BackupChannelPanel). */
+/**
+ * Os failovers do canal a dar (como o painel da TV, ver BackupChannelPanel): tocar e manter tira um, arrastar pela
+ * pega muda a ordem; os parecidos e os encontrados juntam-se (ou tiram-se) com um toque.
+ */
 @Composable
-internal fun BackupSection(vm: AppViewModel, channel: Channel, mainId: String? = null, onTry: ((Channel) -> Unit)?) {
+internal fun BackupSection(vm: AppViewModel, channel: Channel, mainId: String? = null, onTry: ((List<String>) -> Unit)?) {
     val s = LocalStrings.current
     val state = rememberBackupPanel(vm, channel, mainId)
     val choices = state.choices
@@ -672,29 +683,83 @@ internal fun BackupSection(vm: AppViewModel, channel: Channel, mainId: String? =
             state.loading -> Note(s.backupChecking)
             choices == null -> Note(s.backupUnavailable((mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()))
             else -> {
-                val effective = state.effective
-                if (onTry != null) MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play, subtitle = effective?.name) { effective?.let(onTry) }
-                val auto = choices.autoChannel
-                when {
-                    // Manual: o automático é uma sugestão, que se escolhe com um toque.
-                    state.manual && auto != null -> MenuRow(s.backupSuggestion(auto.name), null, checked = state.choice == auto.key, subtitle = choices.content.categoryName(auto.categoryId)) { state.pick(auto.key) }
-                    state.manual -> Note(state.autoLabel(s))
-                    else -> MenuRow(s.backupChannelAuto, null, checked = state.choice == null, subtitle = state.autoLabel(s)) { state.pick(null) }
-                }
-                MenuRow(s.backupChannelOff, null, checked = state.none) { state.pick(ChannelMatch.OFF) }
-                val chosen = choices.content.byKey[state.choice ?: ""]
-                val similar = (listOfNotNull(chosen) + choices.similar).distinctBy { it.key }
-                if (similar.isNotEmpty()) Note(s.backupChannelSimilar)
-                similar.forEach { c -> BackupRow(state, choices, c, s) }
-                Field(s.backupChannelSearch(choices.backup.name), state.query, Modifier.padding(horizontal = 12.dp).padding(vertical = 8.dp)) { state.query = it }
-                state.results.forEach { c -> BackupRow(state, choices, c, s) }
+                val failovers = state.failovers
+                if (onTry != null) MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play, subtitle = failovers.firstOrNull()?.let(choices::channelOf)?.name) { if (failovers.isNotEmpty()) onTry(failovers) }
+                Note(if (failovers.isEmpty()) s.backupStateNone else s.backupFailovers)
+                failovers.forEachIndexed { i, f -> FailoverRow(state, choices, f, i, failovers.size, s) }
+                if (failovers.isNotEmpty()) Note(s.backupFailoversHintPhone)
+                if (state.manual) Note(state.autoLabel(s)) else MenuRow(s.backupChannelAuto, null, checked = state.automatic, subtitle = state.autoLabel(s), onClick = state::reset)
+                MenuRow(s.backupChannelOff, null, checked = state.none, onClick = state::clear)
+                val similar = (listOfNotNull(choices.autoChannel) + choices.similar).distinctBy { it.key }
+                if (similar.isNotEmpty()) Note(s.backupAddFrom(choices.backup.name))
+                similar.forEach { c -> AddRow(state, choices, c, false, s) }
+                if (choices.similarMain.isNotEmpty()) Note(s.backupAddFrom(choices.main?.playlist?.name.orEmpty()))
+                choices.similarMain.forEach { c -> AddRow(state, choices, c, true, s) }
+                Field(s.backupChannelSearchAll, state.query, Modifier.padding(horizontal = 12.dp).padding(vertical = 8.dp)) { state.query = it }
+                state.results.forEach { (c, fromMain) -> AddRow(state, choices, c, fromMain, s) }
             }
         }
     }
 }
 
+/** Um failover: o número, o canal e a lista; manter carregado tira-o, a pega (≡) arrasta-o para cima ou para baixo. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BackupRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, c: Channel, s: Strings) {
-    val sub = listOfNotNull(choices.content.categoryName(c.categoryId), s.backupChannelAuto.takeIf { c.key == choices.autoChannel?.key }).joinToString(" · ")
-    MenuRow(c.name, null, checked = state.choice == c.key, subtitle = sub) { state.pick(c.key) }
+private fun FailoverRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, f: String, index: Int, count: Int, s: Strings) {
+    val c = choices.channelOf(f) ?: return
+    val haptics = LocalHapticFeedback.current
+    var drag by remember(f) { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableIntStateOf(1) }
+    // O índice muda a cada passo do arrasto: lido aqui dentro, o gesto continua com o valor certo.
+    val current by rememberUpdatedState(index)
+    Row(
+        Modifier.fillMaxWidth()
+            .onSizeChanged { rowHeight = it.height.coerceAtLeast(1) }
+            .zIndex(if (drag != 0f) 1f else 0f)
+            .graphicsLayer { translationY = drag }
+            .background(if (drag != 0f) PhoneColors.Card else Color.Transparent)
+            .combinedClickable(onClick = {}, onLongClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                state.remove(f)
+            })
+            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${index + 1}", color = ItvColors.TextFaint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(26.dp))
+        Column(Modifier.weight(1f)) {
+            Text(c.name, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(state.subtitle(f, s), color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(
+            Modifier.size(48.dp).pointerInput(f) {
+                detectVerticalDragGestures(
+                    onDragEnd = { drag = 0f },
+                    onDragCancel = { drag = 0f },
+                ) { change, dy ->
+                    change.consume()
+                    drag += dy
+                    // Meia linha para cima ou para baixo: troca com a vizinha (e a linha fica debaixo do dedo).
+                    val step = when {
+                        drag > rowHeight / 2f && current < count - 1 -> 1
+                        drag < -rowHeight / 2f && current > 0 -> -1
+                        else -> 0
+                    }
+                    if (step != 0) {
+                        state.move(f, step)
+                        drag -= step * rowHeight
+                    }
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(ItvIcons.DragHandle, s.backupFailoversHintPhone, tint = ItvColors.TextFaint, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+/** Um canal para juntar aos failovers (da reserva, ou [fromMain] da própria lista); com o visto se já lá estiver. */
+@Composable
+private fun AddRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, c: Channel, fromMain: Boolean, s: Strings) {
+    val f = choices.failoverOf(c, fromMain)
+    MenuRow(c.name, null, icon = if (f in state.failovers) null else ItvIcons.Add, checked = f in state.failovers, subtitle = state.subtitle(f, s)) { state.toggle(f) }
 }

@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %2$d chaînes sur %3$d trouvées · %4$d incertaines</string>
     <string name="backup_unavailable">%1$s · impossible de charger les chaînes</string>
     <string name="backup_playing">%1$s ne répond pas. Lecture depuis %2$s.</string>
-    <string name="backup_also_failed">La playlist de secours (%1$s) n\'a pas pu l\'ouvrir non plus.</string>
+    <string name="backup_also_failed">Les failovers n\'ont pas pu l\'ouvrir non plus : %1$s.</string>
+    <string name="backup_playing_channel">%1$s ne s\'est pas ouverte. Lecture de %2$s.</string>
+    <string name="backup_failovers">Failovers, dans l\'ordre où ils sont essayés</string>
+    <string name="backup_failovers_hint">OK : déplacer · OK long : retirer</string>
+    <string name="backup_failovers_hint_phone">Appui long pour retirer · Glissez ≡ pour réordonner</string>
+    <string name="backup_add_from">Ajouter depuis %1$s</string>
+    <string name="backup_channel_search_all">Chercher dans les deux playlists</string>
     <string name="backup_channel">Chaîne de secours</string>
     <string name="backup_channel_auto">Automatique</string>
     <string name="backup_channel_auto_is">Automatique : %1$s</string>

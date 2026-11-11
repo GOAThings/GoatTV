@@ -259,7 +259,7 @@ class PersistedFormatTest {
         "channelLogos" to (Prefs.Key.CHANNEL_LOGOS to mapOf("p1:101" to "https://logos.example.com/rtp1.png", "p1:102" to "")),
         "extraEpg" to (Prefs.Key.EXTRA_EPG to mapOf("p1" to "https://epg.example.com/extra.xml")),
         "backupPlaylist" to (Prefs.Key.BACKUP_PLAYLIST to mapOf("p1" to "p2")),
-        "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off")),
+        "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off", "p1:103" to listOf("2001", "main:104"))),
         "backupMode" to (Prefs.Key.BACKUP_MODE to mapOf("p1" to "manual")),
         "outlineColor" to (Prefs.Key.OUTLINE_COLOR to "pink"),
         "panelTimeout" to (Prefs.Key.PANEL_TIMEOUT to 30),
@@ -317,7 +317,7 @@ class PersistedFormatTest {
             {"hidden_groups": ["p1:7", "p1:Outros"], "group_order": {"p1": ["3", "1"]}, "channel_order": {"p1:1": ["102", "101"]},
              "channel_logos": {"p1:101": "https://logos.example.com/rtp1.png", "p1:102": ""},
              "extra_epg": {"p1": "https://epg.example.com/extra.xml"}, "backup_playlist": {"p1": "p2"},
-             "backup_channels": {"p1:101": "2001", "p1:102": "off"}, "backup_mode": {"p1": "manual"}, "reconnect_seconds": 10, "afr": true,
+             "backup_channels": {"p1:101": "2001", "p1:102": "off", "p1:103": ["2001", "main:104"]}, "backup_mode": {"p1": "manual"}, "reconnect_seconds": 10, "afr": true,
              "parental_pin_sha256": "${Prefs.hashPin("1234")}", "epg_offset_min": -90, "language": "pt-BR"}
             """,
             JsonObject().apply {
@@ -381,7 +381,13 @@ class PersistedFormatTest {
     }
 
     /** O exemplo como o [Prefs] o guarda: o AppViewModel grava os conjuntos como listas. */
-    private fun asStored(value: Any, field: Any?): Any = if (field is Set<*> && value is List<*>) value.toSet() else value
+    private fun asStored(value: Any, field: Any?): Any = when {
+        field is Set<*> && value is List<*> -> value.toSet()
+        // Os failovers: uma chave ou "off" leem-se como listas (ver Prefs.backupChannels).
+        field is Map<*, *> && value is Map<*, *> && field.values.all { it is List<*> } ->
+            value.mapValues { (_, v) -> if (v == "off") emptyList<String>() else if (v is String) listOf(v) else v }
+        else -> value
+    }
 
     private fun fieldOf(prefs: Prefs, name: String): Any? =
         Prefs::class.java.getDeclaredField(name).apply { isAccessible = true }.get(prefs)

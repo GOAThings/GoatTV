@@ -258,13 +258,13 @@ internal class ChannelPlayback(
         onBackup = null
         reconnects = 0
         nextTryAt = 0L
-        // A lista principal esteve em baixo há pouco (ver ProviderOutage): vai-se logo ao mesmo canal da reserva, sem
-        // esperar pelas tentativas de sempre. Sem esse canal na reserva, tenta-se a principal como sempre.
+        // A lista principal esteve em baixo há pouco (ver ProviderOutage): vai-se logo aos failovers, sem esperar pelas
+        // tentativas de sempre. Sem nenhum (os da própria lista não contam: falhavam também), tenta-se a principal.
         if (policy.failover && request.live && request.backup == null && host.providerDown(request)) {
             backupJob = scope.launch {
-                val backup = runCatching { host.backupFor(request) }.getOrNull()
+                val backups = runCatching { host.backupsFor(request) }.getOrDefault(emptyList())
                 if (this@ChannelPlayback.request !== request) return@launch
-                if (backup != null) openBackup(backup, null) else start(0)
+                if (backups.isNotEmpty()) openBackup(backups, null) else start(0)
             }
             return
         }
@@ -272,13 +272,20 @@ internal class ChannelPlayback(
     }
 
     /**
-     * Passa a dar [backup] (o mesmo canal na lista de reserva) no lugar do pedido atual da lista principal, que falhou
-     * com [error] (null: escolhido à mão). A ligação à principal fecha antes de abrir a da reserva: é outra geração do
-     * [gate], que fecha as anteriores antes de ligar. O ecrã continua na lista principal; o próximo canal volta a ela.
+     * Passa a dar o primeiro de [backups] (os failovers, pela ordem) no lugar do pedido da lista principal, que falhou
+     * com [error] (null: escolhido à mão); se também não abrir, passa ao seguinte. A ligação anterior fecha antes de
+     * abrir a nova: é outra geração do [gate], que fecha as anteriores antes de ligar. O ecrã continua na lista
+     * principal; o próximo canal volta a ela. [failed]: os que já falharam; [mainFormat]: o formato da principal.
      */
-    private fun openBackup(backup: BackupStream, error: PlaybackException?) {
+    private fun openBackup(
+        backups: List<BackupStream>,
+        error: PlaybackException?,
+        failed: List<String> = emptyList(),
+        mainFormat: String? = currentCandidate?.format,
+    ) {
         val main = request?.let { it.backup?.main ?: it } ?: return
-        val origin = BackupOrigin(main, error, currentCandidate?.format, backup.mainName, backup.backupName)
+        val backup = backups.firstOrNull() ?: return
+        val origin = BackupOrigin(main, error, mainFormat, backup.mainName, backup.backupName, backup.sameList, backups.drop(1), failed, backup.label)
         val req = backup.request.asBackup(origin)
         held = false
         request = req
@@ -296,13 +303,13 @@ internal class ChannelPlayback(
     }
 
     /**
-     * "Experimentar agora" (painel do canal de reserva): dá já [backup] no lugar do canal da lista principal, com o
-     * mesmo aviso; o próximo canal volta à principal.
+     * "Experimentar agora" (painel do canal de reserva): dá já os failovers [backups] (pela ordem) no lugar do canal
+     * da lista principal, com o mesmo aviso; o próximo canal volta à principal.
      */
-    fun playBackup(backup: BackupStream) {
-        if (request == null) return
+    fun playBackup(backups: List<BackupStream>) {
+        if (request == null || backups.isEmpty()) return
         backupJob?.cancel()
-        openBackup(backup, null)
+        openBackup(backups, null)
     }
 
     /** A passar canais: pára o canal que está a dar e larga a ligação, com a última imagem no ecrã. */
@@ -566,19 +573,19 @@ internal class ChannelPlayback(
     /**
      * Não arrancou: mostra o erro (primeiro "a analisar") e tenta mais umas vezes, sem martelar o servidor.
      *
-     * Um canal em direto da lista principal passa antes para o mesmo canal da lista de reserva, se houver (só depois
-     * de as tentativas de sempre desistirem: os formatos, e as esperas do OpenRetry em cada um). Se a reserva também
-     * falhar, volta-se ao pedido da principal (as tentativas seguintes começam por ela) e o cartão diz as duas.
+     * Um canal em direto da lista principal passa antes para os failovers dele, pela ordem, se houver (só depois de
+     * as tentativas de sempre desistirem: os formatos, e as esperas do OpenRetry em cada um). Se todos falharem,
+     * volta-se ao pedido da principal (as tentativas seguintes começam por ela) e o cartão diz os que falharam.
      */
     private fun fail(error: PlaybackException, req: PlaybackRequest, delayMs: Long?) {
         if (policy.failover && req.live && req.backup == null && backupJob?.isActive != true) {
             host.onMainFailed(req, error)
             val shown = currentCandidate?.format
             backupJob = scope.launch {
-                val backup = runCatching { host.backupFor(req) }.getOrNull()
+                val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
                 if (request !== req) return@launch
-                if (backup != null) {
-                    openBackup(backup, error)
+                if (backups.isNotEmpty()) {
+                    openBackup(backups, error)
                 } else {
                     showFailure(error, req, delayMs, null, shown)
                 }
@@ -587,12 +594,18 @@ internal class ChannelPlayback(
         }
         val origin = req.backup
         if (origin != null) {
-            // A reserva também não abriu: o cartão é o da principal (com o erro dela), e as tentativas recomeçam nela.
+            val failed = origin.failed + origin.label
+            // Este failover também não abriu: o seguinte.
+            if (origin.rest.isNotEmpty()) {
+                openBackup(origin.rest, origin.mainError, failed, origin.mainFormat)
+                return
+            }
+            // Nenhum abriu: o cartão é o da principal (com o erro dela), e as tentativas recomeçam nela.
             request = origin.main
             candidates = origin.main.candidates
             attempt = 0
             onBackup = null
-            showFailure(origin.mainError ?: error, origin.main, delayMs, origin.backupName, origin.mainFormat)
+            showFailure(origin.mainError ?: error, origin.main, delayMs, failed.joinToString(", "), origin.mainFormat)
             return
         }
         showFailure(error, req, delayMs, null, currentCandidate?.format)

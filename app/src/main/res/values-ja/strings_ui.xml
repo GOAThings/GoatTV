@@ -395,7 +395,13 @@
     <string name="backup_coverage">%1$s · %3$d 件中 %2$d 件のチャンネルが一致 · 不確か %4$d 件</string>
     <string name="backup_unavailable">%1$s · チャンネルを読み込めませんでした</string>
     <string name="backup_playing">%1$s が応答しません。%2$s から再生しています。</string>
-    <string name="backup_also_failed">予備のプレイリスト（%1$s）でも開けませんでした。</string>
+    <string name="backup_also_failed">代替チャンネルでも開けませんでした：%1$s。</string>
+    <string name="backup_playing_channel">%1$s が開きませんでした。%2$s を再生しています。</string>
+    <string name="backup_failovers">代替チャンネル（試す順）</string>
+    <string name="backup_failovers_hint">OK：移動 · OK長押し：削除</string>
+    <string name="backup_failovers_hint_phone">長押しで削除 · ≡ をドラッグで並べ替え</string>
+    <string name="backup_add_from">%1$s から追加</string>
+    <string name="backup_channel_search_all">両方のプレイリストを検索</string>
     <string name="backup_channel">予備のチャンネル</string>
     <string name="backup_channel_auto">自動</string>
     <string name="backup_channel_auto_is">自動: %1$s</string>

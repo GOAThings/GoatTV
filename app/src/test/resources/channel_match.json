@@ -1665,6 +1665,261 @@
     "missing": 2,
     "chosen": 1
    }
+  },
+  {
+   "case": "failover lists",
+   "manual": false,
+   "main": [
+    {
+     "name": "RTP 1",
+     "key": "a"
+    },
+    {
+     "name": "RTP 1 SD",
+     "key": "a2"
+    },
+    {
+     "name": "SIC",
+     "key": "b"
+    },
+    {
+     "name": "TVI",
+     "key": "c"
+    }
+   ],
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "overrides": {
+    "a": [
+     "main:a2",
+     "r"
+    ],
+    "b": "off",
+    "c": [
+     "gone"
+    ]
+   },
+   "expect": [
+    [
+     "chosen",
+     null,
+     null
+    ],
+    [
+     "auto",
+     0,
+     null
+    ],
+    [
+     "off",
+     null,
+     null
+    ],
+    [
+     "missing",
+     null,
+     null
+    ]
+   ],
+   "failovers": [
+    [
+     "main:a2",
+     "r"
+    ],
+    [],
+    [],
+    []
+   ],
+   "filters": {
+    "all": 4,
+    "matched": 2,
+    "unsure": 0,
+    "missing": 2,
+    "chosen": 2
+   }
+  }
+ ],
+ "failovers": [
+  {
+   "case": "no choice: the automatic match",
+   "target": {
+    "name": "RTP 1",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "b"
+   ],
+   "chosen": null,
+   "expect": [
+    "r"
+   ]
+  },
+  {
+   "case": "no choice in manual: none",
+   "manual": true,
+   "target": {
+    "name": "RTP 1",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "PT: RTP 1 HD",
+     "key": "r"
+    }
+   ],
+   "mainKeys": [
+    "a"
+   ],
+   "chosen": null,
+   "expect": []
+  },
+  {
+   "case": "chosen order kept, backup and main mixed",
+   "target": {
+    "name": "RTP 1",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "RTP 1 FHD",
+     "key": "f"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "a2"
+   ],
+   "chosen": [
+    "f",
+    "main:a2",
+    "r"
+   ],
+   "expect": [
+    "f",
+    "main:a2",
+    "r"
+   ]
+  },
+  {
+   "case": "gone channels, duplicates and the channel itself are dropped",
+   "target": {
+    "name": "RTP 1",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "RTP 1 FHD",
+     "key": "f"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "mainKeys": [
+    "a",
+    "a2"
+   ],
+   "chosen": [
+    "x",
+    "f",
+    "main:a",
+    "main:zz",
+    "f",
+    "main:a2"
+   ],
+   "expect": [
+    "f",
+    "main:a2"
+   ]
+  },
+  {
+   "case": "empty list is none",
+   "target": {
+    "name": "RTP 1",
+    "key": "a"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "RTP 1 FHD",
+     "key": "f"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "mainKeys": [
+    "a"
+   ],
+   "chosen": [],
+   "expect": []
+  },
+  {
+   "case": "all chosen gone: back to the automatic match",
+   "target": {
+    "name": "SIC",
+    "key": "b"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 HD",
+     "key": "r"
+    },
+    {
+     "name": "RTP 1 FHD",
+     "key": "f"
+    },
+    {
+     "name": "SIC",
+     "key": "s"
+    }
+   ],
+   "mainKeys": [
+    "b"
+   ],
+   "chosen": [
+    "x",
+    "main:zz"
+   ],
+   "expect": [
+    "s"
+   ]
   }
  ]
 }
