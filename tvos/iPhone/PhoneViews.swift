@@ -1074,7 +1074,7 @@ struct PlayerOptionsSheet: View {
 
     var body: some View {
         if option == .backup, let channel = model.current {
-            PhoneBackupChannelSheet(channel: channel)
+            NavigationStack { PhoneBackupChannelSheet(channel: channel) }
         } else {
             options
         }
@@ -2052,12 +2052,30 @@ private struct PhoneBackupPlaylistPicker: View {
                 } footer: {
                     Text(model.backupSubtitle(playlist.id))
                 }
+                if current != nil {
+                    // Automático (com as escolhas à mão por cima) ou só os canais escolhidos à mão.
+                    Section(s.r("backup_mode")) {
+                        let manual = model.backupManual(playlist.id)
+                        row(s.r("backup_channel_auto"), !manual) { model.setBackupManual(playlist.id, false) }
+                        row(s.r("backup_mode_manual"), manual) { model.setBackupManual(playlist.id, true) }
+                    }
+                    Section {
+                        NavigationLink {
+                            PhoneBackupChannelsList(playlistId: playlist.id)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(s.r("backup_channels")).foregroundStyle(Theme.text)
+                                Text(s.r("backup_channels_sub")).font(.footnote).foregroundStyle(Theme.textFaint)
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle(s.r("backup_playlist"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(s.r("done")) { onClose() } } }
         }
-        .task(id: current) { model.checkBackupCoverage(playlist.id) }
+        .task(id: "\(current ?? "")|\(model.backupManual(playlist.id))|\(model.prefs.backupChannels.description)") { model.checkBackupCoverage(playlist.id) }
     }
 
     private func row(_ title: String, _ checked: Bool, _ action: @escaping () -> Void) -> some View {
@@ -2077,6 +2095,9 @@ private struct PhoneBackupChannelSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let channel: Channel
+    /// A lista principal (nil = a em uso) e se há "Experimentar agora" (não nas Definições, onde nada está a dar).
+    var mainId: String? = nil
+    var canTry = true
     @State private var choices: BackupChoices?
     @State private var loading = true
     @State private var query = ""
@@ -2084,13 +2105,13 @@ private struct PhoneBackupChannelSheet: View {
 
     var body: some View {
         let s = model.strings
-        NavigationStack {
-            List {
+        List {
                 if loading {
                     Text(s.r("backup_checking")).foregroundStyle(Theme.textFaint)
                 } else if let choices {
                     Section {
                         let effective = choices.effective
+                        if canTry {
                         Button {
                             if let effective {
                                 model.tryBackup(effective)
@@ -2105,8 +2126,18 @@ private struct PhoneBackupChannelSheet: View {
                             } icon: { Image(systemName: "play.fill") }
                         }
                         .disabled(effective == nil)
-                        row(s.r("backup_channel_auto"), model.backupAutoLabel(choices), choices.choice == nil) { pick(nil) }
-                        row(s.r("backup_channel_off"), nil, choices.choice == ChannelMatch.off) { pick(ChannelMatch.off) }
+                        }
+                        if choices.manual {
+                            // Manual: o automático é uma sugestão, que se escolhe com um toque.
+                            if let auto = choices.autoChannel {
+                                row(s.r("backup_suggestion", auto.name), choices.content.categoryName(auto.categoryId), choices.choice == auto.key) { pick(auto.key) }
+                            } else {
+                                Text(model.backupAutoLabel(choices)).foregroundStyle(Theme.textFaint)
+                            }
+                        } else {
+                            row(s.r("backup_channel_auto"), model.backupAutoLabel(choices), choices.choice == nil) { pick(nil) }
+                        }
+                        row(s.r("backup_channel_off"), nil, choices.none) { pick(ChannelMatch.off) }
                     }
                     let chosen = choices.choice.flatMap { choices.content.byKey[$0] }
                     let similar = unique([chosen].compactMap { $0 } + choices.similar)
@@ -2122,16 +2153,15 @@ private struct PhoneBackupChannelSheet: View {
                         ForEach(results, id: \.key) { c in channelRow(c, choices) }
                     }
                 } else {
-                    Text(s.r("backup_unavailable", model.content.flatMap { model.backupOf($0.playlist.id)?.name } ?? "")).foregroundStyle(Theme.textFaint)
+                    Text(s.r("backup_unavailable", (mainId ?? model.content?.playlist.id).flatMap { model.backupOf($0)?.name } ?? "")).foregroundStyle(Theme.textFaint)
                 }
-            }
-            .navigationTitle(s.r("backup_channel"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("close")) { dismiss() } } }
         }
+        .navigationTitle(canTry ? s.r("backup_channel") : channel.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if canTry { ToolbarItem(placement: .cancellationAction) { Button(s.r("close")) { dismiss() } } } }
         .presentationDetents([.medium, .large])
         .task {
-            choices = await model.backupChoices(channel)
+            choices = await model.backupChoices(channel, mainId: mainId)
             loading = false
         }
         .task(id: query) {
@@ -2142,7 +2172,7 @@ private struct PhoneBackupChannelSheet: View {
     }
 
     private func pick(_ value: String?) {
-        guard let main = model.content?.playlist.id else { return }
+        guard let main = choices?.mainId else { return }
         choices?.choice = value
         model.setBackupChoice(main, channel.key, value)
     }
@@ -2169,5 +2199,50 @@ private struct PhoneBackupChannelSheet: View {
     private func unique(_ list: [Channel]) -> [Channel] {
         var seen = Set<String>()
         return list.filter { seen.insert($0.key).inserted }
+    }
+}
+
+/// A lista "Canais de reserva" no iPhone (como na TV): filtros, pesquisa pelo nome do canal e, ao tocar, a escolha do
+/// canal da reserva (sem "Experimentar agora").
+private struct PhoneBackupChannelsList: View {
+    @Environment(AppModel.self) private var model
+    let playlistId: String
+    @State private var filter = ChannelMatch.Filter.all
+    @State private var query = ""
+
+    var body: some View {
+        let s = model.strings
+        Group {
+            if let review = model.backupReview(playlistId) {
+                List {
+                    Section {
+                        Picker(s.r("backup_channels"), selection: $filter) {
+                            ForEach(ChannelMatch.Filter.allCases, id: \.self) { f in
+                                Text("\(model.backupFilterLabel(f)) (\(review.rows.filter { $0.passes(f) }.count))").tag(f)
+                            }
+                        }
+                    }
+                    Section {
+                        ForEach(model.backupRows(review, filter, query), id: \.main) { row in
+                            let text = model.backupRowText(review, row)
+                            NavigationLink {
+                                PhoneBackupChannelSheet(channel: review.main.channels[row.main], mainId: playlistId, canTry: false)
+                            } label: {
+                                VStack(alignment: .leading) {
+                                    Text(text.title).foregroundStyle(Theme.text)
+                                    Text(text.subtitle).font(.footnote).foregroundStyle(Theme.textFaint)
+                                }
+                            }
+                        }
+                    }
+                }
+                .searchable(text: $query, prompt: s.r("backup_channel_search", review.main.playlist.name))
+            } else {
+                Text(s.r("backup_checking")).foregroundStyle(Theme.textFaint)
+            }
+        }
+        .navigationTitle(s.r("backup_channels"))
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: model.prefs.backupChannels) { model.checkBackupCoverage(playlistId) }
     }
 }

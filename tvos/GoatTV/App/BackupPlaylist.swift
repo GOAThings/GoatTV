@@ -1,28 +1,45 @@
 import Foundation
 import GoatCore
 
+/// Os canais de uma lista na reserva: a cobertura e a lista "Canais de reserva" (cada canal e o seu estado).
+struct BackupReview {
+    let main: PlaylistContent
+    let backup: PlaylistContent
+    let rows: [ChannelMatch.ReviewRow]
+    let coverage: ChannelMatch.Coverage
+    let manual: Bool
+    let overrides: [String: String]
+}
+
 /// A cobertura da reserva de uma lista: quantos canais ela tem (o subtítulo da linha "Lista de reserva").
-enum BackupCoverage: Equatable {
+enum BackupCoverage {
     case checking
-    case ready(backupId: String, coverage: ChannelMatch.Coverage)
+    case ready(backupId: String, review: BackupReview)
     case unavailable
 }
 
 /// O painel "Canal de reserva" de um canal: o automático, os parecidos e a escolha à mão.
 struct BackupChoices {
+    /// A lista principal.
+    let mainId: String
     let backup: Playlist
     let content: PlaylistContent
     let auto: ChannelMatch.Result
     let similar: [Channel]
     /// A escolha à mão: uma chave da reserva, "off", ou nil (automático).
     var choice: String?
+    /// Modo manual: o automático é só uma sugestão (e sem escolha não muda de lista).
+    let manual: Bool
+
+    /// "Nenhum" está escolhido: à mão, ou (no modo manual) por não haver escolha.
+    var none: Bool { choice == ChannelMatch.off || (manual && choice == nil) }
 
     var autoChannel: Channel? { auto.index.flatMap { content.channels.indices.contains($0) ? content.channels[$0] : nil } }
 
     /// O canal a experimentar: o escolhido, ou o automático; nil com "nenhum" ou sem canal.
     var effective: Channel? {
         switch choice {
-        case nil: return autoChannel
+        case nil: return manual ? nil : autoChannel
         case ChannelMatch.off: return nil
         case let key?: return content.byKey[key]
         }
@@ -38,18 +55,37 @@ extension AppModel {
         return playlists.first { $0.id == id }
     }
 
-    /// Muda a reserva de [playlistId] (nil = nenhuma). Os canais escolhidos à mão eram da reserva anterior: saem.
+    /// Muda a reserva de [playlistId] (nil = nenhuma). Os canais escolhidos à mão e o modo eram da reserva anterior: saem.
     func setBackupPlaylist(_ playlistId: String, _ backupId: String?) {
         let target = backupId == playlistId ? nil : backupId
         guard prefs.backupPlaylist[playlistId] != target else { return }
         var map = prefs.backupPlaylist
         map[playlistId] = target
         let channels = prefs.backupChannels.filter { !$0.key.hasPrefix("\(playlistId):") }
+        var modes = prefs.backupMode
+        modes[playlistId] = nil
         setPrefs([
             "backup_playlist": .object(map.mapValues { JSON.string($0) }),
             "backup_channels": .object(channels.mapValues { JSON.string($0) }),
+            "backup_mode": .object(modes.mapValues { JSON.string($0) }),
         ])
         backupCoverage[playlistId] = nil
+    }
+
+    /// Modo manual: só os canais escolhidos à mão passam para a reserva.
+    func backupManual(_ playlistId: String) -> Bool { prefs.backupMode[playlistId] == ChannelMatch.modeManual }
+
+    func setBackupManual(_ playlistId: String, _ manual: Bool) {
+        var modes = prefs.backupMode
+        modes[playlistId] = manual ? ChannelMatch.modeManual : nil
+        setPref("backup_mode", .object(modes.mapValues { JSON.string($0) }))
+    }
+
+    /// As escolhas à mão de [playlistId] (chave do canal → escolha).
+    private func backupOverrides(_ playlistId: String) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: prefs.backupChannels.compactMap { k, v -> (String, String)? in
+            k.hasPrefix("\(playlistId):") ? (String(k.dropFirst(playlistId.count + 1)), v) : nil
+        })
     }
 
     /// O canal da reserva escolhido à mão para [channelKey] de [playlistId] (uma chave, "off", ou nil = automático).
@@ -61,7 +97,6 @@ extension AppModel {
         var map = prefs.backupChannels
         map["\(playlistId):\(channelKey)"] = value
         setPref("backup_channels", .object(map.mapValues { JSON.string($0) }))
-        backupCoverage[playlistId] = nil
     }
 
     /// Os canais da reserva (a lista em uso, da cache, ou descarregados como os do segundo canal).
@@ -71,7 +106,7 @@ extension AppModel {
 
     private func matcher(for content: PlaylistContent) async -> ChannelMatcher {
         if let cached = backupMatcher, cached.id == content.playlist.id, cached.fetchedAt == content.fetchedAt { return cached.matcher }
-        let entries = content.channels.map(ChannelMatch.Entry.init)
+        let entries = content.channels.map { ChannelMatch.Entry($0, in: content) }
         let matcher = await Task.detached(priority: .userInitiated) { ChannelMatcher(entries) }.value
         backupMatcher = (content.playlist.id, content.fetchedAt, matcher)
         return matcher
@@ -97,9 +132,10 @@ extension AppModel {
             target = choice
         } else {
             let m = await matcher(for: content)
-            let result = m.find(channel.name, epgId: channel.epgId, override: backupChoice(main.playlist.id, channel.key))
+            let manual = backupManual(main.playlist.id)
+            let result = ChannelMatch.decide(ChannelMatch.Entry(channel, in: main), m, override: backupChoice(main.playlist.id, channel.key), manual: manual)
             guard let i = result.index, content.channels.indices.contains(i) else {
-                DebugLog.add("Backup: \(result == .missing ? "no channel" : "unsure") for \"\(channel.name)\"")
+                DebugLog.add("Backup: \(result == .missing ? (manual ? "not chosen (manual)" : "no channel") : "unsure") for \"\(channel.name)\"")
                 return nil
             }
             target = content.channels[i]
@@ -146,14 +182,25 @@ extension AppModel {
         }
     }
 
-    /// O painel "Canal de reserva" do canal a ver.
-    func backupChoices(_ channel: Channel) async -> BackupChoices? {
-        guard let main = content, let backup = backupOf(main.playlist.id), let backupContent = await backupContent(backup) else { return nil }
+    /// As escolhas de [channel] da lista [mainId] (a em uso, com nil): o painel do player e a lista "Canais de reserva".
+    func backupChoices(_ channel: Channel, mainId: String? = nil) async -> BackupChoices? {
+        guard let id = mainId ?? content?.playlist.id, let backup = backupOf(id), let backupContent = await backupContent(backup) else { return nil }
+        let mainContent: PlaylistContent?
+        if content?.playlist.id == id {
+            mainContent = content
+        } else if case .ready(_, let review) = backupCoverage[id] {
+            mainContent = review.main
+        } else {
+            mainContent = nil
+        }
         let m = await matcher(for: backupContent)
-        let name = channel.name, epg = channel.epgId
-        let (auto, ranked) = await Task.detached(priority: .userInitiated) { (m.find(name, epgId: epg), m.ranked(name, epgId: epg)) }.value
+        let entry = ChannelMatch.Entry(channel, in: mainContent)
+        let (auto, ranked) = await Task.detached(priority: .userInitiated) {
+            (m.find(entry.name, epgId: entry.epgId, group: entry.group), m.ranked(entry.name, epgId: entry.epgId))
+        }.value
         let similar = ranked.compactMap { backupContent.channels.indices.contains($0) ? backupContent.channels[$0] : nil }
-        return BackupChoices(backup: backup, content: backupContent, auto: auto, similar: similar, choice: backupChoice(main.playlist.id, channel.key))
+        return BackupChoices(mainId: id, backup: backup, content: backupContent, auto: auto, similar: similar,
+                             choice: backupChoice(id, channel.key), manual: backupManual(id))
     }
 
     /// Pesquisa nos canais da reserva (pelo nome, sem acentos nem maiúsculas).
@@ -174,19 +221,23 @@ extension AppModel {
         }
     }
 
-    /// Conta, por trás, quantos canais de [playlistId] têm o seu na reserva. Os nomes dos que faltam ou ficam em dúvida
-    /// vão para o registo da app (só os nomes), que segue no relatório.
+    /// Conta, por trás, como fica cada canal de [playlistId] na reserva (uma vez por reserva, escolhas e modo; depois de
+    /// uma escolha, a anterior fica à vista até a nova estar pronta). Os nomes dos que faltam ou ficam em dúvida vão
+    /// para o registo da app (só os nomes), que segue no relatório.
     func checkBackupCoverage(_ playlistId: String) {
         guard let backup = backupOf(playlistId), let main = playlists.first(where: { $0.id == playlistId }) else { return }
+        let overrides = backupOverrides(playlistId)
+        let manual = backupManual(playlistId)
+        var previous: BackupReview?
         switch backupCoverage[playlistId] {
         case .checking: return
-        case .ready(let id, _) where id == backup.id: return
+        case .ready(let id, let review) where id == backup.id:
+            if review.overrides == overrides && review.manual == manual { return }
+            previous = review
         default: break
         }
-        backupCoverage[playlistId] = .checking
-        let overrides = Dictionary(uniqueKeysWithValues: prefs.backupChannels.compactMap { k, v -> (String, String)? in
-            k.hasPrefix("\(playlistId):") ? (String(k.dropFirst(playlistId.count + 1)), v) : nil
-        })
+        if previous == nil { backupCoverage[playlistId] = .checking }
+        let hadPrevious = previous != nil
         Task { [weak self] in
             guard let self else { return }
             let mainContent: PlaylistContent? = self.content?.playlist.id == playlistId ? self.content : await self.backupContent(main)
@@ -195,14 +246,61 @@ extension AppModel {
                 return
             }
             let m = await self.matcher(for: backupContent)
-            let entries = mainContent.channels.map(ChannelMatch.Entry.init)
-            let cov = await Task.detached(priority: .utility) { ChannelMatch.coverage(entries, m, overrides: overrides) }.value
-            DebugLog.add("Backup coverage \(main.name) -> \(backup.name): \(cov.matched)/\(cov.total), \(cov.unsure) unsure, \(cov.missing) missing")
-            // Só os nomes dos canais (nunca endereços), para estudar o que falha.
-            for (label, names) in [("Unsure", cov.unsureNames), ("Missing", cov.missingNames)] where !names.isEmpty {
-                DebugLog.add("Backup \(label): " + names.prefix(400).joined(separator: " | "))
+            let entries = mainContent.channels.map { ChannelMatch.Entry($0, in: mainContent) }
+            let (rows, cov) = await Task.detached(priority: .utility) { () -> ([ChannelMatch.ReviewRow], ChannelMatch.Coverage) in
+                let rows = ChannelMatch.review(entries, m, overrides: overrides, manual: manual)
+                return (rows, ChannelMatch.coverage(entries, m, overrides: overrides, manual: manual, rows: rows))
+            }.value
+            if !hadPrevious {
+                DebugLog.add("Backup coverage \(main.name) -> \(backup.name): \(cov.matched)/\(cov.total), \(cov.unsure) unsure, \(cov.missing) missing")
+                // Só os nomes dos canais (nunca endereços), para estudar o que falha.
+                for (label, names) in [("Unsure", cov.unsureNames), ("Missing", cov.missingNames)] where !names.isEmpty {
+                    DebugLog.add("Backup \(label): " + names.prefix(400).joined(separator: " | "))
+                }
             }
-            self.backupCoverage[playlistId] = .ready(backupId: backup.id, coverage: cov)
+            let review = BackupReview(main: mainContent, backup: backupContent, rows: rows, coverage: cov, manual: manual, overrides: overrides)
+            self.backupCoverage[playlistId] = .ready(backupId: backup.id, review: review)
+        }
+    }
+
+    /// A lista "Canais de reserva" de [playlistId], já feita (nil enquanto se conta).
+    func backupReview(_ playlistId: String) -> BackupReview? {
+        if case .ready(let id, let review) = backupCoverage[playlistId], id == backupOf(playlistId)?.id { return review }
+        return nil
+    }
+
+    /// Uma linha da lista: "RTP 1 → RTP 1 FHD" e o estado (no manual sem escolha, a sugestão).
+    func backupRowText(_ review: BackupReview, _ row: ChannelMatch.ReviewRow) -> (title: String, subtitle: String) {
+        let main = review.main.channels[row.main].name
+        let backup = row.backup.flatMap { review.backup.channels.indices.contains($0) ? review.backup.channels[$0].name : nil }
+        let suggestion = row.suggestion.flatMap { review.backup.channels.indices.contains($0) ? strings.r("backup_suggestion", review.backup.channels[$0].name) : nil }
+        let state: String
+        switch row.state {
+        case .auto: state = strings.r("backup_channel_auto")
+        case .chosen: state = strings.r("backup_state_chosen")
+        case .off: state = strings.r("backup_state_none")
+        case .unsure: state = strings.r("backup_state_unsure")
+        case .missing: state = strings.r("backup_state_missing")
+        case .notSet: state = strings.r("backup_state_not_set")
+        }
+        return (backup.map { "\(main) → \($0)" } ?? main, [state, suggestion].compactMap { $0 }.joined(separator: " · "))
+    }
+
+    func backupFilterLabel(_ filter: ChannelMatch.Filter) -> String {
+        switch filter {
+        case .all: return strings.all
+        case .matched: return strings.r("backup_filter_matched")
+        case .unsure: return strings.r("backup_state_unsure")
+        case .missing: return strings.r("backup_channel_no_match")
+        case .chosen: return strings.r("backup_state_chosen")
+        }
+    }
+
+    /// Os canais da lista a mostrar com [filter] e a pesquisa [query] (pelo nome do canal principal).
+    func backupRows(_ review: BackupReview, _ filter: ChannelMatch.Filter, _ query: String) -> [ChannelMatch.ReviewRow] {
+        let q = query.trimmingCharacters(in: .whitespaces).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        return review.rows.filter { row in
+            row.passes(filter) && (q.isEmpty || review.main.channels[row.main].name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).contains(q))
         }
     }
 
@@ -210,7 +308,9 @@ extension AppModel {
     func backupSubtitle(_ playlistId: String) -> String {
         guard let backup = backupOf(playlistId) else { return strings.r("backup_playlist_sub") }
         switch backupCoverage[playlistId] {
-        case .ready(let id, let cov) where id == backup.id:
+        case .ready(let id, let review) where id == backup.id:
+            let cov = review.coverage
+            if review.manual { return strings.r("backup_chosen", backup.name, "\(cov.matched)") }
             return strings.r("backup_coverage", backup.name, "\(cov.matched)", "\(cov.total)", "\(cov.unsure)")
         case .unavailable: return strings.r("backup_unavailable", backup.name)
         default: return strings.r("backup_checking")
