@@ -84,6 +84,11 @@ final class AppModel {
     }
 
     private(set) var second: SecondView?
+
+    /// A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva", ver BackupPlaylist.swift).
+    var backupCoverage: [String: BackupCoverage] = [:]
+    /// O índice da última reserva procurada (partir os nomes de milhares de canais faz-se uma vez).
+    @ObservationIgnored var backupMatcher: (id: String, fetchedAt: Date, matcher: ChannelMatcher)?
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
 
     /// O programa a ver em catch-up (nil = em direto).
@@ -131,7 +136,7 @@ final class AppModel {
     private static let watchedSeconds: Double = 5
     private static let maxRecents = 20
 
-    private var loader: PlaylistLoader {
+    var loader: PlaylistLoader {
         let s = strings
         return PlaylistLoader(
             userAgent: prefs.userAgent.isEmpty ? iptvUserAgent : prefs.userAgent,
@@ -179,6 +184,9 @@ final class AppModel {
         // Os nomes das línguas (para ler as faixas) montam-se uma vez, fora do ecrã: o primeiro canal já os encontra prontos.
         Task.detached(priority: .utility) { _ = Languages.code("English") }
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
+        // A lista principal desistiu do canal: o mesmo canal na lista de reserva (ver BackupPlaylist.swift).
+        player.onStartFailed = { [weak self] in self?.startFailover() ?? false }
+        player.onBackupPlaying = { [weak self] in self?.backupPlaying() }
         wireRecordings()
         // Pausar o direto: guarda-se só o programa que se está a ver.
         player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
@@ -245,6 +253,10 @@ final class AppModel {
                 info = self.strings.errChannelUnreachable
             }
             if info.detail == nil { info.detail = self.strings.technical(self.player.backendName + (http.map { " · HTTP \($0)" } ?? "")) }
+            // A reserva também não abriu: o cartão diz as duas listas.
+            if self.player.backupFailed, let backup = self.backupOf(playlist.id) {
+                info.cause = [info.cause, self.strings.r("backup_also_failed", backup.name)].compactMap { $0 }.joined(separator: "\n")
+            }
             guard self.player.state == .failed else { return }
             self.playbackError = info
             self.playbackStatus = retrying
@@ -1337,7 +1349,7 @@ final class AppModel {
     // MARK: Segundo canal
 
     /// As duas listas usam a mesma conta do fornecedor (a mesma lista, ou o mesmo servidor e utilizador).
-    private func sameAccount(_ a: Playlist, _ b: Playlist) -> Bool {
+    func sameAccount(_ a: Playlist, _ b: Playlist) -> Bool {
         // Como no Android: uma barra no fim do servidor ou espaços no utilizador não fazem de uma conta duas.
         func server(_ p: Playlist) -> String? {
             p.server.map { s in

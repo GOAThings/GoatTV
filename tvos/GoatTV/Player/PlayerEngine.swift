@@ -67,6 +67,22 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var onFormatWorked: ((String) -> Void)?
     /// Começou a dar (ou voltou a dar depois de cair).
     @ObservationIgnored var onPlaying: (() -> Void)?
+    /// O direto da lista principal não abriu depois das tentativas de sempre (os formatos, e os pedidos de cada um):
+    /// devolve true se quem usa o leitor vai procurar o canal na lista de reserva (e chama depois [playBackup] ou
+    /// [backupUnavailable]); false mostra o erro como sempre.
+    @ObservationIgnored var onStartFailed: (() -> Bool)?
+    /// O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>.").
+    @ObservationIgnored var onBackupPlaying: (() -> Void)?
+
+    // MARK: Lista de reserva
+
+    /// A dar o canal da lista de reserva no lugar do da principal (o pedido da principal fica guardado para voltar).
+    private(set) var onBackup = false
+    /// A reserva também não abriu este canal: o cartão de erro diz as duas listas.
+    private(set) var backupFailed = false
+    @ObservationIgnored private var mainRequest: (candidates: [StreamCandidate], userAgent: String, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)?)?
+    /// Já se perguntou pela reserva nesta volta de tentativas (cada volta, desde a principal, pode passar a ela uma vez).
+    @ObservationIgnored private var backupAsked = false
 
     struct Track: Identifiable, Equatable {
         let id: Int32
@@ -323,6 +339,11 @@ final class PlayerEngine: NSObject {
         reconnects = 0
         nextTryAt = nil
         lastHTTPStatus = nil
+        // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
+        onBackup = false
+        backupFailed = false
+        backupAsked = false
+        mainRequest = nil
         guard freezeFrame, wasShowing else {
             // Ainda a abrir (ex.: dois canais seguidos): a última imagem fica até o novo começar.
             if !freezeFrame { hideFreeze() }
@@ -403,6 +424,7 @@ final class PlayerEngine: NSObject {
     func retryNow() {
         retry?.cancel()
         pendingStart?.cancel()
+        backupAsked = false
         held = false
         nextTryAt = nil
         lastHTTPStatus = nil
@@ -565,6 +587,20 @@ final class PlayerEngine: NSObject {
             scheduleRetry(reconnecting: true)
             return
         }
+        // A lista principal desistiu deste direto: o mesmo canal na lista de reserva (uma vez por volta de tentativas).
+        if !onBackup, openedLive, !backupAsked, let ask = onStartFailed {
+            backupAsked = true
+            if ask() {
+                state = .opening
+                return
+            }
+        }
+        if onBackup { restoreMain() }
+        showFailure()
+    }
+
+    /// Não abriu: o erro e mais umas tentativas (desde a lista principal).
+    private func showFailure() {
         state = .failed
         hideFreeze()
         // Sem nada para abrir (o catch-up do Stalker sem gravação deste programa): diz-se, sem voltar a tentar.
@@ -588,6 +624,7 @@ final class PlayerEngine: NSObject {
             self.nextTryAt = nil
             // Outra volta desde o primeiro formato: o código da volta anterior já não conta.
             self.lastHTTPStatus = nil
+            if !reconnecting { self.backupAsked = false }
             self.fallback.restart()
             self.start()
         }
@@ -635,13 +672,60 @@ final class PlayerEngine: NSObject {
         // O outro formato é que deu (no direto, sem ser por uma recusa): fica a ser o preferido. A ordem das tentativas
         // não muda: ao voltar a ligar, começa-se sempre pela primeira (um .ts em baixo uns minutos volta a ser tentado
         // primeiro).
-        if let attempt, fallback.learns(candidateIndex: attempt.candidateIndex, live: openedLive) {
+        // O formato da reserva é de outra conta: não se aprende.
+        if let attempt, !onBackup, fallback.learns(candidateIndex: attempt.candidateIndex, live: openedLive) {
             onFormatWorked?(attempt.candidate.format)
         }
+        if onBackup { onBackupPlaying?() }
         applyAspect()
         applyAudio()
         scheduleTrackChoice()
         startAfr()
+    }
+
+    /// Abre o mesmo canal da lista de reserva no lugar do da principal (depois de [onStartFailed], ou "experimentar
+    /// agora"). A ligação à principal fecha antes ([open] pára o motor e larga o anel; ver [whenConnectionFree]); o ecrã
+    /// continua no canal da principal e o próximo canal (ou [play] outra vez) volta a ela.
+    func playBackup(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+        guard openedKey != nil else { return }
+        if !onBackup {
+            mainRequest = (openedCandidates, self.userAgent, self.referrer, self.linkResolver)
+        }
+        onBackup = true
+        backupAsked = true
+        retry?.cancel()
+        pendingStart?.cancel()
+        let agent = userAgent.map(SafeInput.stripControl) ?? ""
+        self.userAgent = agent.isEmpty ? iptvUserAgent : agent
+        self.referrer = referrer.map(SafeInput.stripControl)
+        self.linkResolver = linkResolver
+        attempts = makeAttempts(candidates)
+        fallback.restart()
+        wasPlaying = false
+        reconnects = 0
+        nextTryAt = nil
+        lastHTTPStatus = nil
+        state = .opening
+        start()
+    }
+
+    /// A procura na reserva não deu (sem reserva, sem o canal ou na dúvida): o erro como sempre.
+    func backupUnavailable() {
+        guard state == .opening, !onBackup else { return }
+        showFailure()
+    }
+
+    /// A reserva também falhou: as tentativas seguintes voltam a começar pela lista principal.
+    private func restoreMain() {
+        guard let main = mainRequest else { return }
+        onBackup = false
+        backupFailed = true
+        mainRequest = nil
+        userAgent = main.userAgent
+        referrer = main.referrer
+        linkResolver = main.linkResolver
+        attempts = makeAttempts(main.candidates)
+        fallback.restart()
     }
 
     // MARK: VLC
