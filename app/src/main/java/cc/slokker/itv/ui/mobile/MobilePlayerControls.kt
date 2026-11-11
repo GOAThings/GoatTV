@@ -663,19 +663,25 @@ private const val ZAP_DRAG_PX = 120f
 
 /** O canal de reserva do canal a dar (como o painel da TV, ver BackupChannelPanel). */
 @Composable
-private fun BackupSection(vm: AppViewModel, channel: Channel, onTry: (Channel) -> Unit) {
+internal fun BackupSection(vm: AppViewModel, channel: Channel, mainId: String? = null, onTry: ((Channel) -> Unit)?) {
     val s = LocalStrings.current
-    val state = rememberBackupPanel(vm, channel)
+    val state = rememberBackupPanel(vm, channel, mainId)
     val choices = state.choices
     Section(listOfNotNull(s.backupChannel, choices?.backup?.name).joinToString(" · ")) {
         when {
             state.loading -> Note(s.backupChecking)
-            choices == null -> Note(s.backupUnavailable(vm.content.value?.playlist?.id?.let(vm::backupOf)?.name.orEmpty()))
+            choices == null -> Note(s.backupUnavailable((mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()))
             else -> {
                 val effective = state.effective
-                MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play, subtitle = effective?.name) { effective?.let(onTry) }
-                MenuRow(s.backupChannelAuto, null, checked = state.choice == null, subtitle = state.autoLabel(s)) { state.pick(null) }
-                MenuRow(s.backupChannelOff, null, checked = state.choice == ChannelMatch.OFF) { state.pick(ChannelMatch.OFF) }
+                if (onTry != null) MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play, subtitle = effective?.name) { effective?.let(onTry) }
+                val auto = choices.autoChannel
+                when {
+                    // Manual: o automático é uma sugestão, que se escolhe com um toque.
+                    state.manual && auto != null -> MenuRow(s.backupSuggestion(auto.name), null, checked = state.choice == auto.key, subtitle = choices.content.categoryName(auto.categoryId)) { state.pick(auto.key) }
+                    state.manual -> Note(state.autoLabel(s))
+                    else -> MenuRow(s.backupChannelAuto, null, checked = state.choice == null, subtitle = state.autoLabel(s)) { state.pick(null) }
+                }
+                MenuRow(s.backupChannelOff, null, checked = state.none) { state.pick(ChannelMatch.OFF) }
                 val chosen = choices.content.byKey[state.choice ?: ""]
                 val similar = (listOfNotNull(chosen) + choices.similar).distinctBy { it.key }
                 if (similar.isNotEmpty()) Note(s.backupChannelSimilar)

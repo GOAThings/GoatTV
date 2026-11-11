@@ -168,7 +168,8 @@ internal fun settingItems(
         is Route.Pick -> route.options.mapIndexed { i, (value, label) ->
             Item.Check("o:$i", label, value == route.selected, swatch = route.swatches[value]) { route.onPick(value) }
         }
-        Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit -> emptyList()
+        Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit,
+        is Route.BackupChannels, is Route.BackupChannelPick -> emptyList()
     }
 }
 
@@ -727,7 +728,7 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     // A página de uma lista com reserva conta, por trás, os canais que a reserva tem.
     val detailId = (route as? Route.PlaylistDetail)?.id
     val detailBackup = detailId?.let { prefs.backupPlaylist[it] }
-    LaunchedEffect(detailId, detailBackup, prefs.backupChannels) { detailId?.let(vm::checkBackupCoverage) }
+    LaunchedEffect(detailId, detailBackup, prefs.backupChannels, prefs.backupMode) { detailId?.let(vm::checkBackupCoverage) }
     // Um "carregar outra vez para confirmar" por ação e por página: armar um não pode confirmar o outro.
     var confirmEpgReset by remember(route) { mutableStateOf(false) }
     var confirmDelete by remember(route) { mutableStateOf(false) }
@@ -768,6 +769,17 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                         push(Route.Pick(s.backupPlaylist, options, backup?.id) { v -> vm.setBackupPlaylist(p.id, v as String?); nav.popNested() }, "backup")
                     },
                 )
+                if (backup != null) {
+                    // Automático (o ChannelMatch, com as escolhas à mão por cima) ou só os canais escolhidos à mão.
+                    val manual = vm.backupManual(p.id)
+                    add(
+                        Item.Nav("backupmode", s.backupMode, value = if (manual) s.backupModeManual else s.backupChannelAuto) {
+                            val options = listOf<Pair<Any?, String>>(false to s.backupChannelAuto, true to s.backupModeManual)
+                            push(Route.Pick(s.backupMode, options, manual) { v -> vm.setBackupManual(p.id, v == true); nav.popNested() }, "backupmode")
+                        },
+                    )
+                    add(Item.Nav("backupchannels", s.backupChannels, subtitle = s.backupChannelsSub) { push(Route.BackupChannels(p.id), "backupchannels") })
+                }
             }
             // Organizar: esconder e reordenar grupos e canais (precisa dos canais, por isso só na lista em uso).
             add(Item.Header("horg", s.organize))
@@ -1024,6 +1036,8 @@ private fun streamInfo(player: Player?, format: String?): List<Item> {
  */
 internal fun backupSubtitle(s: Strings, backup: Playlist?, coverage: AppViewModel.BackupCoverage?): String = when {
     backup == null -> s.backupPlaylistSub
+    coverage is AppViewModel.BackupCoverage.Ready && coverage.backupId == backup.id && coverage.review.manual ->
+        s.backupChosen(backup.name, coverage.coverage.matched)
     coverage is AppViewModel.BackupCoverage.Ready && coverage.backupId == backup.id ->
         s.backupCoverage(backup.name, coverage.coverage.matched, coverage.coverage.total, coverage.coverage.unsure)
     coverage == AppViewModel.BackupCoverage.Unavailable -> s.backupUnavailable(backup.name)

@@ -1,6 +1,10 @@
 package cc.slokker.itv.ui.player
 
 import androidx.compose.foundation.background
+import cc.slokker.itv.ui.glass.GlassChipButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -59,7 +63,7 @@ import kotlinx.coroutines.delay
  * escolha. "Experimentar agora" dá já o escolhido, com a ligação à lista principal fechada antes.
  */
 @Stable
-internal class BackupPanelState(private val vm: AppViewModel, val channel: Channel) {
+internal class BackupPanelState(private val vm: AppViewModel, val channel: Channel, private val mainId: String? = null) {
     var choices by mutableStateOf<AppViewModel.BackupChoices?>(null)
         private set
     var loading by mutableStateOf(true)
@@ -74,7 +78,7 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
 
     suspend fun load() {
         loading = true
-        choices = vm.backupChoices(channel)
+        choices = vm.backupChoices(channel, mainId)
         choice = choices?.choice
         loading = false
     }
@@ -83,19 +87,25 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
         results = choices?.let { vm.searchBackup(it, query) }.orEmpty()
     }
 
+    /** Modo manual: o automático é só uma sugestão (e sem escolha não muda de lista). */
+    val manual: Boolean get() = choices?.manual == true
+
+    /** "Nenhum" está escolhido: à mão, ou (no modo manual) por não haver escolha. */
+    val none: Boolean get() = choice == ChannelMatch.OFF || manual && choice == null
+
     /** O canal a experimentar: o escolhido, ou o automático; null com "nenhum" ou sem canal. */
     val effective: Channel?
         get() {
             val c = choices ?: return null
             return when (val chosen = choice) {
-                null -> c.autoChannel
+                null -> if (c.manual) null else c.autoChannel
                 ChannelMatch.OFF -> null
                 else -> c.content.byKey[chosen]
             }
         }
 
     fun pick(value: String?) {
-        val main = vm.content.value?.playlist?.id ?: return
+        val main = choices?.mainId ?: return
         choice = value
         vm.setBackupChoice(main, channel.key, value)
     }
@@ -109,8 +119,8 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
 }
 
 @Composable
-internal fun rememberBackupPanel(vm: AppViewModel, channel: Channel): BackupPanelState {
-    val state = remember(channel.key) { BackupPanelState(vm, channel) }
+internal fun rememberBackupPanel(vm: AppViewModel, channel: Channel, mainId: String? = null): BackupPanelState {
+    val state = remember(channel.key, mainId) { BackupPanelState(vm, channel, mainId) }
     LaunchedEffect(state) { state.load() }
     // Procura enquanto se escreve, com uma pequena pausa (como a pesquisa de canais).
     LaunchedEffect(state, state.query, state.choices) {
@@ -124,11 +134,6 @@ internal fun rememberBackupPanel(vm: AppViewModel, channel: Channel): BackupPane
 @Composable
 internal fun BackupChannelPanel(vm: AppViewModel, channel: Channel, width: Dp, onTry: (Channel) -> Unit, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
-    val state = rememberBackupPanel(vm, channel)
-    val firstFocus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(state.loading) { if (!state.loading) focusWithRetry(firstFocus) }
-    val choices = state.choices
     Column(
         modifier
             .padding(start = 24.dp, top = 24.dp, bottom = 24.dp)
@@ -138,30 +143,63 @@ internal fun BackupChannelPanel(vm: AppViewModel, channel: Channel, width: Dp, o
             .padding(horizontal = 12.dp, vertical = 16.dp),
     ) {
         Text(s.backupChannel, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 8.dp))
+        BackupChannelBody(vm, channel, null, onTry)
+    }
+}
+
+/**
+ * O conteúdo do painel (também nas Definições → lista → Canais de reserva, aí sem "Experimentar agora": [onTry] null).
+ * [mainId]: a lista principal (null = a em uso).
+ */
+@Composable
+internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: String?, onTry: ((Channel) -> Unit)?) {
+    val s = LocalStrings.current
+    val state = rememberBackupPanel(vm, channel, mainId)
+    val firstFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(state.loading) { if (!state.loading) focusWithRetry(firstFocus) }
+    val choices = state.choices
+    Column {
         Text(
             listOfNotNull(channel.name, choices?.backup?.name).joinToString(" → "),
             color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
         )
         when {
             state.loading -> Text(s.backupChecking, color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
-            choices == null -> Text(s.backupUnavailable(vm.content.value?.playlist?.id?.let(vm::backupOf)?.name.orEmpty()), color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
+            choices == null -> Text(s.backupUnavailable((mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()), color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 val effective = state.effective
-                item(key = "try") {
-                    GlassRow(
-                        onClick = { effective?.let(onTry) },
-                        enabled = effective != null,
-                        modifier = Modifier.focusRequester(firstFocus),
-                        leading = { Icon(ItvIcons.Play, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
-                        title = s.backupChannelTry,
-                        subtitle = effective?.name,
-                    )
+                if (onTry != null) {
+                    item(key = "try") {
+                        GlassRow(
+                            onClick = { effective?.let(onTry) },
+                            enabled = effective != null,
+                            modifier = Modifier.focusRequester(firstFocus),
+                            leading = { Icon(ItvIcons.Play, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(12.dp)) },
+                            title = s.backupChannelTry,
+                            subtitle = effective?.name,
+                        )
+                    }
                 }
+                // Sem "Experimentar agora", o foco começa na primeira escolha.
+                val first = if (onTry == null) Modifier.focusRequester(firstFocus) else Modifier
                 item(key = "auto") {
-                    GlassRow(onClick = { state.pick(null) }, selected = state.choice == null, trailing = check(state.choice == null), title = s.backupChannelAuto, subtitle = state.autoLabel(s))
+                    val auto = choices.autoChannel
+                    when {
+                        // Manual: o automático é uma sugestão, que se escolhe com um toque.
+                        state.manual && auto != null -> GlassRow(
+                            onClick = { state.pick(auto.key) }, modifier = first, selected = state.choice == auto.key, trailing = check(state.choice == auto.key),
+                            title = s.backupSuggestion(auto.name), subtitle = choices.content.categoryName(auto.categoryId),
+                        )
+                        state.manual -> GlassRow(onClick = {}, modifier = first, title = state.autoLabel(s))
+                        else -> GlassRow(
+                            onClick = { state.pick(null) }, modifier = first, selected = state.choice == null, trailing = check(state.choice == null),
+                            title = s.backupChannelAuto, subtitle = state.autoLabel(s),
+                        )
+                    }
                 }
                 item(key = "off") {
-                    GlassRow(onClick = { state.pick(ChannelMatch.OFF) }, selected = state.choice == ChannelMatch.OFF, trailing = check(state.choice == ChannelMatch.OFF), title = s.backupChannelOff)
+                    GlassRow(onClick = { state.pick(ChannelMatch.OFF) }, selected = state.none, trailing = check(state.none), title = s.backupChannelOff)
                 }
                 // Um canal escolhido à mão que não está entre os parecidos continua à vista.
                 val chosen = choices.content.byKey[state.choice ?: ""]
@@ -221,3 +259,91 @@ private fun ChoiceRow(state: BackupPanelState, c: Channel, choices: AppViewModel
 
 private fun check(on: Boolean): (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? =
     if (on) ({ Icon(ItvIcons.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }) else null
+
+/** O que diz o estado de um canal na lista "Canais de reserva". */
+internal fun ChannelMatch.State.label(s: Strings): String = when (this) {
+    ChannelMatch.State.AUTO -> s.backupChannelAuto
+    ChannelMatch.State.CHOSEN -> s.backupStateChosen
+    ChannelMatch.State.OFF -> s.backupStateNone
+    ChannelMatch.State.UNSURE -> s.backupStateUnsure
+    ChannelMatch.State.MISSING -> s.backupStateMissing
+    ChannelMatch.State.NOT_SET -> s.backupStateNotSet
+}
+
+internal fun ChannelMatch.Filter.label(s: Strings): String = when (this) {
+    ChannelMatch.Filter.ALL -> s.all
+    ChannelMatch.Filter.MATCHED -> s.backupFilterMatched
+    ChannelMatch.Filter.UNSURE -> s.backupStateUnsure
+    ChannelMatch.Filter.MISSING -> s.backupChannelNoMatch
+    ChannelMatch.Filter.CHOSEN -> s.backupStateChosen
+}
+
+/** Uma linha da lista "Canais de reserva": "RTP 1 → RTP 1 FHD" e o estado (no manual sem escolha, a sugestão). */
+internal fun backupRowText(s: Strings, review: AppViewModel.BackupReview, row: ChannelMatch.ReviewRow): Pair<String, String> {
+    val main = review.main.channels[row.main].name
+    val backup = row.backup?.let { review.backup.channels.getOrNull(it)?.name }
+    val title = if (backup != null) "$main → $backup" else main
+    val suggestion = row.suggestion?.let { review.backup.channels.getOrNull(it)?.name }?.let(s::backupSuggestion)
+    return title to listOfNotNull(row.state.label(s), suggestion).joinToString(" · ")
+}
+
+/**
+ * A lista "Canais de reserva" de uma lista (Definições na TV): cada canal em direto da lista principal, o da reserva e o
+ * estado, com filtros e a pesquisa pelo nome. Feita uma vez (a mesma conta da cobertura); OK abre a escolha ([onOpen]).
+ */
+@Composable
+internal fun BackupChannelsPage(vm: AppViewModel, playlistId: String, enabled: Boolean, onOpen: (Channel) -> Unit) {
+    val s = LocalStrings.current
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val coverage by vm.backupCoverage.collectAsStateWithLifecycle()
+    LaunchedEffect(playlistId, prefs.backupChannels, prefs.backupMode) { vm.checkBackupCoverage(playlistId) }
+    val review = (coverage[playlistId] as? AppViewModel.BackupCoverage.Ready)?.review
+    var filter by remember { mutableStateOf(ChannelMatch.Filter.ALL) }
+    var query by remember { mutableStateOf("") }
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(review != null) { if (review != null) focusWithRetry(firstFocus) }
+    if (review == null) {
+        Text(s.backupChecking, color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
+        return
+    }
+    val counts = remember(review) { ChannelMatch.Filter.entries.associateWith { f -> review.rows.count { with(ChannelMatch) { it.passes(f) } } } }
+    val shown = remember(review, filter, query) {
+        review.rows.filter { with(ChannelMatch) { it.passes(filter) } && vm.backupReviewMatches(review.main.channels[it.main].name, query) }
+    }
+    Column {
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            ChannelMatch.Filter.entries.forEachIndexed { i, f ->
+                GlassChipButton(
+                    if (f == filter) ItvIcons.Check else ItvIcons.Channels, "${f.label(s)} (${counts[f]})", { filter = f },
+                    if (i == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                )
+            }
+        }
+        BasicTextField(
+            value = query,
+            onValueChange = { query = it },
+            enabled = enabled,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleSmall.copy(color = ItvColors.Text),
+            cursorBrush = SolidColor(LocalAccent.current.start),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+            decorationBox = { field ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(ItvIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = ItvColors.TextDim)
+                    Spacer(Modifier.width(10.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Text(s.backupChannelSearch(review.main.playlist.name), color = ItvColors.TextFaint, style = MaterialTheme.typography.titleSmall)
+                        field()
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth().clip(ItvShapes.Control).background(Color.White.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 12.dp),
+        )
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
+            items(shown, key = { it.main }) { row ->
+                val (title, subtitle) = backupRowText(s, review, row)
+                GlassRow(onClick = { onOpen(review.main.channels[row.main]) }, enabled = enabled, title = title, subtitle = subtitle)
+            }
+        }
+    }
+}

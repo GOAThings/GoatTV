@@ -1636,26 +1636,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return playlists.value.firstOrNull { it.id == id && it.id != playlistId }
     }
 
-    /** Muda a reserva de [playlistId] (null = nenhuma). Os canais escolhidos à mão eram da reserva anterior: saem. */
+    /**
+     * Muda a reserva de [playlistId] (null = nenhuma). Os canais escolhidos à mão e o modo eram da reserva anterior:
+     * saem (o modo volta ao automático).
+     */
     fun setBackupPlaylist(playlistId: String, backupId: String?) {
         val p = prefs.value
         val target = backupId?.takeIf { it != playlistId }
         if (p.backupPlaylist[playlistId] == target) return
         val map = if (target == null) p.backupPlaylist - playlistId else p.backupPlaylist + (playlistId to target)
         val channels = p.backupChannels.filterKeys { !it.startsWith("$playlistId:") }
-        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to channels))
+        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to channels, Prefs.Key.BACKUP_MODE to p.backupMode - playlistId))
         _backupCoverage.value = _backupCoverage.value - playlistId
+    }
+
+    /** Modo manual: só os canais escolhidos à mão passam para a reserva. */
+    fun backupManual(playlistId: String): Boolean = prefs.value.backupMode[playlistId] == ChannelMatch.MODE_MANUAL
+
+    fun setBackupManual(playlistId: String, manual: Boolean) {
+        val current = prefs.value.backupMode
+        setPref(Prefs.Key.BACKUP_MODE, if (manual) current + (playlistId to ChannelMatch.MODE_MANUAL) else current - playlistId)
     }
 
     /** O canal da reserva escolhido à mão para [channelKey] de [playlistId]: uma chave, [ChannelMatch.OFF], ou null (automático). */
     fun backupChoice(playlistId: String, channelKey: String): String? = prefs.value.backupChannels["$playlistId:$channelKey"]
+
+    /** As escolhas à mão de [playlistId] (chave do canal → escolha). */
+    private fun backupOverrides(playlistId: String): Map<String, String> =
+        prefs.value.backupChannels.filterKeys { it.startsWith("$playlistId:") }.mapKeys { it.key.removePrefix("$playlistId:") }
 
     /** Grava a escolha à mão ([value] null = volta ao automático). */
     fun setBackupChoice(playlistId: String, channelKey: String, value: String?) {
         val current = prefs.value.backupChannels
         val key = "$playlistId:$channelKey"
         setPref(Prefs.Key.BACKUP_CHANNELS, if (value == null) current - key else current + (key to value))
-        _backupCoverage.value = _backupCoverage.value - playlistId
     }
 
     /** Os canais da reserva (da cache, ou descarregados como os do segundo canal), ou null se não carregarem a tempo. */
@@ -1667,15 +1681,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun matcherFor(content: PlaylistContent): ChannelMatch.Matcher {
         backupMatcher?.takeIf { it.first === content }?.let { return it.second }
-        val m = withContext(Dispatchers.Default) { ChannelMatch.Matcher(content.channels.map(ChannelMatch::entry)) }
+        val m = withContext(Dispatchers.Default) { ChannelMatch.Matcher(content.channels.map { ChannelMatch.entry(it, content) }) }
         backupMatcher = content to m
         return m
     }
 
     /**
      * O canal [channel] de [main] na reserva, pronto a abrir ([choice]: um canal já escolhido no painel "experimentar
-     * agora"); null sem reserva, sem o canal (ou na dúvida), ou quando abrir a reserva passava o limite de ligações
-     * dela (o segundo canal já está nessa conta).
+     * agora"); null sem reserva, sem o canal (ou na dúvida, ou sem escolha no modo manual), ou quando abrir a reserva
+     * passava o limite de ligações dela (o segundo canal já está nessa conta).
      */
     internal suspend fun backupStream(main: PlaylistContent, channel: Channel, choice: Channel? = null): BackupStream? {
         if (streamsDisabled) return null
@@ -1689,19 +1703,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (sp.sharesConnectionsWith(backup) && one) return null.also { Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela") }
         }
         val target = choice ?: run {
-            val result = matcherFor(content).find(channel.name, channel.epgId, backupChoice(main.playlist.id, channel.key))
+            val manual = backupManual(main.playlist.id)
+            val result = ChannelMatch.decide(ChannelMatch.entry(channel, main), matcherFor(content), backupChoice(main.playlist.id, channel.key), manual)
             (result as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
-                ?: return null.also { Log.i(TAG_BACKUP, "Reserva: ${if (result is ChannelMatch.Result.Unsure) "em dúvida" else "sem canal"} para \"${channel.name}\"") }
+                ?: return null.also { Log.i(TAG_BACKUP, "Reserva: ${if (result is ChannelMatch.Result.Unsure) "em dúvida" else if (manual) "sem escolha (manual)" else "sem canal"} para \"${channel.name}\"") }
         }
         Log.i(TAG_BACKUP, "Reserva: \"${channel.name}\" → \"${target.name}\" (${backup.name})")
         val request = PlaybackRequest.of(content, target, null, streamFormat.value, stalkerLinks)
         return BackupStream(request, main.playlist.name, backup.name)
     }
 
+    /** Os canais de uma lista na reserva: a cobertura e a lista "Canais de reserva" (cada canal e o seu estado). */
+    class BackupReview(
+        val main: PlaylistContent,
+        val backup: PlaylistContent,
+        val rows: List<ChannelMatch.ReviewRow>,
+        val coverage: ChannelMatch.Coverage,
+        val manual: Boolean,
+        internal val overrides: Map<String, String>,
+    )
+
     /** A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva"). */
     sealed interface BackupCoverage {
         data object Checking : BackupCoverage
-        data class Ready(val backupId: String, val coverage: ChannelMatch.Coverage) : BackupCoverage
+        class Ready(val backupId: String, val review: BackupReview) : BackupCoverage {
+            val coverage: ChannelMatch.Coverage get() = review.coverage
+        }
         data object Unavailable : BackupCoverage
     }
 
@@ -1709,26 +1736,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val backupCoverage: StateFlow<Map<String, BackupCoverage>> = _backupCoverage.asStateFlow()
 
     /**
-     * Conta, por trás, quantos canais de [playlistId] têm o seu na reserva (as listas da cache, ou descarregadas como as
-     * do segundo canal). Os nomes dos que faltam ou ficam em dúvida vão para o registo (só os nomes), para o relatório.
+     * Conta, por trás, como fica cada canal de [playlistId] na reserva (as listas da cache, ou descarregadas como as do
+     * segundo canal). Feita uma vez por reserva, escolhas e modo: depois de uma escolha, a anterior fica à vista até a
+     * nova estar pronta. Os nomes dos que faltam ou ficam em dúvida vão para o registo (só os nomes), para o relatório.
      */
     fun checkBackupCoverage(playlistId: String) {
         val backup = backupOf(playlistId) ?: return
+        val overrides = backupOverrides(playlistId)
+        val manual = backupManual(playlistId)
         val known = _backupCoverage.value[playlistId]
-        if (known == BackupCoverage.Checking || known is BackupCoverage.Ready && known.backupId == backup.id) return
+        if (known == BackupCoverage.Checking) return
+        val ready = known as? BackupCoverage.Ready
+        if (ready != null && ready.backupId == backup.id && ready.review.overrides == overrides && ready.review.manual == manual) return
         val main = playlists.value.firstOrNull { it.id == playlistId } ?: return
-        _backupCoverage.value = _backupCoverage.value + (playlistId to BackupCoverage.Checking)
+        if (ready?.backupId != backup.id) _backupCoverage.value = _backupCoverage.value + (playlistId to BackupCoverage.Checking)
         viewModelScope.launch {
             val mainContent = content.value?.takeIf { it.playlist.id == playlistId } ?: backupContent(main)
             val backupContent = backupContent(backup)
             val result = if (mainContent == null || backupContent == null) {
                 BackupCoverage.Unavailable
             } else {
-                val overrides = prefs.value.backupChannels.filterKeys { it.startsWith("$playlistId:") }.mapKeys { it.key.removePrefix("$playlistId:") }
                 val matcher = matcherFor(backupContent)
-                val cov = withContext(Dispatchers.Default) { ChannelMatch.coverage(mainContent.channels.map(ChannelMatch::entry), matcher, overrides) }
-                logCoverage(main.name, backup.name, cov)
-                BackupCoverage.Ready(backup.id, cov)
+                val review = withContext(Dispatchers.Default) {
+                    val entries = mainContent.channels.map { ChannelMatch.entry(it, mainContent) }
+                    val rows = ChannelMatch.review(entries, matcher, overrides, manual)
+                    BackupReview(mainContent, backupContent, rows, ChannelMatch.coverage(entries, matcher, overrides, manual, rows), manual, overrides)
+                }
+                if (ready == null) logCoverage(main.name, backup.name, review.coverage)
+                BackupCoverage.Ready(backup.id, review)
             }
             _backupCoverage.value = _backupCoverage.value + (playlistId to result)
         }
@@ -1743,28 +1778,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** O painel "Canal de reserva" de [channel] (da lista principal): o automático, os parecidos e a escolha à mão. */
+    /** O painel "Canal de reserva" de [channel] (de [mainId]): o automático (ou a sugestão), os parecidos e a escolha à mão. */
     class BackupChoices(
+        val mainId: String,
         val backup: Playlist,
         val content: PlaylistContent,
         val auto: ChannelMatch.Result,
         val similar: List<Channel>,
         /** A escolha à mão: uma chave da reserva, [ChannelMatch.OFF], ou null (automático). */
         val choice: String?,
+        /** Modo manual: o automático é só uma sugestão. */
+        val manual: Boolean,
     ) {
         val autoChannel: Channel? get() = (auto as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
-        val chosenChannel: Channel? get() = choice?.takeIf { it != ChannelMatch.OFF }?.let { content.byKey[it] }
     }
 
-    suspend fun backupChoices(channel: Channel): BackupChoices? {
-        val main = content.value ?: return null
-        val backup = backupOf(main.playlist.id) ?: return null
+    /** As escolhas de [channel] da lista [mainId] (a em uso, se null). */
+    suspend fun backupChoices(channel: Channel, mainId: String? = null): BackupChoices? {
+        val id = mainId ?: content.value?.playlist?.id ?: return null
+        val backup = backupOf(id) ?: return null
         val backupContent = backupContent(backup) ?: return null
+        val mainContent = content.value?.takeIf { it.playlist.id == id }
+            ?: (_backupCoverage.value[id] as? BackupCoverage.Ready)?.review?.main
         val matcher = matcherFor(backupContent)
         return withContext(Dispatchers.Default) {
-            val auto = matcher.find(channel.name, channel.epgId)
+            val entry = ChannelMatch.entry(channel, mainContent)
+            val auto = matcher.find(entry.name, entry.epgId, null, entry.group)
             val similar = matcher.ranked(channel.name, channel.epgId, BACKUP_SIMILAR).mapNotNull { backupContent.channels.getOrNull(it) }
-            BackupChoices(backup, backupContent, auto, similar, backupChoice(main.playlist.id, channel.key))
+            BackupChoices(id, backup, backupContent, auto, similar, backupChoice(id, channel.key), backupManual(id))
         }
     }
 
@@ -1773,6 +1814,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val q = searchKey(query.trim())
         if (q.length < 2) return emptyList()
         return choices.content.channels.asSequence().filter { q in searchKey(it.name) }.take(MAX_SEARCH).toList()
+    }
+
+    /** Pesquisa na lista "Canais de reserva" (pelo nome do canal principal). */
+    fun backupReviewMatches(name: String, query: String): Boolean {
+        val q = searchKey(query.trim())
+        return q.isEmpty() || q in searchKey(name)
     }
 
     // ---- Atualizações da app -----------------------------------------------------------------

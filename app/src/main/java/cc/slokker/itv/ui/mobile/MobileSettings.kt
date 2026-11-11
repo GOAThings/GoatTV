@@ -1,6 +1,13 @@
 package cc.slokker.itv.ui.mobile
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.ui.player.backupRowText
+import cc.slokker.itv.ui.player.label
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -301,13 +308,21 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val coverage by vm.backupCoverage.collectAsStateWithLifecycle()
     var pickBackup by remember { mutableStateOf(false) }
+    var pickMode by remember { mutableStateOf(false) }
+    var reviewing by remember { mutableStateOf(false) }
     val others = playlists.filter { it.id != playlist.id }
     val backup = vm.backupOf(playlist.id)
-    LaunchedEffect(playlist.id, prefs.backupPlaylist[playlist.id], prefs.backupChannels) { vm.checkBackupCoverage(playlist.id) }
+    val manual = vm.backupManual(playlist.id)
+    LaunchedEffect(playlist.id, prefs.backupPlaylist[playlist.id], prefs.backupChannels, prefs.backupMode) { vm.checkBackupCoverage(playlist.id) }
     if (pickBackup) {
         val options = listOf<Pair<Any?, String>>(null to s.backupPlaylistNone) + others.map { it.id to it.name }
         return PickPage(Picking(s.backupPlaylist, options, backup?.id) { v -> vm.setBackupPlaylist(playlist.id, v as String?) }) { pickBackup = false }
     }
+    if (pickMode) {
+        val options = listOf<Pair<Any?, String>>(false to s.backupChannelAuto, true to s.backupModeManual)
+        return PickPage(Picking(s.backupMode, options, manual) { v -> vm.setBackupManual(playlist.id, v == true) }) { pickMode = false }
+    }
+    if (reviewing) return BackupChannelsPage(vm, playlist.id) { reviewing = false }
     BackHandler(onBack = onClose)
     SubPage(playlist.name, onClose) {
         if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist); onClose() }
@@ -317,6 +332,10 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
         }
         if (others.isNotEmpty()) {
             MenuRow(s.backupPlaylist, backup?.name ?: s.backupPlaylistNone, chevron = true, subtitle = backupSubtitle(s, backup, coverage[playlist.id])) { pickBackup = true }
+            if (backup != null) {
+                MenuRow(s.backupMode, if (manual) s.backupModeManual else s.backupChannelAuto, chevron = true) { pickMode = true }
+                MenuRow(s.backupChannels, null, chevron = true, subtitle = s.backupChannelsSub) { reviewing = true }
+            }
         }
         MenuRow(s.edit, null, chevron = true, onClick = onEdit)
         MenuRow(
@@ -491,5 +510,59 @@ fun PlaylistFormPage(vm: AppViewModel, editing: Playlist? = null, onDone: () -> 
                 }
             }.padding(horizontal = 28.dp, vertical = 13.dp),
         )
+    }
+}
+
+/**
+ * A lista "Canais de reserva" no telemóvel (como na TV, ver BackupChannelsPage): filtros, pesquisa pelo nome do canal e,
+ * ao tocar, a escolha do canal da reserva (sem "Experimentar agora").
+ */
+@Composable
+private fun BackupChannelsPage(vm: AppViewModel, playlistId: String, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    val coverage by vm.backupCoverage.collectAsStateWithLifecycle()
+    LaunchedEffect(playlistId, prefs.backupChannels, prefs.backupMode) { vm.checkBackupCoverage(playlistId) }
+    var filter by remember { mutableStateOf(ChannelMatch.Filter.ALL) }
+    var query by remember { mutableStateOf("") }
+    var opened by remember { mutableStateOf<Channel?>(null) }
+    opened?.let { channel ->
+        BackHandler { opened = null }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalBarSpace.current), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PageHeader(channel.name, s.backupChannels) { opened = null }
+            BackupSection(vm, channel, playlistId, onTry = null)
+        }
+        return
+    }
+    BackHandler(onBack = onClose)
+    val review = (coverage[playlistId] as? AppViewModel.BackupCoverage.Ready)?.review
+    Column(Modifier.fillMaxSize().padding(bottom = LocalBarSpace.current)) {
+        PageHeader(s.backupChannels, s.settings, onClose)
+        if (review == null) {
+            Note(s.backupChecking)
+            return@Column
+        }
+        val counts = remember(review) { ChannelMatch.Filter.entries.associateWith { f -> review.rows.count { with(ChannelMatch) { it.passes(f) } } } }
+        val shown = remember(review, filter, query) {
+            review.rows.filter { with(ChannelMatch) { it.passes(filter) } && vm.backupReviewMatches(review.main.channels[it.main].name, query) }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChannelMatch.Filter.entries.forEach { f ->
+                val on = f == filter
+                Text(
+                    "${f.label(s)} (${counts[f]})",
+                    color = if (on) Color.Black else ItvColors.Text,
+                    fontSize = 14.sp,
+                    modifier = Modifier.clip(CircleShape).background(if (on) Color.White else PhoneColors.Card).clickable { filter = f }.padding(horizontal = 12.dp, vertical = 7.dp),
+                )
+            }
+        }
+        Field(s.backupChannelSearch(review.main.playlist.name), query, Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp)) { query = it }
+        LazyColumn {
+            items(shown, key = { it.main }) { row ->
+                val (title, subtitle) = backupRowText(s, review, row)
+                MenuRow(title, null, chevron = true, subtitle = subtitle) { opened = review.main.channels[row.main] }
+            }
+        }
     }
 }
