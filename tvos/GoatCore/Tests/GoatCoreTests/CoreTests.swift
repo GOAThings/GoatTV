@@ -18,6 +18,7 @@ enum CoreTests {
         ("channelMatchCoverage", channelMatchCoverage),
         ("channelMatchRanked", channelMatchRanked),
         ("channelMatchReview", channelMatchReview),
+        ("channelMatchFailovers", channelMatchFailovers),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
         ("stalker", stalker),
@@ -482,7 +483,13 @@ enum CoreTests {
             "backup_channels": .object(["p1:1": "", "p1:2": "off"]),
         ]))
         try expect(backup.backupPlaylist, ["p3": "p1"])
-        try expect(backup.backupChannels, ["p1:2": "off"])
+        try expect(backup.backupChannels, ["p1:2": []])
+        // Vários failovers: um array (os vazios e os repetidos saem); um só grava-se como era.
+        let lists = Prefs(settings: .object(["backup_channels": .object(["p1:3": .array(["b1", "main:4", "", "b1"]), "p1:4": .array([]), "p1:5": .number(7)])]))
+        try expect(lists.backupChannels, ["p1:3": ["b1", "main:4"], "p1:4": [], "p1:5": ["7"]])
+        try expect(Prefs.failoverValue([]), .string("off"))
+        try expect(Prefs.failoverValue(["b9"]), .string("b9"))
+        try expect(Prefs.failoverValue(["b1", "main:4"]), .array(["b1", "main:4"]))
         try expect(Prefs(settings: .object(["backup_mode": .object(["p1": "manual", "p2": "auto"])])).backupMode, ["p1": "manual"])
     }
 

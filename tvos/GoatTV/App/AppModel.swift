@@ -91,6 +91,10 @@ final class AppModel {
     @ObservationIgnored var backupMatcher: (id: String, fetchedAt: Date, matcher: ChannelMatcher)?
     /// As listas em baixo há pouco (os canais delas vão logo à reserva).
     @ObservationIgnored var providerOutage = ProviderOutage()
+    /// Os failovers do canal a dar: o que está a abrir, os que faltam (pela ordem) e os que já falharam (ver [failoverFailed]).
+    @ObservationIgnored var failoverNow: FailoverStream?
+    @ObservationIgnored var failoverQueue: [FailoverStream] = []
+    @ObservationIgnored var failoversFailed: [String] = []
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
 
     /// O programa a ver em catch-up (nil = em direto).
@@ -190,6 +194,7 @@ final class AppModel {
         player.onStartFailed = { [weak self] status in self?.startFailover(status: status) ?? false }
         player.skipMain = { [weak self] in self?.skipToBackup() ?? false }
         player.onBackupPlaying = { [weak self] in self?.backupPlaying() }
+        player.onBackupFailed = { [weak self] in self?.failoverFailed() ?? false }
         wireRecordings()
         // Pausar o direto: guarda-se só o programa que se está a ver.
         player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
@@ -257,9 +262,9 @@ final class AppModel {
                 info = self.strings.errChannelUnreachable
             }
             if info.detail == nil { info.detail = self.strings.technical(self.player.backendName + (http.map { " · HTTP \($0)" } ?? "")) }
-            // A reserva também não abriu: o cartão diz as duas listas.
-            if self.player.backupFailed, let backup = self.backupOf(playlist.id) {
-                info.cause = [info.cause, self.strings.r("backup_also_failed", backup.name)].compactMap { $0 }.joined(separator: "\n")
+            // Os failovers também não abriram: o cartão diz quais.
+            if self.player.backupFailed, !self.failoversFailed.isEmpty {
+                info.cause = [info.cause, self.strings.r("backup_also_failed", self.failoversFailed.joined(separator: ", "))].compactMap { $0 }.joined(separator: "\n")
             }
             guard self.player.state == .failed else { return }
             self.playbackError = info

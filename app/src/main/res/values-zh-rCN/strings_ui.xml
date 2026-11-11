@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">长按移除 · 拖动 ≡ 排序</string>
     <string name="backup_add_from">从 %1$s 添加</string>
     <string name="backup_channel_search_all">在两个列表中搜索</string>
+    <string name="backup_failover_remove">从备用频道中移除</string>
     <string name="backup_channel">备用频道</string>
     <string name="backup_channel_auto">自动</string>
     <string name="backup_channel_auto_is">自动：%1$s</string>

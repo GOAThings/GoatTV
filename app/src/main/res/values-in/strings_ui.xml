@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">Tahan untuk menghapus · Seret ≡ untuk mengurutkan</string>
     <string name="backup_add_from">Tambah dari %1$s</string>
     <string name="backup_channel_search_all">Cari di kedua playlist</string>
+    <string name="backup_failover_remove">Hapus dari failover</string>
     <string name="backup_channel">Saluran cadangan</string>
     <string name="backup_channel_auto">Otomatis</string>
     <string name="backup_channel_auto_is">Otomatis: %1$s</string>

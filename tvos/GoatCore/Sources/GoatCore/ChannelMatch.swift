@@ -58,8 +58,20 @@ public enum ChannelMatch {
         }
     }
 
-    /// Escolha à mão canal a canal: a chave do canal na reserva, ou [off] para nunca mudar.
+    /// Escolha à mão canal a canal: "nenhum" (este canal nunca muda de lista). Gravado como o valor de uma lista vazia.
     public static let off = "off"
+
+    /// Um failover que é outro canal da própria lista (não da reserva): "main:" e a chave dele. Os da reserva são só a
+    /// chave, como eram quando cada canal tinha um só.
+    public static let mainPrefix = "main:"
+
+    /// A chave do canal [key] da lista principal como failover.
+    public static func mainFailover(_ key: String) -> String { mainPrefix + key }
+
+    /// A chave na lista principal, se [failover] for um canal dela; nil se for um da reserva.
+    public static func mainKey(of failover: String) -> String? {
+        failover.hasPrefix(mainPrefix) ? String(failover.dropFirst(mainPrefix.count)) : nil
+    }
 
     public enum Quality {
         public static let sd = 1
@@ -360,11 +372,32 @@ public enum ChannelMatch {
         return .match(index)
     }
 
+    /// Os failovers do canal [main], pela ordem em que se tentam: as chaves (as da própria lista com [mainPrefix]).
+    /// [chosen]: a lista escolhida à mão (vazia = "nenhum"; nil = automático: o que o [matcher] encontrar, e nada no
+    /// [manual]). Os escolhidos que já não existem (na reserva, ou na principal segundo [inMain]) ficam de fora, e o
+    /// próprio canal também; se não sobrar nenhum, conta como sem escolha (como na lista "Canais de reserva").
+    public static func failovers(_ main: Entry, _ matcher: ChannelMatcher, chosen: [String]?, manual: Bool, inMain: (String) -> Bool) -> [String] {
+        let kept = chosen.map { existing($0, except: main.key, matcher, inMain) }
+        if chosen?.isEmpty == true { return [] }
+        if let kept, !kept.isEmpty { return kept }
+        guard let index = decide(main, matcher, override: nil, manual: manual).index else { return [] }
+        return [matcher.pool[index].key]
+    }
+
+    /// Os failovers de [chosen] que ainda existem (na reserva, ou na principal segundo [inMain]), sem o próprio canal.
+    private static func existing(_ chosen: [String], except key: String, _ matcher: ChannelMatcher, _ inMain: (String) -> Bool) -> [String] {
+        var seen = Set<String>()
+        return chosen.filter { f in
+            let ok = mainKey(of: f).map { $0 != key && inMain($0) } ?? (matcher.indexOfKey(f) != nil)
+            return ok && seen.insert(f).inserted
+        }
+    }
+
     /// Como fica cada canal da lista principal na reserva (a lista "Canais de reserva").
     public enum State: String, Sendable {
         /// Encontrado sozinho.
         case auto
-        /// Escolhido à mão.
+        /// Escolhido à mão (um ou mais failovers).
         case chosen
         /// "Nenhum": escolhido à mão para não mudar.
         case off
@@ -375,11 +408,13 @@ public enum ChannelMatch {
     }
 
     /// Um canal da lista principal ([main], a posição) e o da reserva ([backup]) ou a [suggestion] automática.
+    /// Escolhidos à mão: [failovers], as chaves pela ordem (ver [failovers]); [backup] é o primeiro, se for da reserva.
     public struct ReviewRow: Equatable, Sendable {
         public let main: Int
         public let state: State
         public let backup: Int?
         public let suggestion: Int?
+        public var failovers: [String] = []
 
         public func passes(_ filter: Filter) -> Bool {
             switch filter {
@@ -397,13 +432,18 @@ public enum ChannelMatch {
         case all, matched, unsure, missing, chosen
     }
 
-    /// Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → escolha) e o modo.
-    public static func review(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: String] = [:], manual: Bool = false) -> [ReviewRow] {
-        main.enumerated().map { i, c in
+    /// Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → failovers pela ordem; lista
+    /// vazia = "nenhum") e o modo.
+    public static func review(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: [String]] = [:], manual: Bool = false) -> [ReviewRow] {
+        let mainKeys = Set(main.map(\.key))
+        return main.enumerated().map { i, c in
             let override = overrides[c.key]
-            if override == off { return ReviewRow(main: i, state: .off, backup: nil, suggestion: nil) }
-            if let override, let chosen = matcher.indexOfKey(override) { return ReviewRow(main: i, state: .chosen, backup: chosen, suggestion: nil) }
-            // Uma escolha que já não existe na reserva conta como sem escolha.
+            if override?.isEmpty == true { return ReviewRow(main: i, state: .off, backup: nil, suggestion: nil) }
+            let chosen = override.map { existing($0, except: c.key, matcher, mainKeys.contains) } ?? []
+            if let first = chosen.first {
+                return ReviewRow(main: i, state: .chosen, backup: matcher.indexOfKey(first), suggestion: nil, failovers: chosen)
+            }
+            // Uma escolha que já não existe conta como sem escolha.
             let auto = matcher.find(c.name, epgId: c.epgId, override: nil, group: c.group)
             if manual { return ReviewRow(main: i, state: .notSet, backup: nil, suggestion: auto.index) }
             switch auto {
@@ -428,7 +468,7 @@ public enum ChannelMatch {
 
     /// A cobertura da reserva [matcher] para os canais [main]; [overrides]: chave → escolha à mão. Em [manual], os
     /// encontrados são os escolhidos à mão. Com [rows] já feitas ([review]), não se procura outra vez.
-    public static func coverage(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: String] = [:], manual: Bool = false,
+    public static func coverage(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: [String]] = [:], manual: Bool = false,
                                 rows: [ReviewRow]? = nil) -> Coverage {
         let rows = rows ?? review(main, matcher, overrides: overrides, manual: manual)
         let matched = rows.filter { $0.state == .auto || $0.state == .chosen }.count

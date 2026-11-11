@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">Gedrückt halten zum Entfernen · ≡ ziehen zum Sortieren</string>
     <string name="backup_add_from">Aus %1$s hinzufügen</string>
     <string name="backup_channel_search_all">In beiden Playlists suchen</string>
+    <string name="backup_failover_remove">Aus den Failovern entfernen</string>
     <string name="backup_channel">Ersatzsender</string>
     <string name="backup_channel_auto">Automatisch</string>
     <string name="backup_channel_auto_is">Automatisch: %1$s</string>

@@ -76,6 +76,9 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var skipMain: (() -> Bool)?
     /// O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>.").
     @ObservationIgnored var onBackupPlaying: (() -> Void)?
+    /// Um failover também não abriu: devolve true se quem usa o leitor passa ao seguinte (e chama [playBackup] outra
+    /// vez); false volta à lista principal e mostra o erro.
+    @ObservationIgnored var onBackupFailed: (() -> Bool)?
 
     // MARK: Lista de reserva
 
@@ -607,7 +610,13 @@ final class PlayerEngine: NSObject {
                 return
             }
         }
-        if onBackup { restoreMain() }
+        if onBackup {
+            if onBackupFailed?() == true {
+                state = .opening
+                return
+            }
+            restoreMain()
+        }
         showFailure()
     }
 
@@ -695,9 +704,10 @@ final class PlayerEngine: NSObject {
         startAfr()
     }
 
-    /// Abre o mesmo canal da lista de reserva no lugar do da principal (depois de [onStartFailed], ou "experimentar
-    /// agora"). A ligação à principal fecha antes ([open] pára o motor e larga o anel; ver [whenConnectionFree]); o ecrã
-    /// continua no canal da principal e o próximo canal (ou [play] outra vez) volta a ela.
+    /// Abre um failover (o mesmo canal da lista de reserva, ou outro da própria lista) no lugar do da principal (depois
+    /// de [onStartFailed], de [onBackupFailed] para o seguinte, ou "experimentar agora"). A ligação anterior fecha antes
+    /// ([open] pára o motor e larga o anel; ver [whenConnectionFree]); o ecrã continua no canal da principal e o próximo
+    /// canal (ou [play] outra vez) volta a ela.
     func playBackup(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         guard openedKey != nil else { return }
         if !onBackup {

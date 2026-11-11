@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">Удерживайте, чтобы удалить · Перетащите ≡, чтобы упорядочить</string>
     <string name="backup_add_from">Добавить из %1$s</string>
     <string name="backup_channel_search_all">Искать в обоих плейлистах</string>
+    <string name="backup_failover_remove">Убрать из резервных</string>
     <string name="backup_channel">Резервный канал</string>
     <string name="backup_channel_auto">Автоматически</string>
     <string name="backup_channel_auto_is">Автоматически: %1$s</string>

@@ -403,6 +403,7 @@
     <string name="backup_failovers_hint_phone">Hold to remove · Drag ≡ to reorder</string>
     <string name="backup_add_from">Add from %1$s</string>
     <string name="backup_channel_search_all">Search both playlists</string>
+    <string name="backup_failover_remove">Remove from failovers</string>
     <string name="backup_channel">Backup channel</string>
     <string name="backup_channel_auto">Automatic</string>
     <string name="backup_channel_auto_is">Automatic: %1$s</string>

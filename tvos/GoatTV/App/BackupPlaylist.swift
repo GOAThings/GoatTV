@@ -8,7 +8,7 @@ struct BackupReview {
     let rows: [ChannelMatch.ReviewRow]
     let coverage: ChannelMatch.Coverage
     let manual: Bool
-    let overrides: [String: String]
+    let overrides: [String: [String]]
 }
 
 /// A cobertura da reserva de uma lista: quantos canais ela tem (o subtítulo da linha "Lista de reserva").
@@ -18,32 +18,83 @@ enum BackupCoverage {
     case unavailable
 }
 
-/// O painel "Canal de reserva" de um canal: o automático, os parecidos e a escolha à mão.
+/// O painel "Canal de reserva" de um canal: os failovers dele, o automático, os parecidos na reserva e na própria lista,
+/// e a escolha à mão.
 struct BackupChoices {
     /// A lista principal.
     let mainId: String
     let backup: Playlist
     let content: PlaylistContent
+    /// A lista principal (para os failovers dela); nil se não estiver carregada.
+    let main: PlaylistContent?
     let auto: ChannelMatch.Result
     let similar: [Channel]
-    /// A escolha à mão: uma chave da reserva, "off", ou nil (automático).
-    var choice: String?
+    /// Os parecidos na própria lista (sem o canal).
+    let similarMain: [Channel]
+    /// Os failovers escolhidos à mão, pela ordem: lista vazia = "nenhum", nil = automático.
+    var choice: [String]?
     /// Modo manual: o automático é só uma sugestão (e sem escolha não muda de lista).
     let manual: Bool
 
-    /// "Nenhum" está escolhido: à mão, ou (no modo manual) por não haver escolha.
-    var none: Bool { choice == ChannelMatch.off || (manual && choice == nil) }
-
     var autoChannel: Channel? { auto.index.flatMap { content.channels.indices.contains($0) ? content.channels[$0] : nil } }
 
-    /// O canal a experimentar: o escolhido, ou o automático; nil com "nenhum" ou sem canal.
-    var effective: Channel? {
-        switch choice {
-        case nil: return manual ? nil : autoChannel
-        case ChannelMatch.off: return nil
-        case let key?: return content.byKey[key]
-        }
+    /// O canal de um failover (da reserva, ou da própria lista com ChannelMatch.mainPrefix).
+    func channel(of failover: String) -> Channel? {
+        if let key = ChannelMatch.mainKey(of: failover) { return main?.byKey[key] }
+        return content.byKey[failover]
     }
+
+    /// A lista de um failover (a própria, ou a reserva).
+    func list(of failover: String) -> PlaylistContent? { ChannelMatch.mainKey(of: failover) != nil ? main : content }
+
+    /// O failover de [channel], da reserva ou ([fromMain]) da própria lista.
+    func failover(_ channel: Channel, fromMain: Bool) -> String { fromMain ? ChannelMatch.mainFailover(channel.key) : channel.key }
+
+    /// Os failovers que se tentam, pela ordem: os escolhidos que ainda existem, ou o automático. Uma escolha cujos canais
+    /// já não existem conta como sem escolha (como na lista "Canais de reserva").
+    var failovers: [String] {
+        let chosen = choice?.filter { channel(of: $0) != nil } ?? []
+        if choice?.isEmpty == true || !chosen.isEmpty { return chosen }
+        return manual ? [] : (autoChannel.map { [$0.key] } ?? [])
+    }
+
+    /// "Nenhum": este canal não muda de lista.
+    var none: Bool { failovers.isEmpty }
+
+    /// Os failovers ainda são os do automático (nada escolhido à mão).
+    var automatic: Bool { choice == nil }
+
+    /// Junta [failover] no fim (ou tira-o, se já lá estiver).
+    func toggled(_ failover: String) -> [String] {
+        let list = failovers
+        return list.contains(failover) ? list.filter { $0 != failover } : list + [failover]
+    }
+
+    /// Move [failover] [delta] lugares (−1 = para cima); nil se não puder.
+    func moved(_ failover: String, by delta: Int) -> [String]? {
+        var list = failovers
+        guard let from = list.firstIndex(of: failover), list.indices.contains(from + delta) else { return nil }
+        list.swapAt(from, from + delta)
+        return list
+    }
+}
+
+/// Um canal encontrado na pesquisa do painel: da reserva, ou ([fromMain]) da própria lista.
+struct BackupHit: Identifiable {
+    let channel: Channel
+    let fromMain: Bool
+    var id: String { (fromMain ? "m:" : "b:") + channel.key }
+}
+
+/// Um failover pronto a abrir: a lista dele, o canal, as tentativas, e se é outro canal da própria lista.
+struct FailoverStream {
+    let playlist: Playlist
+    let channel: Channel
+    let candidates: [StreamCandidate]
+    let sameList: Bool
+
+    /// Como aparece no cartão de erro: "RTP 1 HD (BackupTV)", ou só o canal se for da própria lista.
+    var label: String { sameList ? channel.name : "\(channel.name) (\(playlist.name))" }
 }
 
 /// A lista de reserva (como no GoatTV Android): quando um canal em direto não abre na lista em uso, dá o mesmo canal de
@@ -66,7 +117,7 @@ extension AppModel {
         modes[playlistId] = nil
         setPrefs([
             "backup_playlist": .object(map.mapValues { JSON.string($0) }),
-            "backup_channels": .object(channels.mapValues { JSON.string($0) }),
+            "backup_channels": .object(channels.mapValues(Prefs.failoverValue)),
             "backup_mode": .object(modes.mapValues { JSON.string($0) }),
         ])
         backupCoverage[playlistId] = nil
@@ -81,22 +132,24 @@ extension AppModel {
         setPref("backup_mode", .object(modes.mapValues { JSON.string($0) }))
     }
 
-    /// As escolhas à mão de [playlistId] (chave do canal → escolha).
-    private func backupOverrides(_ playlistId: String) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: prefs.backupChannels.compactMap { k, v -> (String, String)? in
+    /// As escolhas à mão de [playlistId] (chave do canal → failovers).
+    private func backupOverrides(_ playlistId: String) -> [String: [String]] {
+        Dictionary(uniqueKeysWithValues: prefs.backupChannels.compactMap { k, v -> (String, [String])? in
             k.hasPrefix("\(playlistId):") ? (String(k.dropFirst(playlistId.count + 1)), v) : nil
         })
     }
 
-    /// O canal da reserva escolhido à mão para [channelKey] de [playlistId] (uma chave, "off", ou nil = automático).
-    func backupChoice(_ playlistId: String, _ channelKey: String) -> String? {
+    /// Os failovers escolhidos à mão para [channelKey] de [playlistId], pela ordem (vazia = "nenhum", nil = automático).
+    func backupChoice(_ playlistId: String, _ channelKey: String) -> [String]? {
         prefs.backupChannels["\(playlistId):\(channelKey)"]
     }
 
-    func setBackupChoice(_ playlistId: String, _ channelKey: String, _ value: String?) {
+    /// Grava os failovers escolhidos à mão ([value] nil = volta ao automático; vazia = "nenhum").
+    func setBackupChoice(_ playlistId: String, _ channelKey: String, _ value: [String]?) {
         var map = prefs.backupChannels
-        map["\(playlistId):\(channelKey)"] = value
-        setPref("backup_channels", .object(map.mapValues { JSON.string($0) }))
+        var seen = Set<String>()
+        map["\(playlistId):\(channelKey)"] = value?.filter { seen.insert($0).inserted }
+        setPref("backup_channels", .object(map.mapValues(Prefs.failoverValue)))
     }
 
     /// Os canais da reserva (a lista em uso, da cache, ou descarregados como os do segundo canal).
@@ -112,73 +165,104 @@ extension AppModel {
         return matcher
     }
 
-    /// O que abrir na reserva para [channel] de [main] ([choice]: um canal já escolhido, "experimentar agora"); nil sem
-    /// reserva, sem o canal (ou na dúvida), ou quando abrir a reserva passava o limite de ligações dela.
-    private func backupStream(_ main: PlaylistContent, _ channel: Channel, choice: Channel? = nil)
-        async -> (playlist: Playlist, channel: Channel, candidates: [StreamCandidate])? {
-        guard let backup = backupOf(main.playlist.id), !sameAccount(backup, main.playlist) else { return nil }
-        guard let content = await backupContent(backup) else {
-            DebugLog.add("Backup: \(backup.name) channels did not load")
-            return nil
+    /// Os failovers de [channel] de [main], prontos a abrir pela ordem ([chosen]: os do painel, "experimentar agora";
+    /// sem eles, os escolhidos à mão ou o automático). Os da reserva ficam de fora sem reserva, quando ela não carrega,
+    /// ou quando abri-la passava o limite de ligações dela; os da própria lista, quando ela está em baixo (falhavam
+    /// também).
+    private func backupStreams(_ main: PlaylistContent, _ channel: Channel, chosen: [String]? = nil) async -> [FailoverStream] {
+        let id = main.playlist.id
+        // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
+        let backup = backupOf(id).flatMap { sameAccount($0, main.playlist) ? nil : $0 }
+        var content: PlaylistContent?
+        if let backup {
+            content = await backupContent(backup)
+            if content == nil { DebugLog.add("Backup: \(backup.name) channels did not load") }
         }
         // O segundo canal já usa a conta da reserva e ela só deixa uma ligação: não se abre outra.
-        if let sp = second?.content.playlist, sameAccount(sp, backup) || sp.id == backup.id,
-           backup.type == .stalker || (backup.type == .xtream && (content.account?.maxConnections ?? 1) < 2) {
+        var busy = false
+        if let backup, let c = content, let sp = second?.content.playlist, sameAccount(sp, backup) || sp.id == backup.id,
+           backup.type == .stalker || (backup.type == .xtream && (c.account?.maxConnections ?? 1) < 2) {
             DebugLog.add("Backup: the second channel already uses its account")
-            return nil
+            busy = true
         }
-        let target: Channel
-        if let choice {
-            target = choice
-        } else {
-            let m = await matcher(for: content)
-            let manual = backupManual(main.playlist.id)
-            let result = ChannelMatch.decide(ChannelMatch.Entry(channel, in: main), m, override: backupChoice(main.playlist.id, channel.key), manual: manual)
-            guard let i = result.index, content.channels.indices.contains(i) else {
-                DebugLog.add("Backup: \(result == .missing ? (manual ? "not chosen (manual)" : "no channel") : "unsure") for \"\(channel.name)\"")
-                return nil
+        let m: ChannelMatcher
+        if let content { m = await matcher(for: content) } else { m = ChannelMatcher([]) }
+        let manual = backupManual(id)
+        let list = ChannelMatch.failovers(ChannelMatch.Entry(channel, in: main), m, chosen: chosen ?? backupChoice(id, channel.key), manual: manual) { main.byKey[$0] != nil }
+        let mainDown = providerOutage.isDown(id, now: Self.uptimeMs())
+        let streams: [FailoverStream] = list.compactMap { f in
+            if let key = ChannelMatch.mainKey(of: f) {
+                guard !mainDown, let c = main.byKey[key] else { return nil }
+                return FailoverStream(playlist: main.playlist, channel: c, candidates: candidates(main, c), sameList: true)
             }
-            target = content.channels[i]
+            guard !busy, let content, let c = content.byKey[f] else { return nil }
+            return FailoverStream(playlist: content.playlist, channel: c, candidates: candidates(content, c), sameList: false)
         }
-        DebugLog.add("Backup: \"\(channel.name)\" -> \"\(target.name)\" (\(backup.name))")
-        let candidates = streamCandidates(playlist: content.playlist, channel: target, preferred: prefs.streamFormat,
-                                          allowedFormats: content.account?.allowedFormats ?? [])
-        return (content.playlist, target, candidates)
+        DebugLog.add(streams.isEmpty
+            ? "Backup: no failover for \"\(channel.name)\"\(manual ? " (manual)" : "")"
+            : "Backup: \"\(channel.name)\" -> " + streams.map { "\"\($0.channel.name)\" (\($0.playlist.name))" }.joined(separator: " | "))
+        return streams
     }
 
-    private func openBackupStream(_ stream: (playlist: Playlist, channel: Channel, candidates: [StreamCandidate])) {
+    private func candidates(_ content: PlaylistContent, _ channel: Channel) -> [StreamCandidate] {
+        streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat, allowedFormats: content.account?.allowedFormats ?? [])
+    }
+
+    /// Abre o primeiro de [streams]; os outros ficam na fila para se, também ele, não abrir (ver [failoverFailed]).
+    private func openFailovers(_ streams: [FailoverStream]) {
+        guard let first = streams.first else { return }
+        failoverQueue = Array(streams.dropFirst())
+        failoversFailed = []
+        openBackupStream(first)
+    }
+
+    private func openBackupStream(_ stream: FailoverStream) {
         let stalker = loader.stalker
         let playlist = stream.playlist
         let channel = stream.channel
+        failoverNow = stream
         player.playBackup(stream.candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
                           linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
     }
 
-    /// O direto da lista principal não abriu: procura o mesmo canal na reserva (o leitor espera pela resposta). Uma
-    /// recusa da conta ou do servidor ([status]) marca a lista como em baixo (ver [skipToBackup]).
-    func startFailover(status: Int?) -> Bool {
-        guard catchup == nil, let content, let channel = current, let backup = backupOf(content.playlist.id),
-              !sameAccount(backup, content.playlist) else { return false }
-        if ProviderOutage.providerWide(status) { providerOutage.markDown(content.playlist.id, now: Self.uptimeMs()) }
-        Task { [weak self] in
-            guard let self else { return }
-            let stream = await self.backupStream(content, channel)
-            guard self.current?.key == channel.key, self.catchup == nil else { return }
-            if let stream { self.openBackupStream(stream) } else { self.player.backupUnavailable() }
+    /// O failover a abrir também não abriu: passa ao seguinte (o leitor espera). Sem mais nenhum, o cartão diz os que
+    /// falharam e as tentativas voltam à lista principal.
+    func failoverFailed() -> Bool {
+        if let now = failoverNow { failoversFailed.append(now.label) }
+        failoverNow = nil
+        guard !failoverQueue.isEmpty, let key = current?.key else { return false }
+        let next = failoverQueue.removeFirst()
+        Task { @MainActor [weak self] in
+            guard let self, self.current?.key == key, self.catchup == nil else { return }
+            self.openBackupStream(next)
         }
         return true
     }
 
-    /// A lista principal esteve em baixo há pouco: o canal novo vai logo à reserva, sem esperar pelas tentativas de
-    /// sempre (sem esse canal na reserva, tenta-se a principal).
-    func skipToBackup() -> Bool {
-        guard catchup == nil, let content, let channel = current, let backup = backupOf(content.playlist.id),
-              !sameAccount(backup, content.playlist), providerOutage.isDown(content.playlist.id, now: Self.uptimeMs()) else { return false }
+    /// O direto da lista principal não abriu: procura os failovers dele (o leitor espera pela resposta). Uma recusa da
+    /// conta ou do servidor ([status]) marca a lista como em baixo (ver [skipToBackup]).
+    func startFailover(status: Int?) -> Bool {
+        guard catchup == nil, let content, let channel = current, backupOf(content.playlist.id) != nil else { return false }
+        if ProviderOutage.providerWide(status) { providerOutage.markDown(content.playlist.id, now: Self.uptimeMs()) }
         Task { [weak self] in
             guard let self else { return }
-            let stream = await self.backupStream(content, channel)
+            let streams = await self.backupStreams(content, channel)
             guard self.current?.key == channel.key, self.catchup == nil else { return }
-            if let stream { self.openBackupStream(stream) } else { self.player.openMain() }
+            if streams.isEmpty { self.player.backupUnavailable() } else { self.openFailovers(streams) }
+        }
+        return true
+    }
+
+    /// A lista principal esteve em baixo há pouco: o canal novo vai logo aos failovers, sem esperar pelas tentativas de
+    /// sempre (sem nenhum — os da própria lista não contam —, tenta-se a principal).
+    func skipToBackup() -> Bool {
+        guard catchup == nil, let content, let channel = current, backupOf(content.playlist.id) != nil,
+              providerOutage.isDown(content.playlist.id, now: Self.uptimeMs()) else { return false }
+        Task { [weak self] in
+            guard let self else { return }
+            let streams = await self.backupStreams(content, channel)
+            guard self.current?.key == channel.key, self.catchup == nil else { return }
+            if streams.isEmpty { self.player.openMain() } else { self.openFailovers(streams) }
         }
         return true
     }
@@ -191,18 +275,25 @@ extension AppModel {
 
     static func uptimeMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
 
-    /// O canal da reserva começou a dar: o aviso.
+    /// Um failover começou a dar: o aviso ("<lista> não responde. A dar da <reserva>.", ou o canal da própria lista).
     func backupPlaying() {
-        guard let content, let backup = backupOf(content.playlist.id) else { return }
-        showToast(strings.r("backup_playing", content.playlist.name, backup.name))
+        guard let content, let stream = failoverNow else { return }
+        if stream.sameList {
+            showToast(strings.r("backup_playing_channel", current?.name ?? "", stream.channel.name))
+        } else {
+            showToast(strings.r("backup_playing", content.playlist.name, stream.playlist.name))
+        }
     }
 
-    /// "Experimentar agora": dá já [target] (da reserva) no lugar do canal a ver; o próximo canal volta à principal.
-    func tryBackup(_ target: Channel) {
-        guard let content, let channel = current else { return }
+    /// "Experimentar agora": dá já os failovers [failovers] (pela ordem) no lugar do canal a ver; o próximo canal volta
+    /// à principal.
+    func tryBackup(_ failovers: [String]) {
+        guard let content, let channel = current, !failovers.isEmpty else { return }
         Task { [weak self] in
-            guard let self, let stream = await self.backupStream(content, channel, choice: target), self.current?.key == channel.key else { return }
-            self.openBackupStream(stream)
+            guard let self else { return }
+            let streams = await self.backupStreams(content, channel, chosen: failovers)
+            guard self.current?.key == channel.key else { return }
+            self.openFailovers(streams)
         }
     }
 
@@ -223,17 +314,36 @@ extension AppModel {
             (m.find(entry.name, epgId: entry.epgId, group: entry.group), m.ranked(entry.name, epgId: entry.epgId))
         }.value
         let similar = ranked.compactMap { backupContent.channels.indices.contains($0) ? backupContent.channels[$0] : nil }
-        return BackupChoices(mainId: id, backup: backup, content: backupContent, auto: auto, similar: similar,
-                             choice: backupChoice(id, channel.key), manual: backupManual(id))
+        // Na própria lista: os parecidos sem o canal (o mesmo canal noutra qualidade, ou noutro grupo).
+        var similarMain: [Channel] = []
+        if let mainContent {
+            let mainEntries = mainContent.channels.map { ChannelMatch.Entry($0, in: mainContent) }
+            let rankedMain = await Task.detached(priority: .userInitiated) { ChannelMatcher(mainEntries).ranked(entry.name, epgId: entry.epgId) }.value
+            similarMain = rankedMain.compactMap { mainContent.channels.indices.contains($0) ? mainContent.channels[$0] : nil }.filter { $0.key != channel.key }
+        }
+        return BackupChoices(mainId: id, backup: backup, content: backupContent, main: mainContent, auto: auto, similar: similar,
+                             similarMain: similarMain, choice: backupChoice(id, channel.key), manual: backupManual(id))
     }
 
-    /// Pesquisa nos canais da reserva (pelo nome, sem acentos nem maiúsculas).
-    func searchBackup(_ choices: BackupChoices, _ query: String) -> [Channel] {
+    /// Pesquisa nos canais da reserva e da própria lista (pelo nome, sem acentos nem maiúsculas): os da reserva primeiro,
+    /// cada um com true nos da própria lista (sem o canal [except]).
+    func searchBackup(_ choices: BackupChoices, _ query: String, except: String) -> [BackupHit] {
         let q = query.trimmingCharacters(in: .whitespaces).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
         guard q.count >= 2 else { return [] }
-        return Array(choices.content.channels.lazy.filter {
-            $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).contains(q)
-        }.prefix(40))
+        func hits(_ c: PlaylistContent?) -> [Channel] {
+            (c?.channels ?? []).filter { $0.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).contains(q) }
+        }
+        let backup = hits(choices.content).map { BackupHit(channel: $0, fromMain: false) }
+        let main = hits(choices.main).filter { $0.key != except }.map { BackupHit(channel: $0, fromMain: true) }
+        return Array((backup + main).prefix(40))
+    }
+
+    /// O subtítulo de um failover: a lista e o grupo (e "Automático" no do automático).
+    func failoverSubtitle(_ choices: BackupChoices, _ failover: String) -> String {
+        let list = choices.list(of: failover)
+        let group = choices.channel(of: failover).flatMap { c in list?.categoryName(c.categoryId) }
+        let auto = choices.automatic && failover == choices.autoChannel?.key ? strings.r("backup_channel_auto") : nil
+        return [list?.playlist.name, group, auto].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// "Automático: SIC HD", "Sem correspondência" ou "Em dúvida…".
@@ -293,10 +403,15 @@ extension AppModel {
         return nil
     }
 
-    /// Uma linha da lista: "RTP 1 → RTP 1 FHD" e o estado (no manual sem escolha, a sugestão).
+    /// Uma linha da lista: "RTP 1 → RTP 1 FHD" (com "+2" se houver mais failovers) e o estado (no manual sem escolha, a
+    /// sugestão).
     func backupRowText(_ review: BackupReview, _ row: ChannelMatch.ReviewRow) -> (title: String, subtitle: String) {
         let main = review.main.channels[row.main].name
-        let backup = row.backup.flatMap { review.backup.channels.indices.contains($0) ? review.backup.channels[$0].name : nil }
+        let chosen = row.failovers.compactMap { f in
+            (ChannelMatch.mainKey(of: f).map { review.main.byKey[$0] } ?? review.backup.byKey[f])?.name
+        }
+        let first = chosen.first ?? row.backup.flatMap { review.backup.channels.indices.contains($0) ? review.backup.channels[$0].name : nil }
+        let backup = first.map { chosen.count > 1 ? "\($0) +\(chosen.count - 1)" : $0 }
         let suggestion = row.suggestion.flatMap { review.backup.channels.indices.contains($0) ? strings.r("backup_suggestion", review.backup.channels[$0].name) : nil }
         let state: String
         switch row.state {

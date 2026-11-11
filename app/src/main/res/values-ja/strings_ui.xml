@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">長押しで削除 · ≡ をドラッグで並べ替え</string>
     <string name="backup_add_from">%1$s から追加</string>
     <string name="backup_channel_search_all">両方のプレイリストを検索</string>
+    <string name="backup_failover_remove">代替チャンネルから削除</string>
     <string name="backup_channel">予備のチャンネル</string>
     <string name="backup_channel_auto">自動</string>
     <string name="backup_channel_auto_is">自動: %1$s</string>

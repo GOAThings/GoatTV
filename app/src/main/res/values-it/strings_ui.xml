@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">Tieni premuto per rimuovere · Trascina ≡ per riordinare</string>
     <string name="backup_add_from">Aggiungi da %1$s</string>
     <string name="backup_channel_search_all">Cerca in entrambe le playlist</string>
+    <string name="backup_failover_remove">Rimuovi dai failover</string>
     <string name="backup_channel">Canale di riserva</string>
     <string name="backup_channel_auto">Automatico</string>
     <string name="backup_channel_auto_is">Automatico: %1$s</string>

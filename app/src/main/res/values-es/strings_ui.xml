@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">Mantén pulsado para quitar · Arrastra ≡ para ordenar</string>
     <string name="backup_add_from">Añadir de %1$s</string>
     <string name="backup_channel_search_all">Buscar en las dos listas</string>
+    <string name="backup_failover_remove">Quitar de los failovers</string>
     <string name="backup_channel">Canal de respaldo</string>
     <string name="backup_channel_auto">Automático</string>
     <string name="backup_channel_auto_is">Automático: %1$s</string>

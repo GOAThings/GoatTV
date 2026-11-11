@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">हटाने के लिए दबाए रखें · क्रम बदलने के लिए ≡ खींचें</string>
     <string name="backup_add_from">%1$s से जोड़ें</string>
     <string name="backup_channel_search_all">दोनों प्लेलिस्ट में खोजें</string>
+    <string name="backup_failover_remove">फ़ेलओवर से हटाएँ</string>
     <string name="backup_channel">बैकअप चैनल</string>
     <string name="backup_channel_auto">स्वचालित</string>
     <string name="backup_channel_auto_is">स्वचालित: %1$s</string>

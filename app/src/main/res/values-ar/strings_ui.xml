@@ -402,6 +402,7 @@
     <string name="backup_failovers_hint_phone">اضغط مطولًا للإزالة · اسحب ≡ لإعادة الترتيب</string>
     <string name="backup_add_from">إضافة من %1$s</string>
     <string name="backup_channel_search_all">البحث في القائمتين</string>
+    <string name="backup_failover_remove">إزالة من القنوات البديلة</string>
     <string name="backup_channel">القناة الاحتياطية</string>
     <string name="backup_channel_auto">تلقائي</string>
     <string name="backup_channel_auto_is">تلقائي: %1$s</string>

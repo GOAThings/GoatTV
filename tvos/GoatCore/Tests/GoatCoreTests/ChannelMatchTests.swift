@@ -61,7 +61,7 @@ extension CoreTests {
     static func channelMatchCoverage() throws {
         for c in try channelMatchCases()["coverage"]?.array ?? [] {
             let label = c["case"]?.string ?? ""
-            let overrides = (c["overrides"]?.object ?? [:]).compactMapValues { $0.string }
+            let overrides = overrides(c)
             let cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatcher(entries(c, "pool")), overrides: overrides, manual: c["manual"]?.bool == true)
             try expect(cov.total, c["main"]?.array?.count ?? -1, label)
             try expect(cov.matched, c["matched"]?.int ?? -1, label)
@@ -85,7 +85,7 @@ extension CoreTests {
     static func channelMatchReview() throws {
         for c in try channelMatchCases()["review"]?.array ?? [] {
             let label = c["case"]?.string ?? ""
-            let overrides = (c["overrides"]?.object ?? [:]).compactMapValues { $0.string }
+            let overrides = overrides(c)
             let rows = ChannelMatch.review(entries(c, "main"), ChannelMatcher(entries(c, "pool")), overrides: overrides, manual: c["manual"]?.bool == true)
             let expected = (c["expect"]?.array ?? []).map { r -> String in
                 let a = r.array ?? []
@@ -93,11 +93,34 @@ extension CoreTests {
             }
             try expect(rows.map { "\($0.state.rawValue) \($0.backup.map(String.init) ?? "-") \($0.suggestion.map(String.init) ?? "-")" }, expected, label)
             try expect(rows.map(\.main), Array(rows.indices), label)
+            if let failovers = c["failovers"]?.array {
+                try expect(rows.map(\.failovers), failovers.map { $0.array?.compactMap(\.string) ?? [] }, "\(label)/failovers")
+            }
             for (name, count) in c["filters"]?.object ?? [:] {
                 let filter = ChannelMatch.Filter(rawValue: name)
                 try expect(filter != nil, true, "\(label)/\(name)")
                 try expect(rows.filter { $0.passes(filter!) }.count, count.int ?? -1, "\(label)/\(name)")
             }
+        }
+    }
+
+    /// As escolhas à mão de um caso: uma chave, "off" (nenhum) ou um array de failovers, como no `settings`.
+    private static func overrides(_ c: JSON) -> [String: [String]] {
+        (c["overrides"]?.object ?? [:]).compactMapValues { v in
+            if let list = v.array { return list.compactMap(\.string) }
+            return v.string.map { $0 == ChannelMatch.off ? [] : [$0] }
+        }
+    }
+
+    static func channelMatchFailovers() throws {
+        for c in try channelMatchCases()["failovers"]?.array ?? [] {
+            let label = c["case"]?.string ?? ""
+            let t = c["target"]
+            let target = ChannelMatch.Entry(key: t?["key"]?.string ?? "main", name: t?["name"]?.string ?? "", epgId: t?["epg"]?.string, group: t?["group"]?.string)
+            let mainKeys = Set((c["mainKeys"]?.array ?? []).compactMap(\.string))
+            let chosen = c["chosen"]?.array?.compactMap(\.string)
+            let result = ChannelMatch.failovers(target, ChannelMatcher(entries(c, "pool")), chosen: chosen, manual: c["manual"]?.bool == true, inMain: mainKeys.contains)
+            try expect(result, (c["expect"]?.array ?? []).compactMap(\.string), label)
         }
     }
 }
