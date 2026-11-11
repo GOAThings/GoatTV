@@ -17,6 +17,7 @@ enum CoreTests {
         ("channelMatchFind", channelMatchFind),
         ("channelMatchCoverage", channelMatchCoverage),
         ("channelMatchRanked", channelMatchRanked),
+        ("channelMatchReview", channelMatchReview),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
         ("stalker", stalker),
@@ -463,6 +464,7 @@ enum CoreTests {
         ]))
         try expect(backup.backupPlaylist, ["p3": "p1"])
         try expect(backup.backupChannels, ["p1:2": "off"])
+        try expect(Prefs(settings: .object(["backup_mode": .object(["p1": "manual", "p2": "auto"])])).backupMode, ["p1": "manual"])
     }
 
     static func library() throws {

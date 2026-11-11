@@ -24,20 +24,24 @@ public enum ChannelMatch {
         }
     }
 
-    /// Um canal da lista de reserva (ou o que se procura).
+    /// Um canal da lista de reserva (ou o que se procura). [group]: o nome do grupo dele, para desempatar cópias iguais
+    /// do mesmo canal em grupos diferentes (ex.: "SIC K" em "Portugal" e em "PT Backup").
     public struct Entry: Equatable, Sendable {
         public let key: String
         public let name: String
         public let epgId: String?
+        public let group: String?
 
-        public init(key: String, name: String, epgId: String?) {
+        public init(key: String, name: String, epgId: String?, group: String? = nil) {
             self.key = key
             self.name = name
             self.epgId = epgId
+            self.group = group
         }
 
-        public init(_ c: Channel) {
-            self.init(key: c.key, name: c.name, epgId: c.epgId)
+        /// O canal, com o nome do grupo dele em [content] (para desempatar cópias).
+        public init(_ c: Channel, in content: PlaylistContent? = nil) {
+            self.init(key: c.key, name: c.name, epgId: c.epgId, group: content?.categoryName(c.categoryId))
         }
     }
 
@@ -342,6 +346,74 @@ public enum ChannelMatch {
         return prev[b.count]
     }
 
+    /// O nome de um grupo para comparar (sem acentos, maiúsculas, espaços nem pontuação).
+    public static func groupKey(_ name: String) -> String { words(Text(fold(name).unicodeScalars)).joined() }
+
+    /// Os modos da reserva de uma lista (`backup_mode`): automático (sem entrada) ou só os canais escolhidos à mão.
+    public static let modeManual = "manual"
+
+    /// A decisão de passar para a reserva: o canal [main] (com a escolha à mão [override]). Em [manual], só uma escolha
+    /// que ainda exista na reserva passa; os outros mostram o erro como sempre.
+    public static func decide(_ main: Entry, _ matcher: ChannelMatcher, override: String?, manual: Bool) -> Result {
+        guard manual else { return matcher.find(main.name, epgId: main.epgId, override: override, group: main.group) }
+        guard let override, override != off, let index = matcher.indexOfKey(override) else { return .missing }
+        return .match(index)
+    }
+
+    /// Como fica cada canal da lista principal na reserva (a lista "Canais de reserva").
+    public enum State: String, Sendable {
+        /// Encontrado sozinho.
+        case auto
+        /// Escolhido à mão.
+        case chosen
+        /// "Nenhum": escolhido à mão para não mudar.
+        case off
+        case unsure
+        case missing
+        /// Modo manual, sem escolha: não muda (a sugestão fica em [ReviewRow.suggestion]).
+        case notSet = "not_set"
+    }
+
+    /// Um canal da lista principal ([main], a posição) e o da reserva ([backup]) ou a [suggestion] automática.
+    public struct ReviewRow: Equatable, Sendable {
+        public let main: Int
+        public let state: State
+        public let backup: Int?
+        public let suggestion: Int?
+
+        public func passes(_ filter: Filter) -> Bool {
+            switch filter {
+            case .all: return true
+            case .matched: return state == .auto || state == .chosen
+            case .unsure: return state == .unsure
+            case .missing: return state == .missing || state == .off || state == .notSet
+            case .chosen: return state == .chosen || state == .off
+            }
+        }
+    }
+
+    /// Os filtros da lista "Canais de reserva".
+    public enum Filter: String, CaseIterable, Sendable {
+        case all, matched, unsure, missing, chosen
+    }
+
+    /// Cada canal de [main] na reserva [matcher], com as escolhas à mão [overrides] (chave → escolha) e o modo.
+    public static func review(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: String] = [:], manual: Bool = false) -> [ReviewRow] {
+        main.enumerated().map { i, c in
+            let override = overrides[c.key]
+            if override == off { return ReviewRow(main: i, state: .off, backup: nil, suggestion: nil) }
+            if let override, let chosen = matcher.indexOfKey(override) { return ReviewRow(main: i, state: .chosen, backup: chosen, suggestion: nil) }
+            // Uma escolha que já não existe na reserva conta como sem escolha.
+            let auto = matcher.find(c.name, epgId: c.epgId, override: nil, group: c.group)
+            if manual { return ReviewRow(main: i, state: .notSet, backup: nil, suggestion: auto.index) }
+            switch auto {
+            case .match(let index): return ReviewRow(main: i, state: .auto, backup: index, suggestion: nil)
+            case .unsure: return ReviewRow(main: i, state: .unsure, backup: nil, suggestion: nil)
+            case .missing: return ReviewRow(main: i, state: .missing, backup: nil, suggestion: nil)
+            }
+        }
+    }
+
     // MARK: A cobertura
 
     /// Quantos canais de uma lista têm o seu na reserva, quantos ficam em dúvida e quantos faltam (com os nomes).
@@ -354,18 +426,14 @@ public enum ChannelMatch {
         public let missingNames: [String]
     }
 
-    /// A cobertura da reserva [matcher] para os canais [main]; [overrides]: chave → escolha à mão.
-    public static func coverage(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: String] = [:]) -> Coverage {
-        var matched = 0
-        var unsure: [String] = []
-        var missing: [String] = []
-        for c in main {
-            switch matcher.find(c.name, epgId: c.epgId, override: overrides[c.key]) {
-            case .match: matched += 1
-            case .unsure: unsure.append(c.name)
-            case .missing: missing.append(c.name)
-            }
-        }
+    /// A cobertura da reserva [matcher] para os canais [main]; [overrides]: chave → escolha à mão. Em [manual], os
+    /// encontrados são os escolhidos à mão. Com [rows] já feitas ([review]), não se procura outra vez.
+    public static func coverage(_ main: [Entry], _ matcher: ChannelMatcher, overrides: [String: String] = [:], manual: Bool = false,
+                                rows: [ReviewRow]? = nil) -> Coverage {
+        let rows = rows ?? review(main, matcher, overrides: overrides, manual: manual)
+        let matched = rows.filter { $0.state == .auto || $0.state == .chosen }.count
+        let unsure = rows.filter { $0.state == .unsure }.map { main[$0.main].name }
+        let missing = rows.filter { $0.state == .missing || $0.state == .off || $0.state == .notSet }.map { main[$0.main].name }
         return Coverage(total: main.count, matched: matched, unsure: unsure.count, missing: missing.count, unsureNames: unsure, missingNames: missing)
     }
 }
@@ -377,10 +445,12 @@ public final class ChannelMatcher: @unchecked Sendable {
     private var byEpg: [String: [Int]] = [:]
     private var byBase: [String: [Int]] = [:]
     private var byKey: [String: Int] = [:]
+    private let groups: [String?]
 
     public init(_ pool: [ChannelMatch.Entry]) {
         self.pool = pool
         parsed = pool.map { ChannelMatch.parse($0.name) }
+        groups = pool.map { $0.group.map(ChannelMatch.groupKey) }
         for (i, e) in pool.enumerated() {
             if let k = ChannelMatch.epgKey(e.epgId) { byEpg[k, default: []].append(i) }
             if !parsed[i].base.isEmpty { byBase[parsed[i].base, default: []].append(i) }
@@ -388,8 +458,11 @@ public final class ChannelMatcher: @unchecked Sendable {
         }
     }
 
-    /// O canal [name] (id do guia [epgId]) nesta lista; [override]: a escolha à mão (off ou uma chave daqui).
-    public func find(_ name: String, epgId: String?, override: String? = nil) -> ChannelMatch.Result {
+    /// A posição do canal [key] nesta lista, ou nil.
+    public func indexOfKey(_ key: String) -> Int? { byKey[key] }
+
+    /// O canal [name] (id do guia [epgId], no grupo [group]) nesta lista; [override]: a escolha à mão (off ou uma chave daqui).
+    public func find(_ name: String, epgId: String?, override: String? = nil, group: String? = nil) -> ChannelMatch.Result {
         if override == ChannelMatch.off { return .missing }
         if let override, let i = byKey[override] { return .match(i) }
         let t = ChannelMatch.parse(name)
@@ -398,21 +471,29 @@ public final class ChannelMatcher: @unchecked Sendable {
             let c = parsed[i]
             return c.shift == t.shift && (t.country == nil || c.country == nil || c.country == t.country)
         }
+        let g = group.map(ChannelMatch.groupKey)
         let byName = (byBase[t.base] ?? []).filter(compatible)
-        let named = choose(t, byName)
+        let named = choose(t, byName, g)
         let epg = (ChannelMatch.epgKey(epgId).flatMap { byEpg[$0] } ?? []).filter(compatible)
         if !epg.isEmpty {
             let sameName = epg.filter { parsed[$0].base == t.base }
-            if !sameName.isEmpty { return choose(t, sameName) }
+            if !sameName.isEmpty { return choose(t, sameName, g) }
+            // O mesmo id do guia e o nome a uma letra de distância (um erro de escrita: "TVI REALLITY"): conta como o
+            // mesmo nome, mas só em nomes com 4 letras ou mais.
+            if byName.isEmpty, t.base.unicodeScalars.count >= 4 {
+                let near = epg.filter { ChannelMatch.levenshtein(parsed[$0].base, t.base) <= 1 }
+                if !near.isEmpty { return choose(t, near, g) }
+            }
             // O id do guia aponta para um canal com outro nome: só vale se não houver nenhum com o mesmo nome.
-            if byName.isEmpty { return choose(t, epg) }
+            if byName.isEmpty { return choose(t, epg, g) }
             return .unsure(byName.count + epg.count)
         }
         return named
     }
 
-    /// Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida.
-    private func choose(_ t: ChannelMatch.Parsed, _ candidates: [Int]) -> ChannelMatch.Result {
+    /// Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida. Cópias
+    /// iguais do mesmo canal não são dúvida: fica a do grupo com o nome do grupo do canal principal, ou a primeira.
+    private func choose(_ t: ChannelMatch.Parsed, _ candidates: [Int], _ group: String? = nil) -> ChannelMatch.Result {
         if candidates.isEmpty { return .missing }
         var set = candidates
         if let country = t.country {
@@ -422,7 +503,9 @@ public final class ChannelMatcher: @unchecked Sendable {
         if Set(set.compactMap { parsed[$0].country }).count > 1 { return .unsure(set.count) }
         if Set(set.map { parsed[$0].base }).count > 1 { return .unsure(set.count) }
         let best = set.map { parsed[$0].quality }.max() ?? 0
-        return .match(set.first { parsed[$0].quality == best }!)
+        let top = set.filter { parsed[$0].quality == best }
+        if let group, let same = top.first(where: { groups[$0] == group }) { return .match(same) }
+        return .match(top[0])
     }
 
     /// Os canais daqui mais parecidos com [name] (para escolher à mão), do mais para o menos parecido (ver o Android).

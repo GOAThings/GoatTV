@@ -24,7 +24,7 @@ extension CoreTests {
 
     private static func entries(_ o: JSON, _ key: String) -> [ChannelMatch.Entry] {
         (o[key]?.array ?? []).enumerated().map { i, e in
-            ChannelMatch.Entry(key: e["key"]?.string ?? "k\(i)", name: e["name"]?.string ?? "", epgId: e["epg"]?.string)
+            ChannelMatch.Entry(key: e["key"]?.string ?? "k\(i)", name: e["name"]?.string ?? "", epgId: e["epg"]?.string, group: e["group"]?.string)
         }
     }
 
@@ -45,7 +45,8 @@ extension CoreTests {
         for c in list {
             let label = c["case"]?.string ?? ""
             let t = c["target"] ?? .null
-            let result = ChannelMatcher(entries(c, "pool")).find(t["name"]?.string ?? "", epgId: t["epg"]?.string, override: c["override"]?.string)
+            let target = ChannelMatch.Entry(key: "main", name: t["name"]?.string ?? "", epgId: t["epg"]?.string, group: t["group"]?.string)
+            let result = ChannelMatch.decide(target, ChannelMatcher(entries(c, "pool")), override: c["override"]?.string, manual: c["manual"]?.bool == true)
             let kind: String
             switch result {
             case .match: kind = "match"
@@ -61,7 +62,7 @@ extension CoreTests {
         for c in try channelMatchCases()["coverage"]?.array ?? [] {
             let label = c["case"]?.string ?? ""
             let overrides = (c["overrides"]?.object ?? [:]).compactMapValues { $0.string }
-            let cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatcher(entries(c, "pool")), overrides: overrides)
+            let cov = ChannelMatch.coverage(entries(c, "main"), ChannelMatcher(entries(c, "pool")), overrides: overrides, manual: c["manual"]?.bool == true)
             try expect(cov.total, c["main"]?.array?.count ?? -1, label)
             try expect(cov.matched, c["matched"]?.int ?? -1, label)
             try expect(cov.unsure, c["unsure"]?.int ?? -1, label)
@@ -79,5 +80,24 @@ extension CoreTests {
         }
         try expect(ChannelMatch.levenshtein("kitten", "sitting"), 3)
         try expect(ChannelMatch.levenshtein("", "sic"), 3)
+    }
+
+    static func channelMatchReview() throws {
+        for c in try channelMatchCases()["review"]?.array ?? [] {
+            let label = c["case"]?.string ?? ""
+            let overrides = (c["overrides"]?.object ?? [:]).compactMapValues { $0.string }
+            let rows = ChannelMatch.review(entries(c, "main"), ChannelMatcher(entries(c, "pool")), overrides: overrides, manual: c["manual"]?.bool == true)
+            let expected = (c["expect"]?.array ?? []).map { r -> String in
+                let a = r.array ?? []
+                return "\(a[0].string ?? "") \(a[1].int.map(String.init) ?? "-") \(a[2].int.map(String.init) ?? "-")"
+            }
+            try expect(rows.map { "\($0.state.rawValue) \($0.backup.map(String.init) ?? "-") \($0.suggestion.map(String.init) ?? "-")" }, expected, label)
+            try expect(rows.map(\.main), Array(rows.indices), label)
+            for (name, count) in c["filters"]?.object ?? [:] {
+                let filter = ChannelMatch.Filter(rawValue: name)
+                try expect(filter != nil, true, "\(label)/\(name)")
+                try expect(rows.filter { $0.passes(filter!) }.count, count.int ?? -1, "\(label)/\(name)")
+            }
+        }
     }
 }

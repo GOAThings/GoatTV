@@ -78,6 +78,8 @@ public struct Prefs: Equatable, Sendable {
     public var backupPlaylist: [String: String] = [:]
     /// O canal da reserva escolhido à mão (`backup_channels`: "playlistId:channelKey" → chave na reserva, ou "off").
     public var backupChannels: [String: String] = [:]
+    /// Como se escolhe o canal da reserva (`backup_mode`: playlistId → "manual"; sem entrada = automático).
+    public var backupMode: [String: String] = [:]
     public var outlineColor = "white"
     public var panelTimeout = 15
     /// Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco).
@@ -245,6 +247,7 @@ public struct Prefs: Equatable, Sendable {
         extraEpg = stringMap("extra_epg").filter { $0.value.hasPrefix("http://") || $0.value.hasPrefix("https://") }
         backupPlaylist = stringMap("backup_playlist").filter { !$0.value.isEmpty && $0.value != $0.key }
         backupChannels = stringMap("backup_channels").filter { !$0.value.isEmpty }
+        backupMode = stringMap("backup_mode").filter { $0.value == ChannelMatch.modeManual }
         outlineColor = str("outline_color", d.outlineColor, ["white", "accent", "blue", "violet", "pink", "red", "orange", "yellow", "green"])
         panelTimeout = clamp(int("panel_timeout", d.panelTimeout), 0, 300)
         glassOpacity = clamp(int("glass_opacity", d.glassOpacity), 0, 100)
