@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.Channel
@@ -204,6 +205,15 @@ internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: Strin
     val firstFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var moving by remember { mutableStateOf<String?>(null) }
+    // Tirar um failover tira a linha com foco: o foco passa ao que fica no lugar dele (ou ao de cima, ou a "Automático").
+    val rowFocus = remember { HashMap<String, FocusRequester>() }
+    val autoFocus = remember { FocusRequester() }
+    var refocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(refocus) {
+        val target = refocus ?: return@LaunchedEffect
+        focusWithRetry(if (target == "auto") autoFocus else rowFocus.getOrPut(target) { FocusRequester() })
+        refocus = null
+    }
     LaunchedEffect(state.loading) { if (!state.loading) focusWithRetry(firstFocus) }
     val choices = state.choices
     Column {
@@ -238,10 +248,12 @@ internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: Strin
                         onClick = { moving = if (isMoving) null else f },
                         onLongClick = {
                             if (moving == f) moving = null
+                            val rest = failovers - f
+                            refocus = rest.getOrNull(i) ?: rest.getOrNull(i - 1) ?: "auto"
                             state.remove(f)
                         },
                         selected = isMoving,
-                        modifier = (if (i == 0) first else Modifier).onPreviewKeyEvent { e ->
+                        modifier = (if (i == 0) first else Modifier).focusRequester(rowFocus.getOrPut(f) { FocusRequester() }).onPreviewKeyEvent { e ->
                             if (!isMoving || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 Key.DirectionUp -> { state.move(f, -1); true }
@@ -249,14 +261,14 @@ internal fun BackupChannelBody(vm: AppViewModel, channel: Channel, mainId: Strin
                                 else -> false
                             }
                         },
-                        leading = { Text("${i + 1}", color = ItvColors.TextDim, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(24.dp)) },
-                        trailing = { Text(if (isMoving) s.moving else "↕", style = MaterialTheme.typography.bodySmall, color = if (isMoving) LocalAccent.current.start else ItvColors.TextDim) },
+                        leading = { Text("${i + 1}", color = LocalContentColor.current.copy(alpha = 0.6f), style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(24.dp)) },
+                        trailing = { Text(if (isMoving) s.moving else "↕", style = MaterialTheme.typography.bodySmall, color = if (isMoving) LocalAccent.current.start else LocalContentColor.current.copy(alpha = 0.6f)) },
                         title = c.name,
                         subtitle = state.subtitle(f, s),
                     )
                 }
                 if (failovers.isNotEmpty()) item(key = "hint") { Text(s.backupFailoversHint, color = ItvColors.TextFaint, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)) }
-                val firstAfter = if (failovers.isEmpty()) first else Modifier
+                val firstAfter = (if (failovers.isEmpty()) first else Modifier).focusRequester(autoFocus)
                 item(key = "auto") {
                     when {
                         state.manual -> GlassRow(onClick = {}, modifier = firstAfter, title = state.autoLabel(s))
