@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">从备用频道中移除</string>
     <string name="backup_connecting">正在尝试备用频道…</string>
     <string name="backup_connecting_to">%1$s · 第 %2$d/%3$d 个</string>
+    <string name="backup_position">第 %1$d/%2$d 个</string>
     <string name="backup_failovers_intro">如果 %1$s 打不开，依次尝试：</string>
     <string name="backup_none_note">%1$s 不会切换到其他频道。</string>
     <string name="backup_this_playlist">此列表</string>

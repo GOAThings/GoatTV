@@ -64,7 +64,7 @@ import cc.slokker.itv.ui.theme.tabular
  * uma Live Activity). Deitado, em ecrã inteiro, o player usa a cápsula da TV.
  */
 @Composable
-internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, modifier: Modifier = Modifier, label: String? = null) {
+internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, modifier: Modifier = Modifier, label: String? = null, badge: String? = null) {
     val s = LocalStrings.current
     Row(
         modifier
@@ -75,15 +75,19 @@ internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, mod
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            channel,
-            color = ItvColors.Text,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        // A posição ("2 de 3") nunca se corta: é o nome que encolhe.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                channel,
+                color = ItvColors.Text,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            badge?.let { Text(" · $it", color = ItvColors.Text, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+        }
         Spacer(Modifier.width(10.dp))
         Text(label ?: s.reconnecting, color = GoatPalette.Warning, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Spacer(Modifier.width(6.dp))

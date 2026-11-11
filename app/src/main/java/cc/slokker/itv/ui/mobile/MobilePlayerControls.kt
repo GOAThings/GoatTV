@@ -256,12 +256,18 @@ internal fun VideoArea(
         }
         // A abrir um failover (o canal não abriu): o mesmo, a dizer qual.
         val failover = playback.core.onBackup?.takeIf { !playback.ready && !playback.core.wasPlaying && playback.reconnects == 0 }
-            ?.let { s.backupConnectingTo(it.label, it.position, it.total) }
         if (failover != null && !pip) {
             if (fullscreen) {
-                TuningPill(channel.name, reconnecting = false, attempt = 0, nextTryAt = 0L, waitMs = 0L, modifier = Modifier.align(Alignment.TopCenter), failover = failover)
+                TuningPill(
+                    channel.name, reconnecting = false, attempt = 0, nextTryAt = 0L, waitMs = 0L, modifier = Modifier.align(Alignment.TopCenter),
+                    failover = s.backupConnectingTo(failover.label, failover.position, failover.total),
+                )
             } else {
-                ReconnectIsland(failover, 0L, 0L, Modifier.align(Alignment.TopCenter).padding(top = 8.dp), label = s.backupConnecting)
+                // Com um só failover, "1 de 1" não diz nada.
+                ReconnectIsland(
+                    failover.label, 0L, 0L, Modifier.align(Alignment.TopCenter).padding(top = 8.dp), label = s.backupConnecting,
+                    badge = if (failover.total > 1) s.backupPosition(failover.position, failover.total) else null,
+                )
             }
         }
         // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.

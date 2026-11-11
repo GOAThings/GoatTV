@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">Hapus dari failover</string>
     <string name="backup_connecting">Mencoba failover…</string>
     <string name="backup_connecting_to">%1$s · %2$d dari %3$d</string>
+    <string name="backup_position">%1$d dari %2$d</string>
     <string name="backup_failovers_intro">Jika %1$s tidak terbuka, coba:</string>
     <string name="backup_none_note">%1$s tidak beralih ke saluran lain.</string>
     <string name="backup_this_playlist">Playlist ini</string>

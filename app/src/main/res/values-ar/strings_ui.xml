@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">إزالة من القنوات البديلة</string>
     <string name="backup_connecting">جارٍ تجربة قناة بديلة…</string>
     <string name="backup_connecting_to">%1$s · %2$d من %3$d</string>
+    <string name="backup_position">%1$d من %2$d</string>
     <string name="backup_failovers_intro">إذا لم تُفتح %1$s، جرّب:</string>
     <string name="backup_none_note">لا تنتقل %1$s إلى قناة أخرى.</string>
     <string name="backup_this_playlist">هذه القائمة</string>

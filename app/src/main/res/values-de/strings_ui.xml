@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">Aus den Failovern entfernen</string>
     <string name="backup_connecting">Failover wird versucht…</string>
     <string name="backup_connecting_to">%1$s · %2$d von %3$d</string>
+    <string name="backup_position">%1$d von %2$d</string>
     <string name="backup_failovers_intro">Wenn %1$s nicht startet, versuchen:</string>
     <string name="backup_none_note">%1$s wechselt nicht zu einem anderen Sender.</string>
     <string name="backup_this_playlist">Diese Playlist</string>

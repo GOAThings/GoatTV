@@ -290,6 +290,13 @@ extension AppModel {
         return strings.r("backup_connecting_to", now.label, "\(position)", "\(position + failoverQueue.count)")
     }
 
+    /// O mesmo para a ilha do iPhone: o failover e a posição à parte ("2 de 3"; nil com um só), que nunca se corta.
+    var failoverConnectingParts: (name: String, position: String?)? {
+        guard failoverConnecting != nil, let now = failoverNow else { return nil }
+        let position = failoversFailed.count + 1, total = position + failoverQueue.count
+        return (now.label, total > 1 ? strings.r("backup_position", "\(position)", "\(total)") : nil)
+    }
+
     /// Um failover começou a dar: o aviso ("<lista> não responde. A dar da <reserva>.", ou o canal da própria lista).
     func backupPlaying() {
         guard let content, let stream = failoverNow else { return }

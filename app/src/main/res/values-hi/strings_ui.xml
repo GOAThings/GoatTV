@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">फ़ेलओवर से हटाएँ</string>
     <string name="backup_connecting">फ़ेलओवर आज़माया जा रहा है…</string>
     <string name="backup_connecting_to">%1$s · %3$d में से %2$d</string>
+    <string name="backup_position">%2$d में से %1$d</string>
     <string name="backup_failovers_intro">अगर %1$s न खुले, तो आज़माएँ:</string>
     <string name="backup_none_note">%1$s किसी दूसरे चैनल पर नहीं जाता।</string>
     <string name="backup_this_playlist">यह प्लेलिस्ट</string>

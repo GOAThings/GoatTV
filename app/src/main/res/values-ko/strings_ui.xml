@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">대체 채널에서 삭제</string>
     <string name="backup_connecting">대체 채널 시도 중…</string>
     <string name="backup_connecting_to">%1$s · %2$d/%3$d</string>
+    <string name="backup_position">%1$d/%2$d</string>
     <string name="backup_failovers_intro">%1$s이(가) 열리지 않으면 다음을 시도:</string>
     <string name="backup_none_note">%1$s은(는) 다른 채널로 바꾸지 않습니다.</string>
     <string name="backup_this_playlist">이 재생목록</string>

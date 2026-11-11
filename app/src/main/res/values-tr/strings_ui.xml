@@ -404,6 +404,7 @@
     <string name="backup_failover_remove">Yedeklerden kaldır</string>
     <string name="backup_connecting">Yedek kanal deneniyor…</string>
     <string name="backup_connecting_to">%1$s · %2$d/%3$d</string>
+    <string name="backup_position">%1$d/%2$d</string>
     <string name="backup_failovers_intro">%1$s açılmazsa sırayla dene:</string>
     <string name="backup_none_note">%1$s başka kanala geçmez.</string>
     <string name="backup_this_playlist">Bu liste</string>

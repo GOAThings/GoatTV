@@ -16,14 +16,23 @@ struct ReconnectIsland: View {
     let waitSeconds: TimeInterval
     /// O texto à direita ("A reconectar…", ou "A tentar um failover…").
     var label: String? = nil
+    /// A seguir ao nome, sem nunca se cortar (a posição do failover, "2 de 3"): é o nome que encolhe.
+    var badge: String? = nil
 
     var body: some View {
         HStack(spacing: 0) {
-            Text(channel)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 0) {
+                Text(channel)
+                    .lineLimit(1)
+                if let badge {
+                    Text(" · " + badge)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Theme.text)
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text(label ?? model.strings.r("reconnecting"))
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.warning)

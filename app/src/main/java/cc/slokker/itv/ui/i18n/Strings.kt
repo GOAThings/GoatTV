@@ -794,6 +794,7 @@ class Strings(context: Context) {
     val backupSuggested get() = s(R.string.backup_suggested)
     val backupAlreadyAdded get() = s(R.string.backup_already_added)
     fun backupConnectingTo(failover: String, position: Int, total: Int) = s(R.string.backup_connecting_to, failover, position, total)
+    fun backupPosition(position: Int, total: Int) = s(R.string.backup_position, position, total)
     val backupChannel get() = s(R.string.backup_channel)
     val backupChannelAuto get() = s(R.string.backup_channel_auto)
     fun backupChannelAutoIs(name: String) = s(R.string.backup_channel_auto_is, name)

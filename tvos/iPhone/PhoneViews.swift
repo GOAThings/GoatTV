@@ -586,7 +586,8 @@ private struct VideoPane: View {
                         TuningPill(channel: current.name, reconnecting: false, attempt: 0, nextTryAt: nil, waitSeconds: 0, scale: 0.55, failover: failover)
                             .padding(.top, 12)
                     } else {
-                        ReconnectIsland(channel: failover, nextTryAt: nil, waitSeconds: 0, label: model.strings.r("backup_connecting"))
+                        ReconnectIsland(channel: model.failoverConnectingParts?.name ?? failover, nextTryAt: nil, waitSeconds: 0,
+                                        label: model.strings.r("backup_connecting"), badge: model.failoverConnectingParts?.position)
                             .padding(.top, 8)
                     }
                     Spacer()
