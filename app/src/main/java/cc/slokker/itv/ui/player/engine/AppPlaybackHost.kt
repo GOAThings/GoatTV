@@ -5,6 +5,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Languages
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.ui.common.explainPlaybackError
@@ -30,6 +31,11 @@ internal class AppPlaybackHost(
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
     override suspend fun backupFor(request: PlaybackRequest): BackupStream? = vm.backupStream(latestData(), request.channel)
     override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(I18n.s.backupPlaying(origin.mainName, origin.backupName))
+    override fun providerDown(request: PlaybackRequest): Boolean = vm.providerOutage.isDown(latestData().playlist.id)
+    override fun onMainFailed(request: PlaybackRequest, error: PlaybackException) {
+        if (ProviderOutage.providerWide(OpenRetry.httpCode(error))) vm.providerOutage.markDown(latestData().playlist.id)
+    }
+    override fun onMainPlaying(request: PlaybackRequest) = vm.providerOutage.clear(latestData().playlist.id)
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()

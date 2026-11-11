@@ -105,6 +105,12 @@ class ChannelPlaybackTest {
         val backupNotices = mutableListOf<String>()
         override suspend fun backupFor(request: PlaybackRequest): BackupStream? { backupAsked++; return backup }
         override fun onBackupPlaying(origin: BackupOrigin) { backupNotices += "${origin.mainName}>${origin.backupName}" }
+        var down = false
+        val mainFailures = mutableListOf<PlaybackException>()
+        var mainPlaying = 0
+        override fun providerDown(request: PlaybackRequest) = down
+        override fun onMainFailed(request: PlaybackRequest, error: PlaybackException) { mainFailures += error }
+        override fun onMainPlaying(request: PlaybackRequest) { mainPlaying++ }
     }
 
     private val time = FakeTime()
@@ -812,5 +818,44 @@ class ChannelPlaybackTest {
         p.stop()
         p.onStart()
         assertEquals(listOf(ts, backupTs, ts), engine.opened)
+    }
+
+    @Test
+    fun principalEmBaixoVaiLogoAReserva() {
+        host.backup = backupStream()
+        host.down = true
+        val p = playback()
+        p.tuneNow(live())
+        // Sem tentar a principal: abre já o canal da reserva (e o aviso diz as duas listas).
+        assertEquals(listOf(backupTs), engine.opened)
+        assertEquals("k1", p.request?.shownKey)
+        p.onState(engine, Player.STATE_READY)
+        assertEquals(listOf("Principal>Reserva"), host.backupNotices)
+        assertEquals(0, host.mainPlaying)
+    }
+
+    @Test
+    fun principalEmBaixoSemCanalNaReservaTentaAPrincipal() {
+        host.down = true
+        val p = playback()
+        p.tuneNow(live(ts))
+        assertEquals(1, host.backupAsked)
+        assertEquals(listOf(ts), engine.opened)
+    }
+
+    @Test
+    fun aFalhaDaPrincipalEContadaEUmCanalQueDaApagaA() {
+        host.backup = backupStream()
+        host.prefs = host.prefs.copy(zapDelayMs = Prefs.ZapDelay.OFF)
+        val p = playback()
+        p.tuneNow(live(ts))
+        p.onError(engine, ioError)
+        assertEquals(1, host.mainFailures.size)
+        // A reserva a dar não conta como a principal; outro canal da principal a dar, sim.
+        p.onState(engine, Player.STATE_READY)
+        assertEquals(0, host.mainPlaying)
+        p.tuneNow(live(ts))
+        p.onState(engine, Player.STATE_READY)
+        assertEquals(1, host.mainPlaying)
     }
 }

@@ -258,6 +258,16 @@ internal class ChannelPlayback(
         onBackup = null
         reconnects = 0
         nextTryAt = 0L
+        // A lista principal esteve em baixo há pouco (ver ProviderOutage): vai-se logo ao mesmo canal da reserva, sem
+        // esperar pelas tentativas de sempre. Sem esse canal na reserva, tenta-se a principal como sempre.
+        if (policy.failover && request.live && request.backup == null && host.providerDown(request)) {
+            backupJob = scope.launch {
+                val backup = runCatching { host.backupFor(request) }.getOrNull()
+                if (this@ChannelPlayback.request !== request) return@launch
+                if (backup != null) openBackup(backup, null) else start(0)
+            }
+            return
+        }
         start(0)
     }
 
@@ -478,7 +488,7 @@ internal class ChannelPlayback(
             // O formato da reserva é de outra conta: não se aprende.
             val backup = request?.backup
             if (policy.learnFormat && attempt > 0 && candidate != null && live && !fellBackOnRefusal && backup == null) host.onFormatWorked(candidate.format)
-            if (backup != null) host.onBackupPlaying(backup)
+            if (backup != null) host.onBackupPlaying(backup) else if (live) request?.let(host::onMainPlaying)
         }
     }
 
@@ -562,6 +572,7 @@ internal class ChannelPlayback(
      */
     private fun fail(error: PlaybackException, req: PlaybackRequest, delayMs: Long?) {
         if (policy.failover && req.live && req.backup == null && backupJob?.isActive != true) {
+            host.onMainFailed(req, error)
             val shown = currentCandidate?.format
             backupJob = scope.launch {
                 val backup = runCatching { host.backupFor(req) }.getOrNull()

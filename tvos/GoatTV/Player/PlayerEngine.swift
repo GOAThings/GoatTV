@@ -69,8 +69,11 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var onPlaying: (() -> Void)?
     /// O direto da lista principal não abriu depois das tentativas de sempre (os formatos, e os pedidos de cada um):
     /// devolve true se quem usa o leitor vai procurar o canal na lista de reserva (e chama depois [playBackup] ou
-    /// [backupUnavailable]); false mostra o erro como sempre.
-    @ObservationIgnored var onStartFailed: (() -> Bool)?
+    /// [backupUnavailable]); false mostra o erro como sempre. Recebe o código HTTP da recusa, quando se sabe.
+    @ObservationIgnored var onStartFailed: ((Int?) -> Bool)?
+    /// Um direto novo da lista principal: devolve true se ela esteve em baixo há pouco e quem usa o leitor vai logo à
+    /// reserva, sem a tentar (e chama depois [playBackup] ou, sem o canal na reserva, [openMain]).
+    @ObservationIgnored var skipMain: (() -> Bool)?
     /// O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>.").
     @ObservationIgnored var onBackupPlaying: (() -> Void)?
 
@@ -344,6 +347,15 @@ final class PlayerEngine: NSObject {
         backupFailed = false
         backupAsked = false
         mainRequest = nil
+        // A lista principal esteve em baixo há pouco (ver ProviderOutage): espera-se pelo canal da reserva.
+        if live, skipMain?() == true {
+            watchdog?.cancel()
+            stopBackends()
+            hideFreeze()
+            backupAsked = true
+            state = .opening
+            return
+        }
         guard freezeFrame, wasShowing else {
             // Ainda a abrir (ex.: dois canais seguidos): a última imagem fica até o novo começar.
             if !freezeFrame { hideFreeze() }
@@ -590,7 +602,7 @@ final class PlayerEngine: NSObject {
         // A lista principal desistiu deste direto: o mesmo canal na lista de reserva (uma vez por volta de tentativas).
         if !onBackup, openedLive, !backupAsked, let ask = onStartFailed {
             backupAsked = true
-            if ask() {
+            if ask(lastHTTPStatus) {
                 state = .opening
                 return
             }
@@ -707,6 +719,12 @@ final class PlayerEngine: NSObject {
         lastHTTPStatus = nil
         state = .opening
         start()
+    }
+
+    /// A lista principal estava em baixo mas a reserva não tem este canal: tenta-se a principal como sempre.
+    func openMain() {
+        guard state == .opening, !onBackup, openedKey != nil else { return }
+        begin(after: 0)
     }
 
     /// A procura na reserva não deu (sem reserva, sem o canal ou na dúvida): o erro como sempre.

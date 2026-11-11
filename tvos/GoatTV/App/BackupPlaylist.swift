@@ -154,10 +154,12 @@ extension AppModel {
                           linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
     }
 
-    /// O direto da lista principal não abriu: procura o mesmo canal na reserva (o leitor espera pela resposta).
-    func startFailover() -> Bool {
+    /// O direto da lista principal não abriu: procura o mesmo canal na reserva (o leitor espera pela resposta). Uma
+    /// recusa da conta ou do servidor ([status]) marca a lista como em baixo (ver [skipToBackup]).
+    func startFailover(status: Int?) -> Bool {
         guard catchup == nil, let content, let channel = current, let backup = backupOf(content.playlist.id),
               !sameAccount(backup, content.playlist) else { return false }
+        if ProviderOutage.providerWide(status) { providerOutage.markDown(content.playlist.id, now: Self.uptimeMs()) }
         Task { [weak self] in
             guard let self else { return }
             let stream = await self.backupStream(content, channel)
@@ -166,6 +168,28 @@ extension AppModel {
         }
         return true
     }
+
+    /// A lista principal esteve em baixo há pouco: o canal novo vai logo à reserva, sem esperar pelas tentativas de
+    /// sempre (sem esse canal na reserva, tenta-se a principal).
+    func skipToBackup() -> Bool {
+        guard catchup == nil, let content, let channel = current, let backup = backupOf(content.playlist.id),
+              !sameAccount(backup, content.playlist), providerOutage.isDown(content.playlist.id, now: Self.uptimeMs()) else { return false }
+        Task { [weak self] in
+            guard let self else { return }
+            let stream = await self.backupStream(content, channel)
+            guard self.current?.key == channel.key, self.catchup == nil else { return }
+            if let stream { self.openBackupStream(stream) } else { self.player.openMain() }
+        }
+        return true
+    }
+
+    /// Um canal em direto da lista principal deu: ela já não está em baixo.
+    func mainPlaying() {
+        guard catchup == nil, !player.onBackup, let content else { return }
+        providerOutage.clear(content.playlist.id)
+    }
+
+    static func uptimeMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
 
     /// O canal da reserva começou a dar: o aviso.
     func backupPlaying() {

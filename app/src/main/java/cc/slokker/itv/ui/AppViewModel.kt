@@ -33,6 +33,7 @@ import cc.slokker.itv.ItvApp
 import cc.slokker.itv.data.Audience
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -1685,6 +1686,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         backupMatcher = content to m
         return m
     }
+
+    /** As listas em baixo há pouco (os canais delas vão logo à reserva). */
+    internal val providerOutage = ProviderOutage { android.os.SystemClock.elapsedRealtime() }
 
     /**
      * O canal [channel] de [main] na reserva, pronto a abrir ([choice]: um canal já escolhido no painel "experimentar

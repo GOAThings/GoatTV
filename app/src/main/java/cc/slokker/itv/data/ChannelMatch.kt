@@ -10,7 +10,7 @@ import java.util.Locale
  * 1. O id do guia (`tvg-id` / `epg_channel_id`), quando os dois têm e são iguais (sem contar maiúsculas).
  * 2. O nome normalizado ([parse]): sem o país/grupo à frente (`PT|`, `PT:`, `[PT]`, `|PT|`…), sem a qualidade (HD,
  *    FHD, UHD, 4K, ᴴᴰ…), sem acentos, pontuação, espaços nem maiúsculas. O `+1` fica: SIC e SIC +1 são canais diferentes.
- * 3. Vários candidatos: o do mesmo país e depois o de melhor qualidade. Se continuar a haver dúvida (países diferentes,
+ * 3. Vários candidatos: o do mesmo país e depois o da mesma qualidade (ou o de melhor qualidade). Se continuar a haver dúvida (países diferentes,
  *    ou nomes diferentes com o mesmo id do guia), não se escolhe: nunca se põe a dar um canal errado.
  */
 object ChannelMatch {
@@ -313,7 +313,7 @@ object ChannelMatch {
         /**
          * Os canais daqui mais parecidos com [name] (para escolher à mão), do mais para o menos parecido: até [limit],
          * com uma parecença de pelo menos [MIN_SCORE] (0–100 pelo nome, mais o id do guia e o país; menos um `+N` ou
-         * um país diferentes). Empates: a melhor qualidade, depois a ordem da lista.
+         * um país diferentes). Empates: a mesma qualidade, a melhor qualidade, depois a ordem da lista.
          */
         fun ranked(name: String, epgId: String?, limit: Int = 8): List<Int> {
             val t = parse(name)
@@ -324,7 +324,11 @@ object ChannelMatch {
                 val s = score(t, epg, i)
                 if (s >= MIN_SCORE) scored += i to s
             }
-            return scored.sortedWith(compareByDescending<Pair<Int, Int>> { it.second }.thenByDescending { parsed[it.first].quality }.thenBy { it.first })
+            return scored.sortedWith(
+                compareByDescending<Pair<Int, Int>> { it.second }
+                    .thenBy { if (t.quality != Quality.NONE && parsed[it.first].quality == t.quality) 0 else 1 }
+                    .thenByDescending { parsed[it.first].quality }.thenBy { it.first },
+            )
                 .take(limit).map { it.first }
         }
 
@@ -343,7 +347,8 @@ object ChannelMatch {
         }
 
         /**
-         * Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida. Cópias
+         * Entre candidatos: o mesmo país, depois a mesma qualidade (se o nome a disser) ou a melhor; países ou nomes
+         * diferentes que sobrem = dúvida. Cópias
          * iguais do mesmo canal não são dúvida: fica a do grupo com o nome do grupo do canal principal ([group]), ou a
          * primeira.
          */
@@ -353,8 +358,14 @@ object ChannelMatch {
             if (t.country != null) set.filter { parsed[it].country == t.country }.takeIf { it.isNotEmpty() }?.let { set = it }
             if (set.mapNotNull { parsed[it].country }.distinct().size > 1) return Result.Unsure(set.size)
             if (set.map { parsed[it].base }.distinct().size > 1) return Result.Unsure(set.size)
-            val best = set.maxOf { parsed[it].quality }
-            val top = set.filter { parsed[it].quality == best }
+            // A mesma qualidade do canal principal, quando o nome a diz (HD com HD, 4K com 4K); senão, a melhor.
+            val same = set.filter { parsed[it].quality == t.quality }
+            val top = if (t.quality != Quality.NONE && same.isNotEmpty()) {
+                same
+            } else {
+                val best = set.maxOf { parsed[it].quality }
+                set.filter { parsed[it].quality == best }
+            }
             val sameGroup = group?.let { g -> top.firstOrNull { groups[it] == g } }
             return Result.Match(sameGroup ?: top.first())
         }

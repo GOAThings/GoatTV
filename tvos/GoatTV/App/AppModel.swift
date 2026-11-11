@@ -89,6 +89,8 @@ final class AppModel {
     var backupCoverage: [String: BackupCoverage] = [:]
     /// O índice da última reserva procurada (partir os nomes de milhares de canais faz-se uma vez).
     @ObservationIgnored var backupMatcher: (id: String, fetchedAt: Date, matcher: ChannelMatcher)?
+    /// As listas em baixo há pouco (os canais delas vão logo à reserva).
+    @ObservationIgnored var providerOutage = ProviderOutage()
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
 
     /// O programa a ver em catch-up (nil = em direto).
@@ -185,7 +187,8 @@ final class AppModel {
         Task.detached(priority: .utility) { _ = Languages.code("English") }
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
         // A lista principal desistiu do canal: o mesmo canal na lista de reserva (ver BackupPlaylist.swift).
-        player.onStartFailed = { [weak self] in self?.startFailover() ?? false }
+        player.onStartFailed = { [weak self] status in self?.startFailover(status: status) ?? false }
+        player.skipMain = { [weak self] in self?.skipToBackup() ?? false }
         player.onBackupPlaying = { [weak self] in self?.backupPlaying() }
         wireRecordings()
         // Pausar o direto: guarda-se só o programa que se está a ver.
@@ -194,6 +197,7 @@ final class AppModel {
         player.onPlaying = { [weak self] in
             self?.playbackError = nil
             self?.playbackStatus = nil
+            self?.mainPlaying()
         }
         // Catch-up que caiu a meio: pede de novo a partir de onde ia.
         player.onDropped = { [weak self] in

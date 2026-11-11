@@ -45,6 +45,7 @@ enum CoreTests {
         ("m3uLongLine", m3uLongLine),
         ("controlCharacters", controlCharacters),
         ("pinAttempts", pinAttempts),
+        ("providerOutage", providerOutage),
         ("epgFailure", epgFailure),
         ("lanRequestAccepts", lanRequestAccepts),
         ("lanRequestRefuses", lanRequestRefuses),
@@ -158,6 +159,24 @@ enum CoreTests {
         var back = PinAttempts(failures: 3, lastFailureAt: 10_000_000)
         try expect(back.waitMs(now: 1_000), 30_000)
         try expect(back.check(now: 31_000, correct: true), true)
+    }
+
+    /// Uma lista em baixo: 5 minutos, ou até um canal dela dar; só os erros da conta ou do servidor (como no Android).
+    static func providerOutage() throws {
+        var o = ProviderOutage()
+        var now: Int64 = 1_000
+        o.markDown("a", now: now)
+        try expect(o.isDown("a", now: now), true)
+        try expect(o.isDown("b", now: now), false)
+        now += ProviderOutage.windowMs - 1
+        try expect(o.isDown("a", now: now), true)
+        now += 1
+        try expect(o.isDown("a", now: now), false)
+        o.markDown("a", now: now)
+        o.clear("a")
+        try expect(o.isDown("a", now: now), false)
+        for code in [401, 429, 456, 458, 500, 502, 503, 513] { try expect(ProviderOutage.providerWide(code), true, "\(code)") }
+        for code in [nil, 200, 302, 403, 404, 410] as [Int?] { try expect(ProviderOutage.providerWide(code), false, "\(String(describing: code))") }
     }
 
     /// Números do fornecedor fora do que faz sentido: nunca terminam a app, ficam com o valor por omissão.

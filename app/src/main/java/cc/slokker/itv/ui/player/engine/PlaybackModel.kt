@@ -204,6 +204,15 @@ internal interface PlaybackHost {
 
     /** O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>."). */
     fun onBackupPlaying(origin: BackupOrigin) = Unit
+
+    /** A lista de [request] esteve em baixo há pouco (ver ProviderOutage): o canal vai logo à reserva. */
+    fun providerDown(request: PlaybackRequest): Boolean = false
+
+    /** [request] (direto, da lista principal) não abriu por [error]: se for da conta ou do servidor, a lista fica em baixo. */
+    fun onMainFailed(request: PlaybackRequest, error: PlaybackException) = Unit
+
+    /** Um canal em direto da lista principal deu: ela já não está em baixo. */
+    fun onMainPlaying(request: PlaybackRequest) = Unit
 }
 
 /** Como abrir uma tentativa (ver [loadStream]). */

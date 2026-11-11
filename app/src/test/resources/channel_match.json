@@ -578,6 +578,57 @@
    "kind": "match"
   },
   {
+   "case": "same quality preferred: HD finds HD",
+   "target": {
+    "name": "Sport TV 1 HD"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 1 SD"
+    },
+    {
+     "name": "Sport TV 1 FHD"
+    },
+    {
+     "name": "Sport TV 1 HD"
+    }
+   ],
+   "expect": 2,
+   "kind": "match"
+  },
+  {
+   "case": "same quality preferred: FHD over UHD",
+   "target": {
+    "name": "PT: Sport TV 2 FHD"
+   },
+   "pool": [
+    {
+     "name": "PT: SPORT TV 2 UHD"
+    },
+    {
+     "name": "PT: SPORT TV 2 FHD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
+   "case": "quality not in the backup: the best",
+   "target": {
+    "name": "Sport TV 1 SD"
+   },
+   "pool": [
+    {
+     "name": "Sport TV 1 HD"
+    },
+    {
+     "name": "Sport TV 1 FHD"
+    }
+   ],
+   "expect": 1,
+   "kind": "match"
+  },
+  {
    "case": "same country preferred",
    "target": {
     "name": "PT: Eurosport 1"
@@ -1429,6 +1480,29 @@
     1,
     2,
     0
+   ]
+  },
+  {
+   "case": "same quality first, then the best",
+   "target": {
+    "name": "RTP 1 HD"
+   },
+   "pool": [
+    {
+     "name": "RTP 1 FHD"
+    },
+    {
+     "name": "RTP 1 HD"
+    },
+    {
+     "name": "RTP 1"
+    }
+   ],
+   "limit": 3,
+   "expect": [
+    1,
+    0,
+    2
    ]
   }
  ],

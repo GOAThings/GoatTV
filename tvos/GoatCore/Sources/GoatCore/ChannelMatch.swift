@@ -491,7 +491,8 @@ public final class ChannelMatcher: @unchecked Sendable {
         return named
     }
 
-    /// Entre candidatos: o mesmo país, depois a melhor qualidade; países ou nomes diferentes que sobrem = dúvida. Cópias
+    /// Entre candidatos: o mesmo país, depois a mesma qualidade (se o nome a disser) ou a melhor; países ou nomes
+    /// diferentes que sobrem = dúvida. Cópias
     /// iguais do mesmo canal não são dúvida: fica a do grupo com o nome do grupo do canal principal, ou a primeira.
     private func choose(_ t: ChannelMatch.Parsed, _ candidates: [Int], _ group: String? = nil) -> ChannelMatch.Result {
         if candidates.isEmpty { return .missing }
@@ -502,8 +503,15 @@ public final class ChannelMatcher: @unchecked Sendable {
         }
         if Set(set.compactMap { parsed[$0].country }).count > 1 { return .unsure(set.count) }
         if Set(set.map { parsed[$0].base }).count > 1 { return .unsure(set.count) }
-        let best = set.map { parsed[$0].quality }.max() ?? 0
-        let top = set.filter { parsed[$0].quality == best }
+        // A mesma qualidade do canal principal, quando o nome a diz (HD com HD, 4K com 4K); senão, a melhor.
+        let sameQuality = set.filter { parsed[$0].quality == t.quality }
+        let top: [Int]
+        if t.quality != ChannelMatch.Quality.none, !sameQuality.isEmpty {
+            top = sameQuality
+        } else {
+            let best = set.map { parsed[$0].quality }.max() ?? 0
+            top = set.filter { parsed[$0].quality == best }
+        }
         if let group, let same = top.first(where: { groups[$0] == group }) { return .match(same) }
         return .match(top[0])
     }
@@ -521,6 +529,8 @@ public final class ChannelMatcher: @unchecked Sendable {
         scored.sort { a, b in
             if a.1 != b.1 { return a.1 > b.1 }
             let qa = parsed[a.0].quality, qb = parsed[b.0].quality
+            // Empates: a mesma qualidade do canal principal, depois a melhor.
+            if t.quality != ChannelMatch.Quality.none, (qa == t.quality) != (qb == t.quality) { return qa == t.quality }
             if qa != qb { return qa > qb }
             return a.0 < b.0
         }
