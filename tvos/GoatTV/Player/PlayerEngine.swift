@@ -420,7 +420,8 @@ final class PlayerEngine: NSObject {
                 self.begin(after: pause)
             }
         case .aether:
-            // Sem imagem congelada: o canal anterior fecha e o novo abre.
+            // O motor apaga a imagem ao fechar: tira-se antes uma cópia do que está no ecrã (como as outras).
+            showFreezeView(aetherPlayback?.view.snapshotView(afterScreenUpdates: false))
             begin(after: pause)
         }
     }
@@ -481,7 +482,21 @@ final class PlayerEngine: NSObject {
         if let image { view.bringSubviewToFront(freezeView); _ = image }
     }
 
+    /// A última imagem do AetherEngine: uma cópia do ecrã (não há ficheiro nem imagem a pedir ao motor).
+    @ObservationIgnored private var freezeCopy: UIView?
+
+    private func showFreezeView(_ copy: UIView?) {
+        freezeCopy?.removeFromSuperview()
+        freezeCopy = copy
+        guard let copy else { return }
+        copy.frame = view.bounds
+        copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.insertSubview(copy, aboveSubview: freezeView)
+    }
+
     private func hideFreeze() {
+        freezeCopy?.removeFromSuperview()
+        freezeCopy = nil
         freezeView.isHidden = true
         freezeView.image = nil
         frozen = false

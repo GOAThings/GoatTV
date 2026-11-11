@@ -154,6 +154,13 @@ public final class AetherPlayback {
         active = true
         var o = LoadOptions()
         o.isLive = request.live
+        if request.live {
+            // Para passar canais depressa: o direto é MPEG-TS ou HLS, que se analisam em pouco (o motor lia até 50 MB
+            // e 60 s antes de abrir), e começa-se com um só segmento de pelo menos 1 s em vez de esperar pelo segundo.
+            o.probesize = 2_000_000
+            o.maxAnalyzeDuration = 2_000_000
+            o.liveStartupSingleSegmentMinimumSeconds = 1
+        }
         o.dvrWindowSeconds = request.dvrSeconds
         o.httpHeaders = request.headers
         if request.singleConnection { o.maxConcurrentSourceRequests = 1 }
