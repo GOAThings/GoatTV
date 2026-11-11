@@ -134,7 +134,7 @@ internal fun NowPlayingBar(
                 Spacer(Modifier.width(20.dp))
             }
             Column(Modifier.weight(1f)) {
-                ChannelLine(channel, isFavorite)
+                ChannelLine(channel, isFavorite, prefs.showNumbers)
                 Text(
                     current?.title ?: channel.name,
                     style = MaterialTheme.typography.headlineSmall.copy(shadow = TextShadow),
@@ -171,12 +171,15 @@ internal fun NowPlayingBar(
     }
 }
 
-/** Número e nome do canal (com ★ se for favorito), pequenos, por cima do programa. */
+/** Número e nome do canal (com ★ se for favorito), pequenos, por cima do programa. Sem [showNumber] (Definições →
+ * Números dos canais desligado), só o nome. */
 @Composable
-internal fun ChannelLine(channel: Channel, isFavorite: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
+internal fun ChannelLine(channel: Channel, isFavorite: Boolean, showNumber: Boolean, style: TextStyle = MaterialTheme.typography.labelLarge) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow).tabular)
-        Spacer(Modifier.width(8.dp))
+        if (showNumber) {
+            Text(channel.num.toString(), color = ItvColors.TextDim, style = style.copy(shadow = TextShadow).tabular)
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             if (isFavorite) "${channel.name}  ★" else channel.name,
             style = style.copy(shadow = TextShadow),
@@ -364,7 +367,7 @@ internal fun ZapCard(channel: Channel, vm: AppViewModel) {
             Spacer(Modifier.width(16.dp))
         }
         Column {
-            ChannelLine(channel, isFavorite = false, style = MaterialTheme.typography.labelMedium)
+            ChannelLine(channel, isFavorite = false, showNumber = prefs.showNumbers, style = MaterialTheme.typography.labelMedium)
             Text(
                 current?.title ?: channel.name,
                 style = MaterialTheme.typography.titleLarge.copy(shadow = TextShadow),

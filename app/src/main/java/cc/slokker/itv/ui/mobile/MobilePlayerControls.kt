@@ -120,6 +120,7 @@ internal fun VideoArea(
     var touched by remember { mutableStateOf(0) }
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var seekDelta by remember { mutableStateOf(0L) }
     var seekBase by remember { mutableStateOf(0L) }
@@ -370,7 +371,7 @@ internal fun VideoArea(
                     Column(Modifier.weight(1f)) {
                         if (fullscreen) {
                             Text(
-                                "${channel.num}  ${channel.name}" + if (vm.isFavorite(channel)) "  ★" else "",
+                                (if (prefs.showNumbers) "${channel.num}  " else "") + channel.name + if (vm.isFavorite(channel)) "  ★" else "",
                                 color = ItvColors.TextDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                         }

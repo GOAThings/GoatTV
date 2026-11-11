@@ -707,10 +707,11 @@ struct SettingsPanel: View {
             var list: [Item] = [
                 .info("res", s.t("Resolution", "Resolução"), model.player.resolution ?? "—"),
                 .info("fmt", s.t("Format", "Formato"), model.player.format.map { $0 == StreamFormat.hls ? "HLS (m3u8)" : "MPEG-TS" } ?? "—"),
-                .info("num", s.t("Number", "Número"), "\(channel.num)"),
                 .info("grp", s.groups, group == PlaylistContent.others ? s.others : group),
                 .info("player", s.t("Player", "Player"), model.player.backendName),
             ]
+            // Com os números dos canais escondidos, também aqui.
+            if prefs.showNumbers { list.insert(.info("num", s.t("Number", "Número"), "\(channel.num)"), at: 2) }
             for (i, detail) in model.player.streamDetails.enumerated() {
                 let title = detail.0 == "video" ? s.t("Video", "Vídeo") : (detail.0 == "audio" ? s.t("Audio", "Áudio") : "Bitrate")
                 list.append(.info("d\(i)", title, detail.1))

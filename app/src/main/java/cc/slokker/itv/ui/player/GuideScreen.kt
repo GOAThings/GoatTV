@@ -342,7 +342,7 @@ internal fun TvGuide(
             Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
                 val shown = hero
                 if (shown != null) {
-                    GuideHero(vm, s, shown.first, shown.second, now, onHeader, prefs.showLogos, marks)
+                    GuideHero(vm, s, shown.first, shown.second, now, onHeader, prefs.showLogos, prefs.showNumbers, marks)
                 } else {
                     Text(s.noChannelsInGroup, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyLarge)
                 }
@@ -509,7 +509,7 @@ private fun GroupTabs(groups: List<Pair<String, String>>, selected: String, focu
 
 /** O programa escolhido, como no HUD: logótipo, canal, título, horas (e o que falta, se está a dar) e o que o OK faz. */
 @Composable
-private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean, marks: Int) {
+private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot, now: Long, onHeader: Boolean, showLogos: Boolean, showNumbers: Boolean, marks: Int) {
     val e = slot.entry
     val live = e == null || e.isOn(now)
     Row(verticalAlignment = Alignment.Bottom) {
@@ -518,7 +518,7 @@ private fun GuideHero(vm: AppViewModel, s: Strings, channel: Channel, slot: Slot
             Spacer(Modifier.width(16.dp))
         }
         Column {
-            ChannelLine(channel, isFavorite = false, style = MaterialTheme.typography.labelMedium)
+            ChannelLine(channel, isFavorite = false, showNumber = showNumbers, style = MaterialTheme.typography.labelMedium)
             Text(
                 e?.title ?: s.noGuideInfo,
                 style = MaterialTheme.typography.headlineSmall.copy(shadow = TextShadow),

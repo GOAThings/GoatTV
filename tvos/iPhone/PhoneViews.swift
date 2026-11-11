@@ -722,7 +722,7 @@ private struct VideoPane: View {
                         .shadow(color: .black.opacity(0.6), radius: 6)
                     VStack(alignment: .leading, spacing: 1) {
                         if fullscreen {
-                            Text("\(channel.num)  \(channel.name)" + (model.isFavorite(channel) ? "  ★" : ""))
+                            Text((model.prefs.showNumbers ? "\(channel.num)  " : "") + channel.name + (model.isFavorite(channel) ? "  ★" : ""))
                                 .font(.caption.weight(.semibold)).foregroundStyle(Theme.textDim).lineLimit(1)
                         }
                         Text(programme?.title ?? channel.name).font(.system(size: fullscreen ? 22 : 16, weight: .heavy)).lineLimit(1)
