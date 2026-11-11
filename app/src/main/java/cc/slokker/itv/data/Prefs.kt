@@ -100,6 +100,25 @@ data class Prefs(
     val channelLogos: Map<String, String> = emptyMap(),
     /** Guia XMLTV extra por lista: playlistId → URL (para os canais que o guia da lista não tem). */
     val extraEpg: Map<String, String> = emptyMap(),
+    /**
+     * Lista de reserva por lista: playlistId → playlistId. Quando um canal em direto não abre na lista, dá o mesmo
+     * canal da reserva (ver ChannelMatch). Fica no `settings` da conta como o guia extra: um mapa que as versões
+     * antigas, o site e a Apple TV guardam intacto (o `settings` grava-se inteiro e só se manda o que mudou).
+     */
+    val backupPlaylist: Map<String, String> = emptyMap(),
+    /**
+     * Os failovers escolhidos à mão: "playlistId:channelKey" → os canais a tentar, pela ordem (lista vazia = "nenhum",
+     * este canal não muda de lista). Cada um é uma chave na reserva, ou "main:" e a chave de outro canal da própria
+     * lista (ver ChannelMatch.MAIN_PREFIX). Ganha ao que o ChannelMatch encontra. Apaga-se ao mudar de reserva.
+     * Gravado como era quando cada canal tinha um só (a 0.12.0 e o site percebem-no): "off", uma chave, ou um array
+     * quando há mais de um.
+     */
+    val backupChannels: Map<String, List<String>> = emptyMap(),
+    /**
+     * Como se escolhe o canal da reserva, por lista: "manual" = só os canais escolhidos à mão ([backupChannels]) passam
+     * para a reserva; sem entrada = automático. Sai ao mudar ou tirar a reserva, e com a lista.
+     */
+    val backupMode: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
     val panelTimeout: Int = 15,
@@ -205,6 +224,9 @@ data class Prefs(
         const val LOGO_SOURCE = "logo_source"
         const val CHANNEL_LOGOS = "channel_logos"
         const val EXTRA_EPG = "extra_epg"
+        const val BACKUP_PLAYLIST = "backup_playlist"
+        const val BACKUP_CHANNELS = "backup_channels"
+        const val BACKUP_MODE = "backup_mode"
         const val OUTLINE_COLOR = "outline_color"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
@@ -415,6 +437,9 @@ data class Prefs(
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
+                backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
+                backupChannels = failoverMap(s, Key.BACKUP_CHANNELS),
+                backupMode = stringMap(s, Key.BACKUP_MODE).filterValues { it == ChannelMatch.MODE_MANUAL },
                 panelTimeout = int(Key.PANEL_TIMEOUT, d.panelTimeout).coerceIn(0, 300),
                 sort = str(Key.SORT, d.sort, Sort.ALL),
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
@@ -483,7 +508,8 @@ data class Prefs(
 
         /**
          * Tira de [settings] o que é só da lista [playlistId] (grupos e canais escondidos, bloqueados e ordenados,
-         * logótipos escolhidos, guia extra), quando ela é apagada. Devolve true se mudou alguma coisa.
+         * logótipos escolhidos, guia extra, reserva e canais de reserva), quando ela é apagada; e a reserva das listas
+         * que a tinham como reserva. Devolve true se mudou alguma coisa.
          */
         fun removePlaylist(settings: JsonObject, playlistId: String): Boolean {
             val prefix = "$playlistId:"
@@ -496,11 +522,22 @@ data class Prefs(
                     changed = true
                 }
             }
-            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true)) {
+            for ((key, perGroup) in listOf(Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false, Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true)) {
                 val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
                 val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
                 gone.forEach { obj.remove(it) }
                 if (gone.isNotEmpty()) changed = true
+            }
+            // As listas que a tinham como reserva ficam sem reserva (e sem os canais escolhidos nela).
+            val backups = settings.get(Key.BACKUP_PLAYLIST)?.takeIf { it.isJsonObject }?.asJsonObject
+            val orphans = backups?.entrySet()?.filter { it.value.isJsonPrimitive && it.value.asString == playlistId }?.map { it.key }.orEmpty()
+            for (main in orphans) {
+                backups?.remove(main)
+                settings.get(Key.BACKUP_MODE)?.takeIf { it.isJsonObject }?.asJsonObject?.remove(main)
+                settings.get(Key.BACKUP_CHANNELS)?.takeIf { it.isJsonObject }?.asJsonObject?.let { ch ->
+                    ch.keySet().filter { it.startsWith("$main:") }.forEach(ch::remove)
+                }
+                changed = true
             }
             return changed
         }
@@ -514,6 +551,24 @@ data class Prefs(
             s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
                 ?.mapNotNull { (k, v) -> v.takeIf { it.isJsonPrimitive }?.asString?.let { k to it } }?.toMap()
                 .orEmpty()
+
+        /** Os failovers de cada canal: "off" = nenhum, uma chave, ou um array delas; um valor vazio fica de fora. */
+        private fun failoverMap(s: JsonObject, key: String): Map<String, List<String>> =
+            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.mapNotNull { (k, v) ->
+                val list = when {
+                    v.isJsonArray -> v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotEmpty() && it != ChannelMatch.OFF } }.distinct()
+                    v.isJsonPrimitive -> v.asString.takeIf { it.isNotEmpty() }?.let { if (it == ChannelMatch.OFF) emptyList() else listOf(it) }
+                    else -> null
+                }
+                list?.let { k to it }
+            }?.toMap().orEmpty()
+
+        /** Os failovers [list] como se gravam (ver [backupChannels]). */
+        fun failoverValue(list: List<String>): Any = when (list.size) {
+            0 -> ChannelMatch.OFF
+            1 -> list[0]
+            else -> list
+        }
 
         private val COUNTRY_CODE = Regex("[A-Za-z]{2,3}")
 

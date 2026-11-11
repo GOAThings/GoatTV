@@ -258,6 +258,9 @@ class PersistedFormatTest {
         "logoSource" to (Prefs.Key.LOGO_SOURCE to "pt"),
         "channelLogos" to (Prefs.Key.CHANNEL_LOGOS to mapOf("p1:101" to "https://logos.example.com/rtp1.png", "p1:102" to "")),
         "extraEpg" to (Prefs.Key.EXTRA_EPG to mapOf("p1" to "https://epg.example.com/extra.xml")),
+        "backupPlaylist" to (Prefs.Key.BACKUP_PLAYLIST to mapOf("p1" to "p2")),
+        "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off", "p1:103" to listOf("2001", "main:104"))),
+        "backupMode" to (Prefs.Key.BACKUP_MODE to mapOf("p1" to "manual")),
         "outlineColor" to (Prefs.Key.OUTLINE_COLOR to "pink"),
         "panelTimeout" to (Prefs.Key.PANEL_TIMEOUT to 30),
         "sort" to (Prefs.Key.SORT to Prefs.Sort.NAME),
@@ -313,11 +316,12 @@ class PersistedFormatTest {
             """
             {"hidden_groups": ["p1:7", "p1:Outros"], "group_order": {"p1": ["3", "1"]}, "channel_order": {"p1:1": ["102", "101"]},
              "channel_logos": {"p1:101": "https://logos.example.com/rtp1.png", "p1:102": ""},
-             "extra_epg": {"p1": "https://epg.example.com/extra.xml"}, "reconnect_seconds": 10, "afr": true,
+             "extra_epg": {"p1": "https://epg.example.com/extra.xml"}, "backup_playlist": {"p1": "p2"},
+             "backup_channels": {"p1:101": "2001", "p1:102": "off", "p1:103": ["2001", "main:104"]}, "backup_mode": {"p1": "manual"}, "reconnect_seconds": 10, "afr": true,
              "parental_pin_sha256": "${Prefs.hashPin("1234")}", "epg_offset_min": -90, "language": "pt-BR"}
             """,
             JsonObject().apply {
-                listOf("hidden_groups", "group_order", "channel_order", "channel_logos", "extra_epg", "reconnect_seconds", "afr", "parental_pin_sha256", "epg_offset_min", "language")
+                listOf("hidden_groups", "group_order", "channel_order", "channel_logos", "extra_epg", "backup_playlist", "backup_channels", "backup_mode", "reconnect_seconds", "afr", "parental_pin_sha256", "epg_offset_min", "language")
                     .forEach { add(it, settings.get(it)) }
             }.toString(),
         )
@@ -343,15 +347,15 @@ class PersistedFormatTest {
             Playlist("p1", PlaylistType.M3U, "Demo", url = "https://example.com/list.m3u"),
             listOf(Category("1", "News"), Category("Outros", "Outros")),
             listOf(
-                Channel(0, "101", 1, "RTP 1", "https://x/rtp1.png", "1"),
-                Channel(1, "u0a1b2c", 2, "Canal ç", "logo.png", "Outros"),
+                Channel(0, "101", 1, "RTP 1", "https://x/rtp1.png", "1", epgId = "rtp1.pt"),
+                Channel(1, "u0a1b2c", 2, "Canal ç", "logo.png", "Outros", epgId = " "),
             ),
         )
         val canonical = "g\t1\tNews\n" + "g\tOutros\tOutros\n" +
-            "c\t101\tRTP 1\t1\t1\thttps://x/rtp1.png\n" + "c\tu0a1b2c\tCanal ç\tOutros\t2\t\n"
+            "c\t101\tRTP 1\t1\t1\thttps://x/rtp1.png\trtp1.pt\n" + "c\tu0a1b2c\tCanal ç\tOutros\t2\t\t\n"
         val sha1 = MessageDigest.getInstance("SHA-1").digest(canonical.toByteArray()).joinToString("") { "%02x".format(it) }
         assertEquals(sha1, ChannelIndex.of(content)!!.hash)
-        assertEquals("ea9f8cc27edc2e37f03ba70062966b66b503be16", sha1)
+        assertEquals("e208f7063796947eba103d5ae4d842c8ab8397b7", sha1)
     }
 
     // ---- Ajudas ----
@@ -377,7 +381,13 @@ class PersistedFormatTest {
     }
 
     /** O exemplo como o [Prefs] o guarda: o AppViewModel grava os conjuntos como listas. */
-    private fun asStored(value: Any, field: Any?): Any = if (field is Set<*> && value is List<*>) value.toSet() else value
+    private fun asStored(value: Any, field: Any?): Any = when {
+        field is Set<*> && value is List<*> -> value.toSet()
+        // Os failovers: uma chave ou "off" leem-se como listas (ver Prefs.backupChannels).
+        field is Map<*, *> && value is Map<*, *> && field.values.all { it is List<*> } ->
+            value.mapValues { (_, v) -> if (v == "off") emptyList<String>() else if (v is String) listOf(v) else v }
+        else -> value
+    }
 
     private fun fieldOf(prefs: Prefs, name: String): Any? =
         Prefs::class.java.getDeclaredField(name).apply { isAccessible = true }.get(prefs)

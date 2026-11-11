@@ -17,6 +17,8 @@ struct PlayerScreen: View {
         case recordings
         case sleep
         case second
+        /// O canal de reserva do canal a ver (ver BackupChannelPanel).
+        case backup
         case settings(SettingsPanel.Page)
     }
 
@@ -259,6 +261,22 @@ struct PlayerScreen: View {
                 HStack {
                     SearchPanel(onPick: pickSearch)
                         .onExitCommand(perform: closePanel)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, 40)
+                .padding(.vertical, 40)
+                .ignoresSafeArea()
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
+            if panel == .backup, let channel = model.current {
+                HStack {
+                    BackupChannelPanel(channel: channel) { target in
+                        closePanel()
+                        // Fecha a ligação à lista principal e abre a da reserva (o aviso aparece quando der).
+                        model.tryBackup(target)
+                    }
+                    .onExitCommand(perform: closePanel)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 40)
@@ -763,7 +781,7 @@ struct PlayerScreen: View {
                 HStack {
                     if model.second == nil { Spacer() }
                     TuningPill(channel: model.current?.name ?? "", reconnecting: player.wasPlaying, attempt: player.reconnects,
-                               nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay)
+                               nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay, failover: model.failoverConnecting)
                     if model.second != nil { Spacer() }
                 }
                 Spacer()
@@ -870,6 +888,13 @@ struct PlayerScreen: View {
                         openSettings(.epgPick(channel.key, false, channel.name))
                     } else {
                         model.showToast(s.r("epg_needs_account"))
+                    }
+                }
+                // O canal da lista de reserva para este canal (só no direto, numa lista com reserva).
+                if model.catchup == nil, let id = model.content?.playlist.id, model.backupOf(id) != nil {
+                    chip("backup", "arrow.left.arrow.right.circle", s.r("backup_channel")) {
+                        hud = false
+                        panel = .backup
                     }
                 }
                 chip("favorite", favorite ? "star.fill" : "star", favorite ? s.removeFavorite : s.addFavorite) {

@@ -25,12 +25,15 @@ public struct ChannelIndex: Sendable {
         var channels: [JSON] = []
         for ch in content.channels {
             let logo = ch.logo.flatMap { $0.hasPrefix("http://") || $0.hasPrefix("https://") ? $0 : nil }
+            // O id do guia: o site usa-o para emparelhar os canais com os da lista de reserva (ver ChannelMatch).
+            let epg = ch.epgId.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
             var item: [String: JSON] = [
                 "key": .string(ch.key), "name": .string(ch.name), "group": .string(ch.categoryId), "num": .number(Double(ch.num)),
             ]
             if let logo { item["logo"] = .string(logo) }
+            if let epg { item["epg"] = .string(epg) }
             channels.append(.object(item))
-            canonical += "c\t\(ch.key)\t\(ch.name)\t\(ch.categoryId)\t\(ch.num)\t\(logo ?? "")\n"
+            canonical += "c\t\(ch.key)\t\(ch.name)\t\(ch.categoryId)\t\(ch.num)\t\(logo ?? "")\t\(epg ?? "")\n"
         }
         hash = SHA.hex(SHA.sha1(Array(canonical.utf8)))
         self.groups = groups

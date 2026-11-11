@@ -149,7 +149,7 @@ internal fun PageHeader(title: String, back: String, onBack: () -> Unit) {
 }
 
 @Composable
-internal fun MenuRow(title: String, value: String?, icon: ImageVector? = null, chevron: Boolean = false, checked: Boolean = false, onClick: () -> Unit) {
+internal fun MenuRow(title: String, value: String?, icon: ImageVector? = null, chevron: Boolean = false, checked: Boolean = false, subtitle: String? = null, onClick: () -> Unit) {
     val accent = LocalAccent.current.start
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -159,7 +159,15 @@ internal fun MenuRow(title: String, value: String?, icon: ImageVector? = null, c
                 }
                 Spacer(Modifier.width(14.dp))
             }
-            Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (subtitle == null) {
+                Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            } else {
+                // Uma linha mais pequena por baixo (ex.: quantos canais a lista de reserva tem).
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(subtitle, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
             if (value != null) {
                 Spacer(Modifier.width(8.dp))
                 Text(value, color = ItvColors.TextFaint, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))

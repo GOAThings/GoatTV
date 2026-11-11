@@ -64,6 +64,10 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.ui.player.HudLogo
+import cc.slokker.itv.ui.player.BackupPanelState
+import cc.slokker.itv.ui.player.rememberBackupPanel
+import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.formatTime
@@ -94,6 +98,16 @@ import cc.slokker.itv.data.at
 import cc.slokker.itv.data.after
 import cc.slokker.itv.data.minutesLeft
 import cc.slokker.itv.ui.player.engine.ZapTrace
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 internal fun VideoArea(
@@ -238,6 +252,16 @@ internal fun VideoArea(
                 Box(Modifier.size(8.dp).clip(CircleShape).background(PhoneColors.LiveRed))
                 Spacer(Modifier.width(6.dp))
                 Text(s.recBadge, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        // A abrir um failover (o canal não abriu): o mesmo, a dizer qual.
+        val failover = playback.core.onBackup?.takeIf { !playback.ready && !playback.core.wasPlaying && playback.reconnects == 0 }
+            ?.let { s.backupConnectingTo(it.label, it.position, it.total) }
+        if (failover != null && !pip) {
+            if (fullscreen) {
+                TuningPill(channel.name, reconnecting = false, attempt = 0, nextTryAt = 0L, waitMs = 0L, modifier = Modifier.align(Alignment.TopCenter), failover = failover)
+            } else {
+                ReconnectIsland(failover, 0L, 0L, Modifier.align(Alignment.TopCenter).padding(top = 8.dp), label = s.backupConnecting)
             }
         }
         // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
@@ -420,7 +444,9 @@ internal fun VideoArea(
                             }
                         }
                         // O que estava no "mais": cada um no seu botão.
-                        PlayerOption.entries.forEach { option ->
+                        // O canal de reserva só no direto, numa lista com reserva.
+        val backup = catchup == null && vm.content.collectAsStateWithLifecycle().value?.playlist?.id?.let(vm::backupOf) != null
+        PlayerOption.entries.filter { it != PlayerOption.BACKUP || backup }.forEach { option ->
                             ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
@@ -509,7 +535,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), SLEEP(ItvIcons.Sleep) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
 
 @Composable
 private fun PlayerOption.label(): String {
@@ -517,6 +543,7 @@ private fun PlayerOption.label(): String {
     return when (this) {
         PlayerOption.AUDIO -> s.audio
         PlayerOption.SUBTITLES -> s.subtitles
+        PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
     }
 }
@@ -527,6 +554,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = 560.dp)
@@ -549,6 +577,13 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                                 onClose()
                             }
                         }
+                    }
+                }
+                PlayerOption.BACKUP -> vm.playing.collectAsStateWithLifecycle().value?.let { channel ->
+                    BackupSection(vm, channel) { failovers ->
+                        onClose()
+                        val data = vm.content.value ?: return@BackupSection
+                        scope.launch { playback.core.playBackup(vm.backupStreams(data, channel, failovers)) }
                     }
                 }
                 PlayerOption.SLEEP -> Section(sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer) {
@@ -645,3 +680,103 @@ private const val CONTROLS_MS = 4_000L
 private const val SEEK_MS = 30_000L
 private const val SEEK_DEBOUNCE_MS = 700L
 private const val ZAP_DRAG_PX = 120f
+
+/**
+ * Os failovers do canal a dar (como o painel da TV, ver BackupChannelPanel): a lista numerada (tocar e manter tira um,
+ * arrastar pela pega muda a ordem), "Juntar um canal" (uma página com a pesquisa e os sugeridos; um toque junta e volta),
+ * "Experimentar agora" e "Voltar ao automático".
+ */
+@Composable
+internal fun BackupSection(vm: AppViewModel, channel: Channel, mainId: String? = null, onTry: ((List<String>) -> Unit)?) {
+    val s = LocalStrings.current
+    val state = rememberBackupPanel(vm, channel, mainId)
+    val choices = state.choices
+    var adding by remember(channel.key) { mutableStateOf(false) }
+    BackHandler(enabled = adding) { adding = false }
+    Section(if (adding) s.backupAddChannel else s.backupChannel) {
+        when {
+            state.loading -> Note(s.backupChecking)
+            choices == null -> Note(s.backupUnavailable((mainId ?: vm.content.value?.playlist?.id)?.let(vm::backupOf)?.name.orEmpty()))
+            adding -> {
+                MenuRow(s.backupChannel, null, icon = ItvIcons.Back) { adding = false }
+                Field(s.backupChannelSearchAll, state.query, Modifier.padding(horizontal = 12.dp).padding(vertical = 8.dp)) { state.query = it }
+                val list = if (state.query.isBlank()) state.suggested else state.results
+                Note(if (state.query.isBlank()) s.backupSuggested else s.backupChannelResults)
+                list.forEach { (c, fromMain) ->
+                    val f = choices.failoverOf(c, fromMain)
+                    val already = f in state.failovers
+                    MenuRow(c.name, state.source(f, s), subtitle = s.backupAlreadyAdded.takeIf { already }) {
+                        if (!already) state.toggle(f)
+                        adding = false
+                    }
+                }
+            }
+            else -> {
+                val failovers = state.failovers
+                Note(if (failovers.isEmpty()) s.backupNoneNote(channel.name) else s.backupFailoversIntro(channel.name))
+                failovers.forEachIndexed { i, f -> FailoverRow(state, choices, f, i, failovers.size, s) }
+                MenuRow(s.backupAddChannel, null, icon = ItvIcons.Add) { adding = true }
+                if (onTry != null && failovers.isNotEmpty()) MenuRow(s.backupChannelTry, null, icon = ItvIcons.Play) { onTry(failovers) }
+                if (!state.automatic) MenuRow(s.backupResetAuto, null, icon = ItvIcons.Replay, subtitle = state.autoLabel(s), onClick = state::reset)
+                if (failovers.isNotEmpty()) Note(s.backupFailoversHintPhone)
+            }
+        }
+    }
+}
+
+/** Um failover: o número, o canal e a lista; manter carregado tira-o, a pega (≡) arrasta-o para cima ou para baixo. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FailoverRow(state: BackupPanelState, choices: AppViewModel.BackupChoices, f: String, index: Int, count: Int, s: Strings) {
+    val c = choices.channelOf(f) ?: return
+    val haptics = LocalHapticFeedback.current
+    var drag by remember(f) { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableIntStateOf(1) }
+    // O índice muda a cada passo do arrasto: lido aqui dentro, o gesto continua com o valor certo.
+    val current by rememberUpdatedState(index)
+    Row(
+        Modifier.fillMaxWidth()
+            .onSizeChanged { rowHeight = it.height.coerceAtLeast(1) }
+            .zIndex(if (drag != 0f) 1f else 0f)
+            .graphicsLayer { translationY = drag }
+            .background(if (drag != 0f) PhoneColors.Card else Color.Transparent)
+            .combinedClickable(onClick = {}, onLongClick = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                state.remove(f)
+            })
+            .padding(start = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${index + 1}", color = ItvColors.TextFaint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(26.dp))
+        Text(c.name, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(
+            state.source(f, s), color = ItvColors.TextDim, fontSize = 12.sp, maxLines = 1,
+            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+        Box(
+            Modifier.size(48.dp).pointerInput(f) {
+                detectVerticalDragGestures(
+                    onDragEnd = { drag = 0f },
+                    onDragCancel = { drag = 0f },
+                ) { change, dy ->
+                    change.consume()
+                    drag += dy
+                    // Meia linha para cima ou para baixo: troca com a vizinha (e a linha fica debaixo do dedo).
+                    val step = when {
+                        drag > rowHeight / 2f && current < count - 1 -> 1
+                        drag < -rowHeight / 2f && current > 0 -> -1
+                        else -> 0
+                    }
+                    if (step != 0) {
+                        state.move(f, step)
+                        drag -= step * rowHeight
+                    }
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(ItvIcons.DragHandle, s.backupFailoversHintPhone, tint = ItvColors.TextFaint, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+

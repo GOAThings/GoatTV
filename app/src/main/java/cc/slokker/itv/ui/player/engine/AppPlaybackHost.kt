@@ -5,6 +5,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Languages
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ErrorInfo
 import cc.slokker.itv.ui.common.explainPlaybackError
@@ -28,6 +29,15 @@ internal class AppPlaybackHost(
     override val appLanguage: String? get() = Languages.code(I18n.s.locale.language)
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
+    override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = vm.backupStreams(latestData(), request.channel)
+    override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(
+        if (origin.sameList) I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName) else I18n.s.backupPlaying(origin.mainName, origin.backupName),
+    )
+    override fun providerDown(request: PlaybackRequest): Boolean = vm.providerOutage.isDown(latestData().playlist.id)
+    override fun onMainFailed(request: PlaybackRequest, error: PlaybackException) {
+        if (ProviderOutage.providerWide(OpenRetry.httpCode(error))) vm.providerOutage.markDown(latestData().playlist.id)
+    }
+    override fun onMainPlaying(request: PlaybackRequest) = vm.providerOutage.clear(latestData().playlist.id)
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()
@@ -57,8 +67,15 @@ internal class SecondPlaybackHost(private val vm: AppViewModel, private val late
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo? = null
 }
 
-/** O título do cartão de erro: a explicação, ou "não foi possível abrir" enquanto se analisa. */
-internal fun PlaybackFailure.titleCard(s: Strings): ErrorInfo = explained ?: ErrorInfo(s.cantOpenChannel.removeSuffix("."))
+/**
+ * O título do cartão de erro: a explicação, ou "não foi possível abrir" enquanto se analisa. Se a reserva também
+ * falhou, a causa diz as duas listas.
+ */
+internal fun PlaybackFailure.titleCard(s: Strings): ErrorInfo {
+    val info = explained ?: ErrorInfo(s.cantOpenChannel.removeSuffix("."))
+    val backup = backupFailed ?: return info
+    return info.copy(cause = listOfNotNull(info.cause, s.backupAlsoFailed(backup)).joinToString("\n"))
+}
 
 /** A linha de estado do cartão de erro: a analisar, a próxima tentativa, ou nada (OK tenta outra vez). */
 internal fun PlaybackFailure.status(s: Strings): String? = when {

@@ -32,6 +32,11 @@ import androidx.lifecycle.viewModelScope
 import cc.slokker.itv.ItvApp
 import cc.slokker.itv.data.Audience
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.data.ProviderOutage
+import cc.slokker.itv.ui.player.engine.BackupStream
+import cc.slokker.itv.ui.player.engine.PlaybackRequest
+import kotlinx.coroutines.withTimeoutOrNull
 import cc.slokker.itv.data.ChannelCatalog
 import cc.slokker.itv.data.GroupNames
 import cc.slokker.itv.data.EpgEntry
@@ -1624,6 +1629,246 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeSecond() = playback.closeSecond()
 
+    // ---- Lista de reserva ------------------------------------------------------------------------
+
+    /** A lista de reserva de [playlistId] (Prefs.backupPlaylist), se ainda existir e não for ela própria. */
+    fun backupOf(playlistId: String): Playlist? {
+        val id = prefs.value.backupPlaylist[playlistId] ?: return null
+        return playlists.value.firstOrNull { it.id == id && it.id != playlistId }
+    }
+
+    /**
+     * Muda a reserva de [playlistId] (null = nenhuma). Os canais escolhidos à mão e o modo eram da reserva anterior:
+     * saem (o modo volta ao automático).
+     */
+    fun setBackupPlaylist(playlistId: String, backupId: String?) {
+        val p = prefs.value
+        val target = backupId?.takeIf { it != playlistId }
+        if (p.backupPlaylist[playlistId] == target) return
+        val map = if (target == null) p.backupPlaylist - playlistId else p.backupPlaylist + (playlistId to target)
+        val channels = p.backupChannels.filterKeys { !it.startsWith("$playlistId:") }
+        setPrefs(mapOf(Prefs.Key.BACKUP_PLAYLIST to map, Prefs.Key.BACKUP_CHANNELS to failoverPrefs(channels), Prefs.Key.BACKUP_MODE to p.backupMode - playlistId))
+        _backupCoverage.value = _backupCoverage.value - playlistId
+    }
+
+    /** Modo manual: só os canais escolhidos à mão passam para a reserva. */
+    fun backupManual(playlistId: String): Boolean = prefs.value.backupMode[playlistId] == ChannelMatch.MODE_MANUAL
+
+    fun setBackupManual(playlistId: String, manual: Boolean) {
+        val current = prefs.value.backupMode
+        setPref(Prefs.Key.BACKUP_MODE, if (manual) current + (playlistId to ChannelMatch.MODE_MANUAL) else current - playlistId)
+    }
+
+    /**
+     * Os failovers escolhidos à mão para [channelKey] de [playlistId], pela ordem (ver Prefs.backupChannels): lista
+     * vazia = "nenhum", null = automático.
+     */
+    fun backupChoice(playlistId: String, channelKey: String): List<String>? = prefs.value.backupChannels["$playlistId:$channelKey"]
+
+    /** As escolhas à mão de [playlistId] (chave do canal → failovers). */
+    private fun backupOverrides(playlistId: String): Map<String, List<String>> =
+        prefs.value.backupChannels.filterKeys { it.startsWith("$playlistId:") }.mapKeys { it.key.removePrefix("$playlistId:") }
+
+    /** Grava os failovers escolhidos à mão ([value] null = volta ao automático; vazia = "nenhum"). */
+    fun setBackupChoice(playlistId: String, channelKey: String, value: List<String>?) {
+        val current = prefs.value.backupChannels
+        val key = "$playlistId:$channelKey"
+        setPref(Prefs.Key.BACKUP_CHANNELS, failoverPrefs(if (value == null) current - key else current + (key to value.distinct())))
+    }
+
+    private fun failoverPrefs(map: Map<String, List<String>>): Map<String, Any> = map.mapValues { Prefs.failoverValue(it.value) }
+
+    /** Os canais da reserva (da cache, ou descarregados como os do segundo canal), ou null se não carregarem a tempo. */
+    private suspend fun backupContent(backup: Playlist): PlaylistContent? =
+        withTimeoutOrNull(BACKUP_LOAD_MS) { runCatching { lists.loadForSecond(backup) }.getOrNull() }
+
+    /** O índice da última reserva procurada (partir os nomes de milhares de canais faz-se uma vez). */
+    private var backupMatcher: Pair<PlaylistContent, ChannelMatch.Matcher>? = null
+
+    private suspend fun matcherFor(content: PlaylistContent): ChannelMatch.Matcher {
+        backupMatcher?.takeIf { it.first === content }?.let { return it.second }
+        val m = withContext(Dispatchers.Default) { ChannelMatch.Matcher(content.channels.map { ChannelMatch.entry(it, content) }) }
+        backupMatcher = content to m
+        return m
+    }
+
+    /** As listas em baixo há pouco (os canais delas vão logo à reserva). */
+    internal val providerOutage = ProviderOutage { android.os.SystemClock.elapsedRealtime() }
+
+    /**
+     * Os failovers do canal [channel] de [main], prontos a abrir pela ordem ([chosen]: os do painel, "experimentar
+     * agora"; sem eles, os escolhidos à mão ou o automático). Os da reserva ficam de fora sem reserva, quando ela não
+     * carrega, ou quando abri-la passava o limite de ligações dela (o segundo canal já está nessa conta); os da própria
+     * lista, quando ela está em baixo (ver [providerOutage]: falhavam também). Vazia se não houver nenhum.
+     */
+    internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null): List<BackupStream> {
+        if (streamsDisabled) return emptyList()
+        val id = main.playlist.id
+        // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
+        val backup = backupOf(id)?.takeUnless { it.sharesConnectionsWith(main.playlist) }
+        val content = backup?.let { b -> backupContent(b) ?: null.also { Log.i(TAG_BACKUP, "Reserva ${b.name}: os canais não carregaram") } }
+        val busy = content != null && playback.second.value?.content?.playlist?.let { sp ->
+            val limit = content.account?.maxConnections
+            val one = backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && (limit ?: 1) < 2
+            sp.sharesConnectionsWith(backup) && one
+        } == true
+        if (busy) Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela")
+        val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
+        val manual = backupManual(id)
+        val list = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, chosen ?: backupChoice(id, channel.key), manual) { it in main.byKey }
+        val mainDown = providerOutage.isDown(id)
+        val streams = list.mapNotNull { f ->
+            val mainKey = ChannelMatch.mainKeyOf(f)
+            when {
+                mainKey != null -> main.byKey[mainKey]?.takeUnless { mainDown }?.let { c ->
+                    BackupStream(PlaybackRequest.of(main, c, null, streamFormat.value, stalkerLinks), main.playlist.name, c.name, sameList = true)
+                }
+                content != null && !busy -> content.byKey[f]?.let { c ->
+                    BackupStream(PlaybackRequest.of(content, c, null, streamFormat.value, stalkerLinks), main.playlist.name, content.playlist.name)
+                }
+                else -> null
+            }
+        }
+        val names = streams.joinToString(" | ") { if (it.sameList) "\"${it.request.channel.name}\" (${main.playlist.name})" else "\"${it.request.channel.name}\" (${it.backupName})" }
+        Log.i(TAG_BACKUP, if (streams.isEmpty()) "Reserva: nenhum failover para \"${channel.name}\"${if (manual) " (manual)" else ""}" else "Reserva: \"${channel.name}\" → $names")
+        return streams
+    }
+
+    /** Os canais de uma lista na reserva: a cobertura e a lista "Canais de reserva" (cada canal e o seu estado). */
+    class BackupReview(
+        val main: PlaylistContent,
+        val backup: PlaylistContent,
+        val rows: List<ChannelMatch.ReviewRow>,
+        val coverage: ChannelMatch.Coverage,
+        val manual: Boolean,
+        internal val overrides: Map<String, List<String>>,
+    )
+
+    /** A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva"). */
+    sealed interface BackupCoverage {
+        data object Checking : BackupCoverage
+        class Ready(val backupId: String, val review: BackupReview) : BackupCoverage {
+            val coverage: ChannelMatch.Coverage get() = review.coverage
+        }
+        data object Unavailable : BackupCoverage
+    }
+
+    private val _backupCoverage = MutableStateFlow<Map<String, BackupCoverage>>(emptyMap())
+    val backupCoverage: StateFlow<Map<String, BackupCoverage>> = _backupCoverage.asStateFlow()
+
+    /**
+     * Conta, por trás, como fica cada canal de [playlistId] na reserva (as listas da cache, ou descarregadas como as do
+     * segundo canal). Feita uma vez por reserva, escolhas e modo: depois de uma escolha, a anterior fica à vista até a
+     * nova estar pronta. Os nomes dos que faltam ou ficam em dúvida vão para o registo (só os nomes), para o relatório.
+     */
+    fun checkBackupCoverage(playlistId: String) {
+        val backup = backupOf(playlistId) ?: return
+        val overrides = backupOverrides(playlistId)
+        val manual = backupManual(playlistId)
+        val known = _backupCoverage.value[playlistId]
+        if (known == BackupCoverage.Checking) return
+        val ready = known as? BackupCoverage.Ready
+        if (ready != null && ready.backupId == backup.id && ready.review.overrides == overrides && ready.review.manual == manual) return
+        val main = playlists.value.firstOrNull { it.id == playlistId } ?: return
+        if (ready?.backupId != backup.id) _backupCoverage.value = _backupCoverage.value + (playlistId to BackupCoverage.Checking)
+        viewModelScope.launch {
+            val mainContent = content.value?.takeIf { it.playlist.id == playlistId } ?: backupContent(main)
+            val backupContent = backupContent(backup)
+            val result = if (mainContent == null || backupContent == null) {
+                BackupCoverage.Unavailable
+            } else {
+                val matcher = matcherFor(backupContent)
+                val review = withContext(Dispatchers.Default) {
+                    val entries = mainContent.channels.map { ChannelMatch.entry(it, mainContent) }
+                    val rows = ChannelMatch.review(entries, matcher, overrides, manual)
+                    BackupReview(mainContent, backupContent, rows, ChannelMatch.coverage(entries, matcher, overrides, manual, rows), manual, overrides)
+                }
+                if (ready == null) logCoverage(main.name, backup.name, review.coverage)
+                BackupCoverage.Ready(backup.id, review)
+            }
+            _backupCoverage.value = _backupCoverage.value + (playlistId to result)
+        }
+    }
+
+    private fun logCoverage(main: String, backup: String, cov: ChannelMatch.Coverage) {
+        Log.i(TAG_BACKUP, "Cobertura $main → $backup: ${cov.matched}/${cov.total}, ${cov.unsure} em dúvida, ${cov.missing} sem canal")
+        // Só os nomes dos canais (nunca endereços), aos bocados para o logcat não os cortar.
+        for ((label, names) in listOf("Em dúvida" to cov.unsureNames, "Sem canal" to cov.missingNames)) {
+            names.take(MAX_LOGGED_NAMES).chunked(40).forEach { Log.i(TAG_BACKUP, "$label: " + it.joinToString(" | ")) }
+            if (names.size > MAX_LOGGED_NAMES) Log.i(TAG_BACKUP, "$label: … mais ${names.size - MAX_LOGGED_NAMES}")
+        }
+    }
+
+    /**
+     * O painel "Canal de reserva" de [channel] (de [mainId]): os failovers dele, o automático (ou a sugestão), os
+     * parecidos na reserva e na própria lista, e a escolha à mão.
+     */
+    class BackupChoices(
+        val mainId: String,
+        val backup: Playlist,
+        val content: PlaylistContent,
+        /** A lista principal (para os failovers dela); null se não estiver carregada. */
+        val main: PlaylistContent?,
+        val auto: ChannelMatch.Result,
+        val similar: List<Channel>,
+        /** Os parecidos na própria lista (sem o canal). */
+        val similarMain: List<Channel>,
+        /** Os failovers escolhidos à mão, pela ordem: lista vazia = "nenhum", null = automático. */
+        val choice: List<String>?,
+        /** Modo manual: o automático é só uma sugestão. */
+        val manual: Boolean,
+    ) {
+        val autoChannel: Channel? get() = (auto as? ChannelMatch.Result.Match)?.let { content.channels.getOrNull(it.index) }
+
+        /** O canal de um failover (da reserva, ou da própria lista com ChannelMatch.MAIN_PREFIX). */
+        fun channelOf(failover: String): Channel? =
+            ChannelMatch.mainKeyOf(failover).let { key -> if (key != null) main?.byKey?.get(key) else content.byKey[failover] }
+
+        /** A lista de um failover (a própria, ou a reserva). */
+        fun contentOf(failover: String): PlaylistContent? = if (ChannelMatch.mainKeyOf(failover) != null) main else content
+
+        /** O nome da lista de um failover. */
+        fun listName(failover: String): String = contentOf(failover)?.playlist?.name.orEmpty()
+
+        /** O failover de [channel], da reserva ou ([fromMain]) da própria lista. */
+        fun failoverOf(channel: Channel, fromMain: Boolean): String = if (fromMain) ChannelMatch.mainFailover(channel.key) else channel.key
+    }
+
+    /** As escolhas de [channel] da lista [mainId] (a em uso, se null). */
+    suspend fun backupChoices(channel: Channel, mainId: String? = null): BackupChoices? {
+        val id = mainId ?: content.value?.playlist?.id ?: return null
+        val backup = backupOf(id) ?: return null
+        val backupContent = backupContent(backup) ?: return null
+        val mainContent = content.value?.takeIf { it.playlist.id == id }
+            ?: (_backupCoverage.value[id] as? BackupCoverage.Ready)?.review?.main
+        val matcher = matcherFor(backupContent)
+        return withContext(Dispatchers.Default) {
+            val entry = ChannelMatch.entry(channel, mainContent)
+            val auto = matcher.find(entry.name, entry.epgId, null, entry.group)
+            val similar = matcher.ranked(channel.name, channel.epgId, BACKUP_SIMILAR).mapNotNull { backupContent.channels.getOrNull(it) }
+            // Na própria lista: os parecidos sem o canal (o mesmo canal noutra qualidade, ou noutro grupo).
+            val similarMain = mainContent?.let { m ->
+                ChannelMatch.Matcher(m.channels.map { ChannelMatch.entry(it, m) }).ranked(channel.name, channel.epgId, BACKUP_SIMILAR + 1)
+                    .mapNotNull { m.channels.getOrNull(it) }.filter { it.key != channel.key }.take(BACKUP_SIMILAR)
+            }.orEmpty()
+            BackupChoices(id, backup, backupContent, mainContent, auto, similar, similarMain, backupChoice(id, channel.key), backupManual(id))
+        }
+    }
+
+    /** Pesquisa nos canais da reserva e da própria lista (pelo nome, sem acentos nem maiúsculas): os da reserva primeiro. */
+    fun searchBackup(choices: BackupChoices, query: String): List<Pair<Channel, Boolean>> {
+        val q = searchKey(query.trim())
+        if (q.length < 2) return emptyList()
+        fun hits(c: PlaylistContent?) = c?.channels.orEmpty().asSequence().filter { q in searchKey(it.name) }
+        return (hits(choices.content).map { it to false } + hits(choices.main).map { it to true }).take(MAX_SEARCH).toList()
+    }
+
+    /** Pesquisa na lista "Canais de reserva" (pelo nome do canal principal). */
+    fun backupReviewMatches(name: String, query: String): Boolean {
+        val q = searchKey(query.trim())
+        return q.isEmpty() || q in searchKey(name)
+    }
+
     // ---- Atualizações da app -----------------------------------------------------------------
 
     val appVersion: String get() = c.updater.currentVersion
@@ -1878,6 +2123,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val TAG = "GoatTV"
+        /** O registo da lista de reserva (vai no relatório: só nomes de canais e de listas). */
+        const val TAG_BACKUP = "GoatTV.Backup"
+        const val BACKUP_LOAD_MS = 20_000L
+        const val BACKUP_SIMILAR = 8
+        const val MAX_LOGGED_NAMES = 400
         const val UPDATE_FIRST_CHECK_MS = 20_000L
         const val UPDATE_INTERVAL_MS = 12 * 3600_000L
         /** Canais na linha da GoatTV no ecrã inicial. */

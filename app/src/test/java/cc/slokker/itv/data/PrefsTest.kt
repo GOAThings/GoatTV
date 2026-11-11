@@ -159,6 +159,40 @@ class PrefsTest {
     }
 
     @Test
+    fun `removing a playlist drops it as a backup too`() {
+        val settings = JsonParser.parseString(
+            """
+            {"backup_playlist": {"p1": "p2", "p3": "p1", "p4": "p2"},
+             "backup_channels": {"p1:101": "9", "p3:5": "off", "p4:7": "8"},
+             "backup_mode": {"p1": "manual", "p3": "manual", "p4": "manual"}}
+            """,
+        ).asJsonObject
+        assertTrue(Prefs.removePlaylist(settings, "p1"))
+        assertEquals(JsonParser.parseString("""{"backup_playlist": {"p4": "p2"}, "backup_channels": {"p4:7": "8"}, "backup_mode": {"p4": "manual"}}"""), settings)
+    }
+
+    @Test
+    fun `failovers read as one key, off or an array, and write back the same way`() {
+        val p = prefs("""{"backup_channels": {"p1:1": "b9", "p1:2": "off", "p1:3": ["b1", "main:4", "", "b1"], "p1:4": [], "p1:5": 7}}""")
+        assertEquals(
+            mapOf("p1:1" to listOf("b9"), "p1:2" to emptyList(), "p1:3" to listOf("b1", "main:4"), "p1:4" to emptyList(), "p1:5" to listOf("7")),
+            p.backupChannels,
+        )
+        assertEquals("off", Prefs.failoverValue(emptyList()))
+        assertEquals("b9", Prefs.failoverValue(listOf("b9")))
+        assertEquals(listOf("b1", "main:4"), Prefs.failoverValue(listOf("b1", "main:4")))
+    }
+
+    @Test
+    fun `a playlist is never its own backup`() {
+        val p = prefs("""{"backup_playlist": {"p1": "p1", "p2": "", "p3": "p1"}, "backup_channels": {"p1:1": "", "p1:2": "off"}}""")
+        assertEquals(mapOf("p3" to "p1"), p.backupPlaylist)
+        assertEquals(mapOf("p1:2" to emptyList<String>()), p.backupChannels)
+        // Só "manual" conta; o resto é o automático (sem entrada).
+        assertEquals(mapOf("p1" to "manual"), prefs("""{"backup_mode": {"p1": "manual", "p2": "auto", "p3": ""}}""").backupMode)
+    }
+
+    @Test
     fun `afr mode keeps reading the old on-off key`() {
         // Gravado antes de haver modos: ligado era "sempre".
         assertEquals(Prefs.AfrMode.ALWAYS, prefs("""{"afr":true}""").afrMode)

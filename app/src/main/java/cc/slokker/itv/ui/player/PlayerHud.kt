@@ -32,7 +32,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 
 /** Os botões da barra completa que mexem no ecrã do player (abrir um painel, trocar os canais...). */
-internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, SLEEP }
+internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
 
 /**
  * Os botões da barra completa (OK no vídeo). O que é só pedir ao ViewModel (imagem, favorito, ver do início,
@@ -51,6 +51,8 @@ internal fun HudButtons(
     pauseLive: Boolean,
     recording: Boolean,
     second: Boolean,
+    /** A lista tem reserva e é direto: o botão "Canal de reserva". */
+    backup: Boolean,
     dualLayout: DualLayout,
     firstFocus: FocusRequester,
     onAction: (HudAction) -> Unit,
@@ -122,6 +124,7 @@ internal fun HudButtons(
                 vm.showToast(s.epgNeedsAccount)
             }
         })
+        if (backup) GlassChipButton(ItvIcons.SwapPlaylist, s.backupChannel, { onAction(HudAction.BACKUP) })
         GlassChipButton(
             if (isFavorite) ItvIcons.Star else ItvIcons.StarOutline,
             if (isFavorite) s.removeFavorite else s.addFavorite,

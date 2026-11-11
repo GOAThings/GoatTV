@@ -1,7 +1,12 @@
 package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.ui.player.NetVerdictCard
+import cc.slokker.itv.ui.player.BackupChannelBody
+import cc.slokker.itv.ui.player.BackupAddBody
+import cc.slokker.itv.ui.player.rememberBackupPanel
+import cc.slokker.itv.ui.player.BackupChannelsPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterExitState
@@ -101,6 +106,18 @@ internal sealed interface Route {
     data object LockedGroups : Route { override fun title(s: Strings) = s.lockedGroups }
     data object Lists : Route { override fun title(s: Strings) = s.playlists }
     class PlaylistDetail(val id: String, private val name: String) : Route { override fun title(s: Strings) = name }
+    /** Os canais da lista [playlistId] na reserva: cada um, o da reserva e o estado (ver BackupChannelsPage). */
+    class BackupChannels(val playlistId: String) : Route {
+        override fun title(s: Strings) = s.backupChannels
+
+        /** O filtro e a pesquisa ficam na entrada (sobrevivem a abrir um canal ou o teclado e voltar). */
+        val filter = mutableStateOf(ChannelMatch.Filter.ALL)
+        val query = mutableStateOf("")
+    }
+    /** Escolher o canal da reserva de [channel] (da lista [playlistId]), como no painel do player. */
+    class BackupChannelPick(val playlistId: String, val channel: Channel) : Route { override fun title(s: Strings) = channel.name }
+    /** "Juntar um canal" aos failovers de [channel] (ver BackupAddBody). */
+    class BackupChannelAdd(val playlistId: String, val channel: Channel) : Route { override fun title(s: Strings) = s.backupAddChannel }
     /**
      * Escolher o guia de um canal (só com conta): pesquisa pelo nome → país → canal de guia.
      * Com [logo], escolhe-se da mesma maneira o logótipo do canal (o do canal de guia), sem mexer no guia.
@@ -294,6 +311,19 @@ fun SettingsContent(
                     enabled = !leaving,
                 )
                 Route.GroupsOrder -> GroupsOrderPage(vm, enabled = !leaving)
+                is Route.BackupChannels -> BackupChannelsPage(
+                    vm, entry.route.playlistId, enabled = !leaving, filterState = entry.route.filter, query = entry.route.query.value,
+                    onSearch = {
+                        val query = entry.route.query
+                        push(Route.TextEdit(I18n.s.search, query.value, TextKind.PLAIN) { v -> query.value = v.trim() }, "bcsearch")
+                    },
+                ) { channel ->
+                    push(Route.BackupChannelPick(entry.route.playlistId, channel), "bc:" + channel.key)
+                }
+                is Route.BackupChannelPick -> BackupChannelBody(vm, rememberBackupPanel(vm, entry.route.channel, entry.route.playlistId), onTry = null) {
+                    push(Route.BackupChannelAdd(entry.route.playlistId, entry.route.channel), "bcadd")
+                }
+                is Route.BackupChannelAdd -> BackupAddBody(vm, rememberBackupPanel(vm, entry.route.channel, entry.route.playlistId)) { pop() }
                 is Route.ChannelsOrder -> ChannelsOrderPage(vm, entry.route.groupId, enabled = !leaving)
                 is Route.TextEdit -> TextEditPage(entry.route, enabled = !leaving) { text ->
                     entry.route.onDone(text)

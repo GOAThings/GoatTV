@@ -74,6 +74,16 @@ public struct Prefs: Equatable, Sendable {
     public var logoSource = LogoSource.playlist
     public var channelLogos: [String: String] = [:]
     public var extraEpg: [String: String] = [:]
+    /// Lista de reserva por lista (`backup_playlist`: playlistId → playlistId): o mesmo canal de outra lista quando um
+    /// canal em direto não abre (ver ChannelMatch). Um mapa no `settings`, como o guia extra.
+    public var backupPlaylist: [String: String] = [:]
+    /// Os failovers escolhidos à mão (`backup_channels`: "playlistId:channelKey" → os canais a tentar, pela ordem; lista
+    /// vazia = "nenhum"). Cada um é uma chave na reserva, ou "main:" e a chave de outro canal da própria lista (ver
+    /// ChannelMatch.mainPrefix). Gravado como era quando cada canal tinha um só (a 0.12.0 e o site percebem-no): "off",
+    /// uma chave, ou um array quando há mais de um (ver [failoverValue]).
+    public var backupChannels: [String: [String]] = [:]
+    /// Como se escolhe o canal da reserva (`backup_mode`: playlistId → "manual"; sem entrada = automático).
+    public var backupMode: [String: String] = [:]
     public var outlineColor = "white"
     public var panelTimeout = 15
     /// Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco).
@@ -239,6 +249,9 @@ public struct Prefs: Equatable, Sendable {
         }
         channelLogos = stringMap("channel_logos")
         extraEpg = stringMap("extra_epg").filter { $0.value.hasPrefix("http://") || $0.value.hasPrefix("https://") }
+        backupPlaylist = stringMap("backup_playlist").filter { !$0.value.isEmpty && $0.value != $0.key }
+        backupChannels = (s["backup_channels"]?.object ?? [:]).compactMapValues(Prefs.failovers)
+        backupMode = stringMap("backup_mode").filter { $0.value == ChannelMatch.modeManual }
         outlineColor = str("outline_color", d.outlineColor, ["white", "accent", "blue", "violet", "pink", "red", "orange", "yellow", "green"])
         panelTimeout = clamp(int("panel_timeout", d.panelTimeout), 0, 300)
         glassOpacity = clamp(int("glass_opacity", d.glassOpacity), 0, 100)
@@ -292,6 +305,25 @@ public struct Prefs: Equatable, Sendable {
     }
 
     /// Uma língua das Definições: um código de 2 ou 3 letras (minúsculas), ou vazio.
+    /// Os failovers de um canal: "off" = nenhum, uma chave, ou um array delas; um valor vazio fica de fora (nil).
+    static func failovers(_ v: JSON) -> [String]? {
+        if let list = v.array {
+            var seen = Set<String>()
+            return list.compactMap(\.text).filter { !$0.isEmpty && $0 != ChannelMatch.off && seen.insert($0).inserted }
+        }
+        guard let one = v.text, !one.isEmpty else { return nil }
+        return one == ChannelMatch.off ? [] : [one]
+    }
+
+    /// Os failovers [list] como se gravam (ver [backupChannels]).
+    public static func failoverValue(_ list: [String]) -> JSON {
+        switch list.count {
+        case 0: return .string(ChannelMatch.off)
+        case 1: return .string(list[0])
+        default: return .array(list.map(JSON.string))
+        }
+    }
+
     private static func language(_ v: JSON?) -> String {
         guard case .string(let raw)? = v else { return "" }
         let code = raw.trimmingCharacters(in: .whitespaces).lowercased()

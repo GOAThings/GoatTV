@@ -23,6 +23,7 @@ import android.provider.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import cc.slokker.itv.ui.common.LocalChannelLogos
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -42,6 +43,7 @@ import cc.slokker.itv.data.api.EpgResult
 import cc.slokker.itv.data.api.EpgCountryInfo
 import cc.slokker.itv.data.api.EpgCountryResult
 import cc.slokker.itv.data.api.EpgGuideChannel
+import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
@@ -166,7 +168,8 @@ internal fun settingItems(
         is Route.Pick -> route.options.mapIndexed { i, (value, label) ->
             Item.Check("o:$i", label, value == route.selected, swatch = route.swatches[value]) { route.onPick(value) }
         }
-        Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit -> emptyList()
+        Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit,
+        is Route.BackupChannels, is Route.BackupChannelPick, is Route.BackupChannelAdd -> emptyList()
     }
 }
 
@@ -718,9 +721,14 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     val content by vm.content.collectAsStateWithLifecycle()
     val local by vm.local.collectAsStateWithLifecycle()
     val epgMappings by vm.epgMappings.collectAsStateWithLifecycle()
+    val backupCoverage by vm.backupCoverage.collectAsStateWithLifecycle()
     val s = LocalStrings.current
     val scope = rememberCoroutineScope()
     val push = nav.push
+    // A página de uma lista com reserva conta, por trás, os canais que a reserva tem.
+    val detailId = (route as? Route.PlaylistDetail)?.id
+    val detailBackup = detailId?.let { prefs.backupPlaylist[it] }
+    LaunchedEffect(detailId, detailBackup, prefs.backupChannels, prefs.backupMode) { detailId?.let(vm::checkBackupCoverage) }
     // Um "carregar outra vez para confirmar" por ação e por página: armar um não pode confirmar o outro.
     var confirmEpgReset by remember(route) { mutableStateOf(false) }
     var confirmDelete by remember(route) { mutableStateOf(false) }
@@ -751,6 +759,28 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             add(Item.Action("reload", s.reloadChannels, s.reloadChannelsSub) {
                 if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(p)
             })
+            // Lista de reserva: quando um canal em direto não abre aqui, o mesmo canal de outra lista.
+            val others = playlists.filter { it.id != p.id }
+            if (others.isNotEmpty()) {
+                val backup = vm.backupOf(p.id)
+                add(
+                    Item.Nav("backup", s.backupPlaylist, value = backup?.name ?: s.backupPlaylistNone, subtitle = backupSubtitle(s, backup, backupCoverage[p.id])) {
+                        val options = listOf<Pair<Any?, String>>(null to s.backupPlaylistNone) + others.map { it.id to it.name }
+                        push(Route.Pick(s.backupPlaylist, options, backup?.id) { v -> vm.setBackupPlaylist(p.id, v as String?); nav.popNested() }, "backup")
+                    },
+                )
+                if (backup != null) {
+                    // Automático (o ChannelMatch, com as escolhas à mão por cima) ou só os canais escolhidos à mão.
+                    val manual = vm.backupManual(p.id)
+                    add(
+                        Item.Nav("backupmode", s.backupMode, value = if (manual) s.backupModeManual else s.backupChannelAuto) {
+                            val options = listOf<Pair<Any?, String>>(false to s.backupChannelAuto, true to s.backupModeManual)
+                            push(Route.Pick(s.backupMode, options, manual) { v -> vm.setBackupManual(p.id, v == true); nav.popNested() }, "backupmode")
+                        },
+                    )
+                    add(Item.Nav("backupchannels", s.backupChannels, subtitle = s.backupChannelsSub) { push(Route.BackupChannels(p.id), "backupchannels") })
+                }
+            }
             // Organizar: esconder e reordenar grupos e canais (precisa dos canais, por isso só na lista em uso).
             add(Item.Header("horg", s.organize))
             if (isCurrent) {
@@ -1000,3 +1030,16 @@ private fun streamInfo(player: Player?, format: String?): List<Item> {
     )
 }
 
+/**
+ * O subtítulo da linha "Lista de reserva": o que faz (sem reserva), "a verificar…", ou quantos canais a reserva tem
+ * ("Mega · 412 de 450 canais encontrados · 18 em dúvida"). Igual no telemóvel.
+ */
+internal fun backupSubtitle(s: Strings, backup: Playlist?, coverage: AppViewModel.BackupCoverage?): String = when {
+    backup == null -> s.backupPlaylistSub
+    coverage is AppViewModel.BackupCoverage.Ready && coverage.backupId == backup.id && coverage.review.manual ->
+        s.backupChosen(backup.name, coverage.coverage.matched)
+    coverage is AppViewModel.BackupCoverage.Ready && coverage.backupId == backup.id ->
+        s.backupCoverage(backup.name, coverage.coverage.matched, coverage.coverage.total, coverage.coverage.unsure)
+    coverage == AppViewModel.BackupCoverage.Unavailable -> s.backupUnavailable(backup.name)
+    else -> s.backupChecking
+}

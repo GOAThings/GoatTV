@@ -35,6 +35,13 @@ struct SettingsPanel: View {
         case pick(String)
         case userAgent
         case extraEpg(String)
+        /// A lista de reserva de uma lista (nenhuma, ou outra das listas).
+        case backupPlaylist(String)
+        /// Automático ou manual (só os canais escolhidos à mão), por lista.
+        case backupMode(String)
+        /// Os canais da lista na reserva (ver BackupChannelsList) e a escolha de um deles (lista, chave do canal).
+        case backupChannels(String)
+        case backupChannelPick(String, String)
         /// Escolher o guia (ou, com logo, o logótipo) de um canal: sugestões e pesquisa pelo nome.
         case epgPick(String, Bool, String)
         /// Os canais de guia de um país (os da pesquisa, ou todos com nil).
@@ -160,6 +167,9 @@ struct SettingsPanel: View {
             try? await Task.sleep(for: .milliseconds(60))
             focus = pendingFocus ?? firstFocus
             pendingFocus = nil
+            // A página de uma lista com reserva conta, por trás, os canais que a reserva tem.
+            if case .playlist(let id) = page { model.checkBackupCoverage(id) }
+            if case .backupChannels(let id) = page { model.checkBackupCoverage(id) }
             await loadRemote(page)
             if focus == nil || focus == "loading" { focus = firstFocus }
         }
@@ -241,7 +251,12 @@ struct SettingsPanel: View {
         default: break
         }
         let list = items(page)
-        if case .pick = page, let checked = list.first(where: { if case .check(_, _, true, _, _, _) = $0 { return true } else { return false } }) {
+        var picking = false
+        switch page {
+        case .pick, .backupPlaylist, .backupMode: picking = true
+        default: break
+        }
+        if picking, let checked = list.first(where: { if case .check(_, _, true, _, _, _) = $0 { return true } else { return false } }) {
             return checked.id
         }
         return list.first(where: \.focusable)?.id
@@ -306,6 +321,12 @@ struct SettingsPanel: View {
             orderList(model.allGroups.map { ($0.id, $0.name) }) { id, delta in model.moveGroup(id, delta) }
         case .channelsOrder(let g):
             orderList(model.groupChannels(g, includeHidden: true).map { ($0.key, $0.name) }) { key, delta in model.moveChannel(g, key, delta) }
+        case .backupChannels(let id):
+            BackupChannelsList(playlistId: id) { channel in push(.backupChannelPick(id, channel.key), from: "bc:" + channel.key) }
+        case .backupChannelPick(let id, let key):
+            if let channel = model.backupReview(id)?.main.byKey[key] {
+                BackupChannelPanel(channel: channel, mainId: id, onTry: nil, embedded: true)
+            }
         case .extraEpg(let id):
             textPage(
                 placeholder: "https://…/guide.xml.gz",
@@ -608,6 +629,10 @@ struct SettingsPanel: View {
         case .report: return s.r("send_report")
         case .channelsOrder(let g): return model.allGroups.first { $0.id == g }?.name ?? s.t("Reorder channels", "Reordenar canais")
         case .extraEpg: return s.t("Extra guide", "Guia extra")
+        case .backupPlaylist: return s.r("backup_playlist")
+        case .backupMode: return s.r("backup_mode")
+        case .backupChannels: return s.r("backup_channels")
+        case .backupChannelPick(let id, let key): return model.backupReview(id)?.main.byKey[key]?.name ?? s.r("backup_channel")
         }
     }
 
@@ -845,6 +870,17 @@ struct SettingsPanel: View {
                 if isCurrent { model.reloadPlaylist() } else { model.switchPlaylist(playlist) }
                 onClose()
             })
+            // Lista de reserva: quando um canal em direto não abre aqui, o mesmo canal de outra lista (como no Android).
+            if model.playlists.contains(where: { $0.id != id }) {
+                list.append(.nav("backup", s.r("backup_playlist"), value: model.backupOf(id)?.name ?? s.r("backup_playlist_none"),
+                                 subtitle: model.backupSubtitle(id), to: .backupPlaylist(id)))
+                if model.backupOf(id) != nil {
+                    // Automático (o ChannelMatch, com as escolhas à mão por cima) ou só os canais escolhidos à mão.
+                    list.append(.nav("backupmode", s.r("backup_mode"),
+                                     value: model.backupManual(id) ? s.r("backup_mode_manual") : s.r("backup_channel_auto"), to: .backupMode(id)))
+                    list.append(.nav("backupchannels", s.r("backup_channels"), subtitle: s.r("backup_channels_sub"), to: .backupChannels(id)))
+                }
+            }
             list.append(.header("horg", s.t("Organise", "Organizar")))
             if isCurrent {
                 let hidden = prefs.hiddenGroups.filter { $0.hasPrefix(id + ":") }.count
@@ -988,6 +1024,26 @@ struct SettingsPanel: View {
                 .info("dovi", "libdovi", "MIT"),
             ]
 
+        case .backupPlaylist(let id):
+            let current = model.backupOf(id)?.id
+            let none: Item = .check("none", s.r("backup_playlist_none"), current == nil) {
+                model.setBackupPlaylist(id, nil)
+                back()
+            }
+            return [none] + model.playlists.filter { $0.id != id }.map { p in
+                .check("b:" + p.id, p.name, current == p.id) {
+                    model.setBackupPlaylist(id, p.id)
+                    back()
+                }
+            }
+
+        case .backupMode(let id):
+            let manual = model.backupManual(id)
+            return [
+                .check("auto", s.r("backup_channel_auto"), !manual) { model.setBackupManual(id, false); back() },
+                .check("manual", s.r("backup_mode_manual"), manual) { model.setBackupManual(id, true); back() },
+            ]
+
         case .pick(let key):
             let sp = spec(key)
             return sp.options.indices.map { (i: Int) -> Item in
@@ -1068,7 +1124,8 @@ struct SettingsPanel: View {
             })
             return list
 
-        case .settingsGate, .parentalGate, .signOutGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report:
+        case .settingsGate, .parentalGate, .signOutGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report,
+             .backupChannels, .backupChannelPick:
             return []
         }
     }

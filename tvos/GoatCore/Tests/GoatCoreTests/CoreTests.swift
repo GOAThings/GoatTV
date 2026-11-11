@@ -13,6 +13,12 @@ enum CoreTests {
 
     static let all: [(String, () throws -> Void)] = [
         ("hashes", hashes),
+        ("channelMatchNormalize", channelMatchNormalize),
+        ("channelMatchFind", channelMatchFind),
+        ("channelMatchCoverage", channelMatchCoverage),
+        ("channelMatchRanked", channelMatchRanked),
+        ("channelMatchReview", channelMatchReview),
+        ("channelMatchFailovers", channelMatchFailovers),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
         ("stalker", stalker),
@@ -40,6 +46,7 @@ enum CoreTests {
         ("m3uLongLine", m3uLongLine),
         ("controlCharacters", controlCharacters),
         ("pinAttempts", pinAttempts),
+        ("providerOutage", providerOutage),
         ("epgFailure", epgFailure),
         ("lanRequestAccepts", lanRequestAccepts),
         ("lanRequestRefuses", lanRequestRefuses),
@@ -153,6 +160,24 @@ enum CoreTests {
         var back = PinAttempts(failures: 3, lastFailureAt: 10_000_000)
         try expect(back.waitMs(now: 1_000), 30_000)
         try expect(back.check(now: 31_000, correct: true), true)
+    }
+
+    /// Uma lista em baixo: 5 minutos, ou até um canal dela dar; só os erros da conta ou do servidor (como no Android).
+    static func providerOutage() throws {
+        var o = ProviderOutage()
+        var now: Int64 = 1_000
+        o.markDown("a", now: now)
+        try expect(o.isDown("a", now: now), true)
+        try expect(o.isDown("b", now: now), false)
+        now += ProviderOutage.windowMs - 1
+        try expect(o.isDown("a", now: now), true)
+        now += 1
+        try expect(o.isDown("a", now: now), false)
+        o.markDown("a", now: now)
+        o.clear("a")
+        try expect(o.isDown("a", now: now), false)
+        for code in [401, 429, 456, 458, 500, 502, 503, 513] { try expect(ProviderOutage.providerWide(code), true, "\(code)") }
+        for code in [nil, 200, 302, 403, 404, 410] as [Int?] { try expect(ProviderOutage.providerWide(code), false, "\(String(describing: code))") }
     }
 
     /// Números do fornecedor fora do que faz sentido: nunca terminam a app, ficam com o valor por omissão.
@@ -452,6 +477,20 @@ enum CoreTests {
         try expect(Prefs(settings: .object(["audio_delay_ms": 9_000])).audioDelayMs, 1_000)
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
+        // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.
+        let backup = Prefs(settings: .object([
+            "backup_playlist": .object(["p1": "p1", "p2": "", "p3": "p1"]),
+            "backup_channels": .object(["p1:1": "", "p1:2": "off"]),
+        ]))
+        try expect(backup.backupPlaylist, ["p3": "p1"])
+        try expect(backup.backupChannels, ["p1:2": []])
+        // Vários failovers: um array (os vazios e os repetidos saem); um só grava-se como era.
+        let lists = Prefs(settings: .object(["backup_channels": .object(["p1:3": .array(["b1", "main:4", "", "b1"]), "p1:4": .array([]), "p1:5": .number(7)])]))
+        try expect(lists.backupChannels, ["p1:3": ["b1", "main:4"], "p1:4": [], "p1:5": ["7"]])
+        try expect(Prefs.failoverValue([]), .string("off"))
+        try expect(Prefs.failoverValue(["b9"]), .string("b9"))
+        try expect(Prefs.failoverValue(["b1", "main:4"]), .array(["b1", "main:4"]))
+        try expect(Prefs(settings: .object(["backup_mode": .object(["p1": "manual", "p2": "auto"])])).backupMode, ["p1": "manual"])
     }
 
     static func library() throws {
@@ -604,15 +643,18 @@ enum CoreTests {
             playlist: playlist,
             categories: [Category(id: "1", name: "News"), Category(id: "Outros", name: "Outros")],
             channels: [
-                Channel(uid: 0, key: "101", num: 1, name: "RTP 1", logo: "https://x/rtp1.png", categoryId: "1"),
-                Channel(uid: 1, key: "u0a1b2c", num: 2, name: "Canal ç", logo: "logo.png", categoryId: "Outros"),
+                Channel(uid: 0, key: "101", num: 1, name: "RTP 1", logo: "https://x/rtp1.png", categoryId: "1", epgId: "rtp1.pt"),
+                Channel(uid: 1, key: "u0a1b2c", num: 2, name: "Canal ç", logo: "logo.png", categoryId: "Outros", epgId: " "),
             ]
         )
         guard let index = ChannelIndex(content) else { throw Failure(description: "sem índice") }
-        try expect(index.hash, "ea9f8cc27edc2e37f03ba70062966b66b503be16")
+        // O mesmo hash do Android (ChannelIndexTest), agora com o id do guia no texto.
+        try expect(index.hash, "e208f7063796947eba103d5ae4d842c8ab8397b7")
         let body = try JSON.parse(index.body())
         try expect(body["channels"]?.array?.count, 2)
         try expect(body["channels"]?.array?[1]["logo"] == nil, true)
+        try expect(body["channels"]?.array?[0]["epg"]?.string, "rtp1.pt")
+        try expect(body["channels"]?.array?[1]["epg"] == nil, true)
     }
 
     /// Os números do tvg-chno (iguais aos do Android, ver M3uParserTest).

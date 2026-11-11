@@ -64,7 +64,7 @@ import cc.slokker.itv.ui.theme.tabular
  * uma Live Activity). Deitado, em ecrã inteiro, o player usa a cápsula da TV.
  */
 @Composable
-internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, modifier: Modifier = Modifier) {
+internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, modifier: Modifier = Modifier, label: String? = null) {
     val s = LocalStrings.current
     Row(
         modifier
@@ -85,7 +85,7 @@ internal fun ReconnectIsland(channel: String, nextTryAt: Long, waitMs: Long, mod
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(10.dp))
-        Text(s.reconnecting, color = GoatPalette.Warning, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label ?: s.reconnecting, color = GoatPalette.Warning, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Spacer(Modifier.width(6.dp))
         CountdownRing(rememberMsLeft(nextTryAt), waitMs, Modifier.size(26.dp), color = GoatPalette.Warning)
     }

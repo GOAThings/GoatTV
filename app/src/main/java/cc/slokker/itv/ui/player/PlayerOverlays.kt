@@ -405,8 +405,9 @@ private val HudScrim = Brush.verticalGradient(
 
 
 /**
- * No canto: a sintonizar um canal, ou a voltar a ligar depois de ele cair ([reconnecting]). A ligar, o anel roda; à
- * espera da próxima tentativa ([nextTryAt], elapsedRealtime), enche-se durante [waitMs] com os segundos no meio.
+ * No canto: a sintonizar um canal, a voltar a ligar depois de ele cair ([reconnecting]), ou a abrir um failover dele
+ * ([failover]: "RTP 1 HD (BackupTV) · 1 de 2"). A ligar, o anel roda; à espera da próxima tentativa ([nextTryAt],
+ * elapsedRealtime), enche-se durante [waitMs] com os segundos no meio.
  */
 @Composable
 internal fun TuningPill(
@@ -416,6 +417,7 @@ internal fun TuningPill(
     nextTryAt: Long,
     waitMs: Long,
     modifier: Modifier = Modifier,
+    failover: String? = null,
 ) {
     val s = LocalStrings.current
     val leftMs = rememberMsLeft(nextTryAt)
@@ -429,9 +431,9 @@ internal fun TuningPill(
         CountdownRing(leftMs, waitMs, Modifier.size(32.dp))
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(if (reconnecting) s.reconnecting else s.tuning, style = MaterialTheme.typography.labelLarge)
+            Text(if (reconnecting) s.reconnecting else if (failover != null) s.backupConnecting else s.tuning, style = MaterialTheme.typography.labelLarge)
             Text(
-                if (attempt > 0) s.reconnectAttempt(channel, attempt) else channel,
+                if (attempt > 0) s.reconnectAttempt(channel, attempt) else failover ?: channel,
                 style = MaterialTheme.typography.bodySmall.tabular,
                 color = ItvColors.TextDim,
                 maxLines = 1,
