@@ -268,6 +268,37 @@ final class PlayerEngine: NSObject {
     }
 
     @ObservationIgnored private var attempts: [Attempt] = []
+
+    // MARK: Canais HDR no AetherEngine
+
+    /// O canal aberto é (ou parece) HDR: o nome diz HDR/UHD/4K ou o AetherEngine já lá viu HDR.
+    @ObservationIgnored private var openedHDR = false
+    /// Os canais onde o AetherEngine viu HDR (ou que o VLC deu em HEVC 4K): abrem logo nele. Só neste aparelho.
+    @ObservationIgnored private var hdrChannels = Set(UserDefaults.standard.stringArray(forKey: "aether_hdr_channels") ?? [])
+
+    private func rememberHDR(_ key: String, _ hdr: Bool) {
+        guard hdrChannels.contains(key) != hdr else { return }
+        if hdr { hdrChannels.insert(key) } else { hdrChannels.remove(key) }
+        UserDefaults.standard.set(Array(hdrChannels), forKey: "aether_hdr_channels")
+        DebugLog.add("Player: \(hdr ? "HDR" : "SDR") channel, \(hdr ? "AetherEngine" : "VLC") from now on")
+    }
+
+    /// O VLC está a dar HEVC em 4K: quase sempre HDR, que ele mostra em SDR.
+    private var vlcLooksHDR: Bool {
+        let tracks = vlc.media?.tracksInformation as? [[String: Any]] ?? []
+        return tracks.contains { t in
+            guard (t[VLCMediaTracksInformationType] as? String) == VLCMediaTracksInformationTypeVideo else { return false }
+            let fourcc = (t[VLCMediaTracksInformationCodec] as? NSNumber)?.uint32Value ?? 0
+            let codec = VLCMedia.codecName(forFourCC: fourcc, trackType: VLCMediaTracksInformationTypeVideo).lowercased()
+            let h = (t[VLCMediaTracksInformationVideoHeight] as? NSNumber)?.intValue ?? 0
+            return (codec.contains("hevc") || codec.contains("265")) && h >= 2000
+        }
+    }
+
+    /// Nome com "HDR", "UHD" ou "4K" como palavra.
+    static func nameSaysHDR(_ name: String) -> Bool {
+        name.uppercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { ["HDR", "HDR10", "UHD", "4K", "2160P"].contains(String($0)) }
+    }
     /// Qual das [attempts] se está a abrir e se se chegou lá por uma recusa (então o formato não se aprende).
     @ObservationIgnored private var fallback = FormatFallback()
     private var index: Int { fallback.index }
@@ -320,10 +351,15 @@ final class PlayerEngine: NSObject {
                     : [Attempt(candidate: c, backend: .aether, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
             }
         }
+        // Normal: um canal HDR que não é HLS abre no AetherEngine (o VLC dá sempre SDR) e, se não der, no VLC.
         return candidates.enumerated().flatMap { i, c -> [Attempt] in
-            engine != "vlc" && c.isHLS
-                ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
-                : [Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            if engine != "vlc" && c.isHLS {
+                return [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+            if engine == "exo" && openedHDR {
+                return [Attempt(candidate: c, backend: .aether, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+            return [Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
         }
     }
 
@@ -335,8 +371,9 @@ final class PlayerEngine: NSObject {
     /// abre onde se parar, e uma mudança nova pelo meio cancela a espera. Voltar ao canal que ainda está a dar (a mesma
     /// lista outra vez, a lista que deu a volta) não abre nada.
     /// [startMs]: abrir já tanto depois do início do vídeo (o catch-up do Stalker, que é a gravação do programa todo).
+    /// [name]: o nome do canal ("HDR", "UHD" ou "4K" nele abre no AetherEngine).
     func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
-              pausable: Bool = false, startMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+              pausable: Bool = false, startMs: Int64 = 0, name: String? = nil, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         let same = openedKey == channelKey
         if !same || live != openedLive { speed = 1 }
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
@@ -365,6 +402,7 @@ final class PlayerEngine: NSObject {
         let agent = userAgent.map(SafeInput.stripControl) ?? ""
         self.userAgent = agent.isEmpty ? iptvUserAgent : agent
         self.referrer = referrer.map(SafeInput.stripControl)
+        openedHDR = hdrChannels.contains(channelKey) || name.map(Self.nameSaysHDR) == true
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
         attempts = makeAttempts(candidates)
         fallback.restart()
@@ -759,6 +797,14 @@ final class PlayerEngine: NSObject {
             hasPicture = true
             hideFreeze()
             DebugLog.add("Player: AetherEngine route \(aether.route)")
+            // Normal: o AetherEngine diz se o canal é mesmo HDR; um SDR volta a abrir no VLC da próxima vez.
+            if engine == "exo", !onBackup, let key = openedKey {
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(3))
+                    guard let self, self.openedKey == key, self.backend == .aether, let hdr = self.aetherPlayback?.isHDR else { return }
+                    self.rememberHDR(key, hdr)
+                }
+            }
         }
         let attempt = attempts.indices.contains(index) ? attempts[index] : nil
         format = attempt?.candidate.format
@@ -909,6 +955,14 @@ final class PlayerEngine: NSObject {
         ringClock()
         vlc.audio?.isMuted = muted
         hideFreeze()
+        // Normal: o VLC está a dar HEVC 4K (quase sempre HDR, que ele mostra em SDR): abre-se outra vez no AetherEngine.
+        if engine == "exo", !openedHDR, !onBackup, let key = openedKey, vlcLooksHDR {
+            rememberHDR(key, true)
+            openedHDR = true
+            attempts = makeAttempts(openedCandidates)
+            fallback.restart()
+            start()
+        }
     }
 
     private var soundOnly: Bool {

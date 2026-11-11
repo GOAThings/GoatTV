@@ -1082,7 +1082,7 @@ final class AppModel {
             let playlist = content.playlist
             defer { updateWatching() }
             player.play(candidates, channelKey: channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,
-                        referrer: channel.referrer, pausable: true,
+                        referrer: channel.referrer, pausable: true, name: channel.name,
                         linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
         }
         saveLast(channel, watched: false)

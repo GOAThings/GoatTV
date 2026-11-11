@@ -298,6 +298,12 @@ public final class AetherPlayback {
 
     public var frameRate: Double? { engine?.sourceVideoFrameRate }
 
+    /// O vídeo é HDR (HDR10, HDR10+, Dolby Vision ou HLG); nil enquanto não se sabe.
+    public var isHDR: Bool? {
+        guard let engine, engine.sourceVideoWidth > 0 else { return nil }
+        return engine.sourceVideoFormat != .sdr
+    }
+
     /// Linhas da "Informação do stream" (título, valor).
     public var details: [(String, String)] {
         guard let engine else { return [] }
