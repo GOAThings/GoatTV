@@ -2,11 +2,10 @@ import GoatCore
 import SwiftUI
 
 /// O painel "Canal de reserva" do canal a ver (como no Android): os failovers dele, pela ordem em que se tentam quando
-/// não abre (canais da reserva ou da própria lista). Sem escolha, é o automático (ChannelMatch). OK num failover pega
-/// nele e ↑/↓ mudam-no de lugar (como em "Reordenar grupos"); carregar e manter abre o menu para o tirar. Os parecidos
-/// (nas duas listas) e a pesquisa juntam-se com OK. Qualquer mudança grava a lista (ganha ao automático); "Automático"
-/// apaga a escolha e "Nenhum" deixa-a vazia. "Experimentar agora" dá já os failovers, pela ordem (a ligação à lista
-/// principal fecha antes). Voltar fecha o painel.
+/// não abre (canais da reserva ou da própria lista), cada um com a etiqueta da lista. OK num failover pega nele e ↑/↓
+/// mudam-no de lugar (como em "Reordenar grupos"); carregar e manter abre o menu para o tirar. Por baixo, "Juntar um
+/// canal" (uma página com a pesquisa nas duas listas e os sugeridos; Voltar recua para os failovers), "Experimentar
+/// agora" e "Voltar ao automático" (só com uma escolha à mão). Voltar fecha o painel.
 struct BackupChannelPanel: View {
     @Environment(\.panelActivity) private var panelActivity
     @Environment(AppModel.self) private var model
@@ -20,6 +19,7 @@ struct BackupChannelPanel: View {
 
     @State private var choices: BackupChoices?
     @State private var loading = true
+    @State private var adding = false
     @State private var query = ""
     @State private var results: [BackupHit] = []
     @State private var moving: String?
@@ -28,64 +28,13 @@ struct BackupChannelPanel: View {
     var body: some View {
         let s = model.strings
         let panel = VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                if !embedded { Text(s.r("backup_channel")).font(Fonts.panelTitle) }
-                Text([channel.name, choices?.backup.name].compactMap { $0 }.joined(separator: " → "))
-                    .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim)
+            if !embedded || adding {
+                Text(adding ? s.r("backup_add_channel") : s.r("backup_channel")).font(Fonts.panelTitle).padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
             if loading {
                 Text(s.r("backup_checking")).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 16)
             } else if let choices {
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 4) {
-                            let failovers = choices.failovers
-                            if let onTry {
-                                Button { if !failovers.isEmpty { onTry(failovers) } } label: {
-                                    RowContent(title: s.r("backup_channel_try"), subtitle: failovers.first.flatMap { choices.channel(of: $0)?.name }) {
-                                        Image(systemName: "play.fill").font(.system(size: 22))
-                                    }
-                                }
-                                .buttonStyle(FillRowStyle())
-                                .focused($focus, equals: "try")
-                                .disabled(moving != nil)
-                            }
-                            header(failovers.isEmpty ? s.r("backup_state_none") : s.r("backup_failovers"))
-                            ForEach(Array(failovers.enumerated()), id: \.element) { i, f in failoverRow(i, f, choices) }
-                            if !failovers.isEmpty { header(s.r("backup_failovers_hint")) }
-                            if choices.manual {
-                                checkRow("auto", model.backupAutoLabel(choices), nil, false) {}
-                            } else {
-                                checkRow("auto", s.r("backup_channel_auto"), model.backupAutoLabel(choices), choices.automatic) { save(nil) }
-                            }
-                            checkRow("off", s.r("backup_channel_off"), nil, choices.none) { save([]) }
-                            // Para juntar: os parecidos na reserva (com a sugestão do automático) e na própria lista.
-                            let similar = uniqueByKey([choices.autoChannel].compactMap { $0 } + choices.similar)
-                            if !similar.isEmpty { header(s.r("backup_add_from", choices.backup.name)) }
-                            ForEach(similar, id: \.key) { c in addRow("s:", c, false, choices) }
-                            if !choices.similarMain.isEmpty { header(s.r("backup_add_from", choices.main?.playlist.name ?? "")) }
-                            ForEach(choices.similarMain, id: \.key) { c in addRow("m:", c, true, choices) }
-                            TextField(s.r("backup_channel_search_all"), text: $query)
-                                .font(Fonts.rowTitle)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .focused($focus, equals: "field")
-                                .disabled(moving != nil)
-                                .padding(.top, 10)
-                            if !results.isEmpty { header(s.r("backup_channel_results")) }
-                            ForEach(results) { r in addRow(r.fromMain ? "rm:" : "r:", r.channel, r.fromMain, choices) }
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 6)
-                    }
-                    .onMoveCommand { direction in
-                        guard let f = moving else { return }
-                        if direction == .up { move(f, -1) }
-                        if direction == .down { move(f, 1) }
-                        proxy.scrollTo("f:" + f, anchor: .center)
-                    }
-                }
+                if adding { addPage(choices) } else { listPage(choices) }
             } else {
                 Text(s.r("backup_unavailable", (mainId ?? model.content?.playlist.id).flatMap { model.backupOf($0)?.name } ?? ""))
                     .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 16)
@@ -104,6 +53,8 @@ struct BackupChannelPanel: View {
             }
         }
         .focusSection()
+        // Em "Juntar um canal", Voltar recua para os failovers (sem isto, fechava o painel).
+        .onExitCommand(perform: adding ? { back() } : nil)
         .onChange(of: focus) { _, now in panelActivity(now == "field") }
         .onChange(of: query) { _, _ in panelActivity(focus == "field") }
         .task(id: query) {
@@ -115,7 +66,95 @@ struct BackupChannelPanel: View {
             choices = await model.backupChoices(channel, mainId: mainId)
             loading = false
             try? await Task.sleep(for: .milliseconds(80))
-            focus = onTry != nil ? "try" : (choices?.failovers.first.map { "f:" + $0 } ?? "auto")
+            focus = choices?.failovers.first.map { "f:" + $0 } ?? "add"
+        }
+    }
+
+    /// Os failovers, "Juntar um canal", "Experimentar agora" e "Voltar ao automático".
+    private func listPage(_ choices: BackupChoices) -> some View {
+        let s = model.strings
+        let failovers = choices.failovers
+        return ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    Text(failovers.isEmpty ? s.r("backup_none_note", channel.name) : s.r("backup_failovers_intro", channel.name))
+                        .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 10).padding(.bottom, 6)
+                    ForEach(Array(failovers.enumerated()), id: \.element) { i, f in failoverRow(i, f, choices) }
+                    actionRow("add", "plus", s.r("backup_add_channel"), nil) {
+                        adding = true
+                        focusSoon("search")
+                    }
+                    Divider().padding(.vertical, 8).padding(.horizontal, 10)
+                    if let onTry, !failovers.isEmpty {
+                        actionRow("try", "play.fill", s.r("backup_channel_try"), nil) { onTry(failovers) }
+                    }
+                    if !choices.automatic {
+                        actionRow("auto", "arrow.counterclockwise", s.r("backup_reset_auto"), model.backupAutoLabel(choices)) {
+                            save(nil)
+                            focus = "add"
+                        }
+                    }
+                    if !failovers.isEmpty {
+                        Text(s.r("backup_failovers_hint")).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 10).padding(.top, 10)
+                    }
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+            }
+            .onMoveCommand { direction in
+                guard let f = moving else { return }
+                if direction == .up { move(f, -1) }
+                if direction == .down { move(f, 1) }
+                proxy.scrollTo("f:" + f, anchor: .center)
+            }
+        }
+    }
+
+    /// "Juntar um canal": a pesquisa nas duas listas e os sugeridos; OK junta no fim e volta aos failovers.
+    private func addPage(_ choices: BackupChoices) -> some View {
+        let s = model.strings
+        let added = Set(choices.failovers)
+        let list = query.trimmingCharacters(in: .whitespaces).isEmpty ? choices.suggested : results
+        return ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 4) {
+                TextField(s.r("backup_channel_search_all"), text: $query)
+                    .font(Fonts.rowTitle)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($focus, equals: "search")
+                    .padding(.bottom, 6)
+                Text(query.isEmpty ? s.r("backup_suggested") : s.r("backup_channel_results"))
+                    .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 10).padding(.top, 8)
+                ForEach(list) { hit in
+                    let f = choices.failover(hit.channel, fromMain: hit.fromMain)
+                    let already = added.contains(f)
+                    Button {
+                        if !already { save(choices.toggled(f)) }
+                        back()
+                    } label: {
+                        RowContent(title: hit.channel.name, subtitle: already ? s.r("backup_already_added") : nil) {
+                            sourceTag(model.failoverSource(choices, f), dim: already)
+                        }
+                    }
+                    .buttonStyle(FillRowStyle())
+                    .focused($focus, equals: hit.id)
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+        }
+    }
+
+    private func back() {
+        adding = false
+        query = ""
+        focusSoon(choices?.failovers.last.map { "f:" + $0 } ?? "add")
+    }
+
+    private func focusSoon(_ id: String) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(80))
+            focus = id
         }
     }
 
@@ -130,14 +169,10 @@ struct BackupChannelPanel: View {
         save(list)
     }
 
-    private func header(_ text: String) -> some View {
-        Text(text).font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(.horizontal, 10).padding(.top, 12)
-    }
-
-    private func checkRow(_ id: String, _ title: String, _ subtitle: String?, _ checked: Bool, _ action: @escaping () -> Void) -> some View {
+    private func actionRow(_ id: String, _ icon: String, _ title: String, _ subtitle: String?, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             RowContent(title: title, subtitle: subtitle) {
-                if checked { Image(systemName: "checkmark").font(.system(size: 22)) }
+                Image(systemName: icon).font(.system(size: 22))
             }
         }
         .buttonStyle(FillRowStyle())
@@ -145,14 +180,17 @@ struct BackupChannelPanel: View {
         .disabled(moving != nil)
     }
 
-    /// Um failover: o número, o canal e a lista. OK pega/larga; com ele "na mão", ↑/↓ movem-no; manter abre "Tirar".
+    /// Um failover: o número, o canal e a etiqueta da lista. OK pega/larga; com ele "na mão", ↑/↓ movem-no; manter abre
+    /// "Tirar" (o foco passa ao que fica no lugar dele).
     private func failoverRow(_ index: Int, _ f: String, _ choices: BackupChoices) -> some View {
         let isMoving = moving == f
         return Button { moving = isMoving ? nil : f } label: {
-            RowContent(title: "\(index + 1). " + (choices.channel(of: f)?.name ?? ""), subtitle: model.failoverSubtitle(choices, f)) {
-                Text(isMoving ? model.strings.r("moving") : "↕")
-                    .font(Fonts.rowValue)
-                    .foregroundStyle(isMoving ? AnyShapeStyle(Theme.sky) : AnyShapeStyle(Color.secondary))
+            RowContent(title: "\(index + 1).  " + (choices.channel(of: f)?.name ?? ""), subtitle: nil) {
+                if isMoving {
+                    Text(model.strings.r("moving")).font(Fonts.rowValue).foregroundStyle(Theme.sky)
+                } else {
+                    sourceTag(model.failoverSource(choices, f))
+                }
             }
         }
         .buttonStyle(FillRowStyle(selected: isMoving))
@@ -161,29 +199,22 @@ struct BackupChannelPanel: View {
         .id("f:" + f)
         .contextMenu {
             Button(role: .destructive) {
-                if moving == f { moving = nil }
-                save(choices.failovers.filter { $0 != f })
+                moving = nil
+                let rest = choices.failovers.filter { $0 != f }
+                save(rest)
+                focusSoon((rest.indices.contains(index) ? rest[index] : rest.last).map { "f:" + $0 } ?? "add")
             } label: { Text(model.strings.r("backup_failover_remove")) }
         }
     }
 
-    /// Um canal para juntar aos failovers (da reserva, ou [fromMain] da própria lista); com o visto se já lá estiver.
-    private func addRow(_ prefix: String, _ c: Channel, _ fromMain: Bool, _ choices: BackupChoices) -> some View {
-        let f = choices.failover(c, fromMain: fromMain)
-        let added = choices.failovers.contains(f)
-        return Button { save(choices.toggled(f)) } label: {
-            RowContent(title: c.name, subtitle: model.failoverSubtitle(choices, f)) {
-                Image(systemName: added ? "checkmark" : "plus").font(.system(size: 22))
-            }
-        }
-        .buttonStyle(FillRowStyle(selected: added))
-        .focused($focus, equals: prefix + c.key)
-        .disabled(moving != nil)
-    }
-
-    private func uniqueByKey(_ list: [Channel]) -> [Channel] {
-        var seen = Set<String>()
-        return list.filter { seen.insert($0.key).inserted }
+    /// A etiqueta pequena com a lista de um canal ("Backup", "Esta lista").
+    private func sourceTag(_ text: String, dim: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(.secondary)
+            .opacity(dim ? 0.5 : 1)
+            .padding(.horizontal, 12).padding(.vertical, 4)
+            .background(Color.secondary.opacity(0.15), in: Capsule())
     }
 }
 

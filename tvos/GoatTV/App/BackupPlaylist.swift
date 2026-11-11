@@ -70,6 +70,13 @@ struct BackupChoices {
         return list.contains(failover) ? list.filter { $0 != failover } : list + [failover]
     }
 
+    /// Os canais sugeridos para juntar: o do automático e os parecidos na reserva, e os parecidos na própria lista.
+    var suggested: [BackupHit] {
+        var seen = Set<String>()
+        let backup = ([autoChannel].compactMap { $0 } + similar).filter { seen.insert($0.key).inserted }.map { BackupHit(channel: $0, fromMain: false) }
+        return Array(backup.prefix(5)) + similarMain.prefix(3).map { BackupHit(channel: $0, fromMain: true) } + backup.dropFirst(5)
+    }
+
     /// Move [failover] [delta] lugares (−1 = para cima); nil se não puder.
     func moved(_ failover: String, by delta: Int) -> [String]? {
         var list = failovers
@@ -346,12 +353,9 @@ extension AppModel {
         return Array((backup + main).prefix(40))
     }
 
-    /// O subtítulo de um failover: a lista e o grupo (e "Automático" no do automático).
-    func failoverSubtitle(_ choices: BackupChoices, _ failover: String) -> String {
-        let list = choices.list(of: failover)
-        let group = choices.channel(of: failover).flatMap { c in list?.categoryName(c.categoryId) }
-        let auto = choices.automatic && failover == choices.autoChannel?.key ? strings.r("backup_channel_auto") : nil
-        return [list?.playlist.name, group, auto].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    /// A etiqueta de um failover: "Esta lista" ou o nome da reserva.
+    func failoverSource(_ choices: BackupChoices, _ failover: String) -> String {
+        ChannelMatch.mainKey(of: failover) != nil ? strings.r("backup_this_playlist") : choices.backup.name
     }
 
     /// "Automático: SIC HD", "Sem correspondência" ou "Em dúvida…".
