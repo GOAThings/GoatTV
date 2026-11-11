@@ -160,6 +160,8 @@ public final class AetherPlayback {
             o.probesize = 2_000_000
             o.maxAnalyzeDuration = 2_000_000
             o.liveStartupSingleSegmentMinimumSeconds = 1
+            // E sem a espera extra (0,5 a 2 s) depois de já haver o mínimo: mostra assim que pode.
+            o.liveStartupGraceSeconds = 0
         }
         o.dvrWindowSeconds = request.dvrSeconds
         o.httpHeaders = request.headers
