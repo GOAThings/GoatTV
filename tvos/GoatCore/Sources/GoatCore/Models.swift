@@ -154,8 +154,14 @@ public final class PlaylistContent: Codable, Sendable {
     public let guideUrl: String?
     public let fetchedAt: Date
 
+    /// Com "Juntar versões" (ver ContentView): as versões que não se mostram, só abertas como failover. Não vão para a cache.
+    public let hidden: [Channel]
+    /// A melhor versão de cada canal → as outras (chaves em [hidden]), da melhor para a pior.
+    public let variants: [String: [String]]
+
     public let byCategory: [String: [Channel]]
-    /// Com chaves repetidas fica o primeiro canal (como no Android).
+    /// Com chaves repetidas fica o primeiro canal (como no Android). Também as versões escondidas ([hidden]): um favorito,
+    /// o último canal ou um failover que seja uma delas abre-a.
     public let byKey: [String: Channel]
     private let categoryNames: [String: String]
 
@@ -164,7 +170,7 @@ public final class PlaylistContent: Codable, Sendable {
     }
 
     public init(playlist: Playlist, categories: [Category], channels: [Channel], account: XtreamAccount? = nil,
-                guideUrl: String? = nil, fetchedAt: Date = Date()) {
+                guideUrl: String? = nil, fetchedAt: Date = Date(), hidden: [Channel] = [], variants: [String: [String]] = [:]) {
         self.playlist = playlist
         // Sem ids repetidos nem os dos grupos especiais (as listas do ecrã usam o id). Vale também para as cópias em cache.
         var seen = Set<String>()
@@ -173,9 +179,11 @@ public final class PlaylistContent: Codable, Sendable {
         self.account = account
         self.guideUrl = guideUrl
         self.fetchedAt = fetchedAt
+        self.hidden = hidden
+        self.variants = variants
         byCategory = Dictionary(grouping: channels, by: \.categoryId)
         var map: [String: Channel] = [:]
-        for ch in channels where map[ch.key] == nil { map[ch.key] = ch }
+        for ch in channels + hidden where map[ch.key] == nil { map[ch.key] = ch }
         byKey = map
         categoryNames = Dictionary(categories.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
     }

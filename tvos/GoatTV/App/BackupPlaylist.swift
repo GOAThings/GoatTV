@@ -35,6 +35,8 @@ struct BackupChoices {
     var choice: [String]?
     /// Modo manual: o automático é só uma sugestão (e sem escolha não muda de lista).
     let manual: Bool
+    /// As outras versões do canal na própria lista (ChannelMatch.mainPrefix), com "Juntar versões": o automático tenta-as primeiro.
+    var variants: [String] = []
 
     var autoChannel: Channel? { auto.index.flatMap { content.channels.indices.contains($0) ? content.channels[$0] : nil } }
 
@@ -55,7 +57,7 @@ struct BackupChoices {
     var failovers: [String] {
         let chosen = choice?.filter { channel(of: $0) != nil } ?? []
         if choice?.isEmpty == true || !chosen.isEmpty { return chosen }
-        return manual ? [] : (autoChannel.map { [$0.key] } ?? [])
+        return variants + (manual ? [] : (autoChannel.map { [$0.key] } ?? []))
     }
 
     /// "Nenhum": este canal não muda de lista.
@@ -195,7 +197,8 @@ extension AppModel {
         let m: ChannelMatcher
         if let content { m = await matcher(for: content) } else { m = ChannelMatcher([]) }
         let manual = backupManual(id)
-        let list = ChannelMatch.failovers(ChannelMatch.Entry(channel, in: main), m, chosen: chosen ?? backupChoice(id, channel.key), manual: manual) { main.byKey[$0] != nil }
+        let list = ChannelMatch.failovers(ChannelMatch.Entry(channel, in: main), m, chosen: chosen ?? backupChoice(id, channel.key), manual: manual,
+                                          variants: main.variants[channel.key] ?? []) { main.byKey[$0] != nil }
         let mainDown = providerOutage.isDown(id, now: Self.uptimeMs())
         let streams: [FailoverStream] = list.compactMap { f in
             if let key = ChannelMatch.mainKey(of: f) {
@@ -249,7 +252,9 @@ extension AppModel {
     /// O direto da lista principal não abriu: procura os failovers dele (o leitor espera pela resposta). Uma recusa da
     /// conta ou do servidor ([status]) marca a lista como em baixo (ver [skipToBackup]).
     func startFailover(status: Int?) -> Bool {
-        guard catchup == nil, let content, let channel = current, backupOf(content.playlist.id) != nil else { return false }
+        // Sem lista de reserva, as outras versões do canal (com "Juntar versões") também são failovers.
+        guard catchup == nil, let content, let channel = current,
+              backupOf(content.playlist.id) != nil || content.variants[channel.key] != nil else { return false }
         if ProviderOutage.providerWide(status) { providerOutage.markDown(content.playlist.id, now: Self.uptimeMs()) }
         Task { [weak self] in
             guard let self else { return }
@@ -344,7 +349,8 @@ extension AppModel {
             similarMain = rankedMain.compactMap { mainContent.channels.indices.contains($0) ? mainContent.channels[$0] : nil }.filter { $0.key != channel.key }
         }
         return BackupChoices(mainId: id, backup: backup, content: backupContent, main: mainContent, auto: auto, similar: similar,
-                             similarMain: similarMain, choice: backupChoice(id, channel.key), manual: backupManual(id))
+                             similarMain: similarMain, choice: backupChoice(id, channel.key), manual: backupManual(id),
+                             variants: (mainContent?.variants[channel.key] ?? []).map(ChannelMatch.mainFailover))
     }
 
     /// Pesquisa nos canais da reserva e da própria lista (pelo nome, sem acentos nem maiúsculas): os da reserva primeiro,

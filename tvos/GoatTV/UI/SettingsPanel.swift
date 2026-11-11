@@ -35,6 +35,8 @@ struct SettingsPanel: View {
         case pick(String)
         case userAgent
         case extraEpg(String)
+        /// O nome do canal a ver (vazio volta ao da lista).
+        case channelName
         /// A lista de reserva de uma lista (nenhuma, ou outra das listas).
         case backupPlaylist(String)
         /// Automático ou manual (só os canais escolhidos à mão), por lista.
@@ -326,6 +328,12 @@ struct SettingsPanel: View {
         case .backupChannelPick(let id, let key):
             if let channel = model.backupReview(id)?.main.byKey[key] {
                 BackupChannelPanel(channel: channel, mainId: id, onTry: nil, embedded: true)
+            }
+        case .channelName:
+            if let channel = model.current {
+                textPage(placeholder: channel.name, hint: s.r("channel_name_sub"), initial: model.channelNameChoice(channel) ?? "") { value in
+                    model.setChannelName(channel, value)
+                }
             }
         case .extraEpg(let id):
             textPage(
@@ -629,6 +637,7 @@ struct SettingsPanel: View {
         case .report: return s.r("send_report")
         case .channelsOrder(let g): return model.allGroups.first { $0.id == g }?.name ?? s.t("Reorder channels", "Reordenar canais")
         case .extraEpg: return s.t("Extra guide", "Guia extra")
+        case .channelName: return s.r("channel_rename")
         case .backupPlaylist: return s.r("backup_playlist")
         case .backupMode: return s.r("backup_mode")
         case .backupChannels: return s.r("backup_channels")
@@ -674,6 +683,7 @@ struct SettingsPanel: View {
             var list: [Item] = [
                 .toggle("fav", s.t("Favourite", "Favorito"), model.isFavorite(channel), subtitle: channel.name) { _ in model.toggleFavorite(channel) },
                 .nav("audio", s.t("Audio", "Áudio"), value: trackName(player.audioTracks, player.currentAudio), to: .audio),
+                .nav("name", s.r("channel_rename"), value: channel.name, subtitle: s.r("channel_name_sub"), to: .channelName),
                 .nav("subs", s.t("Subtitles", "Legendas"), value: trackName(player.subtitleTracks, player.currentSubtitle), to: .subtitles),
                 pickItem("aspect"),
                 .nav("info", s.t("Stream info", "Informação do stream"), to: .streamInfo),
@@ -883,6 +893,8 @@ struct SettingsPanel: View {
                 }
             }
             list.append(.header("horg", s.t("Organise", "Organizar")))
+            list.append(.toggle("merge", s.r("merge_variants"), prefs.mergeVariants.contains(id), subtitle: s.r("merge_variants_sub")) { model.setMergeVariants(id, $0) })
+            if let rules = prefs.nameRules[id] { list.append(.info("rules", s.r("name_rules"), "\(rules.count) · thegoat.systems")) }
             if isCurrent {
                 let hidden = prefs.hiddenGroups.filter { $0.hasPrefix(id + ":") }.count
                 list.append(.nav("groups", s.groups, subtitle: hidden == 0 ? s.t("All visible", "Todos visíveis") : s.t("%@ hidden", "%@ escondidos", "\(hidden)"), to: .groups))
@@ -1125,7 +1137,7 @@ struct SettingsPanel: View {
             })
             return list
 
-        case .settingsGate, .parentalGate, .signOutGate, .newPin, .userAgent, .extraEpg, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report,
+        case .settingsGate, .parentalGate, .signOutGate, .newPin, .userAgent, .extraEpg, .channelName, .epgSearchOther, .groupsOrder, .channelsOrder, .formField, .report,
              .backupChannels, .backupChannelPick:
             return []
         }

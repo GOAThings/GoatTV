@@ -376,12 +376,16 @@ public enum ChannelMatch {
     /// [chosen]: a lista escolhida à mão (vazia = "nenhum"; nil = automático: o que o [matcher] encontrar, e nada no
     /// [manual]). Os escolhidos que já não existem (na reserva, ou na principal segundo [inMain]) ficam de fora, e o
     /// próprio canal também; se não sobrar nenhum, conta como sem escolha (como na lista "Canais de reserva").
-    public static func failovers(_ main: Entry, _ matcher: ChannelMatcher, chosen: [String]?, manual: Bool, inMain: (String) -> Bool) -> [String] {
+    /// No automático, primeiro as [variants] do canal na própria lista (chaves; ver ChannelVariants), também no [manual].
+    public static func failovers(_ main: Entry, _ matcher: ChannelMatcher, chosen: [String]?, manual: Bool, variants: [String] = [],
+                                 inMain: (String) -> Bool) -> [String] {
         let kept = chosen.map { existing($0, except: main.key, matcher, inMain) }
         if chosen?.isEmpty == true { return [] }
         if let kept, !kept.isEmpty { return kept }
-        guard let index = decide(main, matcher, override: nil, manual: manual).index else { return [] }
-        return [matcher.pool[index].key]
+        var seen = Set<String>()
+        let own = variants.filter { $0 != main.key && inMain($0) && seen.insert($0).inserted }.map(mainFailover)
+        guard let index = decide(main, matcher, override: nil, manual: manual).index else { return own }
+        return own + [matcher.pool[index].key]
     }
 
     /// Os failovers de [chosen] que ainda existem (na reserva, ou na principal segundo [inMain]), sem o próprio canal.

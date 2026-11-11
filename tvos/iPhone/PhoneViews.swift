@@ -1300,6 +1300,9 @@ private struct GuideSheet: View {
     @Environment(\.played) private var played
     let channel: Channel
     @State private var pickingLogo: Bool?
+    /// A mudar o nome do canal (o texto escrito; vazio volta ao da lista).
+    @State private var renaming = false
+    @State private var newName = ""
 
     var body: some View {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
@@ -1342,9 +1345,20 @@ private struct GuideSheet: View {
                     if let e = entries.first(where: { $0.endMs > now }) { proxy.scrollTo(e.startMs, anchor: .top) }
                 }
             }
-            .navigationTitle(channel.name)
+            .navigationTitle(model.content?.byKey[channel.key]?.name ?? channel.name)
             .navigationBarTitleDisplayMode(.inline)
+            .alert(model.strings.r("channel_rename"), isPresented: $renaming) {
+                TextField(channel.name, text: $newName)
+                Button(model.strings.t("Save", "Gravar")) { model.setChannelName(channel, newName) }
+                Button(model.strings.r("cancel"), role: .cancel) {}
+            } message: {
+                Text(model.strings.r("channel_name_sub"))
+            }
             .toolbar {
+                Button {
+                    newName = model.channelNameChoice(channel) ?? ""
+                    renaming = true
+                } label: { Image(systemName: "pencil") }
                 if model.hasAccount {
                     Menu {
                         Button(model.strings.t("Guide channel", "Canal do guia")) { pickingLogo = false }
@@ -1638,6 +1652,9 @@ private struct MenuTab: View {
             if model.playlists.count > 1 {
                 Button(s.r("backup_playlist") + ": " + (model.backupOf(pl.id)?.name ?? s.r("backup_playlist_none"))) { backupPlaylistFor = pl }
             }
+            // Juntar as versões do mesmo canal (HD, SD, FHD…) numa linha: liga e desliga.
+            let merged = model.prefs.mergeVariants.contains(pl.id)
+            Button(s.r("merge_variants") + ": " + (merged ? s.t("On", "Ligado") : s.t("Off", "Desligado"))) { model.setMergeVariants(pl.id, !merged) }
             Button(s.r("edit")) { editingPlaylist = pl }
             Button(s.r("remove_playlist"), role: .destructive) { removingPlaylist = pl }
             Button(s.r("cancel"), role: .cancel) {}

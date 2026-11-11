@@ -74,6 +74,13 @@ public struct Prefs: Equatable, Sendable {
     public var logoSource = LogoSource.playlist
     public var channelLogos: [String: String] = [:]
     public var extraEpg: [String: String] = [:]
+    /// As listas com as versões do mesmo canal juntas (`merge_variants`: playlistId → true; ver ChannelVariants).
+    /// Desligado por defeito.
+    public var mergeVariants: Set<String> = []
+    /// Regras para limpar os nomes dos canais (`name_rules`: playlistId → [{find, replace}], pela ordem; ver ChannelNames).
+    public var nameRules: [String: [NameRule]] = [:]
+    /// Nome escolhido canal a canal (`channel_names`: "playlistId:channelKey" → nome). Ganha às [nameRules].
+    public var channelNames: [String: String] = [:]
     /// Lista de reserva por lista (`backup_playlist`: playlistId → playlistId): o mesmo canal de outra lista quando um
     /// canal em direto não abre (ver ChannelMatch). Um mapa no `settings`, como o guia extra.
     public var backupPlaylist: [String: String] = [:]
@@ -249,6 +256,15 @@ public struct Prefs: Equatable, Sendable {
         }
         channelLogos = stringMap("channel_logos")
         extraEpg = stringMap("extra_epg").filter { $0.value.hasPrefix("http://") || $0.value.hasPrefix("https://") }
+        mergeVariants = Set((s["merge_variants"]?.object ?? [:]).filter { $0.value == .bool(true) }.keys)
+        nameRules = (s["name_rules"]?.object ?? [:]).compactMapValues { v -> [NameRule]? in
+            let rules = (v.array ?? []).compactMap { r -> NameRule? in
+                guard let o = r.object, let find = o["find"]?.string, !find.isEmpty else { return nil }
+                return NameRule(find: find, replace: o["replace"]?.string ?? "")
+            }
+            return rules.isEmpty ? nil : rules
+        }
+        channelNames = stringMap("channel_names").mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.value.isEmpty }
         backupPlaylist = stringMap("backup_playlist").filter { !$0.value.isEmpty && $0.value != $0.key }
         backupChannels = (s["backup_channels"]?.object ?? [:]).compactMapValues(Prefs.failovers)
         backupMode = stringMap("backup_mode").filter { $0.value == ChannelMatch.modeManual }

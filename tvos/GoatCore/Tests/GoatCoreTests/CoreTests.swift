@@ -19,6 +19,8 @@ enum CoreTests {
         ("channelMatchRanked", channelMatchRanked),
         ("channelMatchReview", channelMatchReview),
         ("channelMatchFailovers", channelMatchFailovers),
+        ("channelNames", channelNames),
+        ("channelVariants", channelVariants),
         ("channelIndex", channelIndex),
         ("bugReport", bugReport),
         ("stalker", stalker),
@@ -457,8 +459,14 @@ enum CoreTests {
             "show_numbers": false, "sort": "name", "info_seconds": 99, "logo_source": "pt", "stream_format": "m3u8",
             "hidden_groups": .strings(["p:g"]), "channel_order": .object(["p:g": .strings(["b", "a"])]),
             "parental_pin_sha256": .string(String(repeating: "a", count: 64)), "epg_refresh_hours": 7,
+            "merge_variants": .object(["p": true, "q": false]),
+            "name_rules": .object(["p": .array([.object(["find": "PT: ", "replace": ""]), .object(["replace": "x"])])]),
+            "channel_names": .object(["p:101": " RTP 1 ", "p:102": ""]),
         ])
         let p = Prefs(settings: s)
+        try expect(p.mergeVariants, ["p"])
+        try expect(p.nameRules["p"], [NameRule(find: "PT: ", replace: "")])
+        try expect(p.channelNames, ["p:101": "RTP 1"])
         try expect(p.showNumbers, false)
         try expect(p.sort, "name")
         try expect(p.infoSeconds, 30)

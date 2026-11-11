@@ -119,8 +119,25 @@ extension CoreTests {
             let target = ChannelMatch.Entry(key: t?["key"]?.string ?? "main", name: t?["name"]?.string ?? "", epgId: t?["epg"]?.string, group: t?["group"]?.string)
             let mainKeys = Set((c["mainKeys"]?.array ?? []).compactMap(\.string))
             let chosen = c["chosen"]?.array?.compactMap(\.string)
-            let result = ChannelMatch.failovers(target, ChannelMatcher(entries(c, "pool")), chosen: chosen, manual: c["manual"]?.bool == true, inMain: mainKeys.contains)
+            let variants = (c["variants"]?.array ?? []).compactMap(\.string)
+            let result = ChannelMatch.failovers(target, ChannelMatcher(entries(c, "pool")), chosen: chosen, manual: c["manual"]?.bool == true,
+                                                variants: variants, inMain: mainKeys.contains)
             try expect(result, (c["expect"]?.array ?? []).compactMap(\.string), label)
+        }
+    }
+
+    static func channelNames() throws {
+        for c in try channelMatchCases()["names"]?.array ?? [] {
+            let rules = (c["rules"]?.array ?? []).map { NameRule(find: $0["find"]?.string ?? "", replace: $0["replace"]?.string ?? "") }
+            try expect(ChannelNames.apply(c["name"]?.string ?? "", rules), c["expect"]?.string ?? "", c["case"]?.string ?? "")
+        }
+    }
+
+    static func channelVariants() throws {
+        for c in try channelMatchCases()["variants"]?.array ?? [] {
+            let channels = (c["channels"]?.array ?? []).map { (key: $0["key"]?.string ?? "", name: $0["name"]?.string ?? "") }
+            let expected = (c["expect"]?.object ?? [:]).mapValues { $0.array?.compactMap(\.string) ?? [] }
+            try expect(ChannelVariants.of(channels), expected, c["case"]?.string ?? "")
         }
     }
 }

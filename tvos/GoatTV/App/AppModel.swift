@@ -96,6 +96,12 @@ final class AppModel {
     var failoverQueue: [FailoverStream] = []
     var failoversFailed: [String] = []
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
+    /// A última vista de cada lista do segundo canal (ou da reserva), para não a refazer a cada pedido.
+    @ObservationIgnored private var secondViews: [String: (options: ContentView.Options, content: PlaylistContent)] = [:]
+    /// A lista aberta como veio do fornecedor: o [content] é ela com as opções da lista (nomes limpos, versões juntas;
+    /// ver ContentView), feitas com [shownOptions]. A cache e o índice da conta ficam com os canais como vieram.
+    @ObservationIgnored private var rawContent: PlaylistContent?
+    @ObservationIgnored private var shownOptions: ContentView.Options?
 
     /// O programa a ver em catch-up (nil = em direto).
     private(set) var catchup: Catchup?
@@ -400,6 +406,7 @@ final class AppModel {
             } else {
                 player.stop()
                 content = nil
+                rawContent = nil
                 current = nil
                 clearTopShelf()
                 screen = isLocal ? .newPlaylist : .noPlaylists
@@ -514,6 +521,7 @@ final class AppModel {
             if locksBefore.0 != prefs.pinHash || locksBefore.1 != prefs.lockedGroups { updateTopShelf() }
             guard let playlist = startPlaylist() else {
                 content = nil
+                rawContent = nil
                 player.stop()
                 screen = .noPlaylists
                 return
@@ -621,6 +629,8 @@ final class AppModel {
         // Pausar o direto: só no canal principal (o segundo abre o stream como sempre).
         player.timeshiftEnabled = prefs.timeshift
         Fonts.scale = CGFloat(Prefs.TextSize.scale(prefs.textSize)) * CGFloat(prefs.uiScale) / 100
+        // Juntar versões, regras ou nomes da lista aberta mudaram (aqui ou noutro sítio): ela refaz-se.
+        reapplyContentOptions()
     }
 
     /// Muda uma definição da conta (nil repõe o padrão) e grava-a; vale também para as outras TVs.
@@ -676,6 +686,28 @@ final class AppModel {
         if let clean, clean.hasPrefix("http://") || clean.hasPrefix("https://") { map[playlistId] = clean } else { map.removeValue(forKey: playlistId) }
         setPref("extra_epg", .object(map.mapValues { JSON.string($0) }))
         if content?.playlist.id == playlistId { loadGuides(force: true) }
+    }
+
+    /// "Juntar versões do mesmo canal" na lista [playlistId] (ver ContentView).
+    func setMergeVariants(_ playlistId: String, _ on: Bool) {
+        var set = prefs.mergeVariants
+        if on { set.insert(playlistId) } else { set.remove(playlistId) }
+        setPref("merge_variants", .object(Dictionary(uniqueKeysWithValues: set.map { ($0, JSON.bool(true)) })))
+    }
+
+    /// O nome de [channel] escolhido à mão na lista aberta, ou nil (o da lista, com as regras dela).
+    func channelNameChoice(_ channel: Channel) -> String? {
+        guard let id = content?.playlist.id else { return nil }
+        return prefs.channelNames["\(id):\(channel.key)"]
+    }
+
+    /// Muda o nome de [channel] na lista aberta; vazio (ou nil) volta ao da lista.
+    func setChannelName(_ channel: Channel, _ name: String?) {
+        guard let id = content?.playlist.id else { return }
+        var map = prefs.channelNames
+        let key = "\(id):\(channel.key)"
+        if let clean = name?.trimmingCharacters(in: .whitespacesAndNewlines), !clean.isEmpty { map[key] = clean } else { map.removeValue(forKey: key) }
+        setPref("channel_names", .object(map.mapValues { JSON.string($0) }))
     }
 
     /// Volta a descarregar os canais da lista em uso.
@@ -908,6 +940,7 @@ final class AppModel {
         clearTopShelf()
         backend.token = nil
         content = nil
+        rawContent = nil
         current = nil
         previous = nil
         unlocked = []
@@ -1002,11 +1035,15 @@ final class AppModel {
         }
     }
 
-    /// Põe a lista no ecrã. [resume]: abre o último canal visto (ou o primeiro).
-    private func show(_ loaded: PlaylistContent, resume: Bool) {
+    /// Põe a lista no ecrã ([raw], como veio; mostra-se com as opções dela). [resume]: abre o último canal visto (ou o primeiro).
+    private func show(_ raw: PlaylistContent, resume: Bool) {
+        let options = ContentView.options(prefs, playlistId: raw.playlist.id)
+        let loaded = ContentView.apply(raw, options)
         let samePlaylist = content?.playlist.id == loaded.playlist.id
+        rawContent = raw
+        shownOptions = options
         content = loaded
-        uploadIndex(loaded)
+        uploadIndex(raw)
         screen = .player
         if !samePlaylist {
             accountGuide = nil
@@ -1380,18 +1417,34 @@ final class AppModel {
         return (main.account?.maxConnections ?? 0) >= 2
     }
 
-    /// Os canais de [playlist] para escolher o segundo canal (a lista em uso, da cache, ou descarregados).
+    /// Os canais de [playlist] para escolher o segundo canal (a lista em uso, da cache, ou descarregados), com as opções dela.
     func loadForSecond(_ playlist: Playlist) async throws -> PlaylistContent {
         if let content, content.playlist.id == playlist.id { return content }
-        if let loaded = secondContents[playlist.id] { return loaded }
         let loaded: PlaylistContent
-        if let cached = cachedContent(for: playlist) {
+        if let known = secondContents[playlist.id] {
+            loaded = known
+        } else if let cached = cachedContent(for: playlist) {
             loaded = cached
         } else {
             loaded = try await loader.load(playlist)
         }
         secondContents[playlist.id] = loaded
-        return loaded
+        let options = ContentView.options(prefs, playlistId: playlist.id)
+        if let v = secondViews[playlist.id], v.options == options, v.content.fetchedAt == loaded.fetchedAt { return v.content }
+        let viewed = ContentView.apply(loaded, options)
+        secondViews[playlist.id] = (options, viewed)
+        return viewed
+    }
+
+    /// As definições mudaram: se as opções da lista aberta (juntar versões, regras, nomes) são outras, ela refaz-se.
+    private func reapplyContentOptions() {
+        guard let raw = rawContent else { return }
+        let options = ContentView.options(prefs, playlistId: raw.playlist.id)
+        guard options != shownOptions else { return }
+        shownOptions = options
+        let viewed = ContentView.apply(raw, options)
+        content = viewed
+        if let current, let updated = viewed.byKey[current.key] { self.current = updated }
     }
 
     private func secondLibrary(_ c: PlaylistContent) -> Library {
