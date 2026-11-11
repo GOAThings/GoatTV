@@ -19,8 +19,8 @@ import UIKit
 /// stream cair, volta a ligar ao fim de uns segundos. Com "Igualar a frame rate", a TV muda para a cadência e o
 /// HDR do canal (Definições do Apple TV → Vídeo e áudio → Igualar conteúdo).
 /// Em direto, com "Pausar o direto", um .ts é gravado num anel em disco e o VLC lê-o de lá (ver Timeshift).
-/// Experimental: com o motor "aether" (Definições → Player), tudo abre no AetherEngine (ver AetherPlayback), com a
-/// pausa do direto dele.
+/// Experimental: com o motor "aether" (Definições → Player), os HLS abrem no da Apple e o resto no AetherEngine (ver
+/// AetherPlayback), com a pausa do direto dele; o VLC fica para o que nenhum dos dois abrir.
 @MainActor
 @Observable
 final class PlayerEngine: NSObject {
@@ -109,7 +109,7 @@ final class PlayerEngine: NSObject {
     /// Dolby/DTS seguem tal como vêm para o recetor ou a TV (no VLC; o da Apple trata disso sozinho).
     @ObservationIgnored var passthrough = true
     /// "exo" (o normal: o da Apple nos HLS, o VLC no resto) ou "vlc" (sempre o VLC). As mesmas chaves do Android.
-    /// "aether": sempre o AetherEngine (experimental, só aqui; o Android lê-o como "exo").
+    /// "aether": o da Apple nos HLS, o AetherEngine no resto (experimental, só aqui; o Android lê-o como "exo").
     @ObservationIgnored var engine = "exo"
     /// Descodificar em software no VLC (para streams que o hardware não abre bem).
     @ObservationIgnored var softwareDecoder = false
@@ -311,9 +311,14 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var linkResolver: (() async -> [StreamCandidate]?)?
 
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
-        // AetherEngine: cada forma (ts ⇄ m3u8) abre só nele, sem o da Apple nem o VLC a seguir.
+        // AetherEngine: um HLS abre primeiro no da Apple (o mais rápido a mudar de canal) e, se não der, no AetherEngine;
+        // o resto (.ts…) abre no AetherEngine e, em último caso, no VLC.
         if engine == "aether" {
-            return candidates.enumerated().map { i, c in Attempt(candidate: c, backend: .aether, candidateIndex: i) }
+            return candidates.enumerated().flatMap { i, c -> [Attempt] in
+                c.isHLS
+                    ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .aether, candidateIndex: i)]
+                    : [Attempt(candidate: c, backend: .aether, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
         }
         return candidates.enumerated().flatMap { i, c -> [Attempt] in
             engine != "vlc" && c.isHLS
@@ -1004,7 +1009,6 @@ final class PlayerEngine: NSObject {
         r.audioDelaySeconds = Double(audioDelayMs) / 1000
         // O motor desentrelaça sozinho o que é entrelaçado (não dá para desligar): "normal" é a 25/30 imagens.
         r.fieldRate = deinterlace != "yadif"
-        r.software = softwareDecoder
         r.singleConnection = ownsProviderConnection
         r.secondary = !controlsDisplay
         // O modo da TV (frame rate e HDR) muda-o o próprio motor, quando o AFR está ligado e o HDR não está em "SDR".
