@@ -75,7 +75,7 @@ struct NowStrip: View {
                                 pill("record.circle", s.r("record")) { model.recordNow(channel) }
                             }
                         }
-                        ForEach(PlayerOption.allCases) { option in
+                        ForEach(PlayerOption.shown(model)) { option in
                             // Com o temporizador ligado, o botão diz quanto falta.
                             let sleeping = option == .sleep ? model.sleepAt : nil
                             pill(option.symbol, sleeping.map { "\(Int($0.timeIntervalSinceNow / 60) + 1) min" } ?? s.r(option.key),

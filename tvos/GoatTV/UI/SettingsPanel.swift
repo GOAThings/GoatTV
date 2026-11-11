@@ -35,6 +35,8 @@ struct SettingsPanel: View {
         case pick(String)
         case userAgent
         case extraEpg(String)
+        /// A lista de reserva de uma lista (nenhuma, ou outra das listas).
+        case backupPlaylist(String)
         /// Escolher o guia (ou, com logo, o logótipo) de um canal: sugestões e pesquisa pelo nome.
         case epgPick(String, Bool, String)
         /// Os canais de guia de um país (os da pesquisa, ou todos com nil).
@@ -160,6 +162,8 @@ struct SettingsPanel: View {
             try? await Task.sleep(for: .milliseconds(60))
             focus = pendingFocus ?? firstFocus
             pendingFocus = nil
+            // A página de uma lista com reserva conta, por trás, os canais que a reserva tem.
+            if case .playlist(let id) = page { model.checkBackupCoverage(id) }
             await loadRemote(page)
             if focus == nil || focus == "loading" { focus = firstFocus }
         }
@@ -241,7 +245,12 @@ struct SettingsPanel: View {
         default: break
         }
         let list = items(page)
-        if case .pick = page, let checked = list.first(where: { if case .check(_, _, true, _, _, _) = $0 { return true } else { return false } }) {
+        var picking = false
+        switch page {
+        case .pick, .backupPlaylist: picking = true
+        default: break
+        }
+        if picking, let checked = list.first(where: { if case .check(_, _, true, _, _, _) = $0 { return true } else { return false } }) {
             return checked.id
         }
         return list.first(where: \.focusable)?.id
@@ -608,6 +617,7 @@ struct SettingsPanel: View {
         case .report: return s.r("send_report")
         case .channelsOrder(let g): return model.allGroups.first { $0.id == g }?.name ?? s.t("Reorder channels", "Reordenar canais")
         case .extraEpg: return s.t("Extra guide", "Guia extra")
+        case .backupPlaylist: return s.r("backup_playlist")
         }
     }
 
@@ -845,6 +855,11 @@ struct SettingsPanel: View {
                 if isCurrent { model.reloadPlaylist() } else { model.switchPlaylist(playlist) }
                 onClose()
             })
+            // Lista de reserva: quando um canal em direto não abre aqui, o mesmo canal de outra lista (como no Android).
+            if model.playlists.contains(where: { $0.id != id }) {
+                list.append(.nav("backup", s.r("backup_playlist"), value: model.backupOf(id)?.name ?? s.r("backup_playlist_none"),
+                                 subtitle: model.backupSubtitle(id), to: .backupPlaylist(id)))
+            }
             list.append(.header("horg", s.t("Organise", "Organizar")))
             if isCurrent {
                 let hidden = prefs.hiddenGroups.filter { $0.hasPrefix(id + ":") }.count
@@ -983,6 +998,19 @@ struct SettingsPanel: View {
                 .info("goattv", "GoatTV", "GPL-3.0"),
                 .info("vlc", "VLC (TVVLCKit)", "LGPL-2.1"),
             ]
+
+        case .backupPlaylist(let id):
+            let current = model.backupOf(id)?.id
+            let none: Item = .check("none", s.r("backup_playlist_none"), current == nil) {
+                model.setBackupPlaylist(id, nil)
+                back()
+            }
+            return [none] + model.playlists.filter { $0.id != id }.map { p in
+                .check("b:" + p.id, p.name, current == p.id) {
+                    model.setBackupPlaylist(id, p.id)
+                    back()
+                }
+            }
 
         case .pick(let key):
             let sp = spec(key)

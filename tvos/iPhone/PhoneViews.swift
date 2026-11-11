@@ -752,7 +752,7 @@ private struct VideoPane: View {
                                 hudPill("list.bullet", s.r("search_channels"), action: rotate)
                             }
                         }
-                        ForEach(PlayerOption.allCases) { o in
+                        ForEach(PlayerOption.shown(model)) { o in
                             hudButton(o.symbol) { option = o; touched += 1 }
                         }
                     }
@@ -1038,13 +1038,14 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, sleep
+    case audio, subtitles, backup, sleep
 
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .audio: "music.note"
         case .subtitles: "captions.bubble"
+        case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
         }
     }
@@ -1052,8 +1053,15 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         switch self {
         case .audio: "audio"
         case .subtitles: "subtitles"
+        case .backup: "backup_channel"
         case .sleep: "sleep_timer"
         }
+    }
+
+    /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva.
+    @MainActor static func shown(_ model: AppModel) -> [PlayerOption] {
+        let backup = model.catchup == nil && model.content.flatMap { model.backupOf($0.playlist.id) } != nil
+        return allCases.filter { $0 != .backup || backup }
     }
 }
 
@@ -1065,8 +1073,16 @@ struct PlayerOptionsSheet: View {
     let option: PlayerOption
 
     var body: some View {
+        if option == .backup, let channel = model.current {
+            PhoneBackupChannelSheet(channel: channel)
+        } else {
+            options
+        }
+    }
+
+    private var options: some View {
         let s = model.strings
-        NavigationStack {
+        return NavigationStack {
             List {
                 switch option {
                 case .audio:
@@ -1081,6 +1097,8 @@ struct PlayerOptionsSheet: View {
                     ForEach(tracks, id: \.id) { track in
                         row(track.id < 0 ? s.r("subtitles_off") : track.name, track.id == player.currentSubtitle) { player.selectSubtitle(track.id) }
                     }
+                case .backup:
+                    EmptyView()
                 case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }
                     ForEach([15, 30, 45, 60, 90, 120], id: \.self) { minutes in
@@ -1478,6 +1496,8 @@ private struct MenuTab: View {
     /// A lista tocada (usar, recarregar, editar, remover), a que se edita e a que se vai remover.
     @State private var openedPlaylist: Playlist?
     @State private var editingPlaylist: Playlist?
+    /// A lista cuja lista de reserva se está a escolher.
+    @State private var backupPlaylistFor: Playlist?
     @State private var removingPlaylist: Playlist?
     @State private var confirmingSignOut = false
     @State private var confirmingPinOff = false
@@ -1597,6 +1617,10 @@ private struct MenuTab: View {
             let current = pl.id == model.content?.playlist.id
             if !current { Button(s.r("use_playlist")) { model.switchPlaylist(pl) } }
             Button(s.r("reload_channels")) { if current { model.reloadPlaylist() } else { model.switchPlaylist(pl) } }
+            // A lista de reserva (como na TV): o mesmo canal de outra lista quando um canal em direto não abre nesta.
+            if model.playlists.count > 1 {
+                Button(s.r("backup_playlist") + ": " + (model.backupOf(pl.id)?.name ?? s.r("backup_playlist_none"))) { backupPlaylistFor = pl }
+            }
             Button(s.r("edit")) { editingPlaylist = pl }
             Button(s.r("remove_playlist"), role: .destructive) { removingPlaylist = pl }
             Button(s.r("cancel"), role: .cancel) {}
@@ -1614,6 +1638,9 @@ private struct MenuTab: View {
         }
         .sheet(isPresented: Binding(get: { editingPlaylist != nil }, set: { if !$0 { editingPlaylist = nil } })) {
             if let pl = editingPlaylist { PlaylistFormPage(editing: pl) { editingPlaylist = nil } }
+        }
+        .sheet(isPresented: Binding(get: { backupPlaylistFor != nil }, set: { if !$0 { backupPlaylistFor = nil } })) {
+            if let pl = backupPlaylistFor { PhoneBackupPlaylistPicker(playlist: pl) { backupPlaylistFor = nil } }
         }
         .alert(s.r("logout"), isPresented: $confirmingSignOut) {
             Button(s.r("logout"), role: .destructive) {
@@ -2003,5 +2030,144 @@ private struct PlaylistFormPage: View {
                 }
             }
         }
+    }
+}
+
+/// A lista de reserva de uma lista: nenhuma ou outra das listas; por baixo, quantos canais ela tem (como na TV).
+private struct PhoneBackupPlaylistPicker: View {
+    @Environment(AppModel.self) private var model
+    let playlist: Playlist
+    let onClose: () -> Void
+
+    var body: some View {
+        let s = model.strings
+        let current = model.backupOf(playlist.id)?.id
+        NavigationStack {
+            List {
+                Section {
+                    row(s.r("backup_playlist_none"), current == nil) { model.setBackupPlaylist(playlist.id, nil) }
+                    ForEach(model.playlists.filter { $0.id != playlist.id }) { p in
+                        row(p.name, current == p.id) { model.setBackupPlaylist(playlist.id, p.id) }
+                    }
+                } footer: {
+                    Text(model.backupSubtitle(playlist.id))
+                }
+            }
+            .navigationTitle(s.r("backup_playlist"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(s.r("done")) { onClose() } } }
+        }
+        .task(id: current) { model.checkBackupCoverage(playlist.id) }
+    }
+
+    private func row(_ title: String, _ checked: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title).foregroundStyle(Theme.text)
+                Spacer()
+                if checked { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+            }
+        }
+    }
+}
+
+/// O canal de reserva do canal a ver (como o painel da TV, ver BackupChannelPanel): o automático, os parecidos, a
+/// pesquisa na reserva e "nenhum"; escolher grava, "Experimentar agora" dá-o já.
+private struct PhoneBackupChannelSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let channel: Channel
+    @State private var choices: BackupChoices?
+    @State private var loading = true
+    @State private var query = ""
+    @State private var results: [Channel] = []
+
+    var body: some View {
+        let s = model.strings
+        NavigationStack {
+            List {
+                if loading {
+                    Text(s.r("backup_checking")).foregroundStyle(Theme.textFaint)
+                } else if let choices {
+                    Section {
+                        let effective = choices.effective
+                        Button {
+                            if let effective {
+                                model.tryBackup(effective)
+                                dismiss()
+                            }
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(s.r("backup_channel_try")).foregroundStyle(Theme.text)
+                                    if let effective { Text(effective.name).font(.footnote).foregroundStyle(Theme.textFaint) }
+                                }
+                            } icon: { Image(systemName: "play.fill") }
+                        }
+                        .disabled(effective == nil)
+                        row(s.r("backup_channel_auto"), model.backupAutoLabel(choices), choices.choice == nil) { pick(nil) }
+                        row(s.r("backup_channel_off"), nil, choices.choice == ChannelMatch.off) { pick(ChannelMatch.off) }
+                    }
+                    let chosen = choices.choice.flatMap { choices.content.byKey[$0] }
+                    let similar = unique([chosen].compactMap { $0 } + choices.similar)
+                    if !similar.isEmpty {
+                        Section(s.r("backup_channel_similar")) {
+                            ForEach(similar, id: \.key) { c in channelRow(c, choices) }
+                        }
+                    }
+                    Section(s.r("backup_channel_results")) {
+                        TextField(s.r("backup_channel_search", choices.backup.name), text: $query)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        ForEach(results, id: \.key) { c in channelRow(c, choices) }
+                    }
+                } else {
+                    Text(s.r("backup_unavailable", model.content.flatMap { model.backupOf($0.playlist.id)?.name } ?? "")).foregroundStyle(Theme.textFaint)
+                }
+            }
+            .navigationTitle(s.r("backup_channel"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("close")) { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .task {
+            choices = await model.backupChoices(channel)
+            loading = false
+        }
+        .task(id: query) {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, let choices else { return }
+            results = model.searchBackup(choices, query)
+        }
+    }
+
+    private func pick(_ value: String?) {
+        guard let main = model.content?.playlist.id else { return }
+        choices?.choice = value
+        model.setBackupChoice(main, channel.key, value)
+    }
+
+    private func channelRow(_ c: Channel, _ choices: BackupChoices) -> some View {
+        let auto = c.key == choices.autoChannel?.key ? model.strings.r("backup_channel_auto") : nil
+        let subtitle = [choices.content.categoryName(c.categoryId), auto].compactMap { $0 }.joined(separator: " · ")
+        return row(c.name, subtitle, choices.choice == c.key) { pick(c.key) }
+    }
+
+    private func row(_ title: String, _ subtitle: String?, _ checked: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(title).foregroundStyle(Theme.text)
+                    if let subtitle, !subtitle.isEmpty { Text(subtitle).font(.footnote).foregroundStyle(Theme.textFaint) }
+                }
+                Spacer()
+                if checked { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+            }
+        }
+    }
+
+    private func unique(_ list: [Channel]) -> [Channel] {
+        var seen = Set<String>()
+        return list.filter { seen.insert($0.key).inserted }
     }
 }
