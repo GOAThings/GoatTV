@@ -271,7 +271,7 @@ final class PlayerEngine: NSObject {
 
     // MARK: Canais HDR no AetherEngine
 
-    /// O canal aberto é (ou parece) HDR: o nome diz HDR/UHD/4K ou o AetherEngine já lá viu HDR.
+    /// O canal aberto é HDR: o AetherEngine já lá viu HDR (ou o VLC deu-o em HEVC 4K).
     @ObservationIgnored private var openedHDR = false
     /// Os canais onde o AetherEngine viu HDR (ou que o VLC deu em HEVC 4K): abrem logo nele. Só neste aparelho.
     @ObservationIgnored private var hdrChannels = Set(UserDefaults.standard.stringArray(forKey: "aether_hdr_channels") ?? [])
@@ -295,10 +295,6 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    /// Nome com "HDR", "UHD" ou "4K" como palavra.
-    static func nameSaysHDR(_ name: String) -> Bool {
-        name.uppercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { ["HDR", "HDR10", "UHD", "4K", "2160P"].contains(String($0)) }
-    }
     /// Qual das [attempts] se está a abrir e se se chegou lá por uma recusa (então o formato não se aprende).
     @ObservationIgnored private var fallback = FormatFallback()
     private var index: Int { fallback.index }
@@ -371,9 +367,8 @@ final class PlayerEngine: NSObject {
     /// abre onde se parar, e uma mudança nova pelo meio cancela a espera. Voltar ao canal que ainda está a dar (a mesma
     /// lista outra vez, a lista que deu a volta) não abre nada.
     /// [startMs]: abrir já tanto depois do início do vídeo (o catch-up do Stalker, que é a gravação do programa todo).
-    /// [name]: o nome do canal ("HDR", "UHD" ou "4K" nele abre no AetherEngine).
     func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
-              pausable: Bool = false, startMs: Int64 = 0, name: String? = nil, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+              pausable: Bool = false, startMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         let same = openedKey == channelKey
         if !same || live != openedLive { speed = 1 }
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
@@ -402,7 +397,7 @@ final class PlayerEngine: NSObject {
         let agent = userAgent.map(SafeInput.stripControl) ?? ""
         self.userAgent = agent.isEmpty ? iptvUserAgent : agent
         self.referrer = referrer.map(SafeInput.stripControl)
-        openedHDR = hdrChannels.contains(channelKey) || name.map(Self.nameSaysHDR) == true
+        openedHDR = hdrChannels.contains(channelKey)
         // Num HLS, primeiro o leitor da Apple e, se não abrir, o VLC com o mesmo endereço.
         attempts = makeAttempts(candidates)
         fallback.restart()
