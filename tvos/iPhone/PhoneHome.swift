@@ -191,7 +191,8 @@ private struct GroupTile: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     ForEach(channels.prefix(3)) { channel in
-                        ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 28, height: 18))
+                        // Com os logos desligados, só as iniciais (um buraco ficava mal no cartão).
+                        ChannelLogo(url: model.prefs.showLogos ? model.logo(for: channel) : nil, name: channel.name, size: CGSize(width: 28, height: 18))
                             .frame(width: 34, height: 24)
                             .background(tileFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     }

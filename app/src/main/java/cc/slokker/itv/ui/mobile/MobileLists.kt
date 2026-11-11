@@ -156,7 +156,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                     caption(s.searchNow)
                     items(live, key = { "n" + it.channel.uid + it.programme!!.startMs }) { h ->
                         val e = h.programme!!
-                        ResultRow(h.channel, e.title, "${h.channel.name} · ${formatTime(e.startMs)} – ${formatTime(e.endMs)}", e.progress(now), action = s.watch, onLong = { onEpg(h.channel) }) {
+                        ResultRow(h.channel, e.title, "${h.channel.name} · ${formatTime(e.startMs)} – ${formatTime(e.endMs)}", e.progress(now), rows.showLogos, action = s.watch, onLong = { onEpg(h.channel) }) {
                             rememberQuery(query)
                             vm.play(h.channel, vm.groupFor(h.channel))
                             played()
@@ -167,7 +167,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                     caption(s.searchLater)
                     items(later, key = { "l" + it.channel.uid + it.programme!!.startMs }) { h ->
                         val e = h.programme!!
-                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, bell = rows.reminded(h.channel, e), onLong = { onEpg(h.channel) }) {
+                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, rows.showLogos, bell = rows.reminded(h.channel, e), onLong = { onEpg(h.channel) }) {
                             rememberQuery(query)
                             vm.toggleReminder(h.channel, e)
                         }
@@ -177,7 +177,7 @@ internal fun PhoneSearch(vm: AppViewModel, current: Channel, onEpg: (Channel) ->
                     caption(s.searchPast)
                     items(past, key = { "p" + it.channel.uid + it.programme!!.startMs }) { h ->
                         val e = h.programme!!
-                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, action = s.watchAgain, onLong = { onEpg(h.channel) }) {
+                        ResultRow(h.channel, e.title, "${dayLabel(s, e.startMs)} ${formatTime(e.startMs)} · ${h.channel.name}", null, rows.showLogos, action = s.watchAgain, onLong = { onEpg(h.channel) }) {
                             rememberQuery(query)
                             vm.playCatchup(h.channel, e)
                             played()
@@ -209,14 +209,16 @@ private fun Pill(label: String, on: Boolean, onClick: () -> Unit) {
 /** Um programa encontrado: logótipo, título, quando e onde, e o que o toque faz (Ver, lembrete, rever). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ResultRow(channel: Channel, title: String, sub: String, progress: Float?, action: String? = null, bell: Boolean? = null, onLong: () -> Unit, onClick: () -> Unit) {
+private fun ResultRow(channel: Channel, title: String, sub: String, progress: Float?, showLogo: Boolean, action: String? = null, bell: Boolean? = null, onLong: () -> Unit, onClick: () -> Unit) {
     val accent = LocalAccent.current
     Row(
         Modifier.fillMaxWidth().clip(PhoneShapes.List).combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
-        Spacer(Modifier.width(14.dp))
+        if (showLogo) {
+            Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
+            Spacer(Modifier.width(14.dp))
+        }
         Column(Modifier.weight(1f)) {
             Text(title, color = ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(sub, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -263,8 +265,10 @@ internal fun PhoneFavorites(vm: AppViewModel, current: Channel, onEpg: (Channel)
             LazyColumn(contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 12.dp, bottom = LocalBarSpace.current)) {
                 items(channels, key = { it.uid }) { ch ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(ch, 38.dp) }
-                        Spacer(Modifier.width(14.dp))
+                        if (prefs.showLogos) {
+                            Box(Modifier.size(56.dp, 38.dp), contentAlignment = Alignment.Center) { ChannelLogo(ch, 38.dp) }
+                            Spacer(Modifier.width(14.dp))
+                        }
                         Text(ch.name, color = ItvColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         listOf(-1 to -90f, 1 to 90f).forEach { (delta, angle) ->
                             Icon(
@@ -284,7 +288,7 @@ internal fun PhoneFavorites(vm: AppViewModel, current: Channel, onEpg: (Channel)
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(channels, key = { it.uid }) { ch ->
-                FavoriteCard(vm, ch, playing = ch.key == current.key, onLong = { onEpg(ch) }) {
+                FavoriteCard(vm, ch, playing = ch.key == current.key, showLogo = prefs.showLogos, onLong = { onEpg(ch) }) {
                     vm.play(ch, SpecialCategory.FAVORITES)
                     played()
                 }
@@ -306,7 +310,7 @@ internal fun PhoneFavorites(vm: AppViewModel, current: Channel, onEpg: (Channel)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, onLong: () -> Unit, onClick: () -> Unit) {
+private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, showLogo: Boolean, onLong: () -> Unit, onClick: () -> Unit) {
     val accent = LocalAccent.current
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
@@ -318,7 +322,7 @@ private fun FavoriteCard(vm: AppViewModel, channel: Channel, playing: Boolean, o
             ),
             contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.size(72.dp, 48.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp) }
+            Box(Modifier.size(72.dp, 48.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) { ChannelLogo(channel, 38.dp, initials = !showLogo) }
             Icon(ItvIcons.Star, null, tint = PhoneColors.FavoriteGold, modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(16.dp))
         }
         Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {

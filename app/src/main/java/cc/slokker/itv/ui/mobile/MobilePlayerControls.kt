@@ -366,8 +366,10 @@ internal fun VideoArea(
                 val programme = cu?.let { EpgEntry(it.title, it.startMs, it.endMs) } ?: entry
                 val next = if (cu == null) vm.programmes(channel, epg).after(entry, now) else null
                 Row(verticalAlignment = Alignment.Bottom) {
-                    HudLogo(channel, Modifier.size(if (fullscreen) 92.dp else 56.dp, if (fullscreen) 52.dp else 32.dp))
-                    Spacer(Modifier.width(if (fullscreen) 16.dp else 10.dp))
+                    if (prefs.showLogos) {
+                        HudLogo(channel, Modifier.size(if (fullscreen) 92.dp else 56.dp, if (fullscreen) 52.dp else 32.dp))
+                        Spacer(Modifier.width(if (fullscreen) 16.dp else 10.dp))
+                    }
                     Column(Modifier.weight(1f)) {
                         if (fullscreen) {
                             Text(

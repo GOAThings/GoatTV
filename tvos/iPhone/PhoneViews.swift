@@ -718,8 +718,10 @@ private struct VideoPane: View {
             let programme: EpgEntry? = model.catchup.map { EpgEntry(title: $0.title, startMs: $0.startMs, endMs: $0.endMs) } ?? pair.now
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .bottom, spacing: fullscreen ? 16 : 10) {
-                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: fullscreen ? CGSize(width: 92, height: 52) : CGSize(width: 56, height: 32))
-                        .shadow(color: .black.opacity(0.6), radius: 6)
+                    if model.prefs.showLogos {
+                        ChannelLogo(url: model.logo(for: channel), name: channel.name, size: fullscreen ? CGSize(width: 92, height: 52) : CGSize(width: 56, height: 32))
+                            .shadow(color: .black.opacity(0.6), radius: 6)
+                    }
                     VStack(alignment: .leading, spacing: 1) {
                         if fullscreen {
                             Text((model.prefs.showNumbers ? "\(channel.num)  " : "") + channel.name + (model.isFavorite(channel) ? "  ★" : ""))

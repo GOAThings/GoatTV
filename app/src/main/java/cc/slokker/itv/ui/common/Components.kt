@@ -95,10 +95,13 @@ fun Logo(modifier: Modifier = Modifier, size: Int = 32) {
     }
 }
 
-/** Logo do canal (o escolhido nas Definições, ou o da lista), ou as iniciais quando não há logo / falha a carregar. */
+/**
+ * Logo do canal (o escolhido nas Definições, ou o da lista), ou as iniciais quando não há logo / falha a carregar.
+ * [initials]: só as iniciais (os logos desligados, nos cartões onde um buraco ficava mal).
+ */
 @Composable
-fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier) {
-    LogoImage(LocalChannelLogos.current[channel.key] ?: channel.logo, channel.name, size, modifier)
+fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier, initials: Boolean = false) {
+    LogoImage(if (initials) null else LocalChannelLogos.current[channel.key] ?: channel.logo, channel.name, size, modifier)
 }
 
 /** Um logótipo [logo], ou as iniciais de [name] quando é null ou falha a carregar. */

@@ -146,7 +146,7 @@ internal fun MobileHome(
         items(tiles.chunked(2)) { pair ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { g ->
-                    GroupTile(vm, g, Modifier.weight(1f)) { if (g.locked) onLockedGroup(g.id) else onGroup(g.id) }
+                    GroupTile(vm, g, prefs.showLogos, Modifier.weight(1f)) { if (g.locked) onLockedGroup(g.id) else onGroup(g.id) }
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
@@ -227,16 +227,16 @@ private fun ContinueCard(vm: AppViewModel, channel: Channel, first: Boolean, onC
     }
 }
 
-/** Um grupo: até três logótipos dos canais dele, o nome e quantos canais tem. Os bloqueados pedem o PIN. */
+/** Um grupo: até três logótipos dos canais dele (só as iniciais, com os logos desligados), o nome e quantos canais tem. Os bloqueados pedem o PIN. */
 @Composable
-private fun GroupTile(vm: AppViewModel, group: GroupTileInfo, modifier: Modifier, onClick: () -> Unit) {
+private fun GroupTile(vm: AppViewModel, group: GroupTileInfo, showLogos: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val s = LocalStrings.current
     val channels = remember(group.id, group.locked) { if (group.locked) emptyList() else vm.channelsOf(group.id) }
     Column(modifier.clip(PhoneShapes.Tile).background(PhoneColors.Tile).clickable(onClick = onClick).padding(14.dp)) {
         Row(Modifier.height(24.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             channels.take(3).forEach { ch ->
                 Box(Modifier.size(width = 34.dp, height = 24.dp).clip(RoundedCornerShape(6.dp)).background(PhoneColors.Tile), contentAlignment = Alignment.Center) {
-                    ChannelLogo(ch, 20.dp)
+                    ChannelLogo(ch, 20.dp, initials = !showLogos)
                 }
             }
         }

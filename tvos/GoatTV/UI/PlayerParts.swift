@@ -57,7 +57,9 @@ struct ChannelGuidePanel: View {
         let list = model.programmes(for: channel).filter { $0.endMs > now }.prefix(14)
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 16) {
-                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 84, height: 52))
+                if model.prefs.showLogos {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 84, height: 52))
+                }
                 Text(channel.name).font(.title3.bold()).lineLimit(1)
             }
             .padding(.bottom, 8)

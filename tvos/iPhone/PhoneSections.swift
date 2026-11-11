@@ -474,7 +474,9 @@ struct PhoneSearch: View {
     private func result(_ channel: Channel, _ title: String, _ sub: String, progress: Double? = nil, action: String? = nil, bell: Bool? = nil, tap: @escaping () -> Void) -> some View {
         Button(action: tap) {
             HStack(spacing: 14) {
-                ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 56, height: 38))
+                if model.prefs.showLogos {
+                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 56, height: 38))
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.body.weight(.semibold)).lineLimit(1)
                     Text(sub).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
@@ -574,7 +576,9 @@ struct PhoneFavorites: View {
                     LazyVStack(spacing: 0) {
                         ForEach(channels) { ch in
                             HStack(spacing: 14) {
-                                ChannelLogo(url: model.logo(for: ch), name: ch.name, size: CGSize(width: 56, height: 38))
+                                if model.prefs.showLogos {
+                                    ChannelLogo(url: model.logo(for: ch), name: ch.name, size: CGSize(width: 56, height: 38))
+                                }
                                 Text(ch.name).font(.body.weight(.semibold)).lineLimit(1)
                                 Spacer(minLength: 0)
                                 Button { model.moveFavorite(ch, by: -1) } label: { Image(systemName: "chevron.up").frame(width: 40, height: 40) }
@@ -615,7 +619,8 @@ struct PhoneFavorites: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     RadialGradient(colors: [Theme.sky.opacity(playing ? 0.35 : 0.16), .clear], center: .topLeading, startRadius: 0, endRadius: 160)
-                    ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 58, height: 38))
+                    // Com os logos desligados, só as iniciais (um buraco ficava mal no cartão).
+                    ChannelLogo(url: model.prefs.showLogos ? model.logo(for: channel) : nil, name: channel.name, size: CGSize(width: 58, height: 38))
                         .frame(width: 72, height: 48)
                         .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
