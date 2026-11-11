@@ -252,6 +252,16 @@ internal fun VideoArea(
                 Text(s.recBadge, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
+        // A abrir um failover (o canal não abriu): o mesmo, a dizer qual.
+        val failover = playback.core.onBackup?.takeIf { !playback.ready && !playback.core.wasPlaying && playback.reconnects == 0 }
+            ?.let { s.backupConnectingTo(it.label, it.position, it.total) }
+        if (failover != null && !pip) {
+            if (fullscreen) {
+                TuningPill(channel.name, reconnecting = false, attempt = 0, nextTryAt = 0L, waitMs = 0L, modifier = Modifier.align(Alignment.TopCenter), failover = failover)
+            } else {
+                ReconnectIsland(failover, 0L, 0L, Modifier.align(Alignment.TopCenter).padding(top = 8.dp), label = s.backupConnecting)
+            }
+        }
         // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
         if (playback.reconnects > 0 && !pip) {
             if (fullscreen) {

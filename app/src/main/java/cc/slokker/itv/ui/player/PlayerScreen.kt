@@ -1025,6 +1025,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     attempt = playback.reconnects,
                     nextTryAt = playback.nextTryAt,
                     waitMs = playback.retryDelayMs,
+                    failover = playback.onBackup?.takeIf { !playback.wasPlaying }?.let { LocalStrings.current.backupConnectingTo(it.label, it.position, it.total) },
                     modifier = Modifier
                         .align(if (second != null) Alignment.TopStart else Alignment.TopEnd)
                         // A gravar, fica por baixo da cápsula da gravação (no mesmo canto).

@@ -153,7 +153,11 @@ internal class BackupOrigin(
     val failed: List<String> = emptyList(),
     /** Este, como aparece no cartão de erro. */
     val label: String = backupName,
-)
+) {
+    /** Este é o [position].º dos [total] failovers (a cápsula "A tentar um failover"). */
+    val position: Int get() = failed.size + 1
+    val total: Int get() = failed.size + 1 + rest.size
+}
 
 /**
  * Os links pedidos ao abrir. No catch-up do Stalker, a gravação é a do programa inteiro: [archiveStartMs] é onde ela

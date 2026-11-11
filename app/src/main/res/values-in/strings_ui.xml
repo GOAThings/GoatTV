@@ -403,6 +403,8 @@
     <string name="backup_add_from">Tambah dari %1$s</string>
     <string name="backup_channel_search_all">Cari di kedua playlist</string>
     <string name="backup_failover_remove">Hapus dari failover</string>
+    <string name="backup_connecting">Mencoba failover…</string>
+    <string name="backup_connecting_to">%1$s · %2$d dari %3$d</string>
     <string name="backup_channel">Saluran cadangan</string>
     <string name="backup_channel_auto">Otomatis</string>
     <string name="backup_channel_auto_is">Otomatis: %1$s</string>

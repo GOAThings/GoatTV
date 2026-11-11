@@ -275,6 +275,14 @@ extension AppModel {
 
     static func uptimeMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000) }
 
+    /// A abrir um failover (o canal não abriu): "RTP 1 HD (BackupTV) · 1 de 2", para a cápsula "A tentar um failover";
+    /// nil fora disso (e depois de ele dar e cair, que é "a voltar a ligar").
+    var failoverConnecting: String? {
+        guard player.onBackup, player.state == .opening, !player.wasPlaying, player.reconnects == 0, let now = failoverNow else { return nil }
+        let position = failoversFailed.count + 1
+        return strings.r("backup_connecting_to", now.label, "\(position)", "\(position + failoverQueue.count)")
+    }
+
     /// Um failover começou a dar: o aviso ("<lista> não responde. A dar da <reserva>.", ou o canal da própria lista).
     func backupPlaying() {
         guard let content, let stream = failoverNow else { return }

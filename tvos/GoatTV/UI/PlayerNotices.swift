@@ -9,8 +9,9 @@ import SwiftUI
 /// Quanto tempo o cartão de versão nova fica no ecrã (como no Android).
 let updateCardSeconds = 12
 
-/// No canto: a sintonizar um canal, ou a voltar a ligar depois de ele cair ([reconnecting]). A ligar, o anel roda; à
-/// espera da próxima tentativa ([nextTryAt]), enche-se durante [waitSeconds] com os segundos no meio.
+/// No canto: a sintonizar um canal, a voltar a ligar depois de ele cair ([reconnecting]), ou a abrir um failover dele
+/// ([failover]: "RTP 1 HD (BackupTV) · 1 de 2"). A ligar, o anel roda; à espera da próxima tentativa ([nextTryAt]),
+/// enche-se durante [waitSeconds] com os segundos no meio.
 struct TuningPill: View {
     @Environment(AppModel.self) private var model
     let channel: String
@@ -21,12 +22,14 @@ struct TuningPill: View {
     let waitSeconds: TimeInterval
     /// 1 na TV; no iPhone a mesma cápsula, à escala do ecrã dele.
     var scale: CGFloat = 1
+    var failover: String? = nil
 
     var body: some View {
         let s = model.strings
         // O nome não estica a cápsula: um nome muito comprido fica cortado (no Android, 220 dp no máximo).
-        let name = channel.count > 34 ? String(channel.prefix(33)) + "…" : channel
-        CapsuleRow(title: reconnecting ? s.r("reconnecting") : s.r("tuning"), scale: scale) {
+        let shown = failover ?? channel
+        let name = shown.count > 34 ? String(shown.prefix(33)) + "…" : shown
+        CapsuleRow(title: reconnecting ? s.r("reconnecting") : (failover != nil ? s.r("backup_connecting") : s.r("tuning")), scale: scale) {
             CountdownRing(nextTryAt: nextTryAt, waitSeconds: waitSeconds, lineWidth: 4.5 * scale, fontSize: 22 * scale)
         } detail: {
             if attempt > 0 || !name.isEmpty {

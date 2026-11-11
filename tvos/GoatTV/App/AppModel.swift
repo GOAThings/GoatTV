@@ -92,9 +92,9 @@ final class AppModel {
     /// As listas em baixo há pouco (os canais delas vão logo à reserva).
     @ObservationIgnored var providerOutage = ProviderOutage()
     /// Os failovers do canal a dar: o que está a abrir, os que faltam (pela ordem) e os que já falharam (ver [failoverFailed]).
-    @ObservationIgnored var failoverNow: FailoverStream?
-    @ObservationIgnored var failoverQueue: [FailoverStream] = []
-    @ObservationIgnored var failoversFailed: [String] = []
+    var failoverNow: FailoverStream?
+    var failoverQueue: [FailoverStream] = []
+    var failoversFailed: [String] = []
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
 
     /// O programa a ver em catch-up (nil = em direto).

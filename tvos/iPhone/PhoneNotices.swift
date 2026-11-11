@@ -14,6 +14,8 @@ struct ReconnectIsland: View {
     let channel: String
     let nextTryAt: Date?
     let waitSeconds: TimeInterval
+    /// O texto à direita ("A reconectar…", ou "A tentar um failover…").
+    var label: String? = nil
 
     var body: some View {
         HStack(spacing: 0) {
@@ -22,7 +24,7 @@ struct ReconnectIsland: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text(model.strings.r("reconnecting"))
+            Text(label ?? model.strings.r("reconnecting"))
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Theme.warning)
                 .lineLimit(1)

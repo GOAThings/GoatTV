@@ -781,7 +781,7 @@ struct PlayerScreen: View {
                 HStack {
                     if model.second == nil { Spacer() }
                     TuningPill(channel: model.current?.name ?? "", reconnecting: player.wasPlaying, attempt: player.reconnects,
-                               nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay)
+                               nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay, failover: model.failoverConnecting)
                     if model.second != nil { Spacer() }
                 }
                 Spacer()

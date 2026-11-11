@@ -787,6 +787,8 @@ class Strings(context: Context) {
     val backupFailoversHintPhone get() = s(R.string.backup_failovers_hint_phone)
     fun backupAddFrom(list: String) = s(R.string.backup_add_from, list)
     val backupChannelSearchAll get() = s(R.string.backup_channel_search_all)
+    val backupConnecting get() = s(R.string.backup_connecting)
+    fun backupConnectingTo(failover: String, position: Int, total: Int) = s(R.string.backup_connecting_to, failover, position, total)
     val backupChannel get() = s(R.string.backup_channel)
     val backupChannelAuto get() = s(R.string.backup_channel_auto)
     fun backupChannelAutoIs(name: String) = s(R.string.backup_channel_auto_is, name)

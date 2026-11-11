@@ -403,6 +403,8 @@
     <string name="backup_add_from">إضافة من %1$s</string>
     <string name="backup_channel_search_all">البحث في القائمتين</string>
     <string name="backup_failover_remove">إزالة من القنوات البديلة</string>
+    <string name="backup_connecting">جارٍ تجربة قناة بديلة…</string>
+    <string name="backup_connecting_to">%1$s · %2$d من %3$d</string>
     <string name="backup_channel">القناة الاحتياطية</string>
     <string name="backup_channel_auto">تلقائي</string>
     <string name="backup_channel_auto_is">تلقائي: %1$s</string>

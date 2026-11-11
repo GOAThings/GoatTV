@@ -403,6 +403,8 @@
     <string name="backup_add_from">%1$s에서 추가</string>
     <string name="backup_channel_search_all">두 재생목록에서 검색</string>
     <string name="backup_failover_remove">대체 채널에서 삭제</string>
+    <string name="backup_connecting">대체 채널 시도 중…</string>
+    <string name="backup_connecting_to">%1$s · %2$d/%3$d</string>
     <string name="backup_channel">예비 채널</string>
     <string name="backup_channel_auto">자동</string>
     <string name="backup_channel_auto_is">자동: %1$s</string>

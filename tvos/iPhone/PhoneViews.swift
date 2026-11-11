@@ -579,6 +579,20 @@ private struct VideoPane: View {
             if let error = model.playbackError, model.player.state == .failed {
                 PlaybackErrorCard(info: error, status: model.playbackStatus) { explaining = true }
             }
+            // A abrir um failover (o canal não abriu): o mesmo, a dizer qual.
+            if let failover = model.failoverConnecting, let current = model.current {
+                VStack {
+                    if fullscreen {
+                        TuningPill(channel: current.name, reconnecting: false, attempt: 0, nextTryAt: nil, waitSeconds: 0, scale: 0.55, failover: failover)
+                            .padding(.top, 12)
+                    } else {
+                        ReconnectIsland(channel: failover, nextTryAt: nil, waitSeconds: 0, label: model.strings.r("backup_connecting"))
+                            .padding(.top, 8)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
             // Caiu e está a voltar a ligar: ao alto a pílula no topo; em ecrã inteiro a cápsula da TV.
             if model.player.reconnects > 0, let current = model.current {
                 VStack {

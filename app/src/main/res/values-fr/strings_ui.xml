@@ -403,6 +403,8 @@
     <string name="backup_add_from">Ajouter depuis %1$s</string>
     <string name="backup_channel_search_all">Chercher dans les deux playlists</string>
     <string name="backup_failover_remove">Retirer des failovers</string>
+    <string name="backup_connecting">Essai d\'un failover…</string>
+    <string name="backup_connecting_to">%1$s · %2$d sur %3$d</string>
     <string name="backup_channel">Chaîne de secours</string>
     <string name="backup_channel_auto">Automatique</string>
     <string name="backup_channel_auto_is">Automatique : %1$s</string>

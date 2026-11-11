@@ -403,6 +403,8 @@
     <string name="backup_add_from">Adicionar da %1$s</string>
     <string name="backup_channel_search_all">Pesquisar nas duas listas</string>
     <string name="backup_failover_remove">Remover dos failovers</string>
+    <string name="backup_connecting">Tentando um failover…</string>
+    <string name="backup_connecting_to">%1$s · %2$d de %3$d</string>
     <string name="backup_channel">Canal reserva</string>
     <string name="backup_channel_auto">Automático</string>
     <string name="backup_channel_auto_is">Automático: %1$s</string>
