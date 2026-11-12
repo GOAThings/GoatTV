@@ -24,6 +24,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.net.SocketTimeoutException
 
 /**
  * A reprodução de um canal, igual na TV, no telemóvel e no segundo canal (as diferenças estão na [PlaybackPolicy]):
@@ -130,6 +131,9 @@ internal class ChannelPlayback(
     /** O direto parado a carregar: ao fim de [STALL_MS] sem voltar, liga-se outra vez (ver [onStall]). */
     private var stallJob: Job? = null
 
+    /** A tentativa de abrir um direto: sem começar a dar em [openTimeoutMs], o servidor não respondeu (ver [onNoAnswer]). */
+    private var openJob: Job? = null
+
     /** Quando o direto deste canal ficou preso, nos últimos [STALL_WINDOW_MS] (à segunda, vai-se aos failovers). */
     private val stalls = ArrayDeque<Long>()
 
@@ -185,6 +189,7 @@ internal class ChannelPlayback(
     /** Larga [engine] e liberta o player dele (as tentativas pendentes ficam sem efeito). */
     fun detach(engine: StreamEngine) {
         retryJob?.cancel()
+        openJob?.cancel()
         linkJob?.cancel()
         engine.release()
         timeshift?.clear()
@@ -201,6 +206,7 @@ internal class ChannelPlayback(
         backupJob?.cancel()
         retryJob?.cancel()
         stallJob?.cancel()
+        openJob?.cancel()
         linkJob?.cancel()
         tickJob?.cancel()
         engine?.let { detach(it) }
@@ -263,6 +269,7 @@ internal class ChannelPlayback(
         retryJob?.cancel()
         backupJob?.cancel()
         stallJob?.cancel()
+        openJob?.cancel()
         stalls.clear()
         // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
         onBackup = null
@@ -329,6 +336,7 @@ internal class ChannelPlayback(
         if (ready) freezeCapture?.invoke()?.let { freeze = it }
         retryJob?.cancel()
         stallJob?.cancel()
+        openJob?.cancel()
         linkJob?.cancel()
         nextTryAt = 0L
         e.holdForZap()
@@ -362,6 +370,7 @@ internal class ChannelPlayback(
         backupJob?.cancel()
         retryJob?.cancel()
         stallJob?.cancel()
+        openJob?.cancel()
         linkJob?.cancel()
         nextTryAt = 0L
         engine?.stop()
@@ -376,6 +385,7 @@ internal class ChannelPlayback(
         val req = request ?: return
         val engine = engine ?: return
         linkJob?.cancel()
+        openJob?.cancel()
         // Stalker: cada tentativa desde o início pede um link novo ao portal (os antigos caducam).
         val fresh = req.freshLinks
         if (fresh != null && index == 0 && !linkFresh) {
@@ -430,6 +440,53 @@ internal class ChannelPlayback(
                 textLanguage = textLanguage(prefs).takeIf { !tracks.isManual(C.TRACK_TYPE_TEXT) },
             ),
         )
+        // Um direto que não começa a dar no tempo do buffer (e mais um pouco): o servidor não está a responder.
+        if (req.live) {
+            openJob = scope.launch {
+                wait(openTimeoutMs(prefs))
+                if (request === req && attempt == index && !ready && this@ChannelPlayback.engine === engine) {
+                    onNoAnswer(PlaybackException("Sem resposta", SocketTimeoutException(), PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT), req)
+                }
+            }
+        }
+    }
+
+    /** Quanto um direto tem para começar a dar: 8 s (10 s com o buffer grande, que espera 4 s de vídeo para arrancar). */
+    private fun openTimeoutMs(prefs: Prefs): Long = if (prefs.buffer == Prefs.Buffer.LARGE) OPEN_TIMEOUT_LARGE_MS else OPEN_TIMEOUT_MS
+
+    /** O servidor não respondeu a tempo (uma recusa ou uma ligação recusada são rápidas: o outro formato tenta-se). */
+    private fun isNoAnswer(error: PlaybackException): Boolean =
+        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+            error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
+
+    /**
+     * Um direto que não respondeu antes de dar: com failovers, vai-se já a eles (um servidor que não responde num
+     * formato raramente responde no outro, e cada espera eram mais uns segundos de ecrã parado); sem nenhum, tenta-se o
+     * outro formato como sempre. Um failover que não responde passa ao seguinte.
+     */
+    private fun onNoAnswer(error: PlaybackException, req: PlaybackRequest) {
+        openJob?.cancel()
+        val reconnect = retryDelay(host.prefs, ended = false)
+        // Sem failovers: o outro formato e, sem mais nenhum, como um erro (a dar: mais uma espera; antes: o cartão).
+        fun asBefore() {
+            when {
+                attempt + 1 < candidates.size -> start(attempt + 1)
+                wasPlaying && reconnect != null -> reconnectIn(reconnect)
+                else -> showFailure(error, req, reconnect, null, currentCandidate?.format)
+            }
+        }
+        when {
+            req.backup != null -> fail(error, req, reconnect)
+            // Também a voltar a ligar depois de cair: o canal deixou de responder, os failovers dão já.
+            policy.failover && backupJob?.isActive != true -> backupJob = scope.launch {
+                val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
+                if (request !== req) return@launch
+                if (backups.isEmpty()) return@launch asBefore()
+                host.onMainFailed(req, error)
+                openBackup(backups, error)
+            }
+            else -> asBefore()
+        }
     }
 
     /** A língua do áudio: a das Definições ou, em "Automático", a da app. */
@@ -533,6 +590,7 @@ internal class ChannelPlayback(
                 wasPlaying -> retryDelay(host.prefs, ended = true)?.let(::reconnectIn)
             }
         }
+        if (state == Player.STATE_READY) openJob?.cancel()
         if (state == Player.STATE_READY && !ready) {
             ready = true
             wasPlaying = true
@@ -597,6 +655,8 @@ internal class ChannelPlayback(
             error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> source.restartAtLive()
             // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
             policy.vlcFallback && !source.isVlc && isDecoderError(error.errorCode) -> useVlc(source)
+            // Não respondeu, antes de dar: os failovers já, sem esperar pelo outro formato (ver onNoAnswer).
+            !ready && !wasPlaying && req.live && isNoAnswer(error) -> onNoAnswer(error, req)
             // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8). Uma recusa de "ocupado" (403, 503…) já foi
             // tentada uns 3 s (ver OpenRetry): a ligação anterior já fechou, por isso é este formato que o fornecedor
             // recusa neste canal (há canais que só dão em m3u8). Passa-se ao outro, mas sem o aprender para a conta.
@@ -686,6 +746,10 @@ internal class ChannelPlayback(
     private companion object {
         /** O estado da pausa do direto atualiza-se a este ritmo (a medição da ligação, ao dobro). */
         const val TICK_MS = 500L
+
+        /** Quanto um direto tem para começar a dar (ver [openTimeoutMs]). */
+        const val OPEN_TIMEOUT_MS = 8_000L
+        const val OPEN_TIMEOUT_LARGE_MS = 10_000L
 
         /** Parado a carregar há tanto tempo no direto: volta a ligar (ver [watchStall]). */
         const val STALL_MS = 12_000L

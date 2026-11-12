@@ -292,9 +292,60 @@ class ChannelPlaybackTest {
         val p = playback()
         p.tuneNow(live())
         p.onState(engine, Player.STATE_ENDED)
-        time.advance(60_000)
+        time.advance(7_999)
         assertEquals(1, engine.opened.size)
         assertEquals(0, p.reconnects)
+        // Mas um direto que não começa a dar em 8 s não respondeu: o outro formato (sem failovers).
+        time.advance(1)
+        assertEquals(listOf(ts, hls), engine.opened)
+    }
+
+    @Test
+    fun semRespostaVaiLogoAoFailover() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live())
+        time.advance(7_999)
+        assertEquals(listOf(ts), engine.opened)
+        // 8 s sem dar: com failovers, vai-se já a eles, sem esperar pelo .m3u8.
+        time.advance(1)
+        assertEquals(listOf(ts, backupTs), engine.opened)
+        assertEquals("Reserva", p.onBackup?.backupName)
+    }
+
+    @Test
+    fun tempoEsgotadoAntesDeDarVaiAoFailover() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live())
+        p.onError(engine, error(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+        assertEquals(listOf(ts, backupTs), engine.opened)
+    }
+
+    @Test
+    fun caiuEAoVoltarALigarNaoRespondeVaiAoFailover() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live())
+        p.onState(engine, Player.STATE_READY)
+        // Caiu: volta a ligar daqui a 5 s.
+        p.onError(engine, ioError)
+        time.advance(5_000)
+        assertEquals(listOf(ts, ts), engine.opened)
+        // O servidor já não responde: ao fim de 8 s, o failover.
+        time.advance(8_000)
+        assertEquals(listOf(ts, ts, backupTs), engine.opened)
+    }
+
+    @Test
+    fun semRespostaComOBufferGrandeEspera10s() {
+        host.prefs = host.prefs.copy(buffer = Prefs.Buffer.LARGE)
+        val p = playback()
+        p.tuneNow(live())
+        time.advance(9_999)
+        assertEquals(1, engine.opened.size)
+        time.advance(1)
+        assertEquals(listOf(ts, hls), engine.opened)
     }
 
     @Test

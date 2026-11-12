@@ -665,15 +665,33 @@ final class PlayerEngine: NSObject {
                 }
             }
         }
-        // Se não começar a dar, tenta a forma seguinte (o leitor da Apple tem o VLC a seguir: espera-se menos; o
-        // AetherEngine junta-se ao direto com mais calma).
-        let patience = backend == .apple ? 8 : (backend == .aether ? 20 : 15)
+        // Se não começar a dar em 8 s (10 no AetherEngine, que se junta ao direto com mais calma, ou com o buffer
+        // grande), o servidor não respondeu: os failovers, ou a forma seguinte (como no Android).
+        let patience = (backend == .aether ? 10 : 8) + (cachingMs >= 3000 ? 2 : 0)
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(patience))
             guard !Task.isCancelled, let self, self.state == .opening else { return }
             DebugLog.add("Player: no picture after \(patience) s (\(self.backend), waiting: \(self.avPlayer.reasonForWaitingToPlay?.rawValue ?? "-"))")
-            self.next()
+            self.noAnswer()
         }
+    }
+
+    /// O direto não respondeu a tempo: com failovers, vai-se já a eles (um servidor que não responde num formato
+    /// raramente responde no outro); também a voltar a ligar depois de cair. Um failover que não responde passa ao
+    /// seguinte. Sem failovers (ou no catch-up), a forma seguinte, como sempre.
+    private func noAnswer() {
+        guard openedLive else { return next() }
+        // Um failover que não responde: o seguinte (ou, sem mais, o erro da lista principal).
+        if onBackup { return fail() }
+        if !backupAsked, let ask = onStartFailed {
+            backupAsked = true
+            stopBackends()
+            if ask(nil) {
+                state = .opening
+                return
+            }
+        }
+        next()
     }
 
     private func next() {
