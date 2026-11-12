@@ -74,15 +74,16 @@ public enum Stalker {
     }
 
     static func parseChannels(_ raw: [JSON], endpoint: String, channelName: (String) -> String) -> [Channel] {
-        withoutActuallyEscaping(channelName) { name in
-            var result: [Channel] = []
-            for c in raw {
-                guard let ch = StalkerRules.shared.channel(c: fields(c, StalkerRules.shared.CHANNEL_KEYS), uid: Int32(clamping: result.count),
-                                                           endpoint: endpoint, channelName: { name($0) }) else { continue }
-                result.append(Channel(ch))
-            }
-            return result
+        var result: [Channel] = []
+        for c in raw {
+            // O nome dos canais sem nome dá-se aqui: o Kotlin guarda as funções que recebe, e esta não pode sair daqui.
+            guard let ch = StalkerRules.shared.channel(c: fields(c, StalkerRules.shared.CHANNEL_KEYS), uid: Int32(clamping: result.count),
+                                                       endpoint: endpoint, channelName: { _ in "" }) else { continue }
+            var channel = Channel(ch)
+            if channel.name.isEmpty { channel.name = channelName(channel.key) }
+            result.append(channel)
         }
+        return result
     }
 
     /// Dias de arquivo de um canal (a regra do núcleo partilhado: horas ou dias, marcado sem duração dá uma semana).
