@@ -1,0 +1,17 @@
+[
+  {
+    "moduleId": {
+      "groupAndName": {
+        "group": "org.jetbrains.kotlin",
+        "name": "kotlin-stdlib"
+      },
+      "componentId": {
+        "type": "module",
+        "group": "org.jetbrains.kotlin",
+        "name": "kotlin-stdlib"
+      }
+    },
+    "file": "/var/home/hmacedo/AndroidStudioProjects/itv-shared/shared/build/kotlinTransformedMetadataLibraries/commonMain/org.jetbrains.kotlin-kotlin-stdlib-2.4.21-commonMain-MgaIfA.klib",
+    "sourceSetName": "commonMain"
+  }
+]

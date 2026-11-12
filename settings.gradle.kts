@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "i-tv"
 include(":app")
+include(":shared")

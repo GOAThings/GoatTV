@@ -4,4 +4,6 @@ plugins {
     // AGP 9 traz Kotlin embutido; declarar o plugin aqui só fixa a versão do Kotlin usada.
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    // O núcleo partilhado com a Apple TV e o iPhone (ver shared/).
+    alias(libs.plugins.kotlin.multiplatform) apply false
 }

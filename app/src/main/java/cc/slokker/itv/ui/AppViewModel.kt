@@ -33,6 +33,7 @@ import cc.slokker.itv.ItvApp
 import cc.slokker.itv.data.Audience
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.data.entry
 import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest

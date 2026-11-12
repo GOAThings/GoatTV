@@ -1,7 +1,5 @@
 package cc.slokker.itv.data
 
-import java.text.Normalizer
-import java.util.Locale
 
 /**
  * O "mesmo canal" noutra lista (a lista de reserva, quando o fornecedor principal não responde). As mesmas regras na
@@ -173,14 +171,14 @@ object ChannelMatch {
 
     /** Sem acentos (e com as formas de compatibilidade: ｜ → |), em minúsculas. */
     private fun fold(s: String): String =
-        Normalizer.normalize(s, Normalizer.Form.NFKD).filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }.lowercase(Locale.ROOT)
+        nfkd(s).filter { it.category != CharCategory.NON_SPACING_MARK }.lowercase()
 
     /** As palavras: o que é letra ou algarismo, separado pelo resto. */
     private fun words(s: String): List<String> {
         val out = ArrayList<String>()
         val cur = StringBuilder()
         for (c in s) {
-            if (Character.isLetterOrDigit(c)) {
+            if (c.isLetterOrDigit()) {
                 cur.append(c)
             } else if (cur.isNotEmpty()) {
                 out += cur.toString()
@@ -210,7 +208,7 @@ object ChannelMatch {
         val sep = s.indexOfFirst { it in PREFIX_SEPARATORS }
         if (sep in 1..TAG_MAX + 1) {
             val tag = s.substring(0, sep).trim()
-            if (tag.isNotEmpty() && tag.split(' ').size <= 2 && tag.all { it == ' ' || Character.isLetterOrDigit(it) }) {
+            if (tag.isNotEmpty() && tag.split(' ').size <= 2 && tag.all { it == ' ' || it.isLetterOrDigit() }) {
                 val rest = s.substring(sep + 1).let { r -> if (r.isNotEmpty() && r[0] in PREFIX_SEPARATORS) r.substring(1) else r }
                 // "Hollywood: FHD": o que vem depois é só a qualidade, por isso o nome é o que está antes.
                 if (words(rest).any { it !in QUALITY && it !in TECH }) return tag to rest
@@ -255,7 +253,7 @@ object ChannelMatch {
             val endsNumber = k >= s.length || s[k] !in '0'..'9'
             if (digits in 1..2 && endsNumber && (!spaceAfter || spaceBefore)) {
                 // "+1h": o "h" (de horas) vai com ele.
-                if (k < s.length && s[k] == 'h' && (k + 1 >= s.length || !Character.isLetterOrDigit(s[k + 1]))) k++
+                if (k < s.length && s[k] == 'h' && (k + 1 >= s.length || !s[k + 1].isLetterOrDigit())) k++
                 return s.substring(j, j + digits).toInt() to (s.substring(0, i) + " " + s.substring(k))
             }
             i = s.indexOf('+', i + 1)
@@ -265,7 +263,7 @@ object ChannelMatch {
 
     /** O id do guia que serve para comparar (sem os vazios e os "none" de algumas listas). */
     fun epgKey(id: String?): String? =
-        id?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.length >= 2 && it !in setOf("none", "null", "n/a", "0") }
+        id?.trim()?.lowercase()?.takeIf { it.length >= 2 && it !in setOf("none", "null", "n/a", "0") }
 
     // ---- A procura --------------------------------------------------------------------------------
 
@@ -284,7 +282,7 @@ object ChannelMatch {
             pool.forEachIndexed { i, e ->
                 epgKey(e.epgId)?.let { byEpg.getOrPut(it) { ArrayList() } += i }
                 parsed[i].base.takeIf { it.isNotEmpty() }?.let { byBase.getOrPut(it) { ArrayList() } += i }
-                byKey.putIfAbsent(e.key, i)
+                if (e.key !in byKey) byKey[e.key] = i
             }
         }
 
@@ -531,7 +529,4 @@ object ChannelMatch {
         val missing = rows.filter { it.state == State.MISSING || it.state == State.OFF || it.state == State.NOT_SET }.map { main[it.main].name }
         return Coverage(main.size, matched, unsure.size, missing.size, unsure, missing)
     }
-
-    /** O canal como entrada do ChannelMatch, com o nome do grupo dele em [content] (para desempatar cópias). */
-    fun entry(c: Channel, content: PlaylistContent? = null) = Entry(c.key, c.name, c.epgId, content?.categoryName(c.categoryId))
 }

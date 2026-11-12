@@ -98,6 +98,9 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.tv.material)
 
+    // O núcleo partilhado com a Apple TV e o iPhone (canais, versões, nomes…).
+    implementation(project(":shared"))
+
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)

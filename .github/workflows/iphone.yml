@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, mobile]
-    paths: ["tvos/**", ".github/workflows/iphone.yml"]
+    paths: ["tvos/**", "shared/**", ".github/workflows/iphone.yml"]
 
 jobs:
   build:
@@ -16,6 +16,22 @@ jobs:
         working-directory: tvos
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      # O Kotlin/Native descarrega o compilador e as bibliotecas da Apple na primeira vez (centenas de MB).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+      - name: Núcleo partilhado (GoatShared)
+        working-directory: .
+        run: |
+          ./gradlew --configure-on-demand --no-configuration-cache -q :shared:assembleGoatSharedReleaseXCFramework
+          mkdir -p tvos/Frameworks && rm -rf tvos/Frameworks/GoatShared.xcframework
+          cp -R shared/build/XCFrameworks/release/GoatShared.xcframework tvos/Frameworks/
       - name: XcodeGen
         run: scripts/fetch-xcodegen.sh
       - uses: actions/cache@v4
