@@ -1,12 +1,14 @@
 import Foundation
+import GoatShared
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 
 /// Portais Stalker / MAC, só para TV em direto e só para listas sem conta (como o StalkerSource do Android):
-/// os pedidos saem deste aparelho, que se apresenta como uma MAG250.
+/// os pedidos saem deste aparelho, que se apresenta como uma MAG250. As regras são as do núcleo partilhado
+/// (StalkerRules); aqui ficam os pedidos e as sessões.
 public enum Stalker {
-    public static let userAgent = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
+    public static let userAgent = StalkerRules.shared.USER_AGENT
 
     /// Um MAC novo com o prefixo das MAG, que os portais esperam: as apps não têm acesso ao MAC verdadeiro.
     public static func generateMac() -> String {
@@ -14,51 +16,25 @@ public enum Stalker {
     }
 
     /// O MAC como `AA:BB:CC:DD:EE:FF` (aceita traços ou sem separadores), ou nil se não for um MAC.
-    public static func normalizeMac(_ mac: String) -> String? {
-        let hex = Array(mac.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "").uppercased())
-        guard hex.count == 12, hex.allSatisfy({ "0123456789ABCDEF".contains($0) }) else { return nil }
-        return stride(from: 0, to: 12, by: 2).map { String(hex[$0...($0 + 1)]) }.joined(separator: ":")
-    }
+    public static func normalizeMac(_ mac: String) -> String? { StalkerRules.shared.normalizeMac(mac: mac) }
 
     /// Onde o portal pode responder, pela ordem a tentar.
-    public static func endpoints(_ server: String) -> [String] {
-        var s = server.trimmingCharacters(in: .whitespaces)
-        while s.hasSuffix("/") { s.removeLast() }
-        if s.hasSuffix("/c") { s.removeLast(2) }
-        if s.split(separator: "?", omittingEmptySubsequences: false)[0].hasSuffix(".php") { return [s] }
-        if let r = s.range(of: "/stalker_portal") { return [s[..<r.lowerBound] + "/stalker_portal/server/load.php"] }
-        return [s + "/portal.php", s + "/server/load.php", s + "/stalker_portal/server/load.php"]
-    }
+    public static func endpoints(_ server: String) -> [String] { StalkerRules.shared.endpoints(server: server) }
 
     /// Nos `/stalker_portal/`, MAC codificado e token na cookie (menos no `get_profile`); nos outros, MAC tal como está e token sempre.
     public static func cookie(mac: String, token: String, stalkerPortal: Bool, action: String, timezone: String) -> String {
-        var c = "mac=" + (stalkerPortal ? mac.replacingOccurrences(of: ":", with: "%3A") : mac) + "; stb_lang=en; timezone=" + timezone
-        if !token.isEmpty, !stalkerPortal || action != "get_profile" { c += "; token=" + token }
-        return c
+        StalkerRules.shared.cookie(mac: mac, token: token, stalkerPortal: stalkerPortal, action: action, timezone: timezone)
     }
 
     /// Só os comandos `/ch/` são pedidos ao portal; os outros já são o link.
-    public static func needsLink(_ cmd: String) -> Bool { cmd.contains("/ch/") }
+    public static func needsLink(_ cmd: String) -> Bool { StalkerRules.shared.needsLink(cmd: cmd) }
 
     /// O URL dentro de um comando (`ffmpeg http://…`). Sem host, ou com localhost, aponta para o próprio portal.
-    public static func commandURL(_ cmd: String, portal: String) -> String {
-        let url = String(cmd.trimmingCharacters(in: .whitespaces).split(separator: " ").last ?? "")
-        var origin = ""
-        if let p = URL(string: portal), let scheme = p.scheme, let host = p.host {
-            origin = scheme + "://" + host + (p.port.map { ":\($0)" } ?? "")
-        }
-        guard let scheme = url.range(of: "://") else {
-            return origin + "/" + url.drop { $0 == "/" }
-        }
-        let rest = url[scheme.upperBound...]
-        let host = rest.prefix { $0 != "/" && $0 != ":" }
-        guard host == "localhost" || host == "127.0.0.1" else { return url }
-        return origin + rest.drop { $0 != "/" }
-    }
+    public static func commandURL(_ cmd: String, portal: String) -> String { StalkerRules.shared.commandUrl(cmd: cmd, portal: portal) }
 
     public static func candidate(_ url: String) -> StreamCandidate {
-        let path = url.split(separator: "?", omittingEmptySubsequences: false)[0].lowercased()
-        return StreamCandidate(url: url, format: path.hasSuffix(".m3u8") ? StreamFormat.hls : StreamFormat.ts)
+        let c = StalkerRules.shared.candidate(url: url)
+        return StreamCandidate(url: c.url, format: c.format)
     }
 
     /// O que identifica a "box" no portal: o que a pessoa escreveu ou, sem isso, o calculado a partir do MAC.
@@ -66,78 +42,52 @@ public enum Stalker {
         public var mac, serial, deviceId, deviceId2, signature: String
 
         public init(_ p: Playlist) {
-            func given(_ s: String?) -> String? { s.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed } }
-            func hash(_ s: String) -> String { SHA.hex(SHA.sha256(Array(s.utf8))).uppercased() }
-            mac = (p.username ?? "").trimmed.uppercased()
-            serial = given(p.serial) ?? String(SHA.hex(SHA.md5(Array(mac.utf8))).uppercased().prefix(13))
-            deviceId = given(p.deviceId) ?? hash(mac)
-            deviceId2 = given(p.deviceId2) ?? deviceId
-            signature = given(p.signature) ?? hash(serial + mac)
+            let id = StalkerRules.shared.identity(username: p.username, serial: p.serial, deviceId: p.deviceId, deviceId2: p.deviceId2,
+                                                  signature: p.signature)
+            mac = id.mac
+            serial = id.serial
+            deviceId = id.deviceId
+            deviceId2 = id.deviceId2
+            signature = id.signature
+        }
+
+        var shared: StalkerIdentity {
+            StalkerIdentity(mac: mac, serial: serial, deviceId: deviceId, deviceId2: deviceId2, signature: signature)
         }
     }
 
     /// O nome dentro de um separador (`✦●✦ DESPORTO ✦●✦`, `=== UK ===`), ou nil se for um canal normal.
-    public static func sectionTitle(_ name: String) -> String? {
-        let chars = Array(name.trimmingCharacters(in: .whitespaces))
-        func text(_ c: Character) -> Bool { c.isLetter || c.isNumber }
-        guard let first = chars.firstIndex(where: text), let last = chars.lastIndex(where: text) else { return nil }
-        let edges = chars[..<first] + chars[(last + 1)...]
-        guard first >= 2, chars.count - last - 1 >= 2, !edges.contains(where: { "()[]{}".contains($0) }) else { return nil }
-        return String(chars[first...last])
-    }
+    public static func sectionTitle(_ name: String) -> String? { StalkerRules.shared.sectionTitle(name: name) }
 
     /// Portais sem géneros: os separadores da lista passam a grupos e deixam de contar como canais.
     public static func groupBySections(_ channels: [Channel]) -> ([Channel], [Category]) {
-        guard channels.filter({ sectionTitle($0.name) != nil }).count >= 2 else { return (channels, []) }
-        var sections: [Category] = []
-        var current = ""
-        var grouped: [Channel] = []
-        for c in channels {
-            if let title = sectionTitle(c.name) {
-                current = title
-                if !sections.contains(where: { $0.id == title }) { sections.append(Category(id: title, name: title)) }
-            } else {
-                var channel = c
-                channel.categoryId = current
-                channel.uid = grouped.count
-                grouped.append(channel)
-            }
-        }
-        let used = Set(grouped.map(\.categoryId))
-        return (grouped, sections.filter { used.contains($0.id) })
+        let s = StalkerRules.shared.groupBySections(channels: channels.map(\.shared))
+        return (s.channels.map { Channel($0) }, s.categories.map { Category(id: $0.id, name: $0.name) })
+    }
+
+    /// Os campos [keys] de um objeto do portal em texto, e o `url` do primeiro de `cmds` (o que o núcleo partilhado lê).
+    static func fields(_ c: JSON, _ keys: Set<String>) -> [String: String] {
+        var out: [String: String] = [:]
+        for key in keys { if let t = c[key]?.text { out[key] = t } }
+        if let url = c["cmds"]?.array?.first?["url"]?.text { out[StalkerRules.shared.CMDS_URL] = url }
+        return out
     }
 
     static func parseChannels(_ raw: [JSON], endpoint: String, channelName: (String) -> String) -> [Channel] {
-        var result: [Channel] = []
-        for c in raw {
-            guard let id = c["id"]?.text, !id.isEmpty, let cmd = c["cmd"]?.text ?? c["cmds"]?.array?.first?["url"]?.text, !cmd.isEmpty else { continue }
-            let i = result.count
-            let logo = c["logo"]?.text
-            result.append(Channel(
-                uid: i, key: id, num: c["number"]?.text.flatMap { SafeInput.int(text: $0) } ?? i + 1,
-                name: c["name"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed } ?? channelName(id),
-                logo: logo.flatMap { $0.contains("://") ? $0 : $0.hasPrefix("/") ? commandURL($0, portal: endpoint) : nil },
-                categoryId: c["tv_genre_id"]?.text ?? "", streamId: id, url: cmd, userAgent: userAgent,
-                epgId: c["xmltv_id"]?.text.flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed },
-                archiveDays: archiveDays(c)
-            ))
+        withoutActuallyEscaping(channelName) { name in
+            var result: [Channel] = []
+            for c in raw {
+                guard let ch = StalkerRules.shared.channel(c: fields(c, StalkerRules.shared.CHANNEL_KEYS), uid: Int32(clamping: result.count),
+                                                           endpoint: endpoint, channelName: { name($0) }) else { continue }
+                result.append(Channel(ch))
+            }
+            return result
         }
-        return result
     }
 
-    /// Dias de arquivo de um canal (como no Android): o portal marca-o (`tv_archive`, `enable_tv_archive` ou
-    /// `archive` a 1) e diz `tv_archive_duration`, que nuns portais vem em horas (o Ministra traz 168, uma semana) e
-    /// noutros em dias. Como o QiTV e o E2iPlayer: mais de 31, ou um múltiplo de 24, são horas; marcado sem duração,
-    /// uma semana.
+    /// Dias de arquivo de um canal (a regra do núcleo partilhado: horas ou dias, marcado sem duração dá uma semana).
     public static func archiveDays(_ c: JSON) -> Int {
-        let marked = ["tv_archive", "enable_tv_archive", "archive"].contains { key in
-            let t = c[key]?.text
-            return t == "1" || t?.lowercased() == "true"
-        }
-        guard marked else { return 0 }
-        guard let value = c["tv_archive_duration"]?.text.flatMap({ Double($0.trimmed) }), value.isFinite, value > 0 else { return 7 }
-        let days = value > 31 || value.truncatingRemainder(dividingBy: 24) == 0 ? (value / 24).rounded(.up) : value.rounded(.up)
-        return min(31, max(1, Int(days)))
+        Int(StalkerRules.shared.archiveDays(c: fields(c, ["tv_archive", "enable_tv_archive", "archive", "tv_archive_duration"])))
     }
 
     /// Um programa da tabela do portal com gravação.
@@ -149,30 +99,16 @@ public enum Stalker {
 
     /// Uma linha da tabela do portal com gravação (sem `mark_archive` 0) e id, ou nil.
     static func recorded(_ row: JSON) -> ArchiveProgramme? {
-        guard let start = row["start_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }),
-              let stopSeconds = row["stop_timestamp"]?.text.flatMap({ Int64($0) }), stopSeconds > 0,
-              let stop = SafeInput.epochMs(seconds: stopSeconds), stop > start, row["mark_archive"]?.text != "0",
-              let id = row["id"]?.text ?? row["real_id"]?.text else { return nil }
-        return ArchiveProgramme(id: id, startMs: start, stopMs: stop)
+        StalkerRules.shared.recorded(row: fields(row, ["start_timestamp", "stop_timestamp", "mark_archive", "id", "real_id"]))
+            .map { ArchiveProgramme(id: $0.id, startMs: $0.startMs, stopMs: $0.stopMs) }
     }
 
-    /// Até quanto o início de um programa pode variar entre o guia XMLTV e a tabela do portal.
-    static let driftMs: Int64 = 5 * 60_000
-
     /// O programa do portal para o do guia ([startMs]–[endMs]) às [wantedMs]: o que dá a essa hora ou começa até
-    /// [driftMs] depois, o que mais se sobrepõe ao do guia. Assim, se o guia diz 20:00 e o portal 20:01, abrir o
-    /// programa desde o início dá a gravação dele e não o último minuto do anterior.
+    /// 5 minutos depois, o que mais se sobrepõe ao do guia (ver o StalkerRules.matching).
     static func matching(_ rows: [ArchiveProgramme], wantedMs: Int64, startMs: Int64, endMs: Int64) -> ArchiveProgramme? {
-        let near = rows.filter { ($0.startMs <= wantedMs && wantedMs < $0.stopMs) || ($0.startMs > wantedMs && $0.startMs <= wantedMs + driftMs) }
-        func overlap(_ p: ArchiveProgramme) -> Int64 { min(p.stopMs, endMs) - max(p.startMs, startMs) }
-        // Como o maxWith do Kotlin: em empate fica a primeira; a seguir, a que já dá às [wantedMs].
-        var best: ArchiveProgramme?
-        for p in near {
-            guard let b = best else { best = p; continue }
-            let (op, ob) = (overlap(p), overlap(b))
-            if op > ob || (op == ob && (p.startMs <= wantedMs) && !(b.startMs <= wantedMs)) { best = p }
-        }
-        return best
+        StalkerRules.shared.matching(rows: rows.map { StalkerProgramme(id: $0.id, startMs: $0.startMs, stopMs: $0.stopMs) },
+                                     wantedMs: wantedMs, startMs: startMs, endMs: endMs)
+            .map { ArchiveProgramme(id: $0.id, startMs: $0.startMs, stopMs: $0.stopMs) }
     }
 }
 
@@ -336,9 +272,8 @@ public actor StalkerClient {
         var request = URLRequest(url: url)
         request.setValue(Stalker.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("Model: MAG250; Link: WiFi", forHTTPHeaderField: "X-User-Agent")
-        let base = endpoint.components(separatedBy: "/server/load.php")[0]
-        request.setValue((base == endpoint ? String(endpoint[..<(endpoint.lastIndex(of: "/") ?? endpoint.endIndex)]) : base) + "/c/", forHTTPHeaderField: "Referer")
-        request.setValue(Stalker.cookie(mac: identity.mac, token: token, stalkerPortal: endpoint.contains("/stalker_portal/"), action: action, timezone: TimeZone.current.identifier), forHTTPHeaderField: "Cookie")
+        request.setValue(StalkerRules.shared.referer(endpoint: endpoint), forHTTPHeaderField: "Referer")
+        request.setValue(Stalker.cookie(mac: identity.mac, token: token, stalkerPortal: StalkerRules.shared.isStalkerPortal(endpoint: endpoint), action: action, timezone: TimeZone.current.identifier), forHTTPHeaderField: "Cookie")
         request.httpShouldHandleCookies = false
         if !token.isEmpty { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
         let (data, response) = try await HTTP.fetch(urlSession, request, maxBytes: SafeInput.maxPlaylistBytes)
@@ -349,11 +284,6 @@ public actor StalkerClient {
     }
 
     private static func profileParams(_ id: Stalker.Identity, random: String) -> [(String, String)] {
-        [("hd", "1"), ("ver", "ImageDescription: 0.2.18-r14-pub-250; ImageDate: Fri Jan 15 15:20:44 EET 2016; PORTAL version: 5.1.0; API Version: JS API version: 328; STB API version: 134; Player Engine version: 0x566"),
-         ("num_banks", "2"), ("sn", id.serial), ("stb_type", "MAG250"), ("image_version", "218"), ("video_out", "hdmi"),
-         ("device_id", id.deviceId), ("device_id2", id.deviceId2), ("signature", id.signature), ("auth_second_step", "1"),
-         ("hw_version", "1.7-BD-" + SHA.hex(SHA.md5(Array(id.mac.utf8))).uppercased().prefix(2)), ("hw_version_2", SHA.hex(SHA.md5(Array((id.serial + id.mac).lowercased().utf8)))),
-         ("client_type", "STB"), ("metrics", "{\"mac\":\"\(id.mac)\",\"sn\":\"\(id.serial)\",\"model\":\"MAG250\",\"type\":\"STB\",\"uid\":\"\",\"random\":\"\(random)\"}"), ("not_valid_token", "0"), ("api_signature", "263"), ("prehash", "0"),
-         ("timestamp", String(Int(Date().timeIntervalSince1970))), ("random", random)]
+        StalkerRules.shared.profileParams(id: id.shared, random: random, nowSeconds: Int64(Date().timeIntervalSince1970)).map { ($0[0], $0[1]) }
     }
 }
