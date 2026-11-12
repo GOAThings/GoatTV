@@ -2,13 +2,40 @@ import AVFoundation
 import AVKit
 import GoatCore
 import UIKit
+import os
 
-/// A vista do motor GoatCore: a própria camada é o AVSampleBufferDisplayLayer (que descodifica pelo hardware e é a
-/// que o Picture in Picture usa).
+/// A vista do motor GoatCore, com o AVSampleBufferDisplayLayer do canal a dar (que descodifica pelo hardware e é o que o
+/// Picture in Picture usa). Cada canal tem uma camada nova: o que ainda chegue do anterior não a estraga.
 final class GoatCoreView: UIView {
-    override class var layerClass: AnyClass { AVSampleBufferDisplayLayer.self }
+    private(set) var displayLayer = AVSampleBufferDisplayLayer()
+    var gravity: AVLayerVideoGravity = .resizeAspect {
+        didSet { displayLayer.videoGravity = gravity }
+    }
 
-    var displayLayer: AVSampleBufferDisplayLayer { layer as! AVSampleBufferDisplayLayer }
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.addSublayer(displayLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Troca a camada por uma nova (a anterior sai do ecrã com o que tinha).
+    func freshLayer() -> AVSampleBufferDisplayLayer {
+        let next = AVSampleBufferDisplayLayer()
+        next.videoGravity = gravity
+        next.frame = bounds
+        layer.replaceSublayer(displayLayer, with: next)
+        displayLayer = next
+        return next
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        displayLayer.frame = bounds
+        CATransaction.commit()
+    }
 }
 
 /// O motor próprio (experimental, Definições → Player → GoatCore): o stream lê-se aqui, separa-se no núcleo partilhado
@@ -39,8 +66,10 @@ final class GoatCorePlayback: NSObject {
     private(set) var videoHeight = 0
     private(set) var tracks: [MediaTrack] = []
 
-    private let synchronizer = AVSampleBufferRenderSynchronizer()
-    private let audioRenderer = AVSampleBufferAudioRenderer()
+    /// O relógio e o som do canal a dar (novos em cada canal, como a camada do vídeo).
+    private var synchronizer = AVSampleBufferRenderSynchronizer()
+    private var audioRenderer = AVSampleBufferAudioRenderer()
+    private var muted = false
     private var session: StreamSession?
     private var generation = 0
     private var reportedPlaying = false
@@ -53,9 +82,6 @@ final class GoatCorePlayback: NSObject {
     override init() {
         super.init()
         view.backgroundColor = .black
-        view.displayLayer.videoGravity = .resizeAspect
-        synchronizer.addRenderer(view.displayLayer)
-        synchronizer.addRenderer(audioRenderer)
     }
 
     /// Abre [url] com estes cabeçalhos (o User-Agent e o Referer da lista).
@@ -69,7 +95,16 @@ final class GoatCorePlayback: NSObject {
         failure = nil
         videoHeight = 0
         tracks = []
-        let s = StreamSession(display: view.displayLayer, audio: audioRenderer, synchronizer: synchronizer)
+        // Tudo novo: a ligação anterior pode ainda entregar uma imagem antes de fechar, e ia parar ao leitor deste canal
+        // (com outro relógio, a camada deixava de mostrar e só o som continuava).
+        let display = view.freshLayer()
+        synchronizer = AVSampleBufferRenderSynchronizer()
+        audioRenderer = AVSampleBufferAudioRenderer()
+        audioRenderer.isMuted = muted
+        synchronizer.addRenderer(display)
+        synchronizer.addRenderer(audioRenderer)
+        pip = nil
+        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer)
         s.rate = userRate
         selectedAudio = nil
         s.onEvent = { [weak self] event in
@@ -84,7 +119,6 @@ final class GoatCorePlayback: NSObject {
         session?.cancel()
         session = nil
         synchronizer.rate = 0
-        view.displayLayer.flushAndRemoveImage()
         audioRenderer.flush()
     }
 
@@ -137,15 +171,18 @@ final class GoatCorePlayback: NSObject {
     }
 
     var isMuted: Bool {
-        get { audioRenderer.isMuted }
-        set { audioRenderer.isMuted = newValue }
+        get { muted }
+        set {
+            muted = newValue
+            audioRenderer.isMuted = newValue
+        }
     }
 
     func setAspect(_ aspect: String) {
         switch aspect {
-        case "zoom": view.displayLayer.videoGravity = .resizeAspectFill
-        case "fill": view.displayLayer.videoGravity = .resize
-        default: view.displayLayer.videoGravity = .resizeAspect
+        case "zoom": view.gravity = .resizeAspectFill
+        case "fill": view.gravity = .resize
+        default: view.gravity = .resizeAspect
         }
     }
 
@@ -226,7 +263,9 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private let synchronizer: AVSampleBufferRenderSynchronizer
     private let queue = DispatchQueue(label: "cc.slokker.goattv.goatcore", qos: .userInteractive)
     private let pipeline = MediaPipeline()
-    private var urlSession: URLSession?
+    private let urlSessionLock = OSAllocatedUnfairLock<URLSession?>(initialState: nil)
+    /// Já se fechou (de outra thread): nada mais vai para o leitor.
+    private let stopped = OSAllocatedUnfairLock(initialState: false)
     private var cancelled = false
     private var hasAudio = false
     private var hasVideo = false
@@ -266,19 +305,20 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         delegateQueue.underlyingQueue = queue
         delegateQueue.maxConcurrentOperationCount = 1
         let s = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
-        urlSession = s
+        urlSessionLock.withLock { $0 = s }
         var request = URLRequest(url: url)
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         s.dataTask(with: request).resume()
         queue.async { self.startWatch() }
     }
 
+    /// Fecha já a ligação (o fornecedor pode só deixar uma de cada vez); o que ainda estiver na fila não chega ao leitor.
     func cancel() {
+        stopped.withLock { $0 = true }
+        urlSessionLock.withLock { $0?.invalidateAndCancel() }
         queue.async {
             self.cancelled = true
             self.watch?.cancel()
-            self.urlSession?.invalidateAndCancel()
-            self.urlSession = nil
         }
     }
 
@@ -319,7 +359,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard !cancelled else { return }
+        guard !closed else { return }
         pipeline.feed(data)
     }
 
@@ -338,14 +378,16 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         guard !cancelled else { return }
         cancelled = true
         watch?.cancel()
-        urlSession?.invalidateAndCancel()
+        urlSessionLock.withLock { $0?.invalidateAndCancel() }
         onEvent?(.failed(why))
     }
 
     // MARK: Amostras e relógio
 
+    private var closed: Bool { cancelled || stopped.withLock { $0 } }
+
     private func video(_ b: CMSampleBuffer) {
-        guard !cancelled else { return }
+        guard !closed else { return }
         if display.status == .failed {
             fail("video renderer: \(display.error?.localizedDescription ?? "?")")
             return
@@ -361,7 +403,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     private func audioSample(_ b: CMSampleBuffer) {
-        guard !cancelled else { return }
+        guard !closed else { return }
         if audio.status == .failed {
             fail("audio renderer: \(audio.error?.localizedDescription ?? "?")")
             return

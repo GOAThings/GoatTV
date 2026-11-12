@@ -13,12 +13,15 @@ extension CoreTests {
         var unsupported: [String] = []
     }
 
-    private static func run(_ name: String) throws -> Run {
+    private static func fixture(_ name: String) throws -> Data {
         guard let url = Bundle.module.url(forResource: name, withExtension: "ts", subdirectory: "Fixtures") else {
             throw Failure(description: "falta a fixture \(name)")
         }
-        let bytes = try Data(contentsOf: url)
-        let pipeline = MediaPipeline()
+        return try Data(contentsOf: url)
+    }
+
+    private static func run(_ name: String, from offset: Int = 0, pipeline: MediaPipeline = MediaPipeline()) throws -> Run {
+        let bytes = try fixture(name).dropFirst(offset)
         var r = Run()
         pipeline.onTracks = { r.tracks = $0 }
         pipeline.onVideo = { r.video.append($0) }
@@ -27,9 +30,10 @@ extension CoreTests {
         // Aos bocados, como chega da rede.
         var at = 0
         var step = 1
-        while at < bytes.count {
-            let n = min(step, bytes.count - at)
-            pipeline.feed(bytes.subdata(in: at..<at + n))
+        let data = Data(bytes)
+        while at < data.count {
+            let n = min(step, data.count - at)
+            pipeline.feed(data.subdata(in: at..<at + n))
             at += n
             step = step * 7 % 3001 + 1
         }
@@ -59,6 +63,55 @@ extension CoreTests {
         VTDecompressionSessionWaitForAsynchronousFrames(session)
         guard status == noErr, frameStatus == noErr, let size else { throw Failure(description: "descodificar: \(status) / \(frameStatus)") }
         return size
+    }
+
+    /// Todas as imagens pelo VideoToolbox, pela ordem em que chegam (como o leitor faz): nenhuma pode dar erro.
+    private static func decodeAll(_ buffers: [CMSampleBuffer]) throws -> Int {
+        guard let format = buffers.first.flatMap(CMSampleBufferGetFormatDescription) else { throw Failure(description: "sem vídeo") }
+        var session: VTDecompressionSession?
+        guard VTDecompressionSessionCreate(allocator: nil, formatDescription: format, decoderSpecification: nil, imageBufferAttributes: nil,
+                                           outputCallback: nil, decompressionSessionOut: &session) == noErr, let session else {
+            throw Failure(description: "VTDecompressionSessionCreate")
+        }
+        defer { VTDecompressionSessionInvalidate(session) }
+        var images = 0
+        var errors: [OSStatus] = []
+        for b in buffers {
+            let status = VTDecompressionSessionDecodeFrame(session, sampleBuffer: b, flags: [], infoFlagsOut: nil) { s, _, image, _, _ in
+                if s != noErr { errors.append(s) } else if image != nil { images += 1 }
+            }
+            if status != noErr { errors.append(status) }
+        }
+        VTDecompressionSessionWaitForAsynchronousFrames(session)
+        if !errors.isEmpty { throw Failure(description: "erros ao descodificar: \(errors.prefix(5))") }
+        return images
+    }
+
+    /// Entrar num canal a meio (como sempre acontece num direto): a primeira imagem que sai é uma imagem-chave, e
+    /// tudo o que sai descodifica sem erros. Num open GOP, as imagens I que não são IDR também servem para entrar.
+    static func goatCoreJoinsMidStream() throws {
+        let size = try fixture("h264_opengop").count
+        for offset in [size / 4, size / 2, size * 2 / 3] {
+            let r = try run("h264_opengop", from: offset - offset % 188 + 57)
+            guard let first = r.video.first else { throw Failure(description: "sem vídeo a partir de \(offset)") }
+            try expect(isSync(first), true, "a partir de \(offset)")
+            let decoded = try decodeAll(r.video)
+            if decoded == 0 { throw Failure(description: "nenhuma imagem a partir de \(offset)") }
+        }
+    }
+
+    /// Mudar de canal: o mesmo pipeline, reposto, com outro canal (outro formato e outro relógio).
+    static func goatCoreChannelChange() throws {
+        let pipeline = MediaPipeline()
+        let a = try run("h264_aac", pipeline: pipeline)
+        pipeline.reset()
+        let b = try run("hevc_ac3", from: 188 * 300, pipeline: pipeline)
+        try expect(a.video.isEmpty, false)
+        guard let first = b.video.first else { throw Failure(description: "sem vídeo depois de mudar de canal") }
+        try expect(isSync(first), true)
+        try expect(CMFormatDescriptionGetMediaSubType(CMSampleBufferGetFormatDescription(first)!), kCMVideoCodecType_HEVC)
+        _ = try decodeAll(b.video)
+        try expect(b.audio.isEmpty, false)
     }
 
     static func goatCoreH264Aac() throws {

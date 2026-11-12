@@ -41,6 +41,9 @@ public final class MediaPipeline {
     private var nal: NalReader?
     private var videoFormat: CMVideoFormatDescription?
     private var videoClock = TsClock()
+    /// Só se manda vídeo a partir de uma imagem-chave (ao começar e depois de um salto): as outras dependem de
+    /// imagens que o descodificador nunca viu (o verde e os borrões).
+    private var waitingKey = true
     private var audio: AudioFrameReader?
     private var audioReaderPid: Int?
     private var audioFormat: CMAudioFormatDescription?
@@ -69,6 +72,7 @@ public final class MediaPipeline {
         nal = nil
         videoFormat = nil
         videoClock.reset()
+        waitingKey = true
         audio = nil
         audioReaderPid = nil
         audioFormat = nil
@@ -140,7 +144,16 @@ public final class MediaPipeline {
         // Até à primeira imagem-chave com os parâmetros não há nada que se possa mostrar.
         guard let format = videoFormat else { return }
         let pts = videoClock.unwrap(ts: sample.pts)
-        if videoClock.jumped { onJump?() }
+        if videoClock.jumped {
+            waitingKey = true
+            onJump?()
+        }
+        // Faltaram dados (a imagem que vinha não chegou inteira): espera-se pela próxima imagem-chave.
+        if sample.discontinuity { waitingKey = true }
+        if waitingKey {
+            guard unit.keyframe else { return }
+            waitingKey = false
+        }
         let dts = sample.dts == sample.pts ? pts : videoClock.unwrap(ts: sample.dts)
         let data = AppleMedia.shared.data(bytes: unit.data) as Data
         guard let buffer = Self.sampleBuffer(data, format: format, pts: pts, dts: dts, duration: .invalid, samples: 1, packetSizes: nil) else { return }

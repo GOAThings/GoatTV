@@ -31,6 +31,7 @@ class NalReader(private val hevc: Boolean) {
         val nals = split(annexB)
         var keyframe = false
         var changed = false
+        var sawSlice = false
         var size = 0
         val keep = ArrayList<IntArray>(nals.size)
         for (n in nals) {
@@ -47,6 +48,11 @@ class NalReader(private val hevc: Boolean) {
                     size += 4 + n[1] - n[0]
                 }
                 Role.OTHER -> {
+                    // No H.264, muitos canais de TV não mandam IDR: as imagens só com fatias I também servem para entrar.
+                    if (!hevc && (type == 1 || type == 5) && !sawSlice) {
+                        sawSlice = true
+                        if (type == 1 && isIntraSlice(annexB, n[0] + 1, n[1])) keyframe = true
+                    }
                     keep += n
                     size += 4 + n[1] - n[0]
                 }
@@ -73,6 +79,58 @@ class NalReader(private val hevc: Boolean) {
     }
 
     private enum class Role { VPS, SPS, PPS, KEY, SKIP, OTHER }
+
+    /** A primeira fatia é I (slice_type 2 ou 7) ou SI (4 ou 9): o cabeçalho começa por first_mb_in_slice e slice_type. */
+    private fun isIntraSlice(d: ByteArray, from: Int, to: Int): Boolean {
+        val bits = ExpGolomb(d, from, to)
+        bits.ue() // first_mb_in_slice
+        val type = bits.ue()
+        return type >= 0 && (type % 5 == 2 || type % 5 == 4)
+    }
+
+    /** Lê exp-Golomb do início de um NAL, saltando os bytes 0x03 de prevenção (00 00 03). -1 se acabar antes. */
+    private class ExpGolomb(private val d: ByteArray, private var at: Int, private val to: Int) {
+        private var bit = 0
+        private var zeros = 0
+
+        private fun next(): Int {
+            if (at >= to) return -1
+            if (bit == 0) {
+                val b = d[at].toInt() and 0xFF
+                if (zeros >= 2 && b == 3) {
+                    at++
+                    zeros = 0
+                    if (at >= to) return -1
+                }
+            }
+            val b = d[at].toInt() and 0xFF
+            val v = (b shr (7 - bit)) and 1
+            bit++
+            if (bit == 8) {
+                bit = 0
+                zeros = if (b == 0) zeros + 1 else 0
+                at++
+            }
+            return v
+        }
+
+        fun ue(): Int {
+            var n = 0
+            while (true) {
+                val b = next()
+                if (b < 0 || n > 31) return -1
+                if (b == 1) break
+                n++
+            }
+            var v = 0
+            repeat(n) {
+                val b = next()
+                if (b < 0) return -1
+                v = (v shl 1) or b
+            }
+            return (1 shl n) - 1 + v
+        }
+    }
 
     private fun type(d: ByteArray, at: Int): Int = if (hevc) (d[at].toInt() shr 1) and 0x3F else d[at].toInt() and 0x1F
 

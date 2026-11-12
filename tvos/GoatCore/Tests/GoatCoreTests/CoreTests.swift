@@ -17,6 +17,8 @@ enum CoreTests {
         ("goatCoreHevcAc3", goatCoreHevcAc3),
         ("goatCoreEac3", goatCoreEac3),
         ("goatCoreMpeg2IsReported", goatCoreMpeg2IsReported),
+        ("goatCoreJoinsMidStream", goatCoreJoinsMidStream),
+        ("goatCoreChannelChange", goatCoreChannelChange),
         ("channelMatchNormalize", channelMatchNormalize),
         ("channelMatchFind", channelMatchFind),
         ("channelMatchCoverage", channelMatchCoverage),
