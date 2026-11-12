@@ -293,7 +293,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         pipeline.onVideo = { [weak self] b in self?.video(b) }
         pipeline.onAudio = { [weak self] b in self?.audioSample(b) }
         pipeline.onUnsupported = { [weak self] what in self?.fail("unsupported \(what)") }
-        pipeline.onJump = { [weak self] in self?.restartClock() }
+        // Um salto no relógio do canal já chega aqui com o tempo seguido (TsClock): o leitor continua sem parar.
+        pipeline.onJump = {}
     }
 
     func start(_ url: URL, headers: [String: String]) {
@@ -422,17 +423,6 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         running = true
         synchronizer.setRate(userPaused ? 0 : rate, time: time)
         onEvent?(.started)
-    }
-
-    /// O canal saltou no tempo: o que está no leitor não continua o que vem a seguir.
-    private func restartClock() {
-        display.flush()
-        audio.flush()
-        synchronizer.rate = 0
-        startTime = nil
-        running = false
-        lastVideo = .invalid
-        lastAudio = .invalid
     }
 
     /// Se a rede não acompanha, o relógio para à espera (em vez de mostrar imagens paradas com o som aos saltos) e

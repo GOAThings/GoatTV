@@ -19,14 +19,15 @@ public struct MediaTrack: Equatable, Sendable {
 /// (TsDemuxer, NalReader, AudioFrameReader, os mesmos do Android) e sai em CMSampleBuffer comprimidos, prontos para o
 /// AVSampleBufferDisplayLayer (que descodifica o H.264 e o HEVC pelo hardware) e o AVSampleBufferAudioRenderer.
 ///
-/// Não é seguro entre threads: quem usa chama tudo da mesma fila. Os tempos já vêm contínuos (sem as voltas dos 33
-/// bits) e em 90 kHz; quando o canal salta no tempo, [onJump] avisa (quem toca recomeça o relógio).
+/// Não é seguro entre threads: quem usa chama tudo da mesma fila. Os tempos vêm seguidos (sem as voltas dos 33 bits
+/// nem os saltos do canal) e em 90 kHz.
 public final class MediaPipeline {
     /// As faixas do canal (a primeira vez e sempre que mudam).
     public var onTracks: (([MediaTrack]) -> Void)?
     public var onVideo: ((CMSampleBuffer) -> Void)?
     public var onAudio: ((CMSampleBuffer) -> Void)?
-    /// O canal saltou no tempo (outro encoder, o stream recomeçou): o que já está no leitor não continua isto.
+    /// O canal saltou no tempo (outro encoder, o stream recomeçou). Os tempos que saem continuam seguidos (TsClock),
+    /// por isso o leitor não precisa de fazer nada; serve para o registo.
     public var onJump: (() -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
