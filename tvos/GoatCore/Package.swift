@@ -12,6 +12,7 @@ let package = Package(
         .binaryTarget(name: "GoatShared", path: "Frameworks/GoatShared.xcframework"),
         // O núcleo em Kotlin/Native é estático e traz código em C++.
         .target(name: "GoatCore", dependencies: ["GoatShared"], linkerSettings: [.linkedLibrary("c++")]),
-        .testTarget(name: "GoatCoreTests", dependencies: ["GoatCore"]),
+        // Fixtures: canais curtos feitos com o ffmpeg (os mesmos de shared/src/jvmTest/resources/ts).
+        .testTarget(name: "GoatCoreTests", dependencies: ["GoatCore"], resources: [.copy("Fixtures")]),
     ]
 )

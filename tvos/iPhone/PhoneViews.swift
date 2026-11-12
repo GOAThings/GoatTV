@@ -1888,7 +1888,7 @@ private struct MenuTab: View {
             }
             section(s.t("Advanced", "Avançado")) {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)
-                pick(s.t("Player", "Player"), "engine", p.engine, [("exo", s.t("Apple + VLC", "Apple + VLC")), ("vlc", s.t("VLC only (for streams that don't open)", "Só VLC (para streams que não abram)")), ("aether", s.t("Apple + AetherEngine (experimental)", "Apple + AetherEngine (experimental)"))])
+                pick(s.t("Player", "Player"), "engine", p.engine, [("exo", s.t("Apple + VLC", "Apple + VLC")), ("vlc", s.t("VLC only (for streams that don't open)", "Só VLC (para streams que não abram)")), ("aether", s.t("Apple + AetherEngine (experimental)", "Apple + AetherEngine (experimental)")), ("goatcore", s.t("GoatCore (experimental)", "GoatCore (experimental)"))])
                 pick(s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"), "decoder", p.decoder, [("hw", "Hardware"), ("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))])
                 pick(s.r("deinterlace"), "deinterlace", p.deinterlace, [("yadif2x", s.r("deinterlace_smooth")), ("yadif", s.r("deinterlace_normal")), ("off", s.r("off"))])
                 MenuRow(s.t("User agent", "User agent"), value: p.userAgent.isEmpty ? s.t("Default", "Normal") : p.userAgent, chevron: true) {

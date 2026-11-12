@@ -13,6 +13,10 @@ enum CoreTests {
 
     static let all: [(String, () throws -> Void)] = [
         ("hashes", hashes),
+        ("goatCoreH264Aac", goatCoreH264Aac),
+        ("goatCoreHevcAc3", goatCoreHevcAc3),
+        ("goatCoreEac3", goatCoreEac3),
+        ("goatCoreMpeg2IsReported", goatCoreMpeg2IsReported),
         ("channelMatchNormalize", channelMatchNormalize),
         ("channelMatchFind", channelMatchFind),
         ("channelMatchCoverage", channelMatchCoverage),

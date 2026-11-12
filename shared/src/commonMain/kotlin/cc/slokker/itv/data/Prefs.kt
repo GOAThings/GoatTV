@@ -301,9 +301,11 @@ data class Prefs(
         const val EXO = "exo"; const val VLC = "vlc"
         /** Só na Apple (o AetherEngine). */
         const val AETHER = "aether"
+        /** O motor próprio (experimental; por agora só na Apple). */
+        const val GOATCORE = "goatcore"
         /** Os do Android (a Apple passa os seus a [from]). */
         val ALL = setOf(EXO, VLC)
-        val APPLE = setOf(EXO, VLC, AETHER)
+        val APPLE = setOf(EXO, VLC, AETHER, GOATCORE)
     }
 
     /** As margens das gravações, em minutos (antes e depois do programa). */

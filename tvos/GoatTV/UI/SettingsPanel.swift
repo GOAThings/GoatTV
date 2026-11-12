@@ -1437,7 +1437,8 @@ struct SettingsPanel: View {
             return (s.t("Player", "Player"),
                     [o("exo", s.t("Apple + VLC", "Apple + VLC")),
                      o("vlc", s.t("VLC only (for streams that don't open)", "Só VLC (para streams que não abram)")),
-                     o("aether", s.t("Apple + AetherEngine (experimental)", "Apple + AetherEngine (experimental)"))],
+                     o("aether", s.t("Apple + AetherEngine (experimental)", "Apple + AetherEngine (experimental)")),
+                     o("goatcore", s.t("GoatCore (experimental)", "GoatCore (experimental)"))],
                     .string(p.engine))
         case "decoder":
             return (s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"),
