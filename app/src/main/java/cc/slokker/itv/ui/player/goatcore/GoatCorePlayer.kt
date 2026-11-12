@@ -17,6 +17,7 @@ import cc.slokker.itv.media.TsDemuxer
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
+import cc.slokker.itv.media.VideoStart
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -67,7 +68,7 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
     private var audioReader: AudioFrameReader? = null
     private val videoClock = TsClock()
     private val audioClock = TsClock()
-    private var waitingKey = true
+    private val videoStart = VideoStart()
 
     /** Os conjuntos de parâmetros da última imagem-chave (Annex B), para configurar o descodificador. */
     @Volatile private var csd: List<ByteArray> = emptyList()
@@ -157,13 +158,10 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
         val pts = videoClock.unwrap(sample.pts)
         if (videoClock.jumped) {
             stats.jumps++
-            waitingKey = true
+            videoStart.restart()
         }
-        if (sample.discontinuity) waitingKey = true
-        if (waitingKey) {
-            if (!unit.keyframe) return
-            waitingKey = false
-        }
+        if (sample.discontinuity) videoStart.restart()
+        if (!videoStart.pass(unit.keyframe, pts)) return
         stats.videoUnits++
         videoQueue.put(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
     }
