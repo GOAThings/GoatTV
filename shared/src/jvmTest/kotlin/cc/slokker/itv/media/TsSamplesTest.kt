@@ -93,7 +93,7 @@ class TsSamplesTest {
 
     /** Open GOP: só a primeira é IDR, as outras imagens I também são pontos de entrada (como em muitos canais de TV). */
     @Test
-    fun h264OpenGopIFrames() = video("h264_opengop.ts", hevc = false, keyframes = 2)
+    fun h264OpenGopIFrames() = video("h264_opengop.ts", hevc = false, keyframes = 6)
 
     @Test
     fun hevcUnits() = video("hevc_ac3.ts", hevc = true, keyframes = 2)
