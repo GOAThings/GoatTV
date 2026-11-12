@@ -2,6 +2,7 @@ package cc.slokker.itv.ui
 
 import cc.slokker.itv.data.AppRelease
 import cc.slokker.itv.data.Catchup
+import cc.slokker.itv.data.CatchupRules
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.HomeItem
 import cc.slokker.itv.data.PhoneChannelList
@@ -42,6 +43,7 @@ import cc.slokker.itv.data.ChannelCatalog
 import cc.slokker.itv.data.GroupNames
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.Playlist
+import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.kind
@@ -1282,9 +1284,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun canCatchup(channel: Channel, entry: EpgEntry): Boolean {
         val content = content.value ?: return false
-        if (!content.playlist.type.kind.supportsCatchup || channel.archiveDays <= 0) return false
-        val now = System.currentTimeMillis()
-        return entry.startMs < now - Catchup.MIN_AGE_MS && entry.startMs > now - channel.archiveDays * 86_400_000L
+        if (!content.playlist.type.kind.supportsCatchup) return false
+        // A regra é a do núcleo partilhado (igual na Apple).
+        return CatchupRules.available(
+            m3u = content.playlist.type == PlaylistType.M3U, archiveDays = channel.archiveDays, catchupType = channel.catchupType,
+            startMs = entry.startMs, nowMs = System.currentTimeMillis(),
+        )
     }
 
     /** Vê [entry] em catch-up, desde o início (ou desde [positionMs]). */

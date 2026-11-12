@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// Uma forma de abrir um canal. O player tenta-as por ordem (ts ⇄ m3u8).
 public struct StreamCandidate: Equatable, Sendable {
@@ -16,38 +17,19 @@ public struct StreamCandidate: Equatable, Sendable {
 /// [allowedFormats] é o `allowed_output_formats` da conta Xtream.
 public func streamCandidates(playlist: Playlist, channel: Channel, preferred: String?,
                              allowedFormats: Set<String> = []) -> [StreamCandidate] {
-    let order = preferred == StreamFormat.hls ? [StreamFormat.hls, StreamFormat.ts] : [StreamFormat.ts, StreamFormat.hls]
-
     // O link pede-se ao portal ao abrir o canal (StalkerClient.candidates).
     if playlist.type == .stalker { return [] }
 
     if playlist.type == .xtream {
         guard let id = channel.streamId else { return [] }
-        // Se o servidor diz que formatos permite, não vale a pena tentar os outros.
-        let allowed = order.filter { allowedFormats.contains($0) }
-        return (allowed.isEmpty ? order : allowed).compactMap { format in
+        // Se o servidor diz que formatos permite, não vale a pena tentar os outros (as regras do núcleo partilhado).
+        return StreamRules.shared.xtreamFormats(preferred: preferred, allowed: allowedFormats).compactMap { format in
             Xtream.streamURL(playlist, streamId: id, ext: format).map { StreamCandidate(url: $0, format: format) }
         }
     }
 
     guard let url = channel.url else { return [] }
-    let path = String(url.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)[0]
-        .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0])
-    let rest = String(url.dropFirst(path.count))
-    let lower = path.lowercased()
-    if lower.hasSuffix(".m3u8") {
-        return [StreamCandidate(url: url, format: StreamFormat.hls),
-                StreamCandidate(url: String(path.dropLast(5)) + ".ts" + rest, format: StreamFormat.ts)]
-    }
-    if lower.hasSuffix(".ts") {
-        return [StreamCandidate(url: url, format: StreamFormat.ts),
-                StreamCandidate(url: String(path.dropLast(3)) + ".m3u8" + rest, format: StreamFormat.hls)]
-    }
-    // Sem extensão: o mesmo URL, primeiro como HLS (o mais comum em M3U) a não ser que se prefira TS.
-    if preferred == StreamFormat.ts {
-        return [StreamCandidate(url: url, format: StreamFormat.ts), StreamCandidate(url: url, format: StreamFormat.hls)]
-    }
-    return [StreamCandidate(url: url, format: StreamFormat.hls), StreamCandidate(url: url, format: StreamFormat.ts)]
+    return StreamRules.shared.m3uCandidates(url: url, preferred: preferred).map { StreamCandidate(url: $0.url, format: $0.format) }
 }
 
 /// Um programa que já passou (ou o atual desde o início), a ver em catch-up a partir de [positionMs].
@@ -76,16 +58,12 @@ public struct Catchup: Equatable, Sendable {
     /// O programa ainda está no arquivo do servidor? (Xtream com `tv_archive`, M3U com `catchup`, Stalker com o
     /// arquivo do portal, dentro dos dias que guarda, e pelo menos 2 minutos depois de começar.)
     public static func available(playlist: Playlist, channel: Channel, entry: EpgEntry, now: Int64 = nowMs()) -> Bool {
-        guard channel.archiveDays > 0 else { return false }
-        switch playlist.type {
-        case .xtream, .stalker: break
-        case .m3u: guard channel.catchupType != nil else { return false }
-        }
-        // O valor pode vir de uma cópia em cache, de antes de ser limitado ao ler a lista.
-        return entry.startMs < now - minAgeMs && entry.startMs > now - Int64(min(channel.archiveDays, SafeInput.maxArchiveDays)) * 86_400_000
+        // A regra é a do núcleo partilhado (igual no Android).
+        CatchupRules.shared.available(m3u: playlist.type == .m3u, archiveDays: Int32(clamping: channel.archiveDays),
+                                      catchupType: channel.catchupType, startMs: entry.startMs, nowMs: now)
     }
 
-    public static let minAgeMs: Int64 = 2 * 60_000
+    public static var minAgeMs: Int64 { CatchupRules.shared.MIN_AGE_MS }
 }
 
 /// Onde começa o catch-up (ao minuto, que é como o servidor trabalha) e as formas de o pedir.
@@ -102,12 +80,12 @@ public func catchupCandidates(playlist: Playlist, catchup: Catchup, timezone: St
                               nowMs now: Int64 = nowMs(), zone: TimeZone = .current) -> CatchupStart? {
     let wanted = catchup.startMs + catchup.positionMs
     let shift = Int64(correctionMin) * 60_000
-    func floorTo(_ v: Int64, _ unit: Int64) -> Int64 { v - ((v % unit) + unit) % unit }
+    func floorTo(_ v: Int64, _ unit: Int64) -> Int64 { CatchupRules.shared.floorTo(value: v, unit: unit) }
     switch playlist.type {
     case .xtream:
         guard let id = catchup.channel.streamId else { return nil }
         let start = floorTo(wanted, 60_000)
-        let minutes = max(1, Int((catchup.endMs - start + 59_999) / 60_000))
+        let minutes = Int(CatchupRules.shared.xtreamMinutes(startMs: start, endMs: catchup.endMs))
         let urls = Xtream.catchupURLs(playlist, streamId: id, startMs: start + shift, minutes: minutes, timezone: timezone)
         return CatchupStart(startMs: start, candidates: urls.map { StreamCandidate(url: $0, format: StreamFormat.ts) })
     case .m3u:

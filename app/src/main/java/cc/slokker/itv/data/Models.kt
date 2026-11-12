@@ -229,6 +229,6 @@ data class Catchup(
 
     companion object {
         /** O servidor precisa de uns minutos para ter um programa em arquivo. */
-        const val MIN_AGE_MS = 2 * 60_000L
+        const val MIN_AGE_MS = CatchupRules.MIN_AGE_MS
     }
 }

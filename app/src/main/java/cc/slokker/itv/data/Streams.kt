@@ -14,40 +14,17 @@ fun streamCandidates(
     preferred: String?,
     allowedFormats: Set<String> = emptySet(),
 ): List<StreamCandidate> {
-    val order = if (preferred == StreamFormat.HLS) {
-        listOf(StreamFormat.HLS, StreamFormat.TS)
-    } else {
-        listOf(StreamFormat.TS, StreamFormat.HLS)
-    }
-
     // O link pede-se ao portal ao abrir o canal (StalkerSource.candidates).
     if (playlist.type.kind.linkAtPlayTime) return emptyList()
 
     if (playlist.type == PlaylistType.XTREAM) {
         val id = channel.streamId ?: return emptyList()
-        // Se o servidor diz que formatos permite, não vale a pena tentar os outros.
-        return order.filter { it in allowedFormats }.ifEmpty { order }.map { StreamCandidate(XtreamSource.streamUrl(playlist, id, it), it) }
+        // Se o servidor diz que formatos permite, não vale a pena tentar os outros (StreamRules, igual na Apple).
+        return StreamRules.xtreamFormats(preferred, allowedFormats).map { StreamCandidate(XtreamSource.streamUrl(playlist, id, it), it) }
     }
 
-    val url = channel.url ?: return emptyList()
-    val path = url.substringBefore('?').substringBefore('#')
-    return when {
-        path.endsWith(".m3u8", ignoreCase = true) -> listOf(
-            StreamCandidate(url, StreamFormat.HLS),
-            StreamCandidate(swapExtension(url, path, ".m3u8", ".ts"), StreamFormat.TS),
-        )
-        path.endsWith(".ts", ignoreCase = true) -> listOf(
-            StreamCandidate(url, StreamFormat.TS),
-            StreamCandidate(swapExtension(url, path, ".ts", ".m3u8"), StreamFormat.HLS),
-        )
-        // Sem extensão: o mesmo URL, primeiro como HLS (o mais comum em M3U) a não ser que se prefira TS.
-        preferred == StreamFormat.TS -> listOf(StreamCandidate(url, StreamFormat.TS), StreamCandidate(url, StreamFormat.HLS))
-        else -> listOf(StreamCandidate(url, StreamFormat.HLS), StreamCandidate(url, StreamFormat.TS))
-    }
+    return StreamRules.m3uCandidates(channel.url ?: return emptyList(), preferred)
 }
-
-private fun swapExtension(url: String, path: String, from: String, to: String): String =
-    path.dropLast(from.length) + to + url.substring(path.length)
 
 /**
  * Tentativas para ver [catchup] (Xtream e M3U; o Stalker pede o link ao portal, ver StalkerSource.archive). O Xtream
@@ -68,14 +45,14 @@ fun catchupCandidates(
     return when (playlist.type) {
         PlaylistType.XTREAM -> {
             val id = catchup.channel.streamId ?: return null
-            val start = wanted - Math.floorMod(wanted, 60_000L)
-            val minutes = ((catchup.endMs - start + 59_999) / 60_000).toInt().coerceAtLeast(1)
+            val start = CatchupRules.floorTo(wanted, 60_000L)
+            val minutes = CatchupRules.xtreamMinutes(start, catchup.endMs)
             val urls = XtreamSource.catchupUrls(playlist, id, start + shift, minutes, timezone)
             CatchupStart(start, urls.map { StreamCandidate(it, StreamFormat.TS) })
         }
         PlaylistType.M3U -> {
             if (catchup.channel.catchupType == null) return null
-            val start = wanted - Math.floorMod(wanted, M3uCatchup.precisionMs(catchup.channel))
+            val start = CatchupRules.floorTo(wanted, M3uCatchup.precisionMs(catchup.channel))
             val candidates = M3uCatchup.candidates(catchup.channel, (start + shift) / 1000, (catchup.endMs + shift) / 1000, nowMs / 1000)
             CatchupStart(start, candidates).takeIf { candidates.isNotEmpty() }
         }

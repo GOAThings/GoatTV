@@ -2,6 +2,7 @@ package cc.slokker.itv.data.xtream
 
 import cc.slokker.itv.ui.i18n.I18n
 import android.util.Base64
+import cc.slokker.itv.data.CatchupRules
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
@@ -66,7 +67,7 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
                 categoryId = s.categoryId.orEmpty(),
                 streamId = id,
                 epgId = s.epgChannelId?.trim()?.takeIf { it.isNotEmpty() },
-                archiveDays = if (s.tvArchive?.trim() == "1") s.tvArchiveDuration?.trim()?.toDoubleOrNull()?.toInt()?.coerceAtLeast(1) ?: 1 else 0,
+                archiveDays = CatchupRules.xtreamArchiveDays(s.tvArchive, s.tvArchiveDuration),
             )
         }
         PlaylistContent.build(
@@ -155,8 +156,7 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
          * Há duas formas na API Xtream; os servidores aceitam uma ou as duas, por isso o player tenta ambas.
          */
         fun catchupUrls(playlist: Playlist, streamId: String, startMs: Long, minutes: Int, timezone: String?): List<String> {
-            val zone = timezone?.let { java.util.TimeZone.getTimeZone(it) } ?: java.util.TimeZone.getDefault()
-            val start = java.text.SimpleDateFormat("yyyy-MM-dd:HH-mm", java.util.Locale.US).apply { timeZone = zone }.format(java.util.Date(startMs))
+            val start = CatchupRules.xtreamStart(startMs, timezone)
             val user = playlist.username.orEmpty()
             val pass = playlist.password.orEmpty()
             val path = baseUrl(playlist).newBuilder()

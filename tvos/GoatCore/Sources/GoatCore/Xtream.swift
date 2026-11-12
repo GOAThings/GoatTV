@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// Endereços e respostas da API Xtream Codes (só TV em direto), como no GoatTV Android.
 public enum Xtream {
@@ -56,11 +57,8 @@ public enum Xtream {
     /// Há duas formas na API Xtream; os servidores aceitam uma ou as duas, por isso tentam-se ambas.
     public static func catchupURLs(_ playlist: Playlist, streamId: String, startMs: Int64, minutes: Int, timezone: String?) -> [String] {
         guard let base = try? baseURL(playlist) else { return [] }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = timezone.flatMap { TimeZone(identifier: $0) } ?? TimeZone.current
-        formatter.dateFormat = "yyyy-MM-dd:HH-mm"
-        let start = formatter.string(from: Date(timeIntervalSince1970: Double(startMs) / 1000))
+        // A hora no fuso do servidor (sem ele, deste aparelho), como no Android (CatchupRules.xtreamStart).
+        let start = CatchupRules.shared.xtreamStart(startMs: startMs, timezone: timezone)
         let user = playlist.username ?? ""
         let pass = playlist.password ?? ""
         var path = base
@@ -112,8 +110,6 @@ public enum Xtream {
             let name = s["name"]?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let icon = s["stream_icon"]?.text
             let epg = s["epg_channel_id"]?.text?.trimmingCharacters(in: .whitespaces)
-            let archive = s["tv_archive"]?.text?.trimmingCharacters(in: .whitespaces) == "1"
-            let duration = s["tv_archive_duration"]?.text.flatMap { SafeInput.int(text: $0) }
             channels.append(Channel(
                 uid: i,
                 key: id,
@@ -123,7 +119,7 @@ public enum Xtream {
                 categoryId: s["category_id"]?.text ?? "",
                 streamId: id,
                 epgId: (epg?.isEmpty ?? true) ? nil : epg,
-                archiveDays: archive ? min(max(1, duration ?? 1), SafeInput.maxArchiveDays) : 0
+                archiveDays: Int(CatchupRules.shared.xtreamArchiveDays(tvArchive: s["tv_archive"]?.text, duration: s["tv_archive_duration"]?.text))
             ))
         }
         return channels
