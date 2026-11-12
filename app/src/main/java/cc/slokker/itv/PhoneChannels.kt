@@ -3,6 +3,7 @@ package cc.slokker.itv
 import android.util.Log
 import cc.slokker.itv.data.LanRequest
 import cc.slokker.itv.data.PhoneChannelList
+import cc.slokker.itv.data.read
 import cc.slokker.itv.ui.AppViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler

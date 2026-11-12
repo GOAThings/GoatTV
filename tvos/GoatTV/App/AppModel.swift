@@ -1761,7 +1761,7 @@ final class AppModel {
             let head = header + "\n\n--- App ---\n" + DebugLog.text + "\n\n--- System ---\n"
             // Fora da interface: num registo grande, isto demora.
             let log = await Task.detached {
-                BugReport.trim(head: BugReport.redact(head, secrets: secrets), log: BugReport.redact(DebugLog.system(), secrets: secrets))
+                BugReport.report(head: head, log: DebugLog.system(), secrets: secrets)
             }.value
             var body: [String: JSON] = [
                 "app": .string("goattv"), "version": .string(appVersion), "platform": .string("apple-tv"),

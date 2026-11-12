@@ -1,13 +1,12 @@
 package cc.slokker.itv.data
 
-import java.io.InputStream
-
 /**
- * O início de um pedido à porta dos telemóveis ([cc.slokker.itv.PhoneChannels.PORT]), lido com limite de tamanho.
+ * O início de um pedido à porta dos telemóveis (6471, os canais para o GoatRemote), lido com limite de tamanho.
  * Só se responde a pedidos diretos, como os do GoatRemote (um IP ou um nome de casa em Host, e sem Origin): o que
- * vier de uma página web é recusado. As mesmas regras da porta 6470 do GoatLauncher.
+ * vier de uma página web é recusado. As mesmas regras da porta 6470 do GoatLauncher. Cada plataforma lê os bytes da ligação
+ * (até [MAX_HEAD_BYTES]) e passa a cabeça a [parse].
  */
-internal class LanRequest private constructor(
+class LanRequest private constructor(
     val method: String,
     val path: String,
     private val hasOrigin: Boolean,
@@ -18,26 +17,8 @@ internal class LanRequest private constructor(
     companion object {
         const val MAX_HEAD_BYTES = 8 * 1024
 
-        /** Lê até à linha em branco. null: fechou antes disso, passou de [MAX_HEAD_BYTES] ou não se percebe. */
-        fun read(input: InputStream): LanRequest? {
-            val head = StringBuilder()
-            var emptyLine = true
-            while (head.length < MAX_HEAD_BYTES) {
-                val byte = input.read()
-                if (byte < 0) return null
-                val char = byte.toChar()
-                head.append(char)
-                if (char == '\n') {
-                    if (emptyLine) return parse(head.toString())
-                    emptyLine = true
-                } else if (char != '\r') {
-                    emptyLine = false
-                }
-            }
-            return null
-        }
-
-        private fun parse(head: String): LanRequest? {
+        /** Cada byte um carácter (como foram lidos), até à primeira linha em branco: o pedido, ou null se não se percebe. */
+        fun parse(head: String): LanRequest? {
             val lines = head.split('\n').map { it.trimEnd('\r') }
             val requestLine = lines.first().split(' ')
             val method = requestLine[0].takeIf { it.isNotEmpty() } ?: return null
