@@ -1,7 +1,8 @@
 name: Apple TV
 
-# A app do Apple TV (tvos/): testes do núcleo em Linux e a IPA sem assinatura (assina-se depois com o certificado de
-# quem instala). Cada versão do GoatTV leva esta IPA ao lado da APK (scripts de publicação, fora do repositório).
+# A app do Apple TV (tvos/): testes do GoatCore (num Mac, porque usa o núcleo partilhado) e a IPA sem assinatura
+# (assina-se depois com o certificado de quem instala). Cada versão do GoatTV leva esta IPA ao lado da APK (scripts de
+# publicação, fora do repositório).
 on:
   push:
     branches: [main]
@@ -20,34 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  core-tests:
-    # O núcleo (listas, guia, conta) corre em Linux: minutos baratos.
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Testes do GoatCore
-        working-directory: tvos/GoatCore
-        run: |
-          swift --version
-          mkdir -p /tmp/run
-          for f in Tests/GoatCoreTests/*.swift; do sed '/@testable import GoatCore/d' "$f" > /tmp/run/$(basename "$f"); done
-          cat > /tmp/run/main.swift <<'M'
-          import Foundation
-          @main struct Runner {
-              static func main() {
-                  var failed = 0
-                  for (name, test) in CoreTests.all {
-                      do { try test(); print("ok   \(name)") } catch { failed += 1; print("FAIL \(name): \(error)") }
-                  }
-                  exit(failed == 0 ? 0 : 1)
-              }
-          }
-          M
-          swiftc -parse-as-library -module-name GoatCore Sources/GoatCore/*.swift /tmp/run/*.swift -o /tmp/run/tests
-          /tmp/run/tests
-
   ipa:
-    needs: core-tests
     runs-on: macos-26
     defaults:
       run:
@@ -66,11 +40,10 @@ jobs:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
       - name: Núcleo partilhado (GoatShared)
-        working-directory: .
-        run: |
-          ./gradlew --configure-on-demand --no-configuration-cache -q :shared:assembleGoatSharedReleaseXCFramework
-          mkdir -p tvos/Frameworks && rm -rf tvos/Frameworks/GoatShared.xcframework
-          cp -R shared/build/XCFrameworks/release/GoatShared.xcframework tvos/Frameworks/
+        run: scripts/build-shared.sh
+      - name: Testes do GoatCore
+        working-directory: tvos/GoatCore
+        run: swift test
       - name: XcodeGen
         run: scripts/fetch-xcodegen.sh
       - uses: actions/cache@v4

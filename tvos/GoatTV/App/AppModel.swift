@@ -189,7 +189,6 @@ final class AppModel {
     init() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         backend.client = "goattv/\(version) (apple-tv)"
-        DebugLog.add("Shared core: \(SharedCore.check())")
         backend.onSessionEnded = { [weak self] in
             Task { @MainActor in self?.sessionEnded() }
         }

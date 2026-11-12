@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// Uma regra de limpar nomes: [find] passa a [replace] ("" = tirar), sem olhar a maiúsculas.
 public struct NameRule: Equatable, Sendable {
@@ -12,44 +13,24 @@ public struct NameRule: Equatable, Sendable {
 }
 
 /// Os nomes dos canais como se mostram: as regras da lista (Prefs.nameRules), pela ordem, e por cima o nome escolhido
-/// canal a canal (Prefs.channelNames). Igual no Android (ChannelNames.kt), com a tabela channel_match.json ("names").
+/// canal a canal (Prefs.channelNames). As regras são as do núcleo partilhado (ChannelNames.kt), com a tabela
+/// channel_match.json ("names").
 public enum ChannelNames {
     /// [name] depois das [rules]: os espaços repetidos ficam um, sem espaços nas pontas. Se não sobrar nada, fica [name].
     public static func apply(_ name: String, _ rules: [NameRule]) -> String {
         if rules.isEmpty { return name }
-        var s = name
-        for r in rules { s = s.replacingOccurrences(of: r.find, with: r.replace, options: .caseInsensitive) }
-        s = s.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return s.isEmpty ? name : s
+        return AppleBridge.shared.names(name: name, finds: rules.map(\.find), replaces: rules.map(\.replace))
     }
 }
 
 /// As versões do mesmo canal numa lista ("RTP 1 HD", "RTP 1 SD", "RTP 1 FHD"…): o mesmo nome, país e atraso (+1)
 /// depois de tirar a qualidade (ChannelMatch.parse). Com "Juntar versões" (Prefs.mergeVariants), cada canal fica uma
 /// linha só: a de melhor qualidade (a primeira da lista, em empate), e as outras passam a failovers dela, da melhor para
-/// a pior. Igual no Android (ChannelVariants.kt), com a tabela channel_match.json ("variants").
+/// a pior. É o núcleo partilhado (ChannelVariants.kt) que as encontra, com a tabela channel_match.json ("variants").
 public enum ChannelVariants {
     /// Os canais da lista (chave e nome), pela ordem dela → a melhor versão de cada canal → as outras, pela ordem.
     public static func of(_ channels: [(key: String, name: String)]) -> [String: [String]] {
-        struct Item { let key: String; let quality: Int; let index: Int }
-        var groups: [String: [Item]] = [:]
-        var order: [String] = []
-        for (i, c) in channels.enumerated() {
-            let p = ChannelMatch.parse(c.name)
-            guard p.base.count >= 2 else { continue }
-            let g = "\(p.base)|\(p.country ?? "")|\(p.shift)"
-            if groups[g] == nil { order.append(g) }
-            groups[g, default: []].append(Item(key: c.key, quality: p.quality, index: i))
-        }
-        var out: [String: [String]] = [:]
-        for g in order {
-            var seen = Set<String>()
-            let unique = groups[g, default: []].filter { seen.insert($0.key).inserted }
-            guard unique.count >= 2 else { continue }
-            let sorted = unique.sorted { $0.quality != $1.quality ? $0.quality > $1.quality : $0.index < $1.index }
-            out[sorted[0].key] = sorted.dropFirst().map(\.key)
-        }
-        return out
+        AppleBridge.shared.variants(keys: channels.map(\.key), names: channels.map(\.name))
     }
 }
 

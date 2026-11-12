@@ -30,6 +30,7 @@ targets:
       - path: GoatTV
       - path: Shared
     dependencies:
+      # Com o núcleo partilhado com o Android lá dentro (GoatCore/Package.swift).
       - package: GoatCore
       # O AetherEngine vai na sua framework (ver GoatAether/AetherPlayback.swift).
       - target: GoatAether
@@ -38,9 +39,6 @@ targets:
       - package: FFmpegBuild
         products: [AetherLibavcodec, AetherLibavformat, AetherLibavutil, AetherLibswresample, AetherLibswscale,
                    AetherLibavfilter, AetherLibdav1d, AetherLibzimg, AetherLibzvbi]
-      # O núcleo partilhado com o Android (Kotlin, módulo shared/): feito pelo CI, não vai para o git.
-      - framework: Frameworks/GoatShared.xcframework
-        embed: false
       # VLC para tvOS (LGPL): descarregado por scripts/fetch-vlckit.sh, não vai para o git.
       - framework: Frameworks/TVVLCKit.xcframework
         embed: true

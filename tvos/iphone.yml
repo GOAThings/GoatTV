@@ -44,6 +44,7 @@ targets:
       - path: GoatTV/UI/PlayerNotices.swift
       - path: GoatTV/UI/RootView.swift
     dependencies:
+      # Com o núcleo partilhado com o Android lá dentro (GoatCore/Package.swift).
       - package: GoatCore
       # O AetherEngine vai na sua framework (ver GoatAether/AetherPlayback.swift).
       - target: GoatAether
@@ -52,9 +53,6 @@ targets:
       - package: FFmpegBuild
         products: [AetherLibavcodec, AetherLibavformat, AetherLibavutil, AetherLibswresample, AetherLibswscale,
                    AetherLibavfilter, AetherLibdav1d, AetherLibzimg, AetherLibzvbi]
-      # O núcleo partilhado com o Android (Kotlin, módulo shared/): feito pelo CI, não vai para o git.
-      - framework: Frameworks/GoatShared.xcframework
-        embed: false
       - framework: Frameworks/MobileVLCKit.xcframework
         embed: true
       - sdk: libc++.tbd

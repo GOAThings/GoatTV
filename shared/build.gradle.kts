@@ -11,9 +11,10 @@ kotlin {
     // O mesmo bytecode que a app (Java 17), com o JDK que corre o Gradle (sem procurar outros JDKs).
     jvm { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
-    // Só compila num Mac (o CI da Apple); no Linux estes alvos ficam de fora sozinhos.
+    // Só compila num Mac (o CI da Apple); no Linux estes alvos ficam de fora sozinhos. O macOS é para os testes do
+    // GoatCore (`swift test` no Mac do CI), que agora usa este núcleo.
     val xcf = XCFramework("GoatShared")
-    listOf(tvosArm64(), tvosSimulatorArm64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+    listOf(tvosArm64(), tvosSimulatorArm64(), iosArm64(), iosSimulatorArm64(), macosArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "GoatShared"
             isStatic = true
