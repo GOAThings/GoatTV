@@ -1,9 +1,14 @@
 package cc.slokker.itv.data
 
 import cc.slokker.itv.ui.i18n.I18n
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import cc.slokker.itv.data.stalker.StalkerRules
 
-enum class PlaylistType { XTREAM, M3U, STALKER }
+enum class PlaylistType {
+    XTREAM, M3U, STALKER;
+
+    /** Como no JSON das listas e no núcleo partilhado ("xtream", "m3u", "stalker"). */
+    val key: String get() = name.lowercase()
+}
 
 data class Playlist(
     val id: String,
@@ -44,47 +49,24 @@ data class PlaylistForm(
     val signature: String = "",
 ) {
     /** Muda o tipo: o Stalker começa com o MAC deste aparelho, e ao sair dele esse MAC não fica como utilizador. */
-    fun withType(next: PlaylistType, deviceMac: String): PlaylistForm = copy(
-        type = next,
-        username = when {
-            next == PlaylistType.STALKER && username.isBlank() -> deviceMac
-            next != PlaylistType.STALKER && username == deviceMac -> ""
-            else -> username
-        },
-    )
+    fun withType(next: PlaylistType, deviceMac: String): PlaylistForm =
+        copy(type = next, username = PlaylistRules.usernameFor(next.key, username, deviceMac))
 
     /** Mensagem do primeiro campo em falta, ou null se estiver pronto a gravar. */
-    fun problem(): String? = when {
-        type == PlaylistType.XTREAM && server.isBlank() -> I18n.s.missingServer
-        type == PlaylistType.XTREAM && username.isBlank() -> I18n.s.missingUsername
-        type == PlaylistType.XTREAM && password.isBlank() -> I18n.s.missingPassword
-        type == PlaylistType.M3U && url.isBlank() -> I18n.s.missingUrl
-        type == PlaylistType.STALKER && server.isBlank() -> I18n.s.missingPortal
-        type == PlaylistType.STALKER && normalizeMac(username) == null -> I18n.s.invalidMac
-        else -> null
+    fun problem(): String? = when (PlaylistRules.problem(type.key, server, username, password, url)) {
+        PlaylistProblem.SERVER -> I18n.s.missingServer
+        PlaylistProblem.USERNAME -> I18n.s.missingUsername
+        PlaylistProblem.PASSWORD -> I18n.s.missingPassword
+        PlaylistProblem.URL -> I18n.s.missingUrl
+        PlaylistProblem.PORTAL -> I18n.s.missingPortal
+        PlaylistProblem.MAC -> I18n.s.invalidMac
+        null -> null
     }
 
-    /** A lista a gravar. Sem nome fica o do servidor; sem "http://" no endereço, junta-se. */
+    /** A lista a gravar (ver [PlaylistRules.fields]). */
     fun toPlaylist(id: String): Playlist {
-        val stalker = type == PlaylistType.STALKER
-        val xtream = type == PlaylistType.XTREAM || stalker
-        val server = withScheme(server).trimEnd('/')
-        val url = withScheme(url)
-        val fallbackName = (if (xtream) server else url).toHttpUrlOrNull()?.host ?: if (stalker) "Stalker" else if (xtream) "Xtream" else "M3U"
-        return Playlist(
-            id = id,
-            type = type,
-            name = name.trim().ifEmpty { fallbackName },
-            server = server.takeIf { xtream },
-            username = if (stalker) normalizeMac(username) else username.trim().takeIf { xtream },
-            password = password.takeIf { type == PlaylistType.XTREAM },
-            url = url.takeIf { !xtream },
-            epgUrl = withScheme(epgUrl).takeIf { it.isNotEmpty() },
-            serial = serial.trim().takeIf { stalker && it.isNotEmpty() },
-            deviceId = deviceId.trim().takeIf { stalker && it.isNotEmpty() },
-            deviceId2 = deviceId2.trim().takeIf { stalker && it.isNotEmpty() },
-            signature = signature.trim().takeIf { stalker && it.isNotEmpty() },
-        )
+        val f = PlaylistRules.fields(type.key, name, server, username, password, url, epgUrl, serial, deviceId, deviceId2, signature)
+        return Playlist(id, type, f.name, f.server, f.username, f.password, f.url, f.epgUrl, f.serial, f.deviceId, f.deviceId2, f.signature)
     }
 
     companion object {
@@ -103,20 +85,10 @@ data class PlaylistForm(
         )
 
         /** Um MAC novo com o prefixo das MAG, que os portais esperam: as apps não têm acesso ao MAC verdadeiro. */
-        fun generateMac(): String =
-            "00:1A:79:" + List(3) { "%02X".format(java.security.SecureRandom().nextInt(256)) }.joinToString(":")
+        fun generateMac(): String = StalkerRules.generateMac { java.security.SecureRandom().nextInt(it) }
 
         /** O MAC como `AA:BB:CC:DD:EE:FF` (aceita traços ou sem separadores), ou null se não for um MAC. */
-        fun normalizeMac(mac: String): String? {
-            val hex = mac.trim().replace(":", "").replace("-", "").uppercase()
-            if (hex.length != 12 || !hex.all { it in "0123456789ABCDEF" }) return null
-            return hex.chunked(2).joinToString(":")
-        }
-
-        private fun withScheme(address: String): String {
-            val a = address.trim()
-            return if (a.isEmpty() || a.contains("://")) a else "http://$a"
-        }
+        fun normalizeMac(mac: String): String? = StalkerRules.normalizeMac(mac)
     }
 }
 

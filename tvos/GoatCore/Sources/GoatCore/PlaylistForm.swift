@@ -1,6 +1,8 @@
 import Foundation
+import GoatShared
 
-/// Os dados de uma lista a criar ou editar na TV (como o `PlaylistForm` do Android).
+/// Os dados de uma lista a criar ou editar na TV (como o `PlaylistForm` do Android). As regras são as do núcleo
+/// partilhado (PlaylistRules).
 public struct PlaylistForm: Hashable, Sendable {
     public var type: PlaylistType = .xtream
     public var name = ""
@@ -34,11 +36,7 @@ public struct PlaylistForm: Hashable, Sendable {
 
     /// Muda o tipo: o Stalker começa com o MAC deste aparelho, e ao sair dele esse MAC não fica como utilizador.
     public mutating func setType(_ next: PlaylistType, deviceMac: String) {
-        if next == .stalker, username.trimmed.isEmpty {
-            username = deviceMac
-        } else if next != .stalker, username == deviceMac {
-            username = ""
-        }
+        username = PlaylistRules.shared.usernameFor(next: next.rawValue, username: username, deviceMac: deviceMac)
         type = next
     }
 
@@ -48,49 +46,21 @@ public struct PlaylistForm: Hashable, Sendable {
 
     /// O primeiro campo em falta, ou nil se estiver pronta a gravar.
     public var problem: Problem? {
-        switch type {
-        case .xtream:
-            if server.trimmed.isEmpty { return .server }
-            if username.trimmed.isEmpty { return .username }
-            if password.isEmpty { return .password }
-        case .m3u:
-            if url.trimmed.isEmpty { return .url }
-        case .stalker:
-            if server.trimmed.isEmpty { return .server }
-            if Stalker.normalizeMac(username) == nil { return .mac }
+        guard let p = PlaylistRules.shared.problem(type: type.rawValue, server: server, username: username, password: password, url: url) else { return nil }
+        switch p.name {
+        case "USERNAME": return .username
+        case "PASSWORD": return .password
+        case "URL": return .url
+        case "MAC": return .mac
+        default: return .server
         }
-        return nil
     }
 
     /// A lista a gravar. Sem nome fica o do servidor; sem "http://" no endereço, junta-se.
     public func playlist(id: String) -> Playlist {
-        let stalker = type == .stalker
-        let xtream = type == .xtream || stalker
-        func extra(_ s: String) -> String? { stalker && !s.trimmed.isEmpty ? s.trimmed : nil }
-        var server = Self.withScheme(server)
-        while server.hasSuffix("/") { server.removeLast() }
-        let url = Self.withScheme(url)
-        let host = URL(string: xtream ? server : url)?.host
-        let fallback = host ?? type.label
-        let epg = Self.withScheme(epgUrl)
-        return Playlist(
-            id: id,
-            type: type,
-            name: name.trimmed.isEmpty ? fallback : name.trimmed,
-            server: xtream ? server : nil,
-            username: stalker ? Stalker.normalizeMac(username) : xtream ? username.trimmed : nil,
-            password: type == .xtream ? password : nil,
-            url: xtream ? nil : url,
-            epgUrl: epg.isEmpty ? nil : epg,
-            serial: extra(serial),
-            deviceId: extra(deviceId),
-            deviceId2: extra(deviceId2),
-            signature: extra(signature)
-        )
-    }
-
-    private static func withScheme(_ address: String) -> String {
-        let a = address.trimmed
-        return a.isEmpty || a.contains("://") ? a : "http://" + a
+        let f = PlaylistRules.shared.fields(type: type.rawValue, name: name, server: server, username: username, password: password, url: url,
+                                            epgUrl: epgUrl, serial: serial, deviceId: deviceId, deviceId2: deviceId2, signature: signature)
+        return Playlist(id: id, type: type, name: f.name, server: f.server, username: f.username, password: f.password, url: f.url,
+                        epgUrl: f.epgUrl, serial: f.serial, deviceId: f.deviceId, deviceId2: f.deviceId2, signature: f.signature)
     }
 }
