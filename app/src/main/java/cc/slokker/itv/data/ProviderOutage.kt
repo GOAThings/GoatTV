@@ -28,12 +28,9 @@ class ProviderOutage(private val now: () -> Long) {
     }
 
     companion object {
-        const val WINDOW_MS = 5 * 60_000L
+        const val WINDOW_MS = OutageRules.WINDOW_MS
 
-        /** Códigos da conta (401, 429, 456 "linha bloqueada", 458) e do servidor (5xx). 403 e 404 podem ser só do canal. */
-        private val ACCOUNT_CODES = setOf(401, 429, 456, 458)
-
-        /** O código HTTP [code] diz que é a conta ou o servidor que não responde, não só este canal. */
-        fun providerWide(code: Int?): Boolean = code != null && (code in ACCOUNT_CODES || code in 500..599)
+        /** O código HTTP [code] diz que é a conta ou o servidor que não responde, não só este canal (OutageRules). */
+        fun providerWide(code: Int?): Boolean = OutageRules.providerWide(code)
     }
 }

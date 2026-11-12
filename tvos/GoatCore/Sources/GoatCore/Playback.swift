@@ -96,54 +96,38 @@ public struct ZapPacer: Sendable {
 /// Quando o AFR muda o modo da TV (`afr_mode`): uma vez por canal, quando a cadência dele fica conhecida; "ao
 /// começar" só no primeiro canal do leitor (o modo fica nos seguintes, sem o ecrã apagar a cada zap) até [reset] (ao
 /// sair do leitor, quando a TV volta ao modo normal).
-public struct AfrSession: Sendable {
-    private var matched = false
-    private var channelDone = false
+public struct AfrSession: @unchecked Sendable {
+    // A regra é a do núcleo partilhado com o Android.
+    private let shared = GoatShared.AfrSession()
 
     public init() {}
 
     /// Outro canal: ainda não se decidiu nada para ele.
-    public mutating func newChannel() {
-        channelDone = false
-    }
+    public mutating func newChannel() { shared.newChannel() }
 
     /// A TV voltou ao modo normal (saiu-se do leitor, ou o AFR foi desligado).
-    public mutating func reset() {
-        matched = false
-        channelDone = false
-    }
+    public mutating func reset() { shared.reset() }
 
     /// Já se sabe a cadência [fps] do canal: devolve a que se pede à TV, ou nil para não mexer.
     public mutating func onFps(mode: String, fps: Double) -> Double? {
-        if mode == Prefs.AfrMode.off || channelDone || fps <= 0 { return nil }
-        channelDone = true
-        if mode == Prefs.AfrMode.start && matched { return nil }
-        matched = true
-        return fps
+        let target = shared.onFps(mode: mode, fps: fps)
+        return target > 0 ? target : nil
     }
 }
 
 /// As cadências de vídeo: aproximar uma medida das habituais e medir a do VLC pelas imagens mostradas.
 public enum FrameRate {
-    /// As cadências de TV e de cinema.
-    public static let standard: [Double] = [23.976, 24, 25, 29.97, 30, 47.952, 48, 50, 59.94, 60, 100, 119.88, 120]
+    /// As cadências de TV e de cinema (as do núcleo partilhado).
+    public static var standard: [Double] { GoatShared.FrameRates.shared.STANDARD.map { $0.doubleValue } }
 
     /// A cadência habitual mais perto de [fps] (até 1 % de diferença); fora disso, [fps] como está (como no Android).
-    public static func snap(_ fps: Double) -> Double {
-        guard let best = standard.min(by: { abs($0 - fps) / $0 < abs($1 - fps) / $1 }) else { return fps }
-        return abs(best - fps) / best <= 0.01 ? best : fps
-    }
+    public static func snap(_ fps: Double) -> Double { GoatShared.FrameRates.shared.snap(fps: fps) }
 
     /// Uma medida por contagem (imagens num intervalo) não separa 29,97 de 30: entre as duas fica a da TV (29,97,
     /// 59,94, 23,976), que é o que as emissões usam. Até [tolerance] de diferença; fora disso, nil.
     public static func snapCounted(_ fps: Double, tolerance: Double = 0.03) -> Double? {
-        let near = standard.filter { abs($0 - fps) / $0 <= tolerance }
-        guard !near.isEmpty else { return nil }
-        // Pares que a contagem não distingue (0,1 % de diferença): fica a fracionária.
-        let whole: [Double: Double] = [24: 23.976, 30: 29.97, 48: 47.952, 60: 59.94, 120: 119.88]
-        let best = near.min { abs($0 - fps) < abs($1 - fps) }!
-        if let twin = whole[best], near.contains(twin) { return twin }
-        return best
+        let snapped = GoatShared.FrameRates.shared.snapCounted(fps: fps, tolerance: tolerance)
+        return snapped > 0 ? snapped : nil
     }
 
     /// Mede a cadência do que o VLC mostra: o número de imagens mostradas (que só cresce) a cada leitura, com o

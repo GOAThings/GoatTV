@@ -10,6 +10,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.playback.FrameRates
+import cc.slokker.itv.playback.AfrSession as SharedAfrSession
 import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
 import cc.slokker.itv.ui.player.engine.ZapTrace
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,14 +78,8 @@ internal class FpsEstimator(private val frames: Int = FRAMES) {
         /** Mais do que isto entre duas imagens já não é a mesma sequência. */
         private const val RESET_DELTA_US = 1_000_000L
 
-        /** As cadências de TV e de cinema. */
-        val STANDARD = floatArrayOf(23.976f, 24f, 25f, 29.97f, 30f, 47.952f, 48f, 50f, 59.94f, 60f, 100f, 119.88f, 120f)
-
-        /** A cadência habitual mais perto de [fps] (até 1 % de diferença); fora disso, [fps] como está. */
-        fun snap(fps: Float): Float {
-            val best = STANDARD.minByOrNull { abs(it - fps) / it } ?: return fps
-            return if (abs(best - fps) / best <= 0.01f) best else fps
-        }
+        /** A cadência habitual mais perto de [fps] (até 1 % de diferença); fora disso, [fps] como está (FrameRates.snap). */
+        fun snap(fps: Float): Float = FrameRates.snap(fps.toDouble()).toFloat()
     }
 }
 
@@ -93,28 +89,17 @@ internal class FpsEstimator(private val frames: Int = FRAMES) {
  * [reset] (ao sair do player, quando a TV volta ao modo normal).
  */
 internal class AfrSession {
-    private var matched = false
-    private var channelDone = false
+    // A regra é a do núcleo partilhado (igual na Apple); aqui só a cadência em Float, null = não mexer.
+    private val shared = SharedAfrSession()
 
     /** Outro canal: ainda não se decidiu nada para ele. */
-    fun newChannel() {
-        channelDone = false
-    }
+    fun newChannel() = shared.newChannel()
 
     /** A TV voltou ao modo normal (saiu-se do player, ou o AFR foi desligado). */
-    fun reset() {
-        matched = false
-        channelDone = false
-    }
+    fun reset() = shared.reset()
 
     /** Já se sabe a cadência [fps] do canal: devolve a que se pede à TV, ou null para não mexer. */
-    fun onFps(mode: String, fps: Float): Float? {
-        if (mode == Prefs.AfrMode.OFF || channelDone || fps <= 0f) return null
-        channelDone = true
-        if (mode == Prefs.AfrMode.START && matched) return null
-        matched = true
-        return fps
-    }
+    fun onFps(mode: String, fps: Float): Float? = shared.onFps(mode, fps.toDouble()).takeIf { it > 0 }?.toFloat()
 }
 
 /**

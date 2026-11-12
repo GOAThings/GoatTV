@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// Tentativas erradas do PIN, para não dar para as ir experimentando todas: depois de umas quantas, cada PIN tem de
 /// esperar um tempo que vai crescendo. Quem usa guarda [failures] e [lastFailureAt] neste aparelho, para contar entre
@@ -38,8 +39,7 @@ public struct PinAttempts: Equatable, Sendable {
 
     /// Sem espera nas primeiras; depois 30 s, 1 min, 2 min… até 1 hora.
     public static func delay(failures: Int) -> Int64 {
-        guard failures >= 3 else { return 0 }
-        let shift = min(failures - 3, 10)
-        return min(Int64(30_000) << shift, 3_600_000)
+        // A regra é a do núcleo partilhado com o Android.
+        GoatShared.PinBackoff.shared.delayFor(failures: Int32(clamping: failures))
     }
 }

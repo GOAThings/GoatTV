@@ -40,13 +40,8 @@ class PinAttempts(
     }
 
     companion object {
-        private const val FREE_ATTEMPTS = 3
-        private const val FIRST_DELAY_MS = 30_000L
-        private const val MAX_DELAY_MS = 3_600_000L
-
-        /** Sem espera nas primeiras; depois 30 s, 1 min, 2 min… até 1 hora. */
-        fun delayFor(failures: Int): Long =
-            if (failures < FREE_ATTEMPTS) 0 else minOf(FIRST_DELAY_MS shl minOf(failures - FREE_ATTEMPTS, 10), MAX_DELAY_MS)
+        /** Sem espera nas primeiras; depois 30 s, 1 min, 2 min… até 1 hora (a regra partilhada com a Apple). */
+        fun delayFor(failures: Int): Long = PinBackoff.delayFor(failures)
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// Versões novas (como no Updater do GoatTV Android): as releases do GOAThings/GoatTV levam a APK e a IPA, por isso
 /// https://github.com/GOAThings/GoatTV/releases/latest/download/GoatTV.ipa é sempre a da Apple TV mais recente.
@@ -24,26 +25,11 @@ public enum AppUpdate {
     /// As novidades das notas da versão (como o releaseHighlights do Android): os primeiros pontos de lista, sem
     /// negrito. Notas sem lista dão as primeiras linhas que não são títulos ("Android TV:").
     public static func highlights(_ notes: String, max: Int = 3) -> [String] {
-        let lines = notes.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let bullets = lines.filter { $0.hasPrefix("- ") || $0.hasPrefix("* ") }.map { String($0.dropFirst(2)) }
-        let picked = bullets.isEmpty ? lines.filter { !$0.hasSuffix(":") && !$0.hasPrefix("#") } : bullets
-        return Array(picked
-            .map { $0.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .prefix(max))
+        GoatShared.Versions.shared.highlights(notes: notes, max: Int32(clamping: max))
     }
 
+    /// [remote] é mais nova do que [current] (a regra do núcleo partilhado com o Android).
     public static func isNewer(_ remote: String, than current: String) -> Bool {
-        func parts(_ v: String) -> [Int] {
-            (v.hasPrefix("v") ? String(v.dropFirst()) : v).split(whereSeparator: { $0 == "." || $0 == "-" }).map { Int($0) ?? 0 }
-        }
-        let a = parts(remote), b = parts(current)
-        for i in 0..<max(a.count, b.count) {
-            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
-            if x != y { return x > y }
-        }
-        return false
+        GoatShared.Versions.shared.isNewer(remote: remote, current: current)
     }
 }

@@ -144,16 +144,6 @@ class Updater(private val context: Context, private val http: OkHttpClient, priv
         private const val RELEASE_APP_ID = "cc.slokker.itv"
 
         /** "0.10.1" > "0.9.3": compara número a número (o que não é número conta como 0). */
-        fun isNewer(remote: String, current: String): Boolean {
-            fun parts(v: String) = v.removePrefix("v").split('.', '-').map { it.toIntOrNull() ?: 0 }
-            val a = parts(remote)
-            val b = parts(current)
-            for (i in 0 until maxOf(a.size, b.size)) {
-                val x = a.getOrElse(i) { 0 }
-                val y = b.getOrElse(i) { 0 }
-                if (x != y) return x > y
-            }
-            return false
-        }
+        fun isNewer(remote: String, current: String): Boolean = Versions.isNewer(remote, current)
     }
 }

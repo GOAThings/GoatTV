@@ -36,6 +36,7 @@ import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.ItvShapes
+import cc.slokker.itv.data.Versions
 import cc.slokker.itv.ui.theme.LocalAccent
 import cc.slokker.itv.ui.theme.tabular
 
@@ -125,11 +126,4 @@ internal fun UpdateCard(release: AppRelease, state: UpdateState, hold: Float, hi
  * As novidades das notas da versão (as do GitHub, em Markdown): os primeiros pontos de lista, sem negrito. Notas sem
  * lista dão as primeiras linhas que não são títulos ("Android TV:").
  */
-internal fun releaseHighlights(notes: String, max: Int = 3): List<String> {
-    val lines = notes.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-    val bullets = lines.filter { it.startsWith("- ") || it.startsWith("* ") }.map { it.drop(2) }
-    return (bullets.ifEmpty { lines.filterNot { it.endsWith(":") || it.startsWith("#") } })
-        .map { it.replace("**", "").trim() }
-        .filter { it.isNotEmpty() }
-        .take(max)
-}
+internal fun releaseHighlights(notes: String, max: Int = 3): List<String> = Versions.highlights(notes, max)
