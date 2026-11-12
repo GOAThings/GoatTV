@@ -15,6 +15,10 @@ import androidx.media3.common.Player
 import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.playback.AttemptFailure
+import cc.slokker.itv.playback.NextStep
+import cc.slokker.itv.playback.PlaybackRules
+import cc.slokker.itv.playback.StallCounter
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
 import kotlinx.coroutines.CoroutineScope
@@ -128,14 +132,14 @@ internal class ChannelPlayback(
     /** À procura do canal na lista de reserva (ver [failOver]). */
     private var backupJob: Job? = null
 
-    /** O direto parado a carregar: ao fim de [STALL_MS] sem voltar, liga-se outra vez (ver [onStall]). */
+    /** O direto parado a carregar: ao fim de [PlaybackRules.STALL_MS] sem voltar, liga-se outra vez (ver [onStall]). */
     private var stallJob: Job? = null
 
     /** A tentativa de abrir um direto: sem começar a dar em [openTimeoutMs], o servidor não respondeu (ver [onNoAnswer]). */
     private var openJob: Job? = null
 
-    /** Quando o direto deste canal ficou preso, nos últimos [STALL_WINDOW_MS] (à segunda, vai-se aos failovers). */
-    private val stalls = ArrayDeque<Long>()
+    /** As vezes que o direto deste canal ficou preso (à segunda em pouco tempo, vai-se aos failovers). */
+    private val stalls = StallCounter()
 
     /** A dar o canal da lista de reserva no lugar do da principal (o aviso e o painel "canal de reserva"); null na principal. */
     var onBackup by mutableStateOf<BackupOrigin?>(null)
@@ -410,7 +414,7 @@ internal class ChannelPlayback(
         val candidate = candidates.getOrNull(index)
         if (candidate == null) {
             // Catch-up do Stalker sem gravação deste programa: diz-se, em vez de ficar a sintonizar.
-            if (index == 0 && !req.live) fail(PlaybackException("Sem gravação", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND), req, null)
+            if (index == 0 && !req.live) showFailure(PlaybackException("Sem gravação", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND), req, null, null, null)
             return
         }
         if (index == 0) fellBackOnRefusal = false
@@ -452,40 +456,58 @@ internal class ChannelPlayback(
     }
 
     /** Quanto um direto tem para começar a dar: 8 s (10 s com o buffer grande, que espera 4 s de vídeo para arrancar). */
-    private fun openTimeoutMs(prefs: Prefs): Long = if (prefs.buffer == Prefs.Buffer.LARGE) OPEN_TIMEOUT_LARGE_MS else OPEN_TIMEOUT_MS
+    private fun openTimeoutMs(prefs: Prefs): Long = PlaybackRules.openTimeoutMs(largeBuffer = prefs.buffer == Prefs.Buffer.LARGE, slowEngine = false)
 
     /** O servidor não respondeu a tempo (uma recusa ou uma ligação recusada são rápidas: o outro formato tenta-se). */
     private fun isNoAnswer(error: PlaybackException): Boolean =
         error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
             error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
 
-    /**
-     * Um direto que não respondeu antes de dar: com failovers, vai-se já a eles (um servidor que não responde num
-     * formato raramente responde no outro, e cada espera eram mais uns segundos de ecrã parado); sem nenhum, tenta-se o
-     * outro formato como sempre. Um failover que não responde passa ao seguinte.
-     */
+    /** Um direto que não respondeu antes de dar (ver [PlaybackRules.nextStep]). */
     private fun onNoAnswer(error: PlaybackException, req: PlaybackRequest) {
         openJob?.cancel()
+        afterFailure(error, req, noAnswer = true)
+    }
+
+    /** Os failovers deste pedido ainda se podem procurar: ligados, um direto da lista principal, sem procura a decorrer. */
+    private fun canFailOver(req: PlaybackRequest): Boolean = policy.failover && req.live && req.backup == null && backupJob?.isActive != true
+
+    /**
+     * A tentativa atual falhou com [error]: o passo seguinte é o das regras partilhadas com a Apple
+     * ([PlaybackRules.nextStep]). Sem failovers quando se procuram, pergunta-se outra vez sem eles.
+     */
+    private fun afterFailure(error: PlaybackException, req: PlaybackRequest, noAnswer: Boolean, failoverAllowed: Boolean = canFailOver(req)) {
         val reconnect = retryDelay(host.prefs, ended = false)
-        // Sem failovers: o outro formato e, sem mais nenhum, como um erro (a dar: mais uma espera; antes: o cartão).
-        fun asBefore() {
-            when {
-                attempt + 1 < candidates.size -> start(attempt + 1)
-                wasPlaying && reconnect != null -> reconnectIn(reconnect)
-                else -> showFailure(error, req, reconnect, null, currentCandidate?.format)
+        val step = PlaybackRules.nextStep(
+            AttemptFailure(
+                live = req.live,
+                started = ready,
+                wasPlaying = wasPlaying,
+                onBackup = req.backup != null,
+                hasNextFormat = attempt + 1 < candidates.size,
+                failoverAllowed = failoverAllowed,
+                reconnect = reconnect != null,
+                noAnswer = noAnswer,
+            ),
+        )
+        when (step) {
+            NextStep.NEXT_FORMAT -> {
+                // Uma recusa de "ocupado" (403, 503…) já foi tentada uns 3 s (ver OpenRetry): é este formato que o
+                // fornecedor recusa neste canal. Passa-se ao outro, mas sem o aprender para a conta.
+                fellBackOnRefusal = fellBackOnRefusal || OpenRetry.isBusy(error) || OpenRetry.httpCode(error) == 429
+                start(attempt + 1)
             }
-        }
-        when {
-            req.backup != null -> fail(error, req, reconnect)
-            // Também a voltar a ligar depois de cair: o canal deixou de responder, os failovers dão já.
-            policy.failover && backupJob?.isActive != true -> backupJob = scope.launch {
-                val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
-                if (request !== req) return@launch
-                if (backups.isEmpty()) return@launch asBefore()
+            NextStep.FAILOVER -> {
                 host.onMainFailed(req, error)
-                openBackup(backups, error)
+                backupJob = scope.launch {
+                    val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
+                    if (request !== req) return@launch
+                    if (backups.isNotEmpty()) openBackup(backups, error) else afterFailure(error, req, noAnswer, failoverAllowed = false)
+                }
             }
-            else -> asBefore()
+            NextStep.NEXT_FAILOVER -> nextFailover(error, req, reconnect)
+            NextStep.RECONNECT -> reconnectIn(reconnect ?: policy.reconnectFloorMs)
+            NextStep.GIVE_UP -> showFailure(error, req, reconnect, null, currentCandidate?.format)
         }
     }
 
@@ -496,27 +518,24 @@ internal class ChannelPlayback(
     private fun textLanguage(prefs: Prefs): String? = prefs.subtitleLanguage.ifEmpty { null }.takeIf { policy.subtitleLanguage }
 
     /**
-     * O direto parou a carregar: se não voltar em [STALL_MS], o fornecedor deixou de mandar sem fechar a ligação (sem
-     * erro nem fim, o player esperava para sempre, com a imagem parada). Liga-se outra vez; se voltar a prender
-     * dentro de [STALL_WINDOW_MS], passa-se aos failovers do canal (se houver).
+     * O direto parou a carregar: se não voltar em [PlaybackRules.STALL_MS], o fornecedor deixou de mandar sem fechar a
+     * ligação (sem erro nem fim, o player esperava para sempre, com a imagem parada). Liga-se outra vez; se voltar a
+     * prender pouco depois, passa-se aos failovers do canal (se houver; ver [StallCounter]).
      */
     private fun watchStall(source: StreamEngine) {
         stallJob?.cancel()
         val req = request ?: return
         stallJob = scope.launch {
-            wait(STALL_MS)
+            wait(PlaybackRules.STALL_MS)
             if (source !== engine || request !== req || !buffering) return@launch
             onStall(req)
         }
     }
 
     private fun onStall(req: PlaybackRequest) {
-        val t = now()
-        while (stalls.isNotEmpty() && t - stalls.first() > STALL_WINDOW_MS) stalls.removeFirst()
-        stalls.addLast(t)
-        Log.w(TAG, "Direto preso a carregar há ${STALL_MS / 1000} s (${stalls.size}.ª vez): volta a ligar")
-        if (stalls.size >= STALLS_FOR_FAILOVER && policy.failover && req.backup == null && backupJob?.isActive != true) {
-            stalls.clear()
+        val failover = stalls.stalled(now(), canFailOver(req))
+        Log.w(TAG, "Direto preso a carregar há ${PlaybackRules.STALL_MS / 1000} s: ${if (failover) "failovers" else "volta a ligar"}")
+        if (failover) {
             backupJob = scope.launch {
                 val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
                 if (request !== req) return@launch
@@ -649,23 +668,13 @@ internal class ChannelPlayback(
         val req = request ?: return
         val prefs = host.prefs
         if (wasPlaying && req.live) net?.onStop()
-        val reconnect = retryDelay(prefs, ended = false)
         when {
             // Muito comum em live: voltar ao ponto em direto.
             error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> source.restartAtLive()
             // Nem a box nem o FFmpeg descodificam o canal: o VLC talvez sim.
             policy.vlcFallback && !source.isVlc && isDecoderError(error.errorCode) -> useVlc(source)
-            // Não respondeu, antes de dar: os failovers já, sem esperar pelo outro formato (ver onNoAnswer).
-            !ready && !wasPlaying && req.live && isNoAnswer(error) -> onNoAnswer(error, req)
-            // Ainda não começou: tenta o formato seguinte (ts ⇄ m3u8). Uma recusa de "ocupado" (403, 503…) já foi
-            // tentada uns 3 s (ver OpenRetry): a ligação anterior já fechou, por isso é este formato que o fornecedor
-            // recusa neste canal (há canais que só dão em m3u8). Passa-se ao outro, mas sem o aprender para a conta.
-            !ready && attempt + 1 < candidates.size -> {
-                fellBackOnRefusal = fellBackOnRefusal || OpenRetry.isBusy(error) || OpenRetry.httpCode(error) == 429
-                start(attempt + 1)
-            }
-            // Catch-up caiu a meio: pede de novo a partir de onde ia.
-            wasPlaying && !req.live -> {
+            // Catch-up caiu a meio (e não há outro formato por tentar): pede de novo a partir de onde ia.
+            wasPlaying && !req.live && (ready || attempt + 1 >= candidates.size) -> {
                 val position = programmePositionMs() ?: 0L
                 val delayMs = retryDelay(prefs, ended = true) ?: policy.reconnectFloorMs
                 retryLater {
@@ -673,53 +682,30 @@ internal class ChannelPlayback(
                     host.seekCatchup(position)
                 }
             }
-            // Caiu a meio: volta a ligar, de N em N segundos, enquanto se estiver no canal.
-            wasPlaying && reconnect != null -> reconnectIn(reconnect)
-            else -> fail(error, req, reconnect)
+            // O resto é igual na Apple (ver afterFailure): o outro formato, os failovers, voltar a ligar ou o erro.
+            else -> afterFailure(error, req, noAnswer = !ready && req.live && isNoAnswer(error))
         }
     }
 
     /**
-     * Não arrancou: mostra o erro (primeiro "a analisar") e tenta mais umas vezes, sem martelar o servidor.
-     *
-     * Um canal em direto da lista principal passa antes para os failovers dele, pela ordem, se houver (só depois de
-     * as tentativas de sempre desistirem: os formatos, e as esperas do OpenRetry em cada um). Se todos falharem,
-     * volta-se ao pedido da principal (as tentativas seguintes começam por ela) e o cartão diz os que falharam.
+     * Um failover também não abriu: o seguinte, pela ordem. Se todos falharam, volta-se ao pedido da principal (as
+     * tentativas seguintes começam por ela) e o cartão diz os que falharam.
      */
-    private fun fail(error: PlaybackException, req: PlaybackRequest, delayMs: Long?) {
-        if (policy.failover && req.live && req.backup == null && backupJob?.isActive != true) {
-            host.onMainFailed(req, error)
-            val shown = currentCandidate?.format
-            backupJob = scope.launch {
-                val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
-                if (request !== req) return@launch
-                if (backups.isNotEmpty()) {
-                    openBackup(backups, error)
-                } else {
-                    showFailure(error, req, delayMs, null, shown)
-                }
-            }
+    private fun nextFailover(error: PlaybackException, req: PlaybackRequest, delayMs: Long?) {
+        val origin = req.backup ?: return showFailure(error, req, delayMs, null, currentCandidate?.format)
+        val failed = origin.failed + origin.label
+        if (origin.rest.isNotEmpty()) {
+            openBackup(origin.rest, origin.mainError, failed, origin.mainFormat)
             return
         }
-        val origin = req.backup
-        if (origin != null) {
-            val failed = origin.failed + origin.label
-            // Este failover também não abriu: o seguinte.
-            if (origin.rest.isNotEmpty()) {
-                openBackup(origin.rest, origin.mainError, failed, origin.mainFormat)
-                return
-            }
-            // Nenhum abriu: o cartão é o da principal (com o erro dela), e as tentativas recomeçam nela.
-            request = origin.main
-            candidates = origin.main.candidates
-            attempt = 0
-            onBackup = null
-            showFailure(origin.mainError ?: error, origin.main, delayMs, failed.joinToString(", "), origin.mainFormat)
-            return
-        }
-        showFailure(error, req, delayMs, null, currentCandidate?.format)
+        request = origin.main
+        candidates = origin.main.candidates
+        attempt = 0
+        onBackup = null
+        showFailure(origin.mainError ?: error, origin.main, delayMs, failed.joinToString(", "), origin.mainFormat)
     }
 
+    /** Não arrancou: mostra o erro (primeiro "a analisar") e tenta mais umas vezes, sem martelar o servidor. */
     private fun showFailure(error: PlaybackException, req: PlaybackRequest, delayMs: Long?, backupFailed: String?, format: String?) {
         freeze = null
         val retry = delayMs != null && retries < policy.maxStartRetries
@@ -746,17 +732,6 @@ internal class ChannelPlayback(
     private companion object {
         /** O estado da pausa do direto atualiza-se a este ritmo (a medição da ligação, ao dobro). */
         const val TICK_MS = 500L
-
-        /** Quanto um direto tem para começar a dar (ver [openTimeoutMs]). */
-        const val OPEN_TIMEOUT_MS = 8_000L
-        const val OPEN_TIMEOUT_LARGE_MS = 10_000L
-
-        /** Parado a carregar há tanto tempo no direto: volta a ligar (ver [watchStall]). */
-        const val STALL_MS = 12_000L
-
-        /** Duas paragens destas em tão pouco tempo: passa aos failovers. */
-        const val STALL_WINDOW_MS = 180_000L
-        const val STALLS_FOR_FAILOVER = 2
 
         const val TAG = "GoatTV.Playback"
     }

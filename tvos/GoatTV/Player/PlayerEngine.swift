@@ -189,10 +189,12 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var movingSince: Date?
     /// O direto a dar mas com a posição parada (ver [watchProgress]).
     @ObservationIgnored private var stallTask: Task<Void, Never>?
-    /// Quando o direto deste canal ficou preso, nos últimos [stallWindow] s (à segunda, vai-se aos failovers).
-    @ObservationIgnored private var stalls: [Date] = []
-    static let stallSeconds: TimeInterval = 12
-    static let stallWindow: TimeInterval = 180
+    /// As vezes que o direto deste canal ficou preso (à segunda em pouco tempo, vai-se aos failovers).
+    @ObservationIgnored private let stalls = StallCounter()
+    /// Como foi a última falha: "sem resposta", e se a tentativa tinha chegado a dar (para decidir outra vez quando a
+    /// procura dos failovers não der nada; ver [backupUnavailable]).
+    @ObservationIgnored private var lastNoAnswer = false
+    @ObservationIgnored private var lastStarted = false
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -388,7 +390,7 @@ final class PlayerEngine: NSObject {
         if !same {
             manualAudio = nil
             manualSubtitle = nil
-            stalls = []
+            stalls.clear()
         }
         afr.newChannel()
         afrTask?.cancel()
@@ -667,47 +669,78 @@ final class PlayerEngine: NSObject {
         }
         // Se não começar a dar em 8 s (10 no AetherEngine, que se junta ao direto com mais calma, ou com o buffer
         // grande), o servidor não respondeu: os failovers, ou a forma seguinte (como no Android).
-        let patience = (backend == .aether ? 10 : 8) + (cachingMs >= 3000 ? 2 : 0)
+        let patience = PlaybackRules.openTimeout(largeBuffer: cachingMs >= 3000, slowEngine: backend == .aether)
         watchdog = Task { [weak self] in
             try? await Task.sleep(for: .seconds(patience))
             guard !Task.isCancelled, let self, self.state == .opening else { return }
-            DebugLog.add("Player: no picture after \(patience) s (\(self.backend), waiting: \(self.avPlayer.reasonForWaitingToPlay?.rawValue ?? "-"))")
+            DebugLog.add("Player: no picture after \(Int(patience)) s (\(self.backend), waiting: \(self.avPlayer.reasonForWaitingToPlay?.rawValue ?? "-"))")
             self.noAnswer()
         }
     }
 
-    /// O direto não respondeu a tempo: com failovers, vai-se já a eles (um servidor que não responde num formato
-    /// raramente responde no outro); também a voltar a ligar depois de cair. Um failover que não responde passa ao
-    /// seguinte. Sem failovers (ou no catch-up), a forma seguinte, como sempre.
-    private func noAnswer() {
-        guard openedLive else { return next() }
-        // Um failover que não responde: o seguinte (ou, sem mais, o erro da lista principal).
-        if onBackup { return fail() }
-        if !backupAsked, let ask = onStartFailed {
-            backupAsked = true
+    /// O direto não respondeu a tempo (ver [afterFailure]).
+    private func noAnswer() { afterFailure(noAnswer: true) }
+
+    /// A tentativa atual não começou a dar (ver [afterFailure]).
+    private func next() { afterFailure() }
+
+    /// Os failovers ainda se podem procurar: um direto da lista principal, sem os ter procurado nesta volta.
+    private var canFailOver: Bool { openedLive && !onBackup && !backupAsked && onStartFailed != nil }
+
+    /// A tentativa atual falhou: o passo seguinte é o das regras partilhadas com o Android (o outro formato, os
+    /// failovers, voltar a ligar ou o erro; ver GoatCore PlaybackRules). Sem failovers quando se procuram, decide-se
+    /// outra vez sem eles ([backupUnavailable]).
+    private func afterFailure(noAnswer: Bool = false, started: Bool? = nil, failoverAllowed: Bool? = nil) {
+        watchdog?.cancel()
+        let started = started ?? (state == .playing)
+        let status = currentHTTPStatus
+        let hasNext = index + 1 < attempts.count
+        // O catch-up caiu a meio (sem outro formato por tentar): quem usa o leitor pede de novo daquele ponto.
+        if wasPlaying, !openedLive, started || !hasNext {
             stopBackends()
-            if ask(nil) {
+            if onDropped?() == true { return }
+        }
+        let step = PlaybackRules.nextStep(AttemptFailure(
+            live: openedLive, started: started, wasPlaying: wasPlaying, onBackup: onBackup, hasNextFormat: hasNext,
+            failoverAllowed: failoverAllowed ?? canFailOver, reconnect: reconnectSeconds > 0, noAnswer: noAnswer))
+        lastNoAnswer = noAnswer
+        lastStarted = started
+        if step != .nextFormat {
+            DebugLog.add("Player: failed (\(backend), was playing: \(wasPlaying), HTTP \(status.map(String.init) ?? "-")) → \(step)")
+            if lastHTTPStatus == nil { lastHTTPStatus = status }
+            stopBackends()
+        }
+        switch step {
+        case .nextFormat:
+            // Uma recusa de "ocupado" (403, 503…) já foi tentada uns 3 s pelo gravador (ver OpenRetry): é este formato
+            // que o fornecedor recusa neste canal. Passa-se ao outro, mas sem o aprender para a conta (FormatFallback).
+            if OpenRetry.isRefusal(status) { DebugLog.add("Player: refused (HTTP \(status.map(String.init) ?? "-")), trying the next form") }
+            _ = fallback.next(after: status, count: attempts.count)
+            open()
+        case .failover:
+            backupAsked = true
+            if onStartFailed?(noAnswer ? nil : lastHTTPStatus) == true {
+                state = .opening
+            } else {
+                afterFailure(noAnswer: noAnswer, started: started, failoverAllowed: false)
+            }
+        case .nextFailover:
+            if onBackupFailed?() == true {
                 state = .opening
                 return
             }
-        }
-        next()
-    }
-
-    private func next() {
-        // Tenta a forma seguinte (ts ⇄ m3u8). Uma recusa de "ocupado" (403, 503…) já foi tentada uns 3 s pelo
-        // gravador (ver OpenRetry): a ligação anterior já fechou, por isso é este formato que o fornecedor recusa neste
-        // canal (há canais que só dão em m3u8). Passa-se ao outro, mas sem o aprender para a conta (ver FormatFallback).
-        let status = currentHTTPStatus
-        if OpenRetry.isRefusal(status) { DebugLog.add("Player: refused (HTTP \(status.map(String.init) ?? "-")), trying the next form") }
-        if fallback.next(after: status, count: attempts.count) != nil {
-            open()
-        } else {
-            fail()
+            restoreMain()
+            showFailure()
+        case .reconnect:
+            state = .opening
+            reconnects += 1
+            scheduleRetry(reconnecting: true)
+        case .giveUp:
+            showFailure()
         }
     }
 
-    /// O direto a dar: se a posição não andar durante [stallSeconds] (sem estar em pausa), o fornecedor deixou de mandar
+    /// O direto a dar: se a posição não andar durante [PlaybackRules.stallSeconds] (sem estar em pausa), o fornecedor deixou de mandar
     /// sem fechar a ligação (nenhum leitor dá erro: a imagem ficava parada para sempre). Como no Android.
     private func watchProgress() {
         stallTask?.cancel()
@@ -724,7 +757,7 @@ final class PlayerEngine: NSObject {
                     since = Date()
                     continue
                 }
-                if Date().timeIntervalSince(since) >= Self.stallSeconds {
+                if Date().timeIntervalSince(since) >= PlaybackRules.stallSeconds {
                     self.stalled()
                     return
                 }
@@ -732,60 +765,25 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    /// Preso: volta a ligar; se voltar a prender dentro de [stallWindow], passa-se aos failovers do canal (se houver).
+    /// Preso: volta a ligar; se voltar a prender pouco depois, passa-se aos failovers do canal (se houver; ver StallCounter).
     private func stalled() {
-        let now = Date()
-        stalls = stalls.filter { now.timeIntervalSince($0) < Self.stallWindow } + [now]
-        DebugLog.add("Player: live stuck for \(Int(Self.stallSeconds)) s (\(stalls.count)), reconnecting")
-        if stalls.count >= 2, !onBackup, let ask = onStartFailed {
-            stalls = []
+        let failover = stalls.stalled(nowMs: Self.uptimeMs(), failoverAllowed: openedLive && !onBackup && onStartFailed != nil)
+        DebugLog.add("Player: live stuck for \(Int(PlaybackRules.stallSeconds)) s (\(failover ? "failovers" : "reconnecting"))")
+        if failover, let ask = onStartFailed {
             stopBackends()
             backupAsked = true
+            lastNoAnswer = false
+            lastStarted = true
             if ask(nil) {
                 state = .opening
                 return
             }
         }
-        fail()
+        afterFailure(started: true)
     }
 
-    /// Nenhuma forma abriu. Caiu a meio: volta a ligar de N em N segundos, sempre. Não chegou a abrir: mostra o
-    /// erro e tenta mais umas vezes (sem martelar o servidor).
-    private func fail() {
-        DebugLog.add("Player: failed (\(backend), was playing: \(wasPlaying), HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
-        watchdog?.cancel()
-        if lastHTTPStatus == nil { lastHTTPStatus = currentHTTPStatus }
-        stopBackends()
-        if wasPlaying {
-            if onDropped?() == true { return }
-            guard reconnectSeconds > 0 else {
-                state = .failed
-                hideFreeze()
-                onFailed?()
-                return
-            }
-            state = .opening
-            reconnects += 1
-            scheduleRetry(reconnecting: true)
-            return
-        }
-        // A lista principal desistiu deste direto: o mesmo canal na lista de reserva (uma vez por volta de tentativas).
-        if !onBackup, openedLive, !backupAsked, let ask = onStartFailed {
-            backupAsked = true
-            if ask(lastHTTPStatus) {
-                state = .opening
-                return
-            }
-        }
-        if onBackup {
-            if onBackupFailed?() == true {
-                state = .opening
-                return
-            }
-            restoreMain()
-        }
-        showFailure()
-    }
+    /// Nenhuma forma abriu ou caiu a meio (ver [afterFailure]).
+    private func fail() { afterFailure() }
 
     /// Não abriu: o erro e mais umas tentativas (desde a lista principal).
     private func showFailure() {
@@ -919,10 +917,11 @@ final class PlayerEngine: NSObject {
         begin(after: 0)
     }
 
-    /// A procura na reserva não deu (sem reserva, sem o canal ou na dúvida): o erro como sempre.
+    /// A procura na reserva não deu (sem reserva, sem o canal ou na dúvida): decide-se outra vez, sem failovers (o
+    /// outro formato, voltar a ligar ou o erro).
     func backupUnavailable() {
         guard state == .opening, !onBackup else { return }
-        showFailure()
+        afterFailure(noAnswer: lastNoAnswer, started: lastStarted, failoverAllowed: false)
     }
 
     /// A reserva também falhou: as tentativas seguintes voltam a começar pela lista principal.

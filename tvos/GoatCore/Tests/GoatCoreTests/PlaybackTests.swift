@@ -14,6 +14,29 @@ extension CoreTests {
         return out
     }
 
+    /// As regras das tentativas vêm do núcleo partilhado (os casos todos estão lá, PlaybackRulesTest): aqui confere-se a ponte.
+    static func playbackRulesFromTheSharedCore() throws {
+        func step(started: Bool = false, wasPlaying: Bool = false, onBackup: Bool = false, hasNextFormat: Bool = false,
+                  failoverAllowed: Bool = false, noAnswer: Bool = false) -> NextStep {
+            PlaybackRules.nextStep(AttemptFailure(live: true, started: started, wasPlaying: wasPlaying, onBackup: onBackup, hasNextFormat: hasNextFormat,
+                                                  failoverAllowed: failoverAllowed, reconnect: true, noAnswer: noAnswer))
+        }
+        try expect(step(hasNextFormat: true, failoverAllowed: true, noAnswer: true), .failover)
+        try expect(step(hasNextFormat: true), .nextFormat)
+        try expect(step(onBackup: true), .nextFailover)
+        try expect(step(started: true, wasPlaying: true), .reconnect)
+        try expect(step(), .giveUp)
+        try expect(PlaybackRules.openTimeout(largeBuffer: false, slowEngine: false), 8)
+        try expect(PlaybackRules.openTimeout(largeBuffer: true, slowEngine: true), 12)
+        try expect(PlaybackRules.stallSeconds, 12)
+        let stalls = StallCounter()
+        try expect(stalls.stalled(nowMs: 0, failoverAllowed: true), false)
+        try expect(stalls.stalled(nowMs: 60_000, failoverAllowed: true), true)
+        try expect(stalls.count, 0)
+        try expect(ZapPacer.settleMs, 350)
+        try expect(OpenRetry.busyCodes, [403, 406, 458, 503, 509])
+    }
+
     static func openRetryBusyTriesFourTimesInThreeSeconds() throws {
         for code in [403, 406, 458, 503, 509] {
             try expect(ladder(code), [250, 500, 1_000, 1_500], "\(code)")

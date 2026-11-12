@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 // As regras do leitor que não dependem do motor (as mesmas do GoatTV Android, ui/player/engine): quanto esperar para
 // voltar a abrir uma stream recusada, quando passar ao outro formato, o atraso ao mudar de canal e quando o AFR muda o
@@ -13,36 +14,21 @@ import Foundation
 /// (rede) fica perto do que o ExoPlayer faz, um pouco mais curto.
 public enum OpenRetry {
     /// Os códigos com que os painéis Xtream recusam uma ligação a mais (ver [isBusy]).
-    public static let busyCodes: Set<Int> = [403, 406, 458, 503, 509]
-
-    /// Ocupado: 4 tentativas em uns 3 s (o fornecedor ainda está a fechar a ligação anterior). Não mais amiúde: na
-    /// SHIELD, com um fornecedor real, 9 pedidos em 3 s levavam a conta a "demasiados pedidos" (429) no formato seguinte.
-    static let busy: [Int] = [250, 500, 1_000, 1_500]
-    /// "Demasiados pedidos" (429): o servidor pede calma; espera-se a sério antes de voltar a pedir.
-    static let rateLimited: [Int] = [2_000, 4_000]
-    /// Não existe (404/410): uma só tentativa, logo a seguir.
-    static let notFound: [Int] = [250]
-    /// Outros erros (rede, 5xx): 0, 0,5 e 1 s.
-    static let other: [Int] = [0, 500, 1_000]
+    public static var busyCodes: Set<Int> { Set(GoatShared.OpenRetry.shared.BUSY_CODES.map { $0.intValue }) }
 
     /// A espera (ms) antes da repetição [retry] (1 = a primeira) de uma abertura que falhou com o código HTTP
-    /// [httpCode] (nil = sem resposta HTTP); nil = desistir.
+    /// [httpCode] (nil = sem resposta HTTP); nil = desistir. As esperas são as do núcleo partilhado com o Android.
     public static func delayMs(httpCode: Int?, retry: Int) -> Int? {
-        let ladder: [Int]
-        switch httpCode {
-        case let code? where busyCodes.contains(code): ladder = busy
-        case 429: ladder = rateLimited
-        case 404, 410: ladder = notFound
-        default: ladder = other
-        }
-        return retry >= 1 && retry <= ladder.count ? ladder[retry - 1] : nil
+        GoatShared.OpenRetry.shared.delayMs(httpCode: code(httpCode), retry: Int32(clamping: retry)).map { Int($0.int64Value) }
     }
 
     /// O fornecedor recusou a ligação como quem está ocupado (403, 503…; a ligação anterior pode ainda contar).
-    public static func isBusy(_ httpCode: Int?) -> Bool { httpCode.map { busyCodes.contains($0) } ?? false }
+    public static func isBusy(_ httpCode: Int?) -> Bool { GoatShared.OpenRetry.shared.isBusy(httpCode: code(httpCode)) }
 
     /// Uma recusa do fornecedor: ocupado ou "demasiados pedidos" (429).
-    public static func isRefusal(_ httpCode: Int?) -> Bool { isBusy(httpCode) || httpCode == 429 }
+    public static func isRefusal(_ httpCode: Int?) -> Bool { GoatShared.OpenRetry.shared.isRefusal(httpCode: code(httpCode)) }
+
+    private static func code(_ httpCode: Int?) -> KotlinInt? { httpCode.map { KotlinInt(int: Int32(clamping: $0)) } }
 }
 
 /// Ao abrir um canal, as formas tentam-se por ordem (ts ⇄ m3u8, como no GoatTV Android, ChannelPlayback): a que não
@@ -98,17 +84,13 @@ public struct ZapPacer: Sendable {
     public mutating func delayFor(nowMs: Int64, setting: Int) -> Int64 {
         let since = lastZapAt.map { nowMs - $0 }
         lastZapAt = nowMs
-        switch setting {
-        case Prefs.ZapDelay.off: return 0
-        case Prefs.ZapDelay.auto: return since.map { $0 < Self.flipWindowMs } == true ? Self.settleMs : 0
-        default: return Int64(max(0, setting))
-        }
+        return PlaybackRules.zapDelayMs(sinceLastMs: since, setting: setting)
     }
 
     /// Duas mudanças com menos do que isto entre elas: está-se a passar canais.
-    public static let flipWindowMs: Int64 = 500
+    public static var flipWindowMs: Int64 { GoatShared.PlaybackRules.shared.ZAP_FLIP_WINDOW_MS }
     /// A passar canais, o canal abre quando não há outra mudança durante isto.
-    public static let settleMs: Int64 = 350
+    public static var settleMs: Int64 { GoatShared.PlaybackRules.shared.ZAP_SETTLE_MS }
 }
 
 /// Quando o AFR muda o modo da TV (`afr_mode`): uma vez por canal, quando a cadência dele fica conhecida; "ao

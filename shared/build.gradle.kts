@@ -21,4 +21,8 @@ kotlin {
             xcf.add(this)
         }
     }
+
+    sourceSets {
+        commonTest.dependencies { implementation(kotlin("test")) }
+    }
 }

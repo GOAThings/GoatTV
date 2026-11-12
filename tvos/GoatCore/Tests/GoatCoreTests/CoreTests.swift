@@ -85,6 +85,7 @@ enum CoreTests {
         ("ringServerAnswers502WhenTheStreamNeverCame", ringServerAnswers502WhenTheStreamNeverCame),
         ("ringServerStopCutsAWaitingResponse", ringServerStopCutsAWaitingResponse),
         ("openRetryBusyTriesFourTimesInThreeSeconds", openRetryBusyTriesFourTimesInThreeSeconds),
+        ("playbackRulesFromTheSharedCore", playbackRulesFromTheSharedCore),
         ("openRetryTooManyRequestsWaitsForReal", openRetryTooManyRequestsWaitsForReal),
         ("openRetryNotFoundOnceMore", openRetryNotFoundOnceMore),
         ("openRetryOtherErrorsShorter", openRetryOtherErrorsShorter),
