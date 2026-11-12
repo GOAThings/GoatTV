@@ -86,6 +86,7 @@ enum CoreTests {
         ("ringServerStopCutsAWaitingResponse", ringServerStopCutsAWaitingResponse),
         ("openRetryBusyTriesFourTimesInThreeSeconds", openRetryBusyTriesFourTimesInThreeSeconds),
         ("playbackRulesFromTheSharedCore", playbackRulesFromTheSharedCore),
+        ("m3uKeysMatchTheBackendFixture", m3uKeysMatchTheBackendFixture),
         ("openRetryTooManyRequestsWaitsForReal", openRetryTooManyRequestsWaitsForReal),
         ("openRetryNotFoundOnceMore", openRetryNotFoundOnceMore),
         ("openRetryOtherErrorsShorter", openRetryOtherErrorsShorter),

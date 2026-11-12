@@ -120,37 +120,6 @@ data class PlaylistForm(
     }
 }
 
-data class Category(val id: String, val name: String)
-
-/**
- * Um canal dentro de uma lista.
- *
- * [uid] é a posição na lista (única, usada como chave nas listas da UI).
- * [key] é o `channelKey` sincronizado com a conta (favoritos, último canal).
- */
-data class Channel(
-    val uid: Int,
-    val key: String,
-    val num: Int,
-    val name: String,
-    val logo: String?,
-    val categoryId: String,
-    val streamId: String? = null,
-    val url: String? = null,
-    val userAgent: String? = null,
-    val referrer: String? = null,
-    /** Id do canal no guia XMLTV (`tvg-id` / `epg_channel_id`). */
-    val epgId: String? = null,
-    /** Dias de catch-up que o servidor guarda deste canal (0 = sem catch-up). */
-    val archiveDays: Int = 0,
-    /**
-     * M3U: como se pede o catch-up (ver M3uCatchup: default, append, shift, flussonic, flussonic-ts, xc); null nos
-     * outros tipos, que têm a sua forma. Fica null nas listas guardadas antes desta versão (até se atualizarem).
-     */
-    val catchupType: String? = null,
-    /** M3U: o modelo do URL do catch-up (`catchup-source`, do canal ou do `#EXTM3U`), nos tipos default e append. */
-    val catchupSource: String? = null,
-)
 
 data class XtreamAccount(
     val maxConnections: Int?,
@@ -198,7 +167,7 @@ class PlaylistContent(
     }
 
     companion object {
-        const val OTHERS = "Outros"
+        const val OTHERS = OTHERS_GROUP
 
         /** Agrupa os canais pelas categorias conhecidas; o que sobra vai para "Outros". */
         fun build(
@@ -262,9 +231,4 @@ data class Catchup(
         /** O servidor precisa de uns minutos para ter um programa em arquivo. */
         const val MIN_AGE_MS = 2 * 60_000L
     }
-}
-
-object StreamFormat {
-    const val TS = "ts"
-    const val HLS = "m3u8"
 }

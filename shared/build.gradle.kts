@@ -23,6 +23,8 @@ kotlin {
     }
 
     sourceSets {
+        // As horas do catch-up (a hora de um fuso): a mesma biblioteca nas duas plataformas.
+        commonMain.dependencies { api(libs.kotlinx.datetime) }
         commonTest.dependencies { implementation(kotlin("test")) }
     }
 }

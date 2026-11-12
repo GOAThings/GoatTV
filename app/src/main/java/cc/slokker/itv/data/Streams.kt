@@ -3,14 +3,6 @@ package cc.slokker.itv.data
 import cc.slokker.itv.data.m3u.M3uCatchup
 import cc.slokker.itv.data.xtream.XtreamSource
 
-/** Uma forma de abrir um canal. O player tenta-as por ordem (fallback ts ⇄ m3u8). */
-data class StreamCandidate(val url: String, val format: String) {
-    val isHls: Boolean get() = format == StreamFormat.HLS
-
-    /** Uma gravação no disco (`file://`): não é uma ligação ao fornecedor. */
-    val isLocal: Boolean get() = url.startsWith("file:")
-}
-
 /**
  * Lista ordenada de tentativas para [channel].
  * [preferred] é o `settings.stream_format` da conta (null = Auto).

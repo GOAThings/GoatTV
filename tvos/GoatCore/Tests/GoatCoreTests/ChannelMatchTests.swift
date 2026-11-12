@@ -22,6 +22,31 @@ extension CoreTests {
         throw Failure(description: "channel_match.json não encontrado (\(candidates.map(\.path)))")
     }
 
+    /// A lista de teste do backend (app/src/test/resources/organize.m3u, a mesma do Android e do site): as chaves e os
+    /// grupos dos canais têm de sair iguais, também com fins de linha \r\n ou \r.
+    static func m3uKeysMatchTheBackendFixture() throws {
+        let relative = "app/src/test/resources/organize.m3u"
+        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../\(relative)")
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("../../\(relative)")
+        guard let data = [here, cwd].lazy.compactMap({ try? Data(contentsOf: $0.standardizedFileURL) }).first else {
+            throw Failure(description: "organize.m3u não encontrado")
+        }
+        let expected: [(String, String)] = [
+            ("SIC.pt", "Portugal"), ("ueaaa29a28652", "Portugal"), ("u7aa953b3260a", "Portugal"), ("u6a4815eaa311", "Portugal"),
+            ("ESPN.us", "Sports, US"), ("Euronews.fr", PlaylistContent.others), ("ud319eeb165a2", PlaylistContent.others),
+            ("u6c2602101058", "Sports, US"), ("Kids1", "Infantil"), ("Kids2", "Infantil"), ("News1", "Notícias"),
+            ("Docs1", "Documentários"), ("NoGrp", PlaylistContent.others),
+        ]
+        let text = String(decoding: data, as: UTF8.self)
+        for (label, variant) in [("lf", text), ("crlf", text.replacingOccurrences(of: "\n", with: "\r\n")),
+                                 ("cr", text.replacingOccurrences(of: "\n", with: "\r"))] {
+            let r = M3UParser.parse(Data(variant.utf8))
+            try expect(r.channels.map(\.key), expected.map(\.0), label)
+            try expect(r.channels.map(\.categoryId), expected.map(\.1), label)
+            try expect(r.channels.count > 4 ? r.channels[4].name : "", "ESPN, East", label)
+        }
+    }
+
     private static func entries(_ o: JSON, _ key: String) -> [ChannelMatch.Entry] {
         (o[key]?.array ?? []).enumerated().map { i, e in
             ChannelMatch.Entry(key: e["key"]?.string ?? "k\(i)", name: e["name"]?.string ?? "", epgId: e["epg"]?.string, group: e["group"]?.string)

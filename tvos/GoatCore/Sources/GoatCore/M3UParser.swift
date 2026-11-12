@@ -1,7 +1,8 @@
 import Foundation
+import GoatShared
 
-/// Parser M3U/M3U8, igual ao do GoatTV Android (os `channelKey` têm de sair iguais, por causa dos favoritos).
-/// Só guarda canais de TV em direto; ignora filmes e séries.
+/// Parser M3U/M3U8: o do núcleo partilhado com o Android (shared/…/data/m3u/M3uParser.kt), por isso os `channelKey`
+/// saem iguais (os favoritos). Só guarda canais de TV em direto; ignora filmes e séries. Aqui só se partem as linhas.
 public enum M3UParser {
     public struct Result: Sendable {
         public var categories: [Category]
@@ -9,167 +10,30 @@ public enum M3UParser {
         public var epgUrl: String?
     }
 
-    public static func parse(_ data: Data, channelName: (Int) -> String = { "Channel \($0)" }) -> Result {
-        var channels: [Channel] = []
-        var groups: [String] = []
-        var seenGroups = Set<String>()
-        var usedKeys = Set<String>()
-        var epgUrl: String?
-        // O `#EXTM3U` também pode dizer o catch-up de todos os canais (catchup, catchup-days, catchup-source…).
-        var header: [String: String] = [:]
-
-        var pending: (attrs: [String: String], name: String)?
-        // O número do canal anterior: um canal sem tvg-chno fica com o seguinte (sem nenhum, 1, 2, 3…).
-        var lastNum = 0
-        var group: String?
-        var userAgent: String?
-        var referrer: String?
-
-        forEachLine(data) { raw in
-            var line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.hasPrefix("\u{FEFF}") { line.removeFirst() }
-            if line.isEmpty { return }
-            if line.hasPrefix("#EXTM3U") {
-                let attrs = attributes(Substring(line))
-                header = attrs
-                if let tvg = attrs["x-tvg-url"] ?? attrs["url-tvg"],
-                   let first = tvg.split(separator: ",").first?.trimmingCharacters(in: .whitespaces), !first.isEmpty {
-                    epgUrl = first
-                }
-            } else if line.hasPrefix("#EXTINF") {
-                pending = parseExtinf(line)
-                group = nil
-                userAgent = nil
-                referrer = nil
-            } else if line.hasPrefix("#EXTGRP:") {
-                group = String(line.dropFirst("#EXTGRP:".count)).trimmingCharacters(in: .whitespaces)
-            } else if line.hasPrefix("#EXTVLCOPT:") {
-                let opt = line.dropFirst("#EXTVLCOPT:".count)
-                if opt.hasPrefix("http-user-agent=") {
-                    userAgent = String(opt.dropFirst("http-user-agent=".count)).trimmingCharacters(in: .whitespaces)
-                } else if opt.hasPrefix("http-referrer=") {
-                    referrer = String(opt.dropFirst("http-referrer=".count)).trimmingCharacters(in: .whitespaces)
-                }
-            } else if line.hasPrefix("#") {
-                return
-            } else {
-                guard let info = pending else { return }
-                pending = nil
-                if isVod(line) { return }
-
-                // group-title; vazio ou em falta, o último #EXTGRP deste canal; sem nenhum, "Outros".
-                let category = nonEmpty(info.attrs["group-title"]) ?? nonEmpty(group) ?? PlaylistContent.others
-                if seenGroups.insert(category).inserted { groups.append(category) }
-
-                // channelKey: tvg-id; se faltar (ou se repetir), hash curto do URL.
-                let tvgId = info.attrs["tvg-id"]?.trimmingCharacters(in: .whitespaces) ?? ""
-                let key: String
-                if !tvgId.isEmpty, usedKeys.insert(tvgId).inserted {
-                    key = tvgId
-                } else {
-                    key = urlKey(line)
-                }
-                usedKeys.insert(key)
-
-                let index = channels.count
-                let num = channelNumber(info.attrs) ?? lastNum + 1
-                lastNum = num
-                var name = info.name
-                if name.isEmpty { name = info.attrs["tvg-name"] ?? "" }
-                if name.isEmpty { name = channelName(index + 1) }
-                let logo = info.attrs["tvg-logo"].flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-                let catchup = M3uCatchup.spec(info.attrs, header: header, url: line)
-                channels.append(Channel(
-                    uid: index, key: key, num: num, name: name, logo: logo, categoryId: category,
-                    url: line, userAgent: userAgent, referrer: referrer, epgId: tvgId.isEmpty ? nil : tvgId,
-                    archiveDays: catchup?.days ?? 0, catchupType: catchup?.type, catchupSource: catchup?.source
-                ))
-            }
-        }
-        return Result(categories: groups.map { Category(id: $0, name: $0) }, channels: channels, epgUrl: epgUrl)
+    public static func parse(_ data: Data, channelName: @escaping (Int) -> String = { "Channel \($0)" }) -> Result {
+        let reader = AppleM3u(channelName: { channelName(Int($0.int32Value)) })
+        forEachLine(data) { reader.line(raw: $0) }
+        return Result(categories: reader.categories().map { Category(id: $0.id, name: $0.name) },
+                      channels: reader.channels().map { Channel($0) }, epgUrl: reader.epgUrl())
     }
 
-    /// O número que a lista dá ao canal (tvg-chno, ou os nomes que outras listas usam); igual no Android.
+    /// O número que a lista dá ao canal (tvg-chno, ou os nomes que outras listas usam).
     static func channelNumber(_ attrs: [String: String]) -> Int? {
-        for name in ["tvg-chno", "channel-number", "tvg-num"] {
-            if let n = attrs[name].flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) {
-                return (1...99_999).contains(n) ? n : nil
-            }
-        }
-        return nil
+        let n = AppleBridge.shared.m3uChannelNumber(attrs: attrs)
+        return n < 0 ? nil : Int(n)
     }
 
     /// Heurística para filmes e séries: `/movie/`, `/series/`, `.mp4` ou `.mkv`.
-    public static func isVod(_ url: String) -> Bool {
-        let path = url.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)[0]
-            .split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0].lowercased()
-        return path.contains("/movie/") || path.contains("/series/") || path.hasSuffix(".mp4") || path.hasSuffix(".mkv")
-    }
+    public static func isVod(_ url: String) -> Bool { AppleBridge.shared.m3uIsVod(url: url) }
 
-    /// "u" + 12 hexadecimais do SHA-1 do URL (o mesmo que no Android).
-    public static func urlKey(_ url: String) -> String {
-        "u" + SHA.hex(Array(SHA.sha1(Array(url.utf8)).prefix(6)))
-    }
+    /// "u" + 12 hexadecimais do SHA-1 do URL.
+    public static func urlKey(_ url: String) -> String { AppleBridge.shared.m3uUrlKey(url: url) }
 
-    private static func nonEmpty(_ s: String?) -> String? {
-        guard let t = s?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil }
-        return t
-    }
+    /// `chave="valor"` (chave em minúsculas; repetida, fica a última).
+    static func attributes(_ s: Substring) -> [String: String] { AppleBridge.shared.m3uAttributes(s: String(s)) }
 
-    private static func parseExtinf(_ line: String) -> (attrs: [String: String], name: String) {
-        // O nome vem depois da primeira vírgula fora de aspas (os atributos podem ter vírgulas).
-        var inQuotes = false
-        var comma: String.Index?
-        var i = line.startIndex
-        while i < line.endIndex {
-            let c = line[i]
-            if c == "\"" {
-                inQuotes.toggle()
-            } else if c == ",", !inQuotes {
-                comma = i
-                break
-            }
-            i = line.index(after: i)
-        }
-        guard let comma else { return (attributes(Substring(line)), "") }
-        let head = line[..<comma]
-        let name = line[line.index(after: comma)...].trimmingCharacters(in: .whitespaces)
-        return (attributes(head), name)
-    }
-
-    /// `chave="valor"` (chave em minúsculas), como a expressão `([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"` do Android.
-    static func attributes(_ s: Substring) -> [String: String] {
-        let bytes = Array(s.utf8)
-        var result: [String: String] = [:]
-        var i = 0
-        func isKey(_ b: UInt8) -> Bool {
-            (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A) || b == 0x5F || b == 0x2D
-        }
-        func isSpace(_ b: UInt8) -> Bool { b == 0x20 || b == 0x09 || b == 0x0A || b == 0x0D || b == 0x0B || b == 0x0C }
-        while i < bytes.count {
-            guard isKey(bytes[i]) else { i += 1; continue }
-            let keyStart = i
-            while i < bytes.count, isKey(bytes[i]) { i += 1 }
-            let keyEnd = i
-            var j = i
-            while j < bytes.count, isSpace(bytes[j]) { j += 1 }
-            guard j < bytes.count, bytes[j] == 0x3D else { continue } // '='
-            j += 1
-            while j < bytes.count, isSpace(bytes[j]) { j += 1 }
-            guard j < bytes.count, bytes[j] == 0x22 else { continue } // '"'
-            j += 1
-            let valueStart = j
-            while j < bytes.count, bytes[j] != 0x22 { j += 1 }
-            guard j < bytes.count else { continue }
-            // Repetido, fica o último (como o `associate` do Kotlin).
-            let key = String(decoding: bytes[keyStart..<keyEnd], as: UTF8.self).lowercased()
-            result[key] = String(decoding: bytes[valueStart..<j], as: UTF8.self)
-            i = j + 1
-        }
-        return result
-    }
-
-    /// Chama [body] para cada linha (separadas por \n, com ou sem \r), sem copiar o ficheiro todo para uma String.
+    /// Chama [body] para cada linha (fins de linha \n, \r\n ou \r, como no Android), sem copiar o ficheiro todo para
+    /// uma String.
     private static func forEachLine(_ data: Data, _ body: (String) -> Void) {
         data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
             let buf = raw.bindMemory(to: UInt8.self)
@@ -177,7 +41,8 @@ public enum M3UParser {
             let n = buf.count
             var i = 0
             while i <= n {
-                if i == n || buf[i] == 0x0A {
+                // \r\n conta como um fim só (a linha vazia entre os dois não faz nada).
+                if i == n || buf[i] == 0x0A || buf[i] == 0x0D {
                     // Uma linha sem fim não é um canal: fica de fora (o corpo inteiro já tem um limite).
                     if i > start, i - start <= SafeInput.maxM3ULine {
                         body(String(decoding: UnsafeBufferPointer(rebasing: buf[start..<i]), as: UTF8.self))

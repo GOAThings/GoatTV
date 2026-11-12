@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.TimeZone
+import kotlinx.datetime.TimeZone
 
 /**
  * O catch-up das listas M3U: os atributos (por canal e no `#EXTM3U`) e o URL de cada tipo, com exemplos como os do
@@ -18,8 +18,8 @@ class M3uCatchupTest {
     private val start = 1_794_169_815L
     private val end = start + 3_600
     private val now = start + 10_800
-    private val utc = TimeZone.getTimeZone("UTC")
-    private val paris = TimeZone.getTimeZone("Europe/Paris")
+    private val utc = TimeZone.UTC
+    private val paris = TimeZone.of("Europe/Paris")
 
     private fun parse(text: String) = M3uParser.parse(text.trimIndent().lineSequence()).channels
 

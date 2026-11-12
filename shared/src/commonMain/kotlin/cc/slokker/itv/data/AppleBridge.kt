@@ -1,5 +1,9 @@
 package cc.slokker.itv.data
 
+import cc.slokker.itv.data.m3u.M3uCatchup
+import cc.slokker.itv.data.m3u.M3uParser
+import kotlinx.datetime.TimeZone
+
 /**
  * A porta da Apple (GoatCore em Swift) para [ChannelMatch], [ChannelVariants] e [ChannelNames]: só tipos que chegam
  * ao Swift sem surpresas (as classes Apple* de topo, sem sealed, sem lambdas, sem Int?: "nenhum" é -1). O Swift põe
@@ -40,6 +44,32 @@ object AppleBridge {
     /** [ChannelNames.apply] com as regras partidas em [finds] e [replaces] (lado a lado). */
     fun names(name: String, finds: List<String>, replaces: List<String>): String =
         ChannelNames.apply(name, finds.zip(replaces) { f, r -> NameRule(f, r) })
+
+    // ---- Listas M3U e catch-up ------------------------------------------------------------------
+
+    /** [M3uCatchup.spec], ou null. */
+    fun m3uCatchupSpec(attrs: Map<String, String>, header: Map<String, String>, url: String): AppleCatchupSpec? =
+        M3uCatchup.spec(attrs, header, url)?.let { AppleCatchupSpec(it.type, it.source, it.days) }
+
+    fun m3uCatchupPrecisionMs(channel: Channel): Long = M3uCatchup.precisionMs(channel)
+
+    /** [M3uCatchup.candidates] com as datas no fuso [zoneId] (ex.: "Europe/Lisbon"; um desconhecido conta como UTC). */
+    fun m3uCatchupCandidates(channel: Channel, startS: Long, endS: Long, nowS: Long, zoneId: String): List<StreamCandidate> =
+        M3uCatchup.candidates(channel, startS, endS, nowS, zone(zoneId))
+
+    fun m3uCatchupExpand(template: String, startS: Long, endS: Long, nowS: Long, zoneId: String): String? =
+        M3uCatchup.expand(template, startS, endS, nowS, zone(zoneId))
+
+    fun m3uUrlKey(url: String): String = M3uParser.urlKey(url)
+
+    fun m3uIsVod(url: String): Boolean = M3uParser.isVod(url)
+
+    fun m3uAttributes(s: String): Map<String, String> = M3uParser.attributes(s)
+
+    /** O número do canal nos atributos, ou -1. */
+    fun m3uChannelNumber(attrs: Map<String, String>): Int = M3uParser.channelNumber(attrs) ?: -1
+
+    private fun zone(id: String): TimeZone = runCatching { TimeZone.of(id) }.getOrDefault(TimeZone.UTC)
 
     private val STATES = mapOf(
         ChannelMatch.State.AUTO to "auto",
@@ -82,3 +112,22 @@ class AppleResult(val kind: String, val value: Int)
 
 /** [ChannelMatch.ReviewRow]: [state] como o Swift (auto, chosen, off, unsure, missing, not_set); -1 = nenhum. */
 class AppleRow(val main: Int, val state: String, val backup: Int, val suggestion: Int, val failovers: List<String>)
+
+/** [M3uCatchup.Spec]. */
+class AppleCatchupSpec(val type: String, val source: String?, val days: Int)
+
+/** Uma lista M3U lida linha a linha ([M3uParser.Reader]); [channelName]: o nome de um canal sem nome (desde 1). */
+class AppleM3u(channelName: (Int) -> String) {
+    private val reader = M3uParser.Reader(channelName)
+    private var done: M3uParser.Result? = null
+
+    fun line(raw: String) = reader.line(raw)
+
+    private fun result(): M3uParser.Result = done ?: reader.result().also { done = it }
+
+    fun channels(): List<Channel> = result().channels
+
+    fun categories(): List<Category> = result().categories
+
+    fun epgUrl(): String? = result().epgUrl
+}

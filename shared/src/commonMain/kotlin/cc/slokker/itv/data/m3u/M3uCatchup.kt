@@ -3,9 +3,10 @@ package cc.slokker.itv.data.m3u
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.StreamFormat
-import java.util.Calendar
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /**
  * O catch-up das listas M3U, como os outros players o leem (a referência é o README e o código do Kodi IPTV Simple;
@@ -59,7 +60,7 @@ object M3uCatchup {
             else -> return null
         }
         // O default e o append são o modelo: sem ele não há URL (no Kodi caem no "formato da consulta" das definições).
-        if ((type == DEFAULT || type == APPEND) && (source.isEmpty() || expand(source, 0, 0, 0, TimeZone.getTimeZone("UTC")) == null)) return null
+        if ((type == DEFAULT || type == APPEND) && (source.isEmpty() || expand(source, 0, 0, 0, TimeZone.UTC) == null)) return null
         // O xc e o Flussonic fazem-se a partir do URL do canal: um URL que não é desses não tem catch-up.
         if (type == XC && xtreamParts(url) == null) return null
         if ((type == FLUSSONIC || type == FLUSSONIC_TS) && flussonic(url, type == FLUSSONIC_TS) == null) return null
@@ -81,7 +82,7 @@ object M3uCatchup {
      * As datas ({Y}, {H}…, o xc) vão na hora de [zone] (a deste aparelho, como no Kodi). Vazia se o URL do canal não
      * servir para o tipo.
      */
-    fun candidates(channel: Channel, startS: Long, endS: Long, nowS: Long, zone: TimeZone = TimeZone.getDefault()): List<StreamCandidate> {
+    fun candidates(channel: Channel, startS: Long, endS: Long, nowS: Long, zone: TimeZone = TimeZone.currentSystemDefault()): List<StreamCandidate> {
         val url = channel.url ?: return emptyList()
         val urls: List<String> = when (channel.catchupType) {
             DEFAULT -> listOfNotNull(channel.catchupSource?.let { expand(it, startS, endS, nowS, zone) })
@@ -139,16 +140,17 @@ object M3uCatchup {
 
     /** [seconds] escrito com as letras de [pattern] (Y m d H M S; o resto fica como está), na hora de [zone]. */
     private fun format(seconds: Long, pattern: String, zone: TimeZone): String {
-        val c = Calendar.getInstance(zone).apply { timeInMillis = seconds * 1000 }
+        val t = Instant.fromEpochSeconds(seconds).toLocalDateTime(zone)
+        // Algarismos latinos sempre (também com a app em árabe ou hindi).
+        fun two(n: Int) = n.toString().padStart(2, '0')
         return pattern.map { ch ->
             when (ch) {
-                // Locale.ROOT: algarismos latinos também com a app em árabe ou hindi.
-                'Y' -> "%04d".format(Locale.ROOT, c.get(Calendar.YEAR))
-                'm' -> "%02d".format(Locale.ROOT, c.get(Calendar.MONTH) + 1)
-                'd' -> "%02d".format(Locale.ROOT, c.get(Calendar.DAY_OF_MONTH))
-                'H' -> "%02d".format(Locale.ROOT, c.get(Calendar.HOUR_OF_DAY))
-                'M' -> "%02d".format(Locale.ROOT, c.get(Calendar.MINUTE))
-                'S' -> "%02d".format(Locale.ROOT, c.get(Calendar.SECOND))
+                'Y' -> t.year.toString().padStart(4, '0')
+                'm' -> two(t.month.number)
+                'd' -> two(t.day)
+                'H' -> two(t.hour)
+                'M' -> two(t.minute)
+                'S' -> two(t.second)
                 else -> ch.toString()
             }
         }.joinToString("")

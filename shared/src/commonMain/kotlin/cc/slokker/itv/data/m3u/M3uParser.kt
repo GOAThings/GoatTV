@@ -1,14 +1,14 @@
 package cc.slokker.itv.data.m3u
 
-import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
-import cc.slokker.itv.data.PlaylistContent
-import java.security.MessageDigest
+import cc.slokker.itv.data.OTHERS_GROUP
+import cc.slokker.itv.data.Sha1
 
 /**
- * Parser M3U/M3U8 em streaming: lê linha a linha, por isso aguenta listas com dezenas de MB.
- * Só guarda canais de TV em direto; ignora filmes e séries.
+ * Parser M3U/M3U8 em streaming: lê linha a linha, por isso aguenta listas com dezenas de MB. Só guarda canais de TV
+ * em direto; ignora filmes e séries. O mesmo no Android e na Apple (os `channelKey` têm de sair iguais, por causa dos
+ * favoritos): cada plataforma só lê as linhas do ficheiro ([lines] ajuda quem já tem o texto todo).
  */
 object M3uParser {
 
@@ -16,22 +16,34 @@ object M3uParser {
 
     private val ATTR = Regex("""([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"""")
 
-    fun parse(lines: Sequence<String>): Result {
-        val channels = ArrayList<Channel>()
-        val groups = LinkedHashSet<String>()
-        val usedKeys = HashSet<String>()
-        var epgUrl: String? = null
+    /** [lines] de uma lista; [channelName]: o nome de um canal sem nome (a posição, desde 1). */
+    fun parse(lines: Sequence<String>, channelName: (Int) -> String = { "Channel $it" }): Result {
+        val reader = Reader(channelName)
+        for (line in lines) reader.line(line)
+        return reader.result()
+    }
+
+    /** As linhas de [text] (fins de linha \n, \r\n ou \r); as de mais de [maxLine] caracteres ficam de fora. */
+    fun lines(text: String, maxLine: Int = Int.MAX_VALUE): Sequence<String> =
+        text.lineSequence().filter { it.length <= maxLine }
+
+    /** A lista linha a linha ([line]), para quem lê o ficheiro aos bocados; no fim, [result]. */
+    class Reader(private val channelName: (Int) -> String) {
+        private val channels = ArrayList<Channel>()
+        private val groups = LinkedHashSet<String>()
+        private val usedKeys = HashSet<String>()
+        private var epgUrl: String? = null
         // O `#EXTM3U` também pode dizer o catch-up de todos os canais (catchup, catchup-days, catchup-source…).
-        var header: Map<String, String> = emptyMap()
+        private var header: Map<String, String> = emptyMap()
 
-        var pending: Extinf? = null
+        private var pending: Extinf? = null
         // O número do canal anterior: um canal sem tvg-chno fica com o seguinte (sem nenhum, 1, 2, 3…).
-        var lastNum = 0
-        var group: String? = null
-        var userAgent: String? = null
-        var referrer: String? = null
+        private var lastNum = 0
+        private var group: String? = null
+        private var userAgent: String? = null
+        private var referrer: String? = null
 
-        for (raw in lines) {
+        fun line(raw: String) {
             val line = raw.trim().removePrefix("\uFEFF")
             when {
                 line.isEmpty() -> Unit
@@ -57,14 +69,14 @@ object M3uParser {
                 }
                 line.startsWith("#") -> Unit
                 else -> {
-                    val info = pending ?: continue
+                    val info = pending ?: return
                     pending = null
-                    if (isVod(line)) continue
+                    if (isVod(line)) return
 
                     // group-title; vazio ou em falta, o último #EXTGRP deste canal; sem nenhum, "Outros" (como o site).
                     val category = info.attrs["group-title"]?.trim()?.takeIf { it.isNotEmpty() }
                         ?: group?.trim()?.takeIf { it.isNotEmpty() }
-                        ?: PlaylistContent.OTHERS
+                        ?: OTHERS_GROUP
                     groups += category
 
                     // channelKey: tvg-id; se faltar (ou se repetir), hash curto do URL.
@@ -80,7 +92,7 @@ object M3uParser {
                         uid = index,
                         key = key,
                         num = num,
-                        name = info.name.ifEmpty { info.attrs["tvg-name"].orEmpty() }.ifEmpty { I18n.s.channelName((index + 1).toString()) },
+                        name = info.name.ifEmpty { info.attrs["tvg-name"].orEmpty() }.ifEmpty { channelName(index + 1) },
                         logo = info.attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
                         categoryId = category,
                         url = line,
@@ -94,13 +106,14 @@ object M3uParser {
                 }
             }
         }
-        return Result(groups.map { Category(it, it) }, channels, epgUrl)
+
+        fun result(): Result = Result(groups.map { Category(it, it) }, channels, epgUrl)
     }
 
     private class Extinf(val attrs: Map<String, String>, val name: String)
 
     /** O número que a lista dá ao canal (tvg-chno, ou os nomes que outras listas usam); igual na Apple TV. */
-    internal fun channelNumber(attrs: Map<String, String>): Int? =
+    fun channelNumber(attrs: Map<String, String>): Int? =
         listOf("tvg-chno", "channel-number", "tvg-num").firstNotNullOfOrNull { attrs[it]?.trim()?.toIntOrNull() }
             ?.takeIf { it in 1..MAX_CHANNEL_NUMBER }
 
@@ -121,7 +134,8 @@ object M3uParser {
         return Extinf(attributes(head), name)
     }
 
-    private fun attributes(s: String): Map<String, String> =
+    /** Os atributos `chave="valor"` de [s] (chave em minúsculas; repetida, fica a última). */
+    fun attributes(s: String): Map<String, String> =
         ATTR.findAll(s).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
 
     /** Heurística para filmes e séries: `/movie/`, `/series/`, `.mp4` ou `.mkv`. */
@@ -130,8 +144,6 @@ object M3uParser {
         return "/movie/" in path || "/series/" in path || path.endsWith(".mp4") || path.endsWith(".mkv")
     }
 
-    fun urlKey(url: String): String {
-        val digest = MessageDigest.getInstance("SHA-1").digest(url.toByteArray())
-        return "u" + digest.take(6).joinToString("") { "%02x".format(it) }
-    }
+    /** "u" + 12 hexadecimais do SHA-1 do URL. */
+    fun urlKey(url: String): String = "u" + Sha1.hex(Sha1.digest(url.encodeToByteArray()).copyOf(6))
 }
