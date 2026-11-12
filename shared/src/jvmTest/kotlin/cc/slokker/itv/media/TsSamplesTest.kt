@@ -56,6 +56,65 @@ class TsSamplesTest {
         }
     }
 
+    /** As imagens pelo [NalReader]: quantas são imagens-chave e se a primeira traz os conjuntos de parâmetros. */
+    private fun video(name: String, hevc: Boolean, keyframes: Int) {
+        val c = read(name)
+        val track = c.tracks.first { it.kind == TrackKind.VIDEO }
+        val reader = NalReader(hevc)
+        val units = c.samples.getValue(track.pid).map { reader.unit(it.data) }
+        assertEquals(keyframes, units.count { it.keyframe }, name)
+        assertTrue(units.first().keyframe, name)
+        assertEquals(if (hevc) 3 else 2, units.first().parameterSets.size, name)
+        assertTrue(units.drop(1).filter { !it.keyframe }.all { it.parameterSets.isEmpty() }, name)
+        // AVCC: os tamanhos de 4 bytes percorrem a imagem toda.
+        for (u in units) {
+            var at = 0
+            while (at < u.data.size) at += 4 + ((u.data[at].toInt() and 0xFF) shl 24 or ((u.data[at + 1].toInt() and 0xFF) shl 16) or ((u.data[at + 2].toInt() and 0xFF) shl 8) or (u.data[at + 3].toInt() and 0xFF))
+            assertEquals(u.data.size, at, name)
+        }
+    }
+
+    /** O áudio pelo [AudioFrameReader]: os blocos que o ffprobe conta, a frequência, os canais e o tempo a avançar. */
+    private fun audio(name: String, pid: Int, frames: Int, rate: Int, channels: Int) {
+        val c = read(name)
+        val track = c.tracks.first { it.pid == pid }
+        val reader = AudioFrameReader(track.codec)
+        val all = c.samples.getValue(pid).flatMap { reader.frames(it.data, it.pts, it.discontinuity) }
+        assertEquals(frames, all.size, name)
+        assertEquals(rate, reader.format!!.sampleRate, name)
+        assertEquals(channels, reader.format!!.channels, name)
+        assertTrue(all.zipWithNext().all { (a, b) -> b.pts > a.pts }, "$name: o tempo do áudio não avança")
+        val step = all[1].pts - all[0].pts
+        assertEquals(all[0].samples * 90_000L / rate, step, name)
+    }
+
+    @Test
+    fun h264Units() = video("h264_aac.ts", hevc = false, keyframes = 2)
+
+    @Test
+    fun hevcUnits() = video("hevc_ac3.ts", hevc = true, keyframes = 2)
+
+    @Test
+    fun aacFrames() = audio("h264_aac.ts", firstAudio("h264_aac.ts"), 95, 48000, 2)
+
+    @Test
+    fun ac3SurroundFrames() = audio("hevc_ac3.ts", firstAudio("hevc_ac3.ts"), 63, 48000, 6)
+
+    @Test
+    fun eac3Frames() = audio("h264_eac3.ts", firstAudio("h264_eac3.ts"), 63, 48000, 2)
+
+    @Test
+    fun mp2Frames() = audio("mpeg2_mp2.ts", firstAudio("mpeg2_mp2.ts"), 84, 48000, 1)
+
+    @Test
+    fun dvbMonoAc3AndEac3() {
+        val tracks = read("dvb_ac3_eac3.ts").tracks.filter { it.kind == TrackKind.AUDIO }
+        audio("dvb_ac3_eac3.ts", tracks[0].pid, 63, 48000, 1)
+        audio("dvb_ac3_eac3.ts", tracks[1].pid, 63, 48000, 1)
+    }
+
+    private fun firstAudio(name: String) = read(name).tracks.first { it.kind == TrackKind.AUDIO }.pid
+
     @Test
     fun h264WithAac() = check("h264_aac.ts", Codec.H264 to null, Codec.AAC_ADTS to "por")
 
