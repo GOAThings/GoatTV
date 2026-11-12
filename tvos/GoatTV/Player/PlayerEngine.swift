@@ -37,6 +37,8 @@ final class PlayerEngine: NSObject {
         case apple
         /// O AetherEngine (experimental).
         case aether
+        /// O motor próprio (experimental, ver GoatCorePlayback).
+        case goatcore
     }
 
     private(set) var state: State = .idle
@@ -129,6 +131,7 @@ final class PlayerEngine: NSObject {
             }
             vlc.rate = speed
             aetherPlayback?.rate = speed
+            goatCorePlayback?.rate = speed
             avPlayer.defaultRate = speed
             if avPlayer.rate != 0 { avPlayer.rate = speed }
         }
@@ -262,6 +265,20 @@ final class PlayerEngine: NSObject {
         return a
     }
 
+    /// O motor GoatCore, também só criado na primeira vez que é preciso.
+    @ObservationIgnored private var goatCorePlayback: GoatCorePlayback?
+    private var goatCore: GoatCorePlayback {
+        if let goatCorePlayback { return goatCorePlayback }
+        let g = GoatCorePlayback()
+        g.view.frame = view.bounds
+        g.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        g.view.isHidden = true
+        view.insertSubview(g.view, belowSubview: freezeView)
+        g.onEvent = { [weak self] event in self?.goatCoreEvent(event) }
+        goatCorePlayback = g
+        return g
+    }
+
     @ObservationIgnored private var muted = false
     /// As escolhas à mão já repostas nesta abertura.
     @ObservationIgnored private var manualApplied: Set<TrackChoice.Kind> = []
@@ -348,6 +365,15 @@ final class PlayerEngine: NSObject {
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
         // AetherEngine: um HLS abre primeiro no da Apple (o mais rápido a mudar de canal) e, se não der, no AetherEngine;
         // o resto (.ts…) abre no AetherEngine e, em último caso, no VLC.
+        // GoatCore: o .ts abre no motor próprio e, se não der (um formato que ainda não toca), no VLC. O HLS ainda vai
+        // pelo da Apple.
+        if engine == "goatcore" {
+            return candidates.enumerated().flatMap { i, c -> [Attempt] in
+                c.isHLS
+                    ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+                    : [Attempt(candidate: c, backend: .goatcore, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+            }
+        }
         if engine == "aether" {
             return candidates.enumerated().flatMap { i, c -> [Attempt] in
                 c.isHLS
@@ -470,6 +496,9 @@ final class PlayerEngine: NSObject {
             // O motor apaga a imagem ao fechar: tira-se antes uma cópia do que está no ecrã (como as outras).
             showFreezeView(aetherPlayback?.view.snapshotView(afterScreenUpdates: false))
             begin(after: pause)
+        case .goatcore:
+            showFreezeView(goatCorePlayback?.view.snapshotView(afterScreenUpdates: false))
+            begin(after: pause)
         }
     }
 
@@ -585,6 +614,7 @@ final class PlayerEngine: NSObject {
         notifications.removeAll()
         vlc.stop()
         aetherPlayback?.stop()
+        goatCorePlayback?.stop()
         // O leitor da Apple fecha as ligações dele sozinho (e sem avisar quando): cancela-se já o que está a carregar.
         (avPlayer.currentItem?.asset as? AVURLAsset)?.cancelLoading()
         avPlayer.replaceCurrentItem(with: nil)
@@ -626,6 +656,7 @@ final class PlayerEngine: NSObject {
         vlcView.isHidden = backend != .vlc
         appleView.isHidden = backend != .apple
         if backend == .aether { aether.view.isHidden = false } else { aetherPlayback?.view.isHidden = true }
+        if backend == .goatcore { goatCore.view.isHidden = false } else { goatCorePlayback?.view.isHidden = true }
         hasPicture = false
         movingSince = nil
         state = .opening
@@ -665,6 +696,14 @@ final class PlayerEngine: NSObject {
                         self.startTimeshiftTicker()
                     }
                 }
+            }
+        case .goatcore:
+            // Ainda sem a pausa do direto: só o canal que uma gravação está a gravar se lê do anel dela.
+            if pausable, ChannelFeed.find(attempt.candidate.url) != nil,
+               let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
+                startGoatCore(local, ring: true)
+            } else {
+                whenConnectionFree { [weak self] in self?.startGoatCore(url) }
             }
         }
         // Se não começar a dar em 8 s (10 no AetherEngine, que se junta ao direto com mais calma, ou com o buffer
@@ -823,6 +862,7 @@ final class PlayerEngine: NSObject {
         switch backend {
         case .apple: return appleHTTPStatus
         case .aether: return aetherPlayback?.httpStatus
+        case .goatcore: return goatCorePlayback?.httpStatus
         case .vlc:
             guard let status = timeshift.httpStatus, !(200..<300).contains(status) else { return nil }
             return status
@@ -1138,6 +1178,31 @@ final class PlayerEngine: NSObject {
         a.open(r)
     }
 
+    private func startGoatCore(_ url: URL, ring: Bool = false) {
+        var headers: [String: String] = [:]
+        if !ring {
+            headers["User-Agent"] = userAgent
+            if let referrer, !referrer.isEmpty { headers["Referer"] = referrer }
+        }
+        let g = goatCore
+        g.isMuted = muted
+        g.setAspect(aspect)
+        g.rate = speed
+        g.open(url, headers: headers)
+    }
+
+    private func goatCoreEvent(_ event: GoatCorePlayback.Event) {
+        guard backend == .goatcore else { return }
+        switch event {
+        case .playing:
+            becamePlaying()
+        case .failed, .ended:
+            lastHTTPStatus = goatCorePlayback?.httpStatus
+            DebugLog.add("Player: GoatCore \(event == .ended ? "ended" : "failed") (HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
+            if state == .playing { fail() } else { next() }
+        }
+    }
+
     private func aetherEvent(_ event: AetherPlayback.Event) {
         guard backend == .aether else { return }
         switch event {
@@ -1202,7 +1267,7 @@ final class PlayerEngine: NSObject {
             let track = item.tracks.first { $0.assetTrack?.mediaType == .video }
             let fps = Double(track?.currentVideoFrameRate ?? 0)
             return fps > 1 ? FrameRate.snap(fps) : nil
-        case .aether:
+        case .aether, .goatcore:
             return nil
         case .vlc:
             // A que o stream diz (como no Android, a do formato ganha); sem ela, conta-se as imagens que o VLC mostra.
@@ -1235,7 +1300,7 @@ final class PlayerEngine: NSObject {
             // O VLC desenha sempre em SDR: só a frame rate.
             let size = vlcVideoInfo
             manager.preferredDisplayCriteria = Self.criteria(fps: target, width: size?.width ?? 1920, height: size?.height ?? 1080)
-        case .aether:
+        case .aether, .goatcore:
             break
         }
     }
@@ -1292,6 +1357,9 @@ extension PlayerEngine {
         case .aether:
             let t = aetherPlayback?.positionSeconds ?? 0
             return t.isFinite ? Int64(t * 1000) : 0
+        case .goatcore:
+            let t = goatCorePlayback?.positionSeconds ?? 0
+            return t.isFinite ? Int64(t * 1000) : 0
         }
     }
 
@@ -1301,6 +1369,7 @@ extension PlayerEngine {
         vlc.audio?.isMuted = muted
         avPlayer.isMuted = muted
         aetherPlayback?.isMuted = muted
+        goatCorePlayback?.isMuted = muted
     }
 
     private func applyAudio() {
@@ -1312,6 +1381,8 @@ extension PlayerEngine {
             avPlayer.isMuted = muted
         case .aether:
             aetherPlayback?.isMuted = muted
+        case .goatcore:
+            goatCorePlayback?.isMuted = muted
         }
     }
 
@@ -1326,6 +1397,7 @@ extension PlayerEngine {
         case .vlc: if paused { vlc.play() } else { vlc.pause() }
         case .apple: if paused { avPlayer.play() } else { avPlayer.pause() }
         case .aether: if paused { aetherPlayback?.play() } else { aetherPlayback?.pause() }
+        case .goatcore: if paused { goatCorePlayback?.play() } else { goatCorePlayback?.pause() }
         }
         paused.toggle()
         ringClock()
@@ -1338,6 +1410,7 @@ extension PlayerEngine {
         case .vlc: h = Int(vlc.videoSize.height)
         case .apple: h = Int(avPlayer.currentItem?.presentationSize.height ?? 0)
         case .aether: h = aetherPlayback?.videoHeight ?? 0
+        case .goatcore: h = goatCorePlayback?.videoHeight ?? 0
         }
         return h > 0 ? "\(h)p" : nil
     }
@@ -1442,6 +1515,10 @@ extension PlayerEngine {
                 TrackOption(id: Int32(truncatingIfNeeded: t.id), name: t.name,
                             info: TrackInfo(language: t.language, label: t.name, channels: t.channels, selected: t.selected))
             }
+        case .goatcore:
+            return goatCoreAudio.map { t in
+                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected))
+            }
         }
     }
 
@@ -1468,6 +1545,9 @@ extension PlayerEngine {
                 TrackOption(id: Int32(truncatingIfNeeded: t.id), name: t.name,
                             info: TrackInfo(language: t.language, label: t.name, selected: t.selected, forced: t.forced))
             }
+        case .goatcore:
+            // As legendas ainda não (DVB e teletexto vêm a seguir).
+            return []
         }
     }
 
@@ -1531,6 +1611,10 @@ extension PlayerEngine {
             }
         case .aether:
             rows = aetherPlayback?.details ?? []
+        case .goatcore:
+            for t in goatCorePlayback?.tracks ?? [] where t.kind == .video || t.kind == .audio {
+                rows.append((t.kind == .video ? "video" : "audio", t.codec + (t.language.map { " (\($0))" } ?? "")))
+            }
         }
         return rows
     }
@@ -1548,12 +1632,30 @@ extension PlayerEngine {
         }
     }
 
+    /// As faixas de áudio do GoatCore como o menu as mostra (o id é o PID).
+    private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool)] {
+        guard let g = goatCorePlayback else { return [] }
+        let list = g.audioTracks
+        let selected = g.selectedAudio ?? list.first?.pid
+        return list.enumerated().map { i, t in
+            let name = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 } ?? "Audio \(i + 1)"
+            return (Int32(t.pid), name, t.language, t.pid == selected)
+        }
+    }
+
+    /// O Picture in Picture do canal a dar, quando o motor o tem (o GoatCore, em todos os canais).
+    var pictureInPicture: AVPictureInPictureController? {
+        guard backend == .goatcore, state == .playing else { return nil }
+        return goatCorePlayback?.pictureInPicture
+    }
+
     /// O motor em uso, para a informação do stream.
     var backendName: String {
         switch backend {
         case .apple: return "Apple (AVPlayer)"
         case .vlc: return "VLC"
         case .aether: return "AetherEngine"
+        case .goatcore: return "GoatCore"
         }
     }
 
@@ -1571,6 +1673,8 @@ extension PlayerEngine {
             return (appleGroup(.audible)?.options ?? []).enumerated().map { Track(id: Int32($0.offset), name: $0.element.displayName) }
         case .aether:
             return (aetherPlayback?.audioTracks ?? []).map { Track(id: Int32(truncatingIfNeeded: $0.id), name: $0.name) }
+        case .goatcore:
+            return goatCoreAudio.map { Track(id: $0.id, name: $0.name) }
         }
     }
 
@@ -1584,6 +1688,8 @@ extension PlayerEngine {
             return Int32(i)
         case .aether:
             return (aetherPlayback?.audioTracks.first { $0.selected }).map { Int32(truncatingIfNeeded: $0.id) } ?? -1
+        case .goatcore:
+            return goatCoreAudio.first { $0.selected }?.id ?? -1
         }
     }
 
@@ -1603,6 +1709,8 @@ extension PlayerEngine {
             avPlayer.currentItem?.select(group.options[Int(id)], in: group)
         case .aether:
             aetherPlayback?.selectAudio(Int(id))
+        case .goatcore:
+            goatCorePlayback?.selectAudio(pid: Int(id))
         }
     }
 
@@ -1618,6 +1726,8 @@ extension PlayerEngine {
             let tracks = aetherPlayback?.subtitleTracks ?? []
             guard !tracks.isEmpty else { return [] }
             return [Track(id: -1, name: "")] + tracks.map { Track(id: Int32(truncatingIfNeeded: $0.id), name: $0.name) }
+        case .goatcore:
+            return []
         }
     }
 
@@ -1631,6 +1741,8 @@ extension PlayerEngine {
             return Int32(i)
         case .aether:
             return (aetherPlayback?.subtitleTracks.first { $0.selected }).map { Int32(truncatingIfNeeded: $0.id) } ?? -1
+        case .goatcore:
+            return -1
         }
     }
 
@@ -1651,6 +1763,8 @@ extension PlayerEngine {
             avPlayer.currentItem?.select(option, in: group)
         case .aether:
             aetherPlayback?.selectSubtitle(Int(id))
+        case .goatcore:
+            break
         }
     }
 
@@ -1671,6 +1785,7 @@ extension PlayerEngine {
         default: appleView.playerLayer.videoGravity = .resizeAspect
         }
         aetherPlayback?.setAspect(aspect)
+        goatCorePlayback?.setAspect(aspect)
         let ratio = "16:9"
         switch aspect {
         case "zoom":

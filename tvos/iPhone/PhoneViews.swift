@@ -769,6 +769,10 @@ private struct VideoPane: View {
                                 hudPill("list.bullet", s.r("search_channels"), action: rotate)
                             }
                         }
+                        // O Picture in Picture (no motor GoatCore): o canal continua num canto fora da app.
+                        if let pip = model.player.pictureInPicture {
+                            hudButton("pip.enter") { pip.startPictureInPicture(); touched += 1 }
+                        }
                         ForEach(PlayerOption.shown(model)) { o in
                             hudButton(o.symbol) { option = o; touched += 1 }
                         }
