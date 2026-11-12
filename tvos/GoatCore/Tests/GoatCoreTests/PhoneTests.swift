@@ -127,7 +127,7 @@ extension CoreTests {
     }
 
     /// Os grupos como o ecrã os dá (aqui também os escondidos e bloqueados: a lista tira-os na mesma).
-    private static func phoneList(prefs: Prefs = CoreTests.phonePrefs, current: String? = "k1", order: [Category]? = nil,
+    private static func phoneList(prefs: Prefs = CoreTests.phonePrefs, current: String? = "k1", order: [GoatCore.Category]? = nil,
                                   logos: [String: String] = [:]) -> PhoneChannelList {
         let g = phoneGroups
         return PhoneChannelList(
