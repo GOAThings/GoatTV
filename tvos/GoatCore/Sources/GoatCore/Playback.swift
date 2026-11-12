@@ -103,7 +103,7 @@ public struct AfrSession: @unchecked Sendable {
     public init() {}
 
     /// Outro canal: ainda não se decidiu nada para ele.
-    public mutating func newChannel() { shared.newChannel() }
+    public mutating func newChannel() { shared.channelChanged() }
 
     /// A TV voltou ao modo normal (saiu-se do leitor, ou o AFR foi desligado).
     public mutating func reset() { shared.reset() }

@@ -38,7 +38,7 @@ class AfrSession {
     private var channelDone = false
 
     /** Outro canal: ainda não se decidiu nada para ele. */
-    fun newChannel() {
+    fun channelChanged() {
         channelDone = false
     }
 

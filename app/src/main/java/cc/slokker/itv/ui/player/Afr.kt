@@ -93,7 +93,7 @@ internal class AfrSession {
     private val shared = SharedAfrSession()
 
     /** Outro canal: ainda não se decidiu nada para ele. */
-    fun newChannel() = shared.newChannel()
+    fun newChannel() = shared.channelChanged()
 
     /** A TV voltou ao modo normal (saiu-se do player, ou o AFR foi desligado). */
     fun reset() = shared.reset()
