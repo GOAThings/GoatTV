@@ -187,6 +187,12 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private(set) var positionValid = false
     @ObservationIgnored private var savingSnapshot = false
     @ObservationIgnored private var movingSince: Date?
+    /// O direto a dar mas com a posição parada (ver [watchProgress]).
+    @ObservationIgnored private var stallTask: Task<Void, Never>?
+    /// Quando o direto deste canal ficou preso, nos últimos [stallWindow] s (à segunda, vai-se aos failovers).
+    @ObservationIgnored private var stalls: [Date] = []
+    static let stallSeconds: TimeInterval = 12
+    static let stallWindow: TimeInterval = 180
     /// Escolhe a faixa de áudio com mais canais (5.1) quando o canal começa.
     @ObservationIgnored var preferSurround = false
     /// "fit", "zoom" (corta) ou "fill" (estica).
@@ -382,6 +388,7 @@ final class PlayerEngine: NSObject {
         if !same {
             manualAudio = nil
             manualSubtitle = nil
+            stalls = []
         }
         afr.newChannel()
         afrTask?.cancel()
@@ -565,6 +572,7 @@ final class PlayerEngine: NSObject {
     }
 
     private func stopBackends() {
+        stallTask?.cancel()
         criteriaTask?.cancel()
         openTask?.cancel()
         timeshiftTicker?.cancel()
@@ -681,6 +689,48 @@ final class PlayerEngine: NSObject {
         }
     }
 
+    /// O direto a dar: se a posição não andar durante [stallSeconds] (sem estar em pausa), o fornecedor deixou de mandar
+    /// sem fechar a ligação (nenhum leitor dá erro: a imagem ficava parada para sempre). Como no Android.
+    private func watchProgress() {
+        stallTask?.cancel()
+        guard openedLive else { return }
+        stallTask = Task { [weak self] in
+            var last = Int64.min
+            var since = Date()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self, self.state == .playing, self.openedLive else { return }
+                let position = self.positionMs
+                if self.paused || position != last {
+                    last = position
+                    since = Date()
+                    continue
+                }
+                if Date().timeIntervalSince(since) >= Self.stallSeconds {
+                    self.stalled()
+                    return
+                }
+            }
+        }
+    }
+
+    /// Preso: volta a ligar; se voltar a prender dentro de [stallWindow], passa-se aos failovers do canal (se houver).
+    private func stalled() {
+        let now = Date()
+        stalls = stalls.filter { now.timeIntervalSince($0) < Self.stallWindow } + [now]
+        DebugLog.add("Player: live stuck for \(Int(Self.stallSeconds)) s (\(stalls.count)), reconnecting")
+        if stalls.count >= 2, !onBackup, let ask = onStartFailed {
+            stalls = []
+            stopBackends()
+            backupAsked = true
+            if ask(nil) {
+                state = .opening
+                return
+            }
+        }
+        fail()
+    }
+
     /// Nenhuma forma abriu. Caiu a meio: volta a ligar de N em N segundos, sempre. Não chegou a abrir: mostra o
     /// erro e tenta mais umas vezes (sem martelar o servidor).
     private func fail() {
@@ -775,6 +825,7 @@ final class PlayerEngine: NSObject {
         DebugLog.add("Player: playing (\(backend))")
         watchdog?.cancel()
         state = .playing
+        watchProgress()
         wasPlaying = true
         retries = 0
         reconnects = 0

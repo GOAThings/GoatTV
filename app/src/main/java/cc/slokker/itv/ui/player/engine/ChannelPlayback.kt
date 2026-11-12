@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.player.engine
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -126,6 +127,12 @@ internal class ChannelPlayback(
     /** À procura do canal na lista de reserva (ver [failOver]). */
     private var backupJob: Job? = null
 
+    /** O direto parado a carregar: ao fim de [STALL_MS] sem voltar, liga-se outra vez (ver [onStall]). */
+    private var stallJob: Job? = null
+
+    /** Quando o direto deste canal ficou preso, nos últimos [STALL_WINDOW_MS] (à segunda, vai-se aos failovers). */
+    private val stalls = ArrayDeque<Long>()
+
     /** A dar o canal da lista de reserva no lugar do da principal (o aviso e o painel "canal de reserva"); null na principal. */
     var onBackup by mutableStateOf<BackupOrigin?>(null)
         private set
@@ -193,6 +200,7 @@ internal class ChannelPlayback(
     fun release() {
         backupJob?.cancel()
         retryJob?.cancel()
+        stallJob?.cancel()
         linkJob?.cancel()
         tickJob?.cancel()
         engine?.let { detach(it) }
@@ -254,6 +262,8 @@ internal class ChannelPlayback(
         tracks.onOpen(request.channel.key)
         retryJob?.cancel()
         backupJob?.cancel()
+        stallJob?.cancel()
+        stalls.clear()
         // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
         onBackup = null
         reconnects = 0
@@ -318,6 +328,7 @@ internal class ChannelPlayback(
         if (e.idle) return
         if (ready) freezeCapture?.invoke()?.let { freeze = it }
         retryJob?.cancel()
+        stallJob?.cancel()
         linkJob?.cancel()
         nextTryAt = 0L
         e.holdForZap()
@@ -350,6 +361,7 @@ internal class ChannelPlayback(
         // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça em [onStart].
         backupJob?.cancel()
         retryJob?.cancel()
+        stallJob?.cancel()
         linkJob?.cancel()
         nextTryAt = 0L
         engine?.stop()
@@ -426,6 +438,38 @@ internal class ChannelPlayback(
     /** A língua das legendas (vazio nas Definições = sem legendas, além das que o stream marca). */
     private fun textLanguage(prefs: Prefs): String? = prefs.subtitleLanguage.ifEmpty { null }.takeIf { policy.subtitleLanguage }
 
+    /**
+     * O direto parou a carregar: se não voltar em [STALL_MS], o fornecedor deixou de mandar sem fechar a ligação (sem
+     * erro nem fim, o player esperava para sempre, com a imagem parada). Liga-se outra vez; se voltar a prender
+     * dentro de [STALL_WINDOW_MS], passa-se aos failovers do canal (se houver).
+     */
+    private fun watchStall(source: StreamEngine) {
+        stallJob?.cancel()
+        val req = request ?: return
+        stallJob = scope.launch {
+            wait(STALL_MS)
+            if (source !== engine || request !== req || !buffering) return@launch
+            onStall(req)
+        }
+    }
+
+    private fun onStall(req: PlaybackRequest) {
+        val t = now()
+        while (stalls.isNotEmpty() && t - stalls.first() > STALL_WINDOW_MS) stalls.removeFirst()
+        stalls.addLast(t)
+        Log.w(TAG, "Direto preso a carregar há ${STALL_MS / 1000} s (${stalls.size}.ª vez): volta a ligar")
+        if (stalls.size >= STALLS_FOR_FAILOVER && policy.failover && req.backup == null && backupJob?.isActive != true) {
+            stalls.clear()
+            backupJob = scope.launch {
+                val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
+                if (request !== req) return@launch
+                if (backups.isNotEmpty()) openBackup(backups, null) else reconnectIn(policy.reconnectFloorMs)
+            }
+            return
+        }
+        reconnectIn(policy.reconnectFloorMs)
+    }
+
     /** Uma só espera de cada vez: dois erros seguidos não deixam duas reaberturas pendentes. */
     private fun retryLater(block: suspend () -> Unit) {
         retryJob?.cancel()
@@ -470,7 +514,12 @@ internal class ChannelPlayback(
         val live = request?.live == true
         // Parou para carregar depois de já estar a dar (a página Ligação e o aviso contam estas paragens).
         // (Não conta a espera depois de saltar na pausa do direto.)
-        if (state == Player.STATE_BUFFERING && ready && live && timeshift?.seeking != true) net?.onStop()
+        if (state == Player.STATE_BUFFERING && ready && live && timeshift?.seeking != true) {
+            net?.onStop()
+            watchStall(source)
+        } else if (state != Player.STATE_BUFFERING) {
+            stallJob?.cancel()
+        }
         if (state == Player.STATE_READY) timeshift?.seeking = false
         if (state == Player.STATE_ENDED) {
             when {
@@ -637,5 +686,14 @@ internal class ChannelPlayback(
     private companion object {
         /** O estado da pausa do direto atualiza-se a este ritmo (a medição da ligação, ao dobro). */
         const val TICK_MS = 500L
+
+        /** Parado a carregar há tanto tempo no direto: volta a ligar (ver [watchStall]). */
+        const val STALL_MS = 12_000L
+
+        /** Duas paragens destas em tão pouco tempo: passa aos failovers. */
+        const val STALL_WINDOW_MS = 180_000L
+        const val STALLS_FOR_FAILOVER = 2
+
+        const val TAG = "GoatTV.Playback"
     }
 }

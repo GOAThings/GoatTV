@@ -244,6 +244,50 @@ class ChannelPlaybackTest {
     }
 
     @Test
+    fun oDiretoPresoACarregarVoltaALigar() {
+        val p = playback()
+        p.tuneNow(live())
+        p.onState(engine, Player.STATE_READY)
+        // O fornecedor deixou de mandar sem fechar a ligação: o player fica a carregar, sem erro nem fim.
+        p.onState(engine, Player.STATE_BUFFERING)
+        time.advance(11_999)
+        assertEquals(1, engine.opened.size)
+        // Ao fim de 12 s volta a ligar (com a espera mínima de 1 s), pelo primeiro formato.
+        time.advance(1_001)
+        assertEquals(listOf(ts, ts), engine.opened)
+        assertEquals(1, p.reconnects)
+    }
+
+    @Test
+    fun voltarADarAntesDoTempoNaoVoltaALigar() {
+        val p = playback()
+        p.tuneNow(live())
+        p.onState(engine, Player.STATE_READY)
+        p.onState(engine, Player.STATE_BUFFERING)
+        time.advance(5_000)
+        p.onState(engine, Player.STATE_READY)
+        time.advance(30_000)
+        assertEquals(1, engine.opened.size)
+    }
+
+    @Test
+    fun presoDuasVezesSeguidasPassaAosFailovers() {
+        host.backup = backupStream()
+        val p = playback()
+        p.tuneNow(live())
+        p.onState(engine, Player.STATE_READY)
+        p.onState(engine, Player.STATE_BUFFERING)
+        time.advance(13_000)
+        assertEquals(listOf(ts, ts), engine.opened)
+        p.onState(engine, Player.STATE_READY)
+        // Prende outra vez pouco depois: o mesmo canal não está a aguentar, vai ao failover.
+        p.onState(engine, Player.STATE_BUFFERING)
+        time.advance(12_000)
+        assertEquals(listOf(ts, ts, backupTs), engine.opened)
+        assertEquals("Reserva", p.onBackup?.backupName)
+    }
+
+    @Test
     fun acabarAntesDeDarNaoFazNada() {
         val p = playback()
         p.tuneNow(live())
