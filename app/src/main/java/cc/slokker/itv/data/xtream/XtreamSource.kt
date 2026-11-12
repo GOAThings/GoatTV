@@ -1,10 +1,8 @@
 package cc.slokker.itv.data.xtream
 
 import cc.slokker.itv.ui.i18n.I18n
-import android.util.Base64
+import cc.slokker.itv.data.BadJson
 import cc.slokker.itv.data.CatchupRules
-import cc.slokker.itv.data.Category
-import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.LimitedReader
 import cc.slokker.itv.data.Playlist
@@ -12,11 +10,6 @@ import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.SourceException
 import cc.slokker.itv.data.XtreamAccount
-import com.google.gson.Gson
-import com.google.gson.JsonElement
-import com.google.gson.JsonParseException
-import com.google.gson.annotations.SerializedName
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -25,57 +18,33 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.IOException
-import java.lang.reflect.Type
+import java.io.Reader
 
 /**
- * Cliente Xtream Codes, só para TV em direto.
- * Os campos vêm como String porque os servidores misturam números e strings
- * (`"stream_id": "123"` vs `123`); o Gson converte números em String sem problemas.
+ * Cliente Xtream Codes, só para TV em direto. As respostas leem-se com o [XtreamParse] partilhado com a Apple.
  */
-class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
+class XtreamSource(private val http: OkHttpClient) {
 
     suspend fun load(playlist: Playlist): PlaylistContent = coroutineScope {
-        val login = async { runCatching { get<XtreamLogin>(apiUrl(playlist), XtreamLogin::class.java) }.getOrNull() }
-        val categories = async {
-            get<List<XtreamCategory>?>(apiUrl(playlist, "get_live_categories"), CATEGORY_LIST).orEmpty()
-        }
-        val streams = async {
-            get<List<XtreamStream>?>(apiUrl(playlist, "get_live_streams"), STREAM_LIST).orEmpty()
-        }
+        val login = async { runCatching { text(apiUrl(playlist)) }.getOrNull()?.let(XtreamParse::login) }
+        val categories = async { rows(apiUrl(playlist, "get_live_categories")) { XtreamParse.categories(it) } }
+        val streams = async { rows(apiUrl(playlist, "get_live_streams")) { XtreamParse.streams(it) { id -> I18n.s.channelName(id) } } }
 
-        val loginResult = login.await()
-        val info = loginResult?.userInfo
+        val info = login.await()
         if (info?.auth == "0") throw SourceException(SourceException.Kind.BAD_LOGIN, I18n.s.xtreamBadLogin)
         val status = info?.status
         if (status != null && !status.equals("Active", ignoreCase = true)) {
             throw SourceException(SourceException.Kind.INACTIVE, I18n.s.xtreamInactive(status), status = status)
         }
 
-        val cats = categories.await().mapNotNull { c ->
-            val id = c.categoryId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            Category(id, c.categoryName?.trim().orEmpty().ifEmpty { id })
-        }
-        val channels = streams.await().mapIndexedNotNull { i, s ->
-            val id = s.streamId?.takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
-            Channel(
-                uid = i,
-                key = id,
-                num = s.num?.toDoubleOrNull()?.toInt() ?: (i + 1),
-                name = s.name?.trim().orEmpty().ifEmpty { I18n.s.channelName(id) },
-                logo = s.streamIcon?.takeIf { it.isNotBlank() },
-                categoryId = s.categoryId.orEmpty(),
-                streamId = id,
-                epgId = s.epgChannelId?.trim()?.takeIf { it.isNotEmpty() },
-                archiveDays = CatchupRules.xtreamArchiveDays(s.tvArchive, s.tvArchiveDuration),
-            )
-        }
+        val cats = categories.await()
+        val channels = streams.await()
         PlaylistContent.build(
             playlist = playlist,
             categories = cats,
             channels = channels,
             account = info?.let {
-                XtreamAccount(it.maxConnections?.toIntOrNull(), it.status, it.allowedFormats(), loginResult?.serverInfo?.timezone?.takeIf { tz -> tz.isNotBlank() })
+                XtreamAccount(it.maxConnections, it.status, it.allowedFormats, it.timezone)
             },
             // Sem guia próprio, o guia completo do fornecedor (o mesmo XMLTV que os outros players usam).
             guideUrl = playlist.epgUrl?.takeIf { it.isNotBlank() } ?: xmltvUrl(playlist),
@@ -84,9 +53,9 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
 
     /** Ligações ativas e máximo da conta, ou null se o servidor não responder. */
     suspend fun connections(playlist: Playlist): Pair<Int, Int>? {
-        val info = runCatching { get<XtreamLogin?>(apiUrl(playlist), XtreamLogin::class.java) }.getOrNull()?.userInfo
-        val active = info?.activeCons?.toIntOrNull() ?: return null
-        val max = info.maxConnections?.toIntOrNull() ?: return null
+        val info = runCatching { text(apiUrl(playlist)) }.getOrNull()?.let(XtreamParse::login)
+        val active = info?.activeConnections ?: return null
+        val max = info.maxConnections ?: return null
         return active to max
     }
 
@@ -95,12 +64,7 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
             .addQueryParameter("stream_id", streamId)
             .addQueryParameter("limit", limit.toString())
             .build()
-        val listings = get<XtreamShortEpg?>(url, XtreamShortEpg::class.java)?.epgListings.orEmpty()
-        return listings.mapNotNull { l ->
-            val start = l.startTimestamp?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
-            val stop = l.stopTimestamp?.toLongOrNull()?.let(SafeInput::epochMs) ?: return@mapNotNull null
-            EpgEntry(decodeBase64(l.title.orEmpty()), start, stop)
-        }.sortedBy { it.startMs }
+        return XtreamParse.shortEpg(text(url))
     }
 
     private fun apiUrl(playlist: Playlist, action: String? = null): HttpUrl {
@@ -112,21 +76,26 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
         return builder.build()
     }
 
-    private suspend fun <T> get(url: HttpUrl, type: Type): T = withContext(Dispatchers.IO) {
+    /** O corpo de [url] todo (respostas pequenas: a conta, o guia curto). */
+    private suspend fun text(url: HttpUrl): String = body(url) { it.readText() }
+
+    /** Uma lista grande, lida aos poucos por [parse]. */
+    private suspend fun <T> rows(url: HttpUrl, parse: ((CharArray) -> Int) -> T): T = body(url) { reader ->
+        try {
+            parse { buf -> reader.read(buf) }
+        } catch (e: BadJson) {
+            throw SourceException(SourceException.Kind.BAD_RESPONSE, I18n.s.xtreamBadResponse)
+        }
+    }
+
+    private suspend fun <T> body(url: HttpUrl, read: (Reader) -> T): T = withContext(Dispatchers.IO) {
         http.newCall(Request.Builder().url(url).build()).execute().use { res ->
             if (!res.isSuccessful) throw SourceException(SourceException.Kind.HTTP, I18n.s.xtreamHttp(res.code), httpCode = res.code)
-            try {
-                SafeInput.outOfMemoryAsIo { gson.fromJson<T>(LimitedReader(res.body.charStream(), SafeInput.MAX_PLAYLIST_BYTES), type) }
-            } catch (e: JsonParseException) {
-                throw SourceException(SourceException.Kind.BAD_RESPONSE, I18n.s.xtreamBadResponse)
-            }
+            SafeInput.outOfMemoryAsIo { LimitedReader(res.body.charStream(), SafeInput.MAX_PLAYLIST_BYTES).use(read) }
         }
     }
 
     companion object {
-        private val CATEGORY_LIST = object : TypeToken<List<XtreamCategory>>() {}.type
-        private val STREAM_LIST = object : TypeToken<List<XtreamStream>>() {}.type
-
         fun baseUrl(playlist: Playlist): HttpUrl {
             val raw = playlist.server?.trim().orEmpty()
             val withScheme = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
@@ -171,64 +140,6 @@ class XtreamSource(private val http: OkHttpClient, private val gson: Gson) {
                 .build().toString()
             return listOf(path, php)
         }
-
-        private fun decodeBase64(s: String): String =
-            try {
-                String(Base64.decode(s, Base64.DEFAULT), Charsets.UTF_8).trim()
-            } catch (e: IllegalArgumentException) {
-                s
-            }
     }
 }
 
-class XtreamLogin(
-    @SerializedName("user_info") val userInfo: XtreamUserInfo?,
-    @SerializedName("server_info") val serverInfo: XtreamServerInfo?,
-)
-
-class XtreamServerInfo(val timezone: String?)
-
-class XtreamUserInfo(
-    val auth: String?,
-    val status: String?,
-    @SerializedName("exp_date") val expDate: String?,
-    @SerializedName("active_cons") val activeCons: String?,
-    @SerializedName("max_connections") val maxConnections: String?,
-    // JsonElement: alguns servidores mandam lista, outros string.
-    @SerializedName("allowed_output_formats") val allowedOutputFormats: JsonElement?,
-) {
-    fun allowedFormats(): Set<String> {
-        val e = allowedOutputFormats ?: return emptySet()
-        val values = when {
-            e.isJsonArray -> e.asJsonArray.mapNotNull { v -> v.takeIf { it.isJsonPrimitive }?.asString }
-            e.isJsonPrimitive -> e.asString.split(',')
-            else -> emptyList()
-        }
-        return values.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
-    }
-}
-
-class XtreamCategory(
-    @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("category_name") val categoryName: String?,
-)
-
-class XtreamStream(
-    val num: String?,
-    val name: String?,
-    @SerializedName("stream_id") val streamId: String?,
-    @SerializedName("stream_icon") val streamIcon: String?,
-    @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("epg_channel_id") val epgChannelId: String?,
-    // String: uns servidores mandam 1, outros "1".
-    @SerializedName("tv_archive") val tvArchive: String?,
-    @SerializedName("tv_archive_duration") val tvArchiveDuration: String?,
-)
-
-class XtreamShortEpg(@SerializedName("epg_listings") val epgListings: List<XtreamEpgListing>?)
-
-class XtreamEpgListing(
-    val title: String?,
-    @SerializedName("start_timestamp") val startTimestamp: String?,
-    @SerializedName("stop_timestamp") val stopTimestamp: String?,
-)

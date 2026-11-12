@@ -50,7 +50,7 @@ class GuideControllerTest {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(job + Dispatchers.Unconfined)
     private val http = OkHttpClient()
-    private val epg = EpgRepository(XtreamSource(http, gson), StalkerSource(http), XmltvSource(http), AccountGuideSource(backend), cache)
+    private val epg = EpgRepository(XtreamSource(http), StalkerSource(http), XmltvSource(http), AccountGuideSource(backend), cache)
 
     private val playlist = Playlist("p1", PlaylistType.M3U, "Lista", url = "http://m/list.m3u", epgUrl = "http://m/epg.xml")
     private val rtp = Channel(0, "rtp", 1, "RTP 1", null, "news", epgId = "RTP1.pt")

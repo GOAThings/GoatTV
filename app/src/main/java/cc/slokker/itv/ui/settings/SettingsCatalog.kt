@@ -2,6 +2,7 @@ package cc.slokker.itv.ui.settings
 
 import androidx.compose.ui.graphics.Brush
 import cc.slokker.itv.data.Languages
+import cc.slokker.itv.data.displayName
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.RefreshPolicy
 import cc.slokker.itv.data.StreamFormat

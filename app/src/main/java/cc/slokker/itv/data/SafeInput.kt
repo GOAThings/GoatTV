@@ -19,11 +19,9 @@ object SafeInput {
     const val MAX_M3U_LINE = 4 * 1024 * 1024
     /** Uma etiqueta, um CDATA ou um título de um guia. */
     const val MAX_XMLTV_TEXT = 1024 * 1024
-    /** Ano 3000: uma data do fornecedor para lá disto (ou negativa) não é uma data. */
-    private const val MAX_EPOCH_SECONDS = 32_503_680_000L
 
     /** Segundos do fornecedor em ms, ou null fora de um intervalo que faça sentido. */
-    fun epochMs(seconds: Long): Long? = if (seconds in 0..MAX_EPOCH_SECONDS) seconds * 1000 else null
+    fun epochMs(seconds: Long): Long? = InputRules.epochMs(seconds)
 
     /** User-Agent ou Referer de uma lista sem caracteres de controlo nem separadores de linha. */
     fun stripControl(value: String): String = value.filterNot { it.isISOControl() || it == ' ' || it == ' ' }

@@ -3,10 +3,11 @@ package cc.slokker.itv.ui.player.engine
 import cc.slokker.itv.data.Languages
 
 // A escolha automática das faixas ao abrir um canal: a língua preferida do áudio e das legendas (Definições) e, na
-// TV, o áudio surround. Sem o Media3, para os testes: o PlayerEngine traduz as faixas do player para [TrackInfo].
+// TV, o áudio surround. Sem o player: cada plataforma traduz as faixas do seu para [TrackInfo]. O mesmo no Android e na
+// Apple.
 
 /** Uma faixa de áudio ou de legendas, como a escolha automática a vê. */
-internal data class TrackInfo(
+data class TrackInfo(
     /** A língua que o stream diz (o `language` do Format: "pt", "por", "qaa"…). */
     val language: String?,
     /** A etiqueta (HLS NAME, ou a descrição do VLC: "Faixa 1 - [Portuguese]"). */
@@ -22,7 +23,7 @@ internal data class TrackInfo(
 }
 
 /** O que se quer das faixas ao abrir um canal (null = deixar o que o player escolheu). */
-internal data class TrackWish(
+data class TrackWish(
     /** A língua do áudio (ISO 639-1); null = a do stream. */
     val audioLanguage: String?,
     /** A língua das legendas; null = sem legendas além das que o stream marca (as forçadas). */
@@ -34,7 +35,7 @@ internal data class TrackWish(
     val text: Boolean = true,
 )
 
-internal object TrackPick {
+object TrackPick {
 
     /**
      * A faixa de áudio a escolher (índice em [tracks]), ou null para ficar a que está. Com [language], só as dessa
@@ -72,7 +73,7 @@ internal object TrackPick {
  * (as faixas chegam aos poucos: o áudio e as legendas decidem-se cada um quando aparece). Uma escolha à mão no menu
  * ganha até se mudar de canal: o catch-up, os saltos e as reconexões do mesmo canal não a desfazem.
  */
-internal class TrackChoice {
+class TrackChoice {
     private var channel: String? = null
     private val decided = HashSet<Int>()
     private val manual = HashSet<Int>()

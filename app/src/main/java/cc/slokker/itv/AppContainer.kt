@@ -145,7 +145,7 @@ class AppContainer(context: Context) {
 
     val updater = Updater(context, plainHttp, gson)
 
-    val xtream = XtreamSource(iptvHttp, gson)
+    val xtream = XtreamSource(iptvHttp)
     private val m3u = M3uSource(iptvHttp)
     val stalker = StalkerSource(iptvHttp)
     val epg = EpgRepository(xtream, stalker, XmltvSource(iptvHttp), AccountGuideSource(backend), cache)

@@ -72,85 +72,41 @@ public enum Xtream {
 
     // MARK: Respostas
 
+    // As respostas leem-se no núcleo partilhado com o Android (XtreamParse).
+
     public static func parseLogin(_ data: Data) -> Login? {
-        guard let json = try? JSON.parse(data), let info = json["user_info"] else { return nil }
-        var formats = Set<String>()
-        switch info["allowed_output_formats"] {
-        case .array(let values)?: values.compactMap(\.text).forEach { formats.insert($0) }
-        case .string(let s)?: s.split(separator: ",").forEach { formats.insert(String($0)) }
-        default: break
-        }
-        formats = Set(formats.map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty })
-        let tz = json["server_info"]?["timezone"]?.text
+        guard let info = XtreamParse.shared.login(text: String(decoding: data, as: UTF8.self)) else { return nil }
         return Login(
-            auth: info["auth"]?.text,
-            status: info["status"]?.text,
-            activeConnections: info["active_cons"]?.text.flatMap { Int($0) },
-            maxConnections: info["max_connections"]?.text.flatMap { Int($0) },
-            allowedFormats: formats,
-            timezone: (tz?.isEmpty ?? true) ? nil : tz
+            auth: info.auth,
+            status: info.status,
+            activeConnections: info.activeConnections.map { Int($0.int32Value) },
+            maxConnections: info.maxConnections.map { Int($0.int32Value) },
+            allowedFormats: info.allowedFormats,
+            timezone: info.timezone
         )
     }
 
     public static func parseCategories(_ data: Data) throws -> [Category] {
-        guard let list = try parseList(data) else { return [] }
-        return list.compactMap { c in
-            guard let id = c["category_id"]?.text, !id.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-            let name = c["category_name"]?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return Category(id: id, name: name.isEmpty ? id : name)
+        do {
+            return try XtreamParse.shared.categoriesText(text: String(decoding: data, as: UTF8.self))
+                .map { Category(id: $0.id, name: $0.name) }
+        } catch {
+            throw SourceError.badResponse
         }
     }
 
-    public static func parseStreams(_ data: Data, channelName: (String) -> String = { "Channel \($0)" }) throws -> [Channel] {
-        guard let list = try parseList(data) else { return [] }
-        var channels: [Channel] = []
-        channels.reserveCapacity(list.count)
-        for (i, s) in list.enumerated() {
-            guard let id = s["stream_id"]?.text, !id.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-            let name = s["name"]?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let icon = s["stream_icon"]?.text
-            let epg = s["epg_channel_id"]?.text?.trimmingCharacters(in: .whitespaces)
-            channels.append(Channel(
-                uid: i,
-                key: id,
-                num: s["num"]?.text.flatMap { SafeInput.int(text: $0) } ?? (i + 1),
-                name: name.isEmpty ? channelName(id) : name,
-                logo: (icon?.trimmingCharacters(in: .whitespaces).isEmpty ?? true) ? nil : icon,
-                categoryId: s["category_id"]?.text ?? "",
-                streamId: id,
-                epgId: (epg?.isEmpty ?? true) ? nil : epg,
-                archiveDays: Int(CatchupRules.shared.xtreamArchiveDays(tvArchive: s["tv_archive"]?.text, duration: s["tv_archive_duration"]?.text))
-            ))
+    public static func parseStreams(_ data: Data, channelName: @escaping (String) -> String = { "Channel \($0)" }) throws -> [Channel] {
+        do {
+            return try XtreamParse.shared.streamsText(text: String(decoding: data, as: UTF8.self), channelName: channelName).map { Channel($0) }
+        } catch {
+            throw SourceError.badResponse
         }
-        return channels
     }
 
     /// `get_short_epg`: os títulos vêm em Base64.
     public static func parseShortEpg(_ data: Data) -> [EpgEntry] {
-        guard let json = try? JSON.parse(data), let listings = json["epg_listings"]?.array else { return [] }
-        return listings.compactMap { l -> EpgEntry? in
-            guard let start = l["start_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }),
-                  let stop = l["stop_timestamp"]?.text.flatMap({ Int64($0) }).flatMap({ SafeInput.epochMs(seconds: $0) }) else { return nil }
-            let raw = l["title"]?.text ?? ""
-            let title = Data(base64Encoded: raw, options: .ignoreUnknownCharacters).flatMap { String(data: $0, encoding: .utf8) } ?? raw
-            return EpgEntry(title: title.trimmingCharacters(in: .whitespacesAndNewlines), startMs: start, endMs: stop)
-        }.sorted { $0.startMs < $1.startMs }
-    }
-
-    /// Uma lista JSON; null (ou `{}`/`[]` vazio) quando o servidor não tem nada. Outra coisa é resposta inválida.
-    private static func parseList(_ data: Data) throws -> [JSON]? {
-        let json: JSON
-        do {
-            json = try JSON.parse(data)
-        } catch {
-            throw SourceError.badResponse
-        }
-        switch json {
-        case .array(let a): return a
-        case .null: return nil
-        case .object(let o) where o.isEmpty: return nil
-        default: throw SourceError.badResponse
-        }
+        XtreamParse.shared.shortEpg(text: String(decoding: data, as: UTF8.self))
+            .map { EpgEntry(title: $0.title, startMs: $0.startMs, endMs: $0.endMs) }
     }
 
     // MARK: Codificação (como o HttpUrl do OkHttp)
