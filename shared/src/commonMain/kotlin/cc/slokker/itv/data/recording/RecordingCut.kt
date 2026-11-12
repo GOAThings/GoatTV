@@ -1,10 +1,10 @@
 package cc.slokker.itv.data.recording
 
-import cc.slokker.itv.data.TimeshiftRing
+import cc.slokker.itv.data.RingEntry
 
 /**
  * Onde cortar uma gravação no anel. O anel não sabe horas: sabe o tempo do vídeo (pelos PCR) de meio em meio
- * segundo ([TimeshiftRing.Entry]) e o do último byte que chegou ([liveMediaMs], que é "agora"). Uma hora real `t`
+ * segundo ([RingEntry]) e o do último byte que chegou ([liveMediaMs], que é "agora"). Uma hora real `t`
  * fica no tempo do vídeo `liveMediaMs - (agora - t)`; como o relógio do anel avança com o tempo real quando a
  * ligação cai, isto não escorrega com as quebras.
  */
@@ -27,11 +27,11 @@ object RecordingCut {
      * [liveMediaMs] e a hora [nowWall]. O início é o último ponto do índice até ao instante pedido (nunca depois:
      * mais vale meio segundo a mais do que a menos). null sem índice.
      */
-    fun range(entries: List<TimeshiftRing.Entry>, liveMediaMs: Long, nowWall: Long, startWall: Long, endWall: Long): Range? {
+    fun range(entries: List<RingEntry>, liveMediaMs: Long, nowWall: Long, startWall: Long, endWall: Long): Range? {
         if (entries.isEmpty()) return null
         val wanted = mediaAt(liveMediaMs, nowWall, startWall)
         val start = atOrBefore(entries, wanted) ?: entries.first()
-        val late = start.mediaMs > wanted + TimeshiftRing.ENTRY_MS
+        val late = start.mediaMs > wanted + RingEntry.STEP_MS
         val end = mediaAt(liveMediaMs, nowWall, endWall).coerceAtLeast(start.mediaMs)
         return Range(start.offset, start.mediaMs, end, wallAt(liveMediaMs, nowWall, start.mediaMs), late)
     }
@@ -43,10 +43,10 @@ object RecordingCut {
     fun wallAt(liveMediaMs: Long, nowWall: Long, mediaMs: Long): Long = nowWall - (liveMediaMs - mediaMs)
 
     /** O último ponto com o tempo até [mediaMs] (procura binária: o índice vai por ordem). */
-    fun atOrBefore(entries: List<TimeshiftRing.Entry>, mediaMs: Long): TimeshiftRing.Entry? {
+    fun atOrBefore(entries: List<RingEntry>, mediaMs: Long): RingEntry? {
         var lo = 0
         var hi = entries.size - 1
-        var found: TimeshiftRing.Entry? = null
+        var found: RingEntry? = null
         while (lo <= hi) {
             val mid = (lo + hi) ushr 1
             if (entries[mid].mediaMs <= mediaMs) {

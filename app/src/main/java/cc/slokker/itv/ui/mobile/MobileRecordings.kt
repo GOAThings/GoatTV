@@ -134,7 +134,7 @@ private fun ScheduledRow(vm: AppViewModel, r: ScheduledRecording, confirming: Bo
         onClick = {},
         onAction = {
             if (!confirming) return@RowLine onAsk()
-            if (r.seriesId != null) vm.cancelSeries(r.seriesId) else vm.cancelScheduled(r.id)
+            r.seriesId?.let(vm::cancelSeries) ?: vm.cancelScheduled(r.id)
         },
     )
 }

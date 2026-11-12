@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 // As gravações (o `data/recording` do GoatTV Android): os mesmos ficheiros (a ficha `<id>.json` ao lado do `<id>.ts`
 // e a lista do que está marcado), onde cortar no anel da pausa do direto e as regras de quando gravar. Os nomes dos
@@ -286,13 +287,11 @@ public enum RecordingCut {
     /// [liveMediaMs] e a hora [nowWall]. O início é o último ponto do índice até ao instante pedido (nunca depois:
     /// mais vale meio segundo a mais do que a menos). nil sem índice.
     public static func range(_ entries: [TimeshiftRing.Entry], liveMediaMs: Int64, nowWall: Int64, startWall: Int64, endWall: Int64) -> Range? {
-        guard let first = entries.first else { return nil }
-        let wanted = mediaAt(liveMediaMs, nowWall, startWall)
-        let start = atOrBefore(entries, wanted) ?? first
-        let late = start.mediaMs > wanted + TimeshiftRing.entryMs
-        let end = max(start.mediaMs, mediaAt(liveMediaMs, nowWall, endWall))
-        return Range(startOffset: start.offset, startMediaMs: start.mediaMs, endMediaMs: end,
-                     fileStartMs: wallAt(liveMediaMs, nowWall, start.mediaMs), late: late)
+        // A regra é a do núcleo partilhado com o Android (RecordingCut.kt).
+        guard let r = AppleBridge.shared.recordingCut(
+            mediaMs: entries.map { KotlinLong(value: $0.mediaMs) }, offsets: entries.map { KotlinLong(value: $0.offset) },
+            liveMediaMs: liveMediaMs, nowWall: nowWall, startWall: startWall, endWall: endWall) else { return nil }
+        return Range(startOffset: r.startOffset, startMediaMs: r.startMediaMs, endMediaMs: r.endMediaMs, fileStartMs: r.fileStartMs, late: r.late)
     }
 
     /// O tempo do vídeo à hora real [wall].
@@ -400,60 +399,57 @@ public enum RecordingPlan {
     /// O que fazer agora ([now]) com [r], que grava em [w]. Sem resposta até à hora, muda-se para o canal da gravação
     /// (como uma box com um só sintonizador). Uma gravação de outro canal a decorrer ganha (a que já começou não se corta).
     public static func decide(_ r: ScheduledRecording, _ w: Window, now: Int64, watching: Watching?, busy: [Busy], answer: Answer?) -> Decision {
-        if now >= w.toMs { return .expired }
-        if now < w.fromMs - promptLeadMs { return .wait }
-        if r.url == nil { return now >= w.fromMs ? .skip(skipHls) : .wait }
-        if answer == .skip { return .skip(skipUser) }
-        let recordingThis = busy.contains { r.sameChannel($0.playlistId, $0.channelKey) }
-        if !busy.isEmpty, !recordingThis { return now >= w.fromMs ? .skip(skipBusy) : .wait }
-        let watchingThis = watching.map { $0.live && r.sameChannel($0.playlistId, $0.channelKey) } ?? false
-        if watching == nil || watchingThis || recordingThis { return now >= w.fromMs ? .start : .wait }
-        if answer == .switchChannel || now >= w.fromMs { return .switchChannel }
-        return .prompt
+        // As regras são as do núcleo partilhado com o Android (RecordingPlan.kt).
+        let d = AppleBridge.shared.recordingDecide(
+            r: r.shared, fromMs: w.fromMs, toMs: w.toMs, nowMs: now, watchingPlaylist: watching?.playlistId,
+            watchingKey: watching?.channelKey, watchingLive: watching?.live ?? true, busy: busy.map { "\($0.playlistId)|\($0.channelKey)" },
+            answer: answer.map { $0 == .skip ? "skip" : "switch" })
+        switch d {
+        case "wait": return .wait
+        case "prompt": return .prompt
+        case "start": return .start
+        case "switch": return .switchChannel
+        case "expired": return .expired
+        default: return .skip(String(d.dropFirst("skip:".count)))
+        }
     }
 
     /// As marcadas de outros canais que se sobrepõem a [r] (com as margens): só uma delas vai gravar.
     public static func conflicts(_ r: ScheduledRecording, _ all: [ScheduledRecording], _ beforeMin: Int, _ afterMin: Int) -> [ScheduledRecording] {
-        let w = window(r, beforeMin, afterMin)
-        return all.filter { o in
-            let ow = window(o, beforeMin, afterMin)
-            return o.id != r.id && !o.sameChannel(r.playlistId, r.channelKey) && ow.fromMs < w.toMs && w.fromMs < ow.toMs
-        }
+        let ids = Set(AppleBridge.shared.recordingConflicts(r: r.shared, all: all.map(\.shared), beforeMin: Int32(clamping: beforeMin),
+                                                            afterMin: Int32(clamping: afterMin)))
+        return all.filter { ids.contains($0.id) }
     }
 
-    /// A próxima hora a que é preciso tratar de uma marcada: o início, com a margem, da próxima que ainda não começou.
+    /// A próxima hora a que a app tem de acordar: o início, com a margem, da próxima marcada que ainda não começou.
     public static func nextWake(_ schedule: Schedule, _ beforeMin: Int, _ afterMin: Int, now: Int64) -> Int64? {
-        schedule.recordings.map { window($0, beforeMin, afterMin).fromMs }.filter { $0 > now }.min()
+        let t = AppleBridge.shared.recordingNextWake(schedule: schedule.shared, beforeMin: Int32(clamping: beforeMin),
+                                                     afterMin: Int32(clamping: afterMin), nowMs: now)
+        return t < 0 ? nil : t
     }
 
     /// O mesmo título, sem maiúsculas, acentos nem espaços a mais (o guia não escreve sempre igual).
-    public static func titleKey(_ title: String) -> String {
-        let folded = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "en_US_POSIX"))
-        return folded.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-    }
+    public static func titleKey(_ title: String) -> String { AppleBridge.shared.recordingTitleKey(title: title) }
 
-    /// Os programas de [entries] (o guia do canal da série) que a regra marca agora: o mesmo título, ainda por
-    /// começar, dentro de [seriesHorizonMs], que não estejam marcados nem já tratados.
+    /// Os programas de [entries] que a regra [rule] marca agora (ver o RecordingPlan.kt).
     public static func seriesEntries(_ rule: SeriesRule, _ entries: [EpgEntry], _ schedule: Schedule, now: Int64) -> [EpgEntry] {
-        let key = titleKey(rule.title)
-        let marked = Set(schedule.recordings.map(\.instanceKey))
-        return entries.filter { e in
-            let k = ScheduledRecording.instanceKey(rule.playlistId, rule.channelKey, e.startMs)
-            return e.startMs > now && e.startMs < now + seriesHorizonMs && titleKey(e.title) == key && !marked.contains(k) && schedule.handled[k] == nil
-        }
+        AppleBridge.shared.recordingSeriesEntries(rule: rule.shared, entries: entries.map(\.shared), schedule: schedule.shared, nowMs: now)
+            .map { entries[Int($0.int32Value)] }
     }
 
     /// Tira o que já passou: marcadas cujo fim (com margem) já foi, e programas tratados há mais de uns dias.
     public static func prune(_ schedule: Schedule, _ beforeMin: Int, _ afterMin: Int, now: Int64) -> Schedule {
+        let kept = AppleBridge.shared.recordingPrune(schedule: schedule.shared, beforeMin: Int32(clamping: beforeMin),
+                                                     afterMin: Int32(clamping: afterMin), nowMs: now)
+        let ids = Set(kept.recordingIds)
+        let keys = Set(kept.handledKeys)
         var s = schedule
-        s.recordings = schedule.recordings.filter { window($0, beforeMin, afterMin).toMs > now }
-        s.handled = schedule.handled.filter { $0.value > now - handledKeepMs }
+        s.recordings = schedule.recordings.filter { ids.contains($0.id) }
+        s.handled = schedule.handled.filter { keys.contains($0.key) }
         return s
     }
 }
 
-/// O espaço em disco das gravações, com a mesma reserva da pausa do direto (o que fica sempre livre para o sistema).
 public enum RecordingSpace {
     public static let reserveBytes: Int64 = 512 * 1024 * 1024
     /// Sem saber o débito do canal: 8 Mbit/s (um canal HD normal).
@@ -463,14 +459,17 @@ public enum RecordingSpace {
 
     /// Cabe uma gravação nova? [free]: o livre no disco; [bytesPerSecond]: o débito do canal, se se souber.
     public static func canStart(free: Int64, bytesPerSecond: Int64?) -> Bool {
-        free - reserveBytes >= (bytesPerSecond ?? defaultBytesPerSecond) * (minStartMs / 1000)
+        AppleBridge.shared.recordingCanStart(free: free, bytesPerSecond: bytesPerSecond ?? -1)
     }
 
     /// A meio: pára quando o livre chega à reserva.
-    public static func mustStop(free: Int64) -> Bool { free <= reserveBytes }
+    public static func mustStop(free: Int64) -> Bool { AppleBridge.shared.recordingMustStop(free: free) }
 
     /// O débito de um anel que gravou [bytes] em [mediaMs] de vídeo, ou nil com pouco ainda (menos de 5 s).
-    public static func rate(bytes: Int64, mediaMs: Int64) -> Int64? { mediaMs < 5_000 ? nil : bytes * 1000 / mediaMs }
+    public static func rate(bytes: Int64, mediaMs: Int64) -> Int64? {
+        let r = AppleBridge.shared.recordingRate(bytes: bytes, mediaMs: mediaMs)
+        return r < 0 ? nil : r
+    }
 }
 
 /// As gravações no disco: em [dir] cada uma é `<id>.ts` (o vídeo) e `<id>.json` (a [RecordingInfo]). A lista do que
@@ -671,4 +670,32 @@ public final class RecordingWriter: @unchecked Sendable {
     /// De quantos em quantos bytes (ou segundos) se vê o espaço livre e se avisa do progresso.
     public static let checkBytes: Int64 = 8 * 1024 * 1024
     static let checkSeconds: TimeInterval = 5
+}
+
+// Os mesmos dados para o núcleo partilhado.
+extension ScheduledRecording {
+    var shared: GoatShared.ScheduledRecording {
+        GoatShared.ScheduledRecording(id: id, playlistId: playlistId, channelKey: channelKey, channelName: channelName, logo: logo,
+                                      title: title, startMs: startMs, endMs: endMs,
+                                      candidates: candidates.map { GoatShared.StreamCandidate(url: $0.url, format: $0.format) },
+                                      userAgent: userAgent, referrer: referrer, seriesId: seriesId)
+    }
+}
+
+extension SeriesRule {
+    var shared: GoatShared.SeriesRule {
+        GoatShared.SeriesRule(id: id, playlistId: playlistId, channelKey: channelKey, channelName: channelName, logo: logo, title: title)
+    }
+}
+
+extension Schedule {
+    var shared: GoatShared.Schedule {
+        GoatShared.Schedule(version: Int32(clamping: version), recordings: recordings.map(\.shared), series: series.map(\.shared),
+                            handled: handled.mapValues { KotlinLong(value: $0) }, paddingBeforeMin: Int32(clamping: paddingBeforeMin),
+                            paddingAfterMin: Int32(clamping: paddingAfterMin))
+    }
+}
+
+extension EpgEntry {
+    var shared: GoatShared.EpgEntry { GoatShared.EpgEntry(title: title, startMs: startMs, endMs: endMs) }
 }

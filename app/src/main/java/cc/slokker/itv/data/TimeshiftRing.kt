@@ -119,7 +119,6 @@ class TimeshiftRing(
     maxAgeMs: Long,
     private val clock: () -> Long,
 ) : Closeable {
-    data class Entry(val mediaMs: Long, val offset: Long)
 
     private val lock = Object()
     private val writeFile = RandomAccessFile(file, "rw")
@@ -133,7 +132,7 @@ class TimeshiftRing(
     // Protegido por lock.
     private var written = 0L
     private var clobbered = 0L
-    private val entries = ArrayDeque<Entry>()
+    private val entries = ArrayDeque<RingEntry>()
     private val segments = ArrayList<Long>()
     private var closed = false
     private var finished = false
@@ -183,7 +182,7 @@ class TimeshiftRing(
     val liveMediaMs: Long get() = synchronized(lock) { media }
 
     /** O ponto mais antigo para onde se pode recuar. */
-    val oldest: Entry? get() = synchronized(lock) { entries.firstOrNull() }
+    val oldest: RingEntry? get() = synchronized(lock) { entries.firstOrNull() }
 
     /** Já não vem mais nada (a ligação acabou e não se volta a ligar, ou o anel fechou). */
     val isFinished: Boolean get() = synchronized(lock) { finished || closed }
@@ -270,7 +269,7 @@ class TimeshiftRing(
     private fun addEntry(offset: Long) {
         val last = entries.lastOrNull()
         if (newSegment || last == null || media - last.mediaMs >= ENTRY_MS) {
-            entries.addLast(Entry(media, offset.coerceAtLeast(last?.offset ?: 0L)))
+            entries.addLast(RingEntry(media, offset.coerceAtLeast(last?.offset ?: 0L)))
             newSegment = false
         }
     }
@@ -371,18 +370,18 @@ class TimeshiftRing(
     }
 
     /** O ponto do índice mais perto de [mediaMs] sem passar dele (ou o mais antigo). */
-    fun entryAtOrBefore(mediaMs: Long): Entry? = synchronized(lock) {
+    fun entryAtOrBefore(mediaMs: Long): RingEntry? = synchronized(lock) {
         entries.lastOrNull { it.mediaMs <= mediaMs } ?: entries.firstOrNull()
     }
 
     /** O primeiro ponto do índice com o tempo do vídeo em [mediaMs] ou depois (o fim de uma gravação), ou null. */
-    fun entryAtOrAfter(mediaMs: Long): Entry? = synchronized(lock) { entries.firstOrNull { it.mediaMs >= mediaMs } }
+    fun entryAtOrAfter(mediaMs: Long): RingEntry? = synchronized(lock) { entries.firstOrNull { it.mediaMs >= mediaMs } }
 
     /** Uma cópia do índice (para escolher onde começa uma gravação, ver RecordingCut). */
-    fun index(): List<Entry> = synchronized(lock) { entries.toList() }
+    fun index(): List<RingEntry> = synchronized(lock) { entries.toList() }
 
     /** O primeiro ponto do índice a partir de [offset] (para reabrir no início de um segmento). */
-    fun entryFrom(offset: Long): Entry? = synchronized(lock) { entries.firstOrNull { it.offset >= offset } }
+    fun entryFrom(offset: Long): RingEntry? = synchronized(lock) { entries.firstOrNull { it.offset >= offset } }
 
     /** Tempo do vídeo em [offset] (o ponto do índice antes dele). */
     fun mediaAt(offset: Long): Long? = synchronized(lock) { entries.lastOrNull { it.offset <= offset }?.mediaMs }
@@ -406,7 +405,7 @@ class TimeshiftRing(
         const val OVERRUN = -3
 
         /** Um ponto no índice a cada meio segundo de vídeo. */
-        const val ENTRY_MS = 500L
+        const val ENTRY_MS = RingEntry.STEP_MS
 
         /** Sem PCR há mais do que isto: o relógio passa a ser o tempo real. */
         private const val NO_PCR_MS = 1_500L

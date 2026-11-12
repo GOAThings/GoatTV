@@ -1,6 +1,6 @@
 package cc.slokker.itv.data.recording
 
-import cc.slokker.itv.data.TimeshiftRing.Entry
+import cc.slokker.itv.data.RingEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -9,7 +9,7 @@ import org.junit.Test
 
 class RecordingCutTest {
     /** Um ponto a cada 500 ms, de [from] a [to] (tempo do vídeo), 1000 bytes cada. */
-    private fun index(from: Long, to: Long) = (from..to step 500).map { Entry(it, it * 2) }
+    private fun index(from: Long, to: Long) = (from..to step 500).map { RingEntry(it, it * 2) }
 
     @Test
     fun oInicioEOUltimoPontoAteAHoraPedida() {

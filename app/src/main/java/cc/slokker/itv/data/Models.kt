@@ -194,11 +194,6 @@ object SpecialCategory {
     val RESERVED = setOf(FAVORITES, ALL, RECENT)
 }
 
-data class EpgEntry(val title: String, val startMs: Long, val endMs: Long) {
-    fun progress(now: Long): Float =
-        if (endMs <= startMs) 0f else ((now - startMs).toFloat() / (endMs - startMs)).coerceIn(0f, 1f)
-}
-
 /** Lembrete de um programa que ainda vai começar (fica só nesta TV). */
 data class Reminder(
     val playlistId: String,

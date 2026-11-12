@@ -2,7 +2,7 @@ package cc.slokker.itv.data.recording
 
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.EpgEntry
-import java.text.Normalizer
+import cc.slokker.itv.data.nfkd
 
 /**
  * As regras das gravações, sem Android: as margens, o que fazer quando chega a hora de uma gravação marcada, as
@@ -119,7 +119,7 @@ object RecordingPlan {
 
     /** O mesmo título, sem maiúsculas, acentos nem espaços a mais (o guia não escreve sempre igual). */
     fun titleKey(title: String): String =
-        Normalizer.normalize(title.trim().lowercase(), Normalizer.Form.NFD).replace(MARKS, "").replace(SPACES, " ")
+        nfkd(title.trim().lowercase()).replace(MARKS, "").replace(SPACES, " ")
 
     /**
      * Os programas de [entries] (o guia do canal da série) que a regra [rule] marca agora: o mesmo título, ainda por

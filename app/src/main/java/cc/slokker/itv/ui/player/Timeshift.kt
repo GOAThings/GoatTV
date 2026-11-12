@@ -2,6 +2,7 @@
 
 package cc.slokker.itv.ui.player
 
+import cc.slokker.itv.data.RingEntry
 import android.content.Context
 import android.net.Uri
 import androidx.annotation.OptIn
@@ -274,7 +275,7 @@ internal class Timeshift(context: Context) {
         return true
     }
 
-    private fun prepareAt(player: Player, s: Session, entry: TimeshiftRing.Entry, live: Boolean = false) {
+    private fun prepareAt(player: Player, s: Session, entry: RingEntry, live: Boolean = false) {
         val exo = player as? ExoPlayer ?: return
         s.end = 0
         s.startMediaMs = entry.mediaMs

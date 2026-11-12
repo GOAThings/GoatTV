@@ -309,7 +309,7 @@ internal fun RecordingsPanel(vm: AppViewModel, width: Dp, onPlay: (RecordingInfo
             if (scheduled.isNotEmpty()) item(key = "h:s") { SectionLabel(s.recordingsScheduled) }
             items(scheduled, key = { "s:" + it.id }) { r ->
                 val key = "s:" + r.id
-                val cancel = { if (r.seriesId != null) vm.cancelSeries(r.seriesId) else vm.cancelScheduled(r.id) }
+                val cancel = { r.seriesId?.let(vm::cancelSeries) ?: vm.cancelScheduled(r.id) }
                 GlassRow(
                     onClick = { confirm = null },
                     onLongClick = { longPress(key, cancel) },

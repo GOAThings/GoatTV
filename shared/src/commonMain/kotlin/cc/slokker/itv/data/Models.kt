@@ -46,6 +46,19 @@ data class StreamCandidate(val url: String, val format: String) {
     val isLocal: Boolean get() = url.startsWith("file:")
 }
 
+data class EpgEntry(val title: String, val startMs: Long, val endMs: Long) {
+    fun progress(now: Long): Float =
+        if (endMs <= startMs) 0f else ((now - startMs).toFloat() / (endMs - startMs)).coerceIn(0f, 1f)
+}
+
+/** Um ponto do índice do anel da pausa do direto: o tempo do vídeo (pelos PCR) e o byte onde começa. */
+data class RingEntry(val mediaMs: Long, val offset: Long) {
+    companion object {
+        /** O índice tem um ponto a cada este tanto de vídeo. */
+        const val STEP_MS = 500L
+    }
+}
+
 object StreamFormat {
     const val TS = "ts"
     const val HLS = "m3u8"
