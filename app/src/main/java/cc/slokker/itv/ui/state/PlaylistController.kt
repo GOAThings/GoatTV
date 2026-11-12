@@ -3,6 +3,8 @@ package cc.slokker.itv.ui.state
 import android.util.Log
 import cc.slokker.itv.data.CacheStore
 import cc.slokker.itv.data.ChannelIndex
+import cc.slokker.itv.data.gzipBody
+import cc.slokker.itv.data.of
 import cc.slokker.itv.data.ContentView
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent

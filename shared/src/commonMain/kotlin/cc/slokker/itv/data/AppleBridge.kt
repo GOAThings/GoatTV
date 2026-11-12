@@ -73,6 +73,11 @@ object AppleBridge {
     private fun obj(json: String): JsonObject =
         runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
 
+    // ---- O índice para o site ---------------------------------------------------------------
+
+    /** [ChannelIndex.of]; null se passar os limites do servidor. */
+    fun channelIndex(categories: List<Category>, channels: List<Channel>): ChannelIndex? = ChannelIndex.of(categories, channels)
+
     // ---- Gravações -----------------------------------------------------------------------------
 
     /**
