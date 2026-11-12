@@ -12,6 +12,19 @@ class PrefsTest {
     private fun prefs(json: String) = Prefs.from(JsonParser.parseString(json).asJsonObject)
 
     @Test
+    fun booleansAsOnApple() {
+        // Um número conta (0 = não) e só o texto "true"/"false" vale; o resto fica no padrão (igual à Apple).
+        val key = Prefs.Key.FREEZE_FRAME
+        val def = Prefs().freezeFrame
+        assertEquals(true, prefs("""{"$key": 1}""").freezeFrame)
+        assertEquals(false, prefs("""{"$key": 0}""").freezeFrame)
+        assertEquals(true, prefs("""{"$key": "true"}""").freezeFrame)
+        assertEquals(false, prefs("""{"$key": "false"}""").freezeFrame)
+        assertEquals(def, prefs("""{"$key": "sim"}""").freezeFrame)
+        assertEquals(!def, prefs("""{"$key": ${!def}}""").freezeFrame)
+    }
+
+    @Test
     fun `missing or invalid values fall back to defaults`() {
         val p = prefs("""{"buffer":"enorme","decoder":42,"info_seconds":"x","show_logos":false,"stream_format":"ts"}""")
         assertEquals(Prefs.Buffer.NORMAL, p.buffer)

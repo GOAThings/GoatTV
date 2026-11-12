@@ -391,8 +391,18 @@ data class Prefs(
             val d = Prefs()
             fun str(k: String, def: String, allowed: Set<String>) =
                 s.get(k)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it in allowed } ?: def
-            fun bool(k: String, def: Boolean) =
-                s.get(k)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asBoolean }.getOrNull() } ?: def
+            // Como na Apple (GoatCore JSON.bool): true/false, um número (0 = não) ou o texto "true"/"false"; o resto
+            // fica no padrão (o asBoolean do Gson lia 1 e "sim" como false).
+            fun bool(k: String, def: Boolean): Boolean {
+                val p = s.get(k)?.takeIf { it.isJsonPrimitive }?.asJsonPrimitive ?: return def
+                return when {
+                    p.isBoolean -> p.asBoolean
+                    p.isNumber -> p.asDouble != 0.0
+                    p.asString == "true" -> true
+                    p.asString == "false" -> false
+                    else -> def
+                }
+            }
             fun int(k: String, def: Int) =
                 s.get(k)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asInt }.getOrNull() } ?: def
             return Prefs(
