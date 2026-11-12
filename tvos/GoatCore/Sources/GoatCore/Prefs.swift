@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 
 /// As definições do player guardadas no `settings` da conta (as mesmas chaves do GoatTV Android). Só as que esta
 /// versão usa; as outras ficam intactas no JSON.
@@ -192,125 +193,79 @@ public struct Prefs: Equatable, Sendable {
         hiddenChannels.contains("\(playlistId):\(channelKey)")
     }
 
+    /// As definições em [s] (o `settings` da conta ou desta TV): lidas pelo núcleo partilhado com o Android
+    /// (shared/…/data/Prefs.kt), que é quem sabe o formato; aqui só se copiam os campos que a Apple usa.
     public init(settings s: JSON) {
-        let d = Prefs()
-        func str(_ k: String, _ def: String, _ allowed: Set<String>) -> String {
-            guard let v = s[k]?.text, allowed.contains(v) else { return def }
-            return v
-        }
-        func bool(_ k: String, _ def: Bool) -> Bool { s[k]?.bool ?? def }
-        func int(_ k: String, _ def: Int) -> Int { s[k]?.int ?? def }
-        func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(hi, max(lo, v)) }
-        func stringSet(_ k: String) -> Set<String> { Set(s[k]?.strings ?? []) }
-        func stringMap(_ k: String) -> [String: String] {
-            (s[k]?.object ?? [:]).compactMapValues { $0.text }
-        }
-        func stringListMap(_ k: String) -> [String: [String]] {
-            (s[k]?.object ?? [:]).mapValues { $0.strings }
-        }
-
-        userAgent = s["user_agent"]?.string?.trimmed ?? ""
-        language = s["language"]?.string ?? d.language
-        accent = str("accent", d.accent, ["itv", "violet", "mint", "sunset", "gold", "white"])
-        showFavoritesGroup = bool("show_favorites_group", d.showFavoritesGroup)
-        showAllGroup = bool("show_all_group", d.showAllGroup)
-        showRecentGroup = bool("show_recent_group", d.showRecentGroup)
-        hiddenGroups = stringSet("hidden_groups")
-        groupOrder = stringListMap("group_order")
-        hiddenChannels = stringSet("hidden_channels")
-        channelOrder = stringListMap("channel_order")
-        reconnectSeconds = clamp(int("reconnect_seconds", d.reconnectSeconds), 0, 120)
-        streamFormat = s["stream_format"]?.string.flatMap { $0 == StreamFormat.ts || $0 == StreamFormat.hls ? $0 : nil }
-        aspect = str("aspect", d.aspect, [Aspect.fit, Aspect.zoom, Aspect.fill])
-        buffer = str("buffer", d.buffer, [Buffer.live, Buffer.small, Buffer.normal, Buffer.large])
-        audioPassthrough = bool("audio_passthrough", d.audioPassthrough)
-        freezeFrame = bool("freeze_frame", d.freezeFrame)
-        timeshift = bool("timeshift", d.timeshift)
-        protectPaused = bool("protect_paused", d.protectPaused)
-        audioDelayMs = min(max(int("audio_delay_ms", d.audioDelayMs), -1_000), 1_000)
-        surroundDefault = bool("surround_default", d.surroundDefault)
-        audioLanguage = Prefs.language(s["audio_language"])
-        subtitleLanguage = Prefs.language(s["subtitle_language"])
-        uiScale = clamp(int("ui_scale", d.uiScale), 80, 120)
-        engine = str("engine", d.engine, ["exo", "vlc", "aether"])
-        decoder = str("decoder", d.decoder, ["hw", "sw"])
-        afr = bool("afr", d.afr)
-        afrMode = Prefs.readAfrMode(s)
-        afrFallback = str("afr_fallback", d.afrFallback, Set(AfrFallback.all))
-        hdr = str("hdr", d.hdr, ["auto", "sdr"])
-        deinterlace = str("deinterlace", d.deinterlace, ["yadif2x", "yadif", "off"])
-        upDown = str("up_down", d.upDown, [UpDown.zap, UpDown.list])
-        reverseZap = bool("reverse_zap", d.reverseZap)
-        let zapDelay = int("zap_delay_ms", d.zapDelayMs)
-        zapDelayMs = ZapDelay.all.contains(zapDelay) ? zapDelay : d.zapDelayMs
-        infoSeconds = clamp(int("info_seconds", d.infoSeconds), 0, 30)
-        startup = str("startup", d.startup, [Startup.last, Startup.list])
-        phoneStartup = str("phone_startup", d.phoneStartup, [PhoneStartup.home, PhoneStartup.last])
-        backAction = str("back_action", d.backAction, [BackAction.guide, BackAction.exit])
-        exitConfirm = bool("exit_confirm", d.exitConfirm)
-        showNumbers = bool("show_numbers", d.showNumbers)
-        showLogos = bool("show_logos", d.showLogos)
-        if let source = s["logo_source"]?.string,
-           source == LogoSource.playlist || source == LogoSource.guide || Prefs.isCountryCode(source) {
-            logoSource = source
-        }
-        channelLogos = stringMap("channel_logos")
-        extraEpg = stringMap("extra_epg").filter { $0.value.hasPrefix("http://") || $0.value.hasPrefix("https://") }
-        mergeVariants = Set((s["merge_variants"]?.object ?? [:]).filter { $0.value == .bool(true) }.keys)
-        nameRules = (s["name_rules"]?.object ?? [:]).compactMapValues { v -> [NameRule]? in
-            let rules = (v.array ?? []).compactMap { r -> NameRule? in
-                guard let o = r.object, let find = o["find"]?.string, !find.isEmpty else { return nil }
-                return NameRule(find: find, replace: o["replace"]?.string ?? "")
-            }
-            return rules.isEmpty ? nil : rules
-        }
-        channelNames = stringMap("channel_names").mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.value.isEmpty }
-        backupPlaylist = stringMap("backup_playlist").filter { !$0.value.isEmpty && $0.value != $0.key }
-        backupChannels = (s["backup_channels"]?.object ?? [:]).compactMapValues(Prefs.failovers)
-        backupMode = stringMap("backup_mode").filter { $0.value == ChannelMatch.modeManual }
-        outlineColor = str("outline_color", d.outlineColor, ["white", "accent", "blue", "violet", "pink", "red", "orange", "yellow", "green"])
-        panelTimeout = clamp(int("panel_timeout", d.panelTimeout), 0, 300)
-        glassOpacity = clamp(int("glass_opacity", d.glassOpacity), 0, 100)
-        panelWidth = clamp(int("panel_width", d.panelWidth), 260, 520)
-        textSize = str("text_size", d.textSize, [TextSize.small, TextSize.normal, TextSize.large])
-        sort = str("sort", d.sort, [Sort.number, Sort.name])
-        let playlistRefresh = int("playlist_refresh_hours", d.playlistRefreshHours)
-        playlistRefreshHours = Prefs.refreshOptions.contains(playlistRefresh) ? playlistRefresh : d.playlistRefreshHours
-        let epgRefresh = int("epg_refresh_hours", d.epgRefreshHours)
-        epgRefreshHours = Prefs.refreshOptions.contains(epgRefresh) ? epgRefresh : d.epgRefreshHours
-        epgOffsetMin = clamp(int("epg_offset_min", d.epgOffsetMin), -12 * 60, 12 * 60)
-        let past = int("epg_past_hours", d.epgPastHours)
-        epgPastHours = GuideWindow.pastHours.contains(past) ? past : d.epgPastHours
-        let future = int("epg_future_hours", d.epgFutureHours)
-        epgFutureHours = GuideWindow.futureHours.contains(future) ? future : d.epgFutureHours
-        epgInList = bool("epg_in_list", d.epgInList)
-        reminderSwitch = bool("reminder_switch", d.reminderSwitch)
-        catchupOffsetMin = clamp(int("catchup_offset_min", d.catchupOffsetMin), -12 * 60, 12 * 60)
-        let before = int("record_padding_before_min", d.recordPaddingBeforeMin)
-        recordPaddingBeforeMin = Prefs.paddingOptions.contains(before) ? before : d.recordPaddingBeforeMin
-        let after = int("record_padding_after_min", d.recordPaddingAfterMin)
-        recordPaddingAfterMin = Prefs.paddingOptions.contains(after) ? after : d.recordPaddingAfterMin
-        pinHash = s["parental_pin_sha256"]?.string.flatMap { $0.count == 64 ? $0 : nil }
-        lockedGroups = stringSet("locked_groups")
-        settingsPin = bool("settings_pin", d.settingsPin)
-    }
-
-    /// O modo do AFR, como no Android: `afr` a false desliga sempre (as versões antigas só mexem nela); ligada, vale
-    /// `afr_mode` e, sem ele (gravado antes de haver modos), "sempre", que é o que o sim/não fazia. Sem nenhuma, desligado.
-    static func readAfrMode(_ s: JSON) -> String {
-        // Como o Gson do Android: um texto "true" vale, um número não.
-        let raw = s["afr"]
-        let on: Bool?
-        switch raw {
-        case .bool(let b)?: on = b
-        case .string(let t)?: on = t.lowercased() == "true"
-        case .number?: on = false
-        default: on = nil
-        }
-        let mode = s["afr_mode"]?.string.flatMap { $0 == AfrMode.start || $0 == AfrMode.always ? $0 : nil }
-        if on == false { return AfrMode.off }
-        if let mode { return mode }
-        return on == true ? AfrMode.always : AfrMode.off
+        self.init()
+        let p = AppleBridge.shared.prefs(json: String(decoding: s.encoded(), as: UTF8.self))
+        userAgent = p.userAgent
+        language = p.language
+        accent = p.accent
+        showFavoritesGroup = p.showFavoritesGroup
+        showAllGroup = p.showAllGroup
+        showRecentGroup = p.showRecentGroup
+        hiddenGroups = p.hiddenGroups
+        groupOrder = p.groupOrder
+        hiddenChannels = p.hiddenChannels
+        channelOrder = p.channelOrder
+        reconnectSeconds = Int(p.reconnectSeconds)
+        streamFormat = p.streamFormat
+        aspect = p.aspect
+        buffer = p.buffer
+        engine = p.engine
+        decoder = p.decoder
+        afr = p.afr
+        afrMode = p.afrMode
+        afrFallback = p.afrFallback
+        hdr = p.hdr
+        deinterlace = p.deinterlace
+        audioPassthrough = p.audioPassthrough
+        freezeFrame = p.freezeFrame
+        timeshift = p.timeshift
+        protectPaused = p.protectPaused
+        audioDelayMs = Int(p.audioDelayMs)
+        surroundDefault = p.surroundDefault
+        audioLanguage = p.audioLanguage
+        subtitleLanguage = p.subtitleLanguage
+        uiScale = Int(p.uiScale)
+        upDown = p.upDown
+        reverseZap = p.reverseZap
+        zapDelayMs = Int(p.zapDelayMs)
+        infoSeconds = Int(p.infoSeconds)
+        startup = p.startup
+        phoneStartup = p.phoneStartup
+        backAction = p.backAction
+        exitConfirm = p.exitConfirm
+        showNumbers = p.showNumbers
+        showLogos = p.showLogos
+        logoSource = p.logoSource
+        channelLogos = p.channelLogos
+        extraEpg = p.extraEpg
+        mergeVariants = p.mergeVariants
+        nameRules = p.nameRules.mapValues { $0.map { NameRule(find: $0.find, replace: $0.replace) } }
+        channelNames = p.channelNames
+        backupPlaylist = p.backupPlaylist
+        backupChannels = p.backupChannels
+        backupMode = p.backupMode
+        outlineColor = p.outlineColor
+        panelTimeout = Int(p.panelTimeout)
+        glassOpacity = Int(p.glassOpacity)
+        panelWidth = Int(p.panelWidth)
+        textSize = p.textSize
+        sort = p.sort
+        playlistRefreshHours = Int(p.playlistRefreshHours)
+        epgRefreshHours = Int(p.epgRefreshHours)
+        epgOffsetMin = Int(p.epgOffsetMin)
+        epgPastHours = Int(p.epgPastHours)
+        epgFutureHours = Int(p.epgFutureHours)
+        epgInList = p.epgInList
+        reminderSwitch = p.reminderSwitch
+        catchupOffsetMin = Int(p.catchupOffsetMin)
+        recordPaddingBeforeMin = Int(p.recordPaddingBeforeMin)
+        recordPaddingAfterMin = Int(p.recordPaddingAfterMin)
+        pinHash = p.pinHash
+        lockedGroups = p.lockedGroups
+        settingsPin = p.settingsPin
     }
 
     /// O que gravar para o modo [mode] do AFR: as duas chaves a condizer (desligado apaga o modo).
@@ -318,17 +273,6 @@ public struct Prefs: Equatable, Sendable {
         mode == AfrMode.start || mode == AfrMode.always
             ? ["afr": .bool(true), "afr_mode": .string(mode)]
             : ["afr": .bool(false), "afr_mode": nil]
-    }
-
-    /// Uma língua das Definições: um código de 2 ou 3 letras (minúsculas), ou vazio.
-    /// Os failovers de um canal: "off" = nenhum, uma chave, ou um array delas; um valor vazio fica de fora (nil).
-    static func failovers(_ v: JSON) -> [String]? {
-        if let list = v.array {
-            var seen = Set<String>()
-            return list.compactMap(\.text).filter { !$0.isEmpty && $0 != ChannelMatch.off && seen.insert($0).inserted }
-        }
-        guard let one = v.text, !one.isEmpty else { return nil }
-        return one == ChannelMatch.off ? [] : [one]
     }
 
     /// Os failovers [list] como se gravam (ver [backupChannels]).
@@ -340,18 +284,8 @@ public struct Prefs: Equatable, Sendable {
         }
     }
 
-    private static func language(_ v: JSON?) -> String {
-        guard case .string(let raw)? = v else { return "" }
-        let code = raw.trimmingCharacters(in: .whitespaces).lowercased()
-        return (2...3).contains(code.count) && code.allSatisfy({ $0 >= "a" && $0 <= "z" }) ? code : ""
-    }
-
-    private static func isCountryCode(_ s: String) -> Bool {
-        (2...3).contains(s.count) && s.allSatisfy { $0.isASCII && $0.isLetter }
-    }
-
     /// O PIN nunca é guardado em claro, nem na conta ("i-tv:" é o sal de sempre, igual no Android).
     public static func hashPin(_ pin: String) -> String {
-        SHA.hex(SHA.sha256(Array("i-tv:\(pin)".utf8)))
+        AppleBridge.shared.prefsHashPin(pin: pin)
     }
 }

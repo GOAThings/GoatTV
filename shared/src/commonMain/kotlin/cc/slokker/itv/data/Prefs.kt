@@ -1,10 +1,16 @@
 package cc.slokker.itv.data
 
-import cc.slokker.itv.data.recording.RecordingPlan
-import cc.slokker.itv.ui.i18n.Strings
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
-import java.security.MessageDigest
+// As definições (o `settings` da conta ou desta TV), as mesmas no Android e na Apple: o formato é o contrato com o
+// site, por isso lê-se e escreve-se aqui, uma vez. O que é só de uma plataforma fica com o padrão na outra.
+
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 
 /**
  * Definições do player, guardadas no `settings` da conta (iguais em todas as TVs).
@@ -56,6 +62,8 @@ data class Prefs(
     // Geral
     /** User-Agent para os servidores IPTV; vazio = o predefinido. */
     val userAgent: String = "",
+    /** O formato preferido da conta (`stream_format`): ts, m3u8 ou null (automático). */
+    val streamFormat: String? = null,
     val autoStart: Boolean = false,
     val exitConfirm: Boolean = true,
     /** Paleta da cor de destaque (ver Accent). */
@@ -158,8 +166,8 @@ data class Prefs(
     val reminderSwitch: Boolean = false,
     // Gravações
     /** Minutos a gravar antes do início e depois do fim do programa no guia (ver RecordingPlan.PADDING_OPTIONS). */
-    val recordPaddingBeforeMin: Int = RecordingPlan.PADDING_BEFORE_DEFAULT,
-    val recordPaddingAfterMin: Int = RecordingPlan.PADDING_AFTER_DEFAULT,
+    val recordPaddingBeforeMin: Int = Padding.BEFORE_DEFAULT,
+    val recordPaddingAfterMin: Int = Padding.AFTER_DEFAULT,
     // Controlo parental
     val pinHash: String? = null,
     /** "playlistId:groupId". */
@@ -205,6 +213,7 @@ data class Prefs(
         const val TIMESHIFT = "timeshift"
         const val PROTECT_PAUSED = "protect_paused"
         const val USER_AGENT = "user_agent"
+        const val STREAM_FORMAT = "stream_format"
         const val AUTO_START = "auto_start"
         const val EXIT_CONFIRM = "exit_confirm"
         const val GLASS_OPACITY = "glass_opacity"
@@ -290,7 +299,28 @@ data class Prefs(
     }
     object Engine {
         const val EXO = "exo"; const val VLC = "vlc"
+        /** Só na Apple (o AetherEngine). */
+        const val AETHER = "aether"
+        /** Os do Android (a Apple passa os seus a [from]). */
         val ALL = setOf(EXO, VLC)
+        val APPLE = setOf(EXO, VLC, AETHER)
+    }
+
+    /** As margens das gravações, em minutos (antes e depois do programa). */
+    object Padding {
+        val OPTIONS = listOf(0, 1, 2, 5, 10)
+        const val BEFORE_DEFAULT = 1
+        const val AFTER_DEFAULT = 2
+    }
+
+    /** De quantas em quantas horas se atualizam as listas e o guia (0 = sempre que se abre a app). */
+    object Refresh {
+        val OPTIONS = listOf(0, 3, 6, 8, 12, 24)
+    }
+
+    /** O formato preferido da conta (`stream_format`; null = automático). */
+    object StreamFormats {
+        val ALL = setOf(StreamFormat.TS, StreamFormat.HLS)
     }
 
     /** As cores de destaque, pela ordem das Definições (as cores de cada uma estão em ui/theme Accent.ALL). */
@@ -387,26 +417,36 @@ data class Prefs(
     val textScale: Float get() = TextSize.scale(textSize)
 
     companion object {
-        fun from(s: JsonObject): Prefs {
+        /** O valor [k] de [s], se for um primitivo (texto, número ou true/false). */
+        private fun prim(s: JsonObject, k: String): JsonPrimitive? = (s[k] as? JsonPrimitive)?.takeIf { it !is JsonNull }
+
+        /** O texto de um primitivo (também um número ou true/false, como o asString do Gson). */
+        private val JsonPrimitive.text: String get() = content
+
+        /**
+         * As definições em [s]. [engines]: os motores desta plataforma ([Engine.ALL] ou [Engine.APPLE]);
+         * [normalizeLanguage]: a língua da app como esta plataforma a conhece ("auto" = a do sistema).
+         */
+        fun from(s: JsonObject, engines: Set<String> = Engine.ALL, normalizeLanguage: (String?) -> String = { it ?: "auto" }): Prefs {
             val d = Prefs()
-            fun str(k: String, def: String, allowed: Set<String>) =
-                s.get(k)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it in allowed } ?: def
-            // Como na Apple (GoatCore JSON.bool): true/false, um número (0 = não) ou o texto "true"/"false"; o resto
-            // fica no padrão (o asBoolean do Gson lia 1 e "sim" como false).
+            fun str(k: String, def: String, allowed: Collection<String>) = prim(s, k)?.text?.takeIf { it in allowed } ?: def
+            // true/false, um número (0 = não) ou o texto "true"/"false"; o resto fica no padrão.
             fun bool(k: String, def: Boolean): Boolean {
-                val p = s.get(k)?.takeIf { it.isJsonPrimitive }?.asJsonPrimitive ?: return def
+                val p = prim(s, k) ?: return def
                 return when {
-                    p.isBoolean -> p.asBoolean
-                    p.isNumber -> p.asDouble != 0.0
-                    p.asString == "true" -> true
-                    p.asString == "false" -> false
+                    !p.isString && p.booleanOrNull != null -> p.booleanOrNull!!
+                    !p.isString && p.doubleOrNull != null -> p.doubleOrNull != 0.0
+                    p.text == "true" -> true
+                    p.text == "false" -> false
                     else -> def
                 }
             }
-            fun int(k: String, def: Int) =
-                s.get(k)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asInt }.getOrNull() } ?: def
+            fun int(k: String, def: Int): Int {
+                val p = prim(s, k) ?: return def
+                return p.intOrNull ?: p.doubleOrNull?.takeIf { it == kotlin.math.floor(it) && it in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble() }?.toInt() ?: def
+            }
             return Prefs(
-                engine = str(Key.ENGINE, d.engine, Engine.ALL),
+                engine = str(Key.ENGINE, d.engine, engines),
                 buffer = str(Key.BUFFER, d.buffer, Buffer.ALL),
                 decoder = str(Key.DECODER, d.decoder, Decoder.ALL),
                 deinterlace = str(Key.DEINTERLACE, d.deinterlace, Deinterlace.ALL),
@@ -428,11 +468,12 @@ data class Prefs(
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),
                 protectPaused = bool(Key.PROTECT_PAUSED, d.protectPaused),
-                userAgent = s.get(Key.USER_AGENT)?.takeIf { it.isJsonPrimitive }?.asString?.trim().orEmpty(),
+                userAgent = prim(s, Key.USER_AGENT)?.text?.trim().orEmpty(),
+                streamFormat = prim(s, Key.STREAM_FORMAT)?.text?.takeIf { it in StreamFormats.ALL },
                 autoStart = bool(Key.AUTO_START, d.autoStart),
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),
                 glassOpacity = int(Key.GLASS_OPACITY, d.glassOpacity).coerceIn(0, 100),
-                accent = str(Key.ACCENT, d.accent, Accents.IDS.toSet()),
+                accent = str(Key.ACCENT, d.accent, Accents.IDS),
                 showFavoritesGroup = bool(Key.SHOW_FAVORITES_GROUP, d.showFavoritesGroup),
                 showAllGroup = bool(Key.SHOW_ALL_GROUP, d.showAllGroup),
                 showRecentGroup = bool(Key.SHOW_RECENT_GROUP, d.showRecentGroup),
@@ -454,13 +495,13 @@ data class Prefs(
                 phoneStartup = str(Key.PHONE_STARTUP, d.phoneStartup, PhoneStartup.ALL),
                 showNumbers = bool(Key.SHOW_NUMBERS, d.showNumbers),
                 showLogos = bool(Key.SHOW_LOGOS, d.showLogos),
-                logoSource = s.get(Key.LOGO_SOURCE)?.takeIf { it.isJsonPrimitive }?.asString
+                logoSource = prim(s, Key.LOGO_SOURCE)?.text
                     ?.takeIf { it == LogoSource.PLAYLIST || it == LogoSource.GUIDE || COUNTRY_CODE.matches(it) } ?: d.logoSource,
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
-                outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS.toSet()),
+                outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
-                mergeVariants = s.get(Key.MERGE_VARIANTS)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
-                    ?.filter { (_, v) -> v.isJsonPrimitive && v.asJsonPrimitive.isBoolean && v.asBoolean }?.map { it.key }?.toSet().orEmpty(),
+                mergeVariants = (s[Key.MERGE_VARIANTS] as? JsonObject)
+                    ?.filter { (_, v) -> v is JsonPrimitive && !v.isString && v.booleanOrNull == true }?.keys.orEmpty(),
                 nameRules = nameRules(s),
                 channelNames = stringMap(s, Key.CHANNEL_NAMES).mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
                 backupPlaylist = stringMap(s, Key.BACKUP_PLAYLIST).filter { (k, v) -> v.isNotEmpty() && v != k },
@@ -471,30 +512,36 @@ data class Prefs(
                 panelWidth = int(Key.PANEL_WIDTH, d.panelWidth).coerceIn(260, 520),
                 uiScale = int(Key.UI_SCALE, d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
                 textSize = str(Key.TEXT_SIZE, d.textSize, TextSize.ALL),
-                language = Strings.normalize(s.get(Key.LANGUAGE)?.takeIf { it.isJsonPrimitive }?.asString),
-                playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.playlistRefreshHours,
-                epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in RefreshPolicy.OPTIONS } ?: d.epgRefreshHours,
+                language = normalizeLanguage(prim(s, Key.LANGUAGE)?.text),
+                playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.playlistRefreshHours,
+                epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.epgRefreshHours,
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgPastHours = int(Key.EPG_PAST_HOURS, d.epgPastHours).takeIf { it in GuideHours.PAST } ?: d.epgPastHours,
                 epgFutureHours = int(Key.EPG_FUTURE_HOURS, d.epgFutureHours).takeIf { it in GuideHours.FUTURE } ?: d.epgFutureHours,
                 catchupOffsetMin = int(Key.CATCHUP_OFFSET, d.catchupOffsetMin).coerceIn(-12 * 60, 12 * 60),
                 epgInList = bool(Key.EPG_IN_LIST, d.epgInList),
                 reminderSwitch = bool(Key.REMINDER_SWITCH, d.reminderSwitch),
-                recordPaddingBeforeMin = int(Key.RECORD_PADDING_BEFORE, d.recordPaddingBeforeMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingBeforeMin,
-                recordPaddingAfterMin = int(Key.RECORD_PADDING_AFTER, d.recordPaddingAfterMin).takeIf { it in RecordingPlan.PADDING_OPTIONS } ?: d.recordPaddingAfterMin,
-                pinHash = s.get(Key.PIN_HASH)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.length == 64 },
+                recordPaddingBeforeMin = int(Key.RECORD_PADDING_BEFORE, d.recordPaddingBeforeMin).takeIf { it in Padding.OPTIONS } ?: d.recordPaddingBeforeMin,
+                recordPaddingAfterMin = int(Key.RECORD_PADDING_AFTER, d.recordPaddingAfterMin).takeIf { it in Padding.OPTIONS } ?: d.recordPaddingAfterMin,
+                pinHash = prim(s, Key.PIN_HASH)?.text?.takeIf { it.length == 64 },
                 lockedGroups = stringSet(s, Key.LOCKED_GROUPS),
             )
         }
 
         /**
-         * O modo do AFR: a chave antiga [Key.AFR] a false desliga sempre (a Apple TV e as versões antigas só mexem
-         * nela); ligada, vale [Key.AFR_MODE] e, sem ele (gravado antes de haver modos), "sempre", que é o que o
-         * sim/não fazia. Sem nenhuma das duas, desligado.
+         * O modo do AFR: a chave antiga [Key.AFR] a false desliga sempre (as versões antigas só mexem nela); ligada,
+         * vale [Key.AFR_MODE] e, sem ele (gravado antes de haver modos), "sempre", que é o que o sim/não fazia. Sem
+         * nenhuma das duas, desligado. (Aqui, como sempre: true/false ou o texto "true"; um número não conta.)
          */
         private fun afrMode(s: JsonObject): String {
-            val on = s.get(Key.AFR)?.takeIf { it.isJsonPrimitive }?.let { runCatching { it.asBoolean }.getOrNull() }
-            val mode = s.get(Key.AFR_MODE)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it == AfrMode.START || it == AfrMode.ALWAYS }
+            val p = prim(s, Key.AFR)
+            val on = when {
+                p == null -> null
+                !p.isString && p.booleanOrNull != null -> p.booleanOrNull
+                p.isString -> p.text.lowercase() == "true"
+                else -> false
+            }
+            val mode = prim(s, Key.AFR_MODE)?.text?.takeIf { it == AfrMode.START || it == AfrMode.ALWAYS }
             return when {
                 on == false -> AfrMode.OFF
                 mode != null -> mode
@@ -510,50 +557,52 @@ data class Prefs(
         }
 
         /**
-         * Escreve [value] na chave [key] de [settings], na forma que [from] lê (e que o site e a Apple TV esperam):
-         * String, Boolean, Int, lista de Strings, mapa de Strings ou de listas de Strings, ou null para repor o padrão.
+         * [settings] com [value] na chave [key], na forma que [from] lê (e que o site espera): String, Boolean, Int,
+         * lista de Strings, mapa de Strings, de listas ou de mapas, ou null para repor o padrão (tira a chave).
          */
-        fun put(settings: JsonObject, key: String, value: Any?) {
-            when (value) {
-                null -> settings.remove(key)
-                is String -> settings.addProperty(key, value)
-                is Boolean -> settings.addProperty(key, value)
-                is Int -> settings.addProperty(key, value)
-                is Collection<*> -> settings.add(key, array(value))
-                is Map<*, *> -> settings.add(key, obj(value))
-                else -> error("Tipo não suportado: ${value::class}")
-            }
+        fun put(settings: JsonObject, key: String, value: Any?): JsonObject {
+            val out = LinkedHashMap(settings)
+            if (value == null) out.remove(key) else out[key] = json(value)
+            return JsonObject(out)
         }
 
-        /** Os valores de um mapa: listas, mapas (ex.: as regras de nomes) e true/false ficam como são; o resto, texto. */
-        private fun obj(map: Map<*, *>): JsonObject = JsonObject().apply {
-            map.forEach { (k, v) ->
-                when (v) {
-                    is Collection<*> -> add(k.toString(), array(v))
-                    is Map<*, *> -> add(k.toString(), obj(v))
-                    is Boolean -> addProperty(k.toString(), v)
-                    else -> addProperty(k.toString(), v.toString())
+        /** [value] em JSON: em mapas e listas, listas, mapas e true/false ficam como são; o resto, texto. */
+        fun json(value: Any): JsonElement = when (value) {
+            is String -> JsonPrimitive(value)
+            is Boolean -> JsonPrimitive(value)
+            is Int -> JsonPrimitive(value)
+            is Collection<*> -> array(value)
+            is Map<*, *> -> obj(value)
+            else -> error("Tipo não suportado: ${value::class}")
+        }
+
+        private fun obj(map: Map<*, *>): JsonObject = JsonObject(
+            map.entries.associate { (k, v) ->
+                k.toString() to when (v) {
+                    is Collection<*> -> array(v)
+                    is Map<*, *> -> obj(v)
+                    is Boolean -> JsonPrimitive(v)
+                    else -> JsonPrimitive(v.toString())
                 }
-            }
-        }
+            },
+        )
 
-        private fun array(list: Collection<*>): JsonArray = JsonArray().apply {
-            list.forEach { if (it is Map<*, *>) add(obj(it)) else add(it.toString()) }
-        }
+        private fun array(list: Collection<*>): JsonArray = JsonArray(list.map { if (it is Map<*, *>) obj(it) else JsonPrimitive(it.toString()) })
 
         /**
-         * Tira de [settings] o que é só da lista [playlistId] (grupos e canais escondidos, bloqueados e ordenados,
-         * logótipos escolhidos, guia extra, reserva e canais de reserva), quando ela é apagada; e a reserva das listas
-         * que a tinham como reserva. Devolve true se mudou alguma coisa.
+         * [settings] sem o que é só da lista [playlistId] (grupos e canais escondidos, bloqueados e ordenados,
+         * logótipos escolhidos, guia extra, reserva e canais de reserva, versões e nomes), quando ela é apagada; e sem
+         * a reserva das listas que a tinham como reserva. null se não mudou nada.
          */
-        fun removePlaylist(settings: JsonObject, playlistId: String): Boolean {
+        fun removePlaylist(settings: JsonObject, playlistId: String): JsonObject? {
             val prefix = "$playlistId:"
+            val out = LinkedHashMap(settings)
             var changed = false
             for (key in listOf(Key.HIDDEN_GROUPS, Key.HIDDEN_CHANNELS, Key.LOCKED_GROUPS)) {
-                val array = settings.get(key)?.takeIf { it.isJsonArray }?.asJsonArray ?: continue
-                val kept = JsonArray().apply { array.filterNot { it.isJsonPrimitive && it.asString.startsWith(prefix) }.forEach(::add) }
-                if (kept.size() != array.size()) {
-                    settings.add(key, kept)
+                val array = out[key] as? JsonArray ?: continue
+                val kept = array.filterNot { it is JsonPrimitive && it.content.startsWith(prefix) }
+                if (kept.size != array.size) {
+                    out[key] = JsonArray(kept)
                     changed = true
                 }
             }
@@ -562,41 +611,42 @@ data class Prefs(
                 Key.MERGE_VARIANTS to false, Key.NAME_RULES to false,
                 Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true, Key.CHANNEL_NAMES to true,
             )) {
-                val obj = settings.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
-                val gone = obj.keySet().filter { if (perGroup) it.startsWith(prefix) else it == playlistId }
-                gone.forEach { obj.remove(it) }
-                if (gone.isNotEmpty()) changed = true
+                val obj = out[key] as? JsonObject ?: continue
+                val kept = obj.filterKeys { if (perGroup) !it.startsWith(prefix) else it != playlistId }
+                if (kept.size != obj.size) {
+                    out[key] = JsonObject(kept)
+                    changed = true
+                }
             }
             // As listas que a tinham como reserva ficam sem reserva (e sem os canais escolhidos nela).
-            val backups = settings.get(Key.BACKUP_PLAYLIST)?.takeIf { it.isJsonObject }?.asJsonObject
-            val orphans = backups?.entrySet()?.filter { it.value.isJsonPrimitive && it.value.asString == playlistId }?.map { it.key }.orEmpty()
-            for (main in orphans) {
-                backups?.remove(main)
-                settings.get(Key.BACKUP_MODE)?.takeIf { it.isJsonObject }?.asJsonObject?.remove(main)
-                settings.get(Key.BACKUP_CHANNELS)?.takeIf { it.isJsonObject }?.asJsonObject?.let { ch ->
-                    ch.keySet().filter { it.startsWith("$main:") }.forEach(ch::remove)
+            val backups = out[Key.BACKUP_PLAYLIST] as? JsonObject
+            val orphans = backups?.filter { (_, v) -> v is JsonPrimitive && v.content == playlistId }?.keys.orEmpty()
+            if (orphans.isNotEmpty()) {
+                out[Key.BACKUP_PLAYLIST] = JsonObject(backups!!.filterKeys { it !in orphans })
+                (out[Key.BACKUP_MODE] as? JsonObject)?.let { m -> out[Key.BACKUP_MODE] = JsonObject(m.filterKeys { it !in orphans }) }
+                (out[Key.BACKUP_CHANNELS] as? JsonObject)?.let { ch ->
+                    out[Key.BACKUP_CHANNELS] = JsonObject(ch.filterKeys { k -> orphans.none { k.startsWith("$it:") } })
                 }
                 changed = true
             }
-            return changed
+            return if (changed) JsonObject(out) else null
         }
 
+        private fun strings(v: JsonElement?): List<String> =
+            (v as? JsonArray)?.mapNotNull { e -> (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content }.orEmpty()
+
         private fun stringListMap(s: JsonObject, key: String): Map<String, List<String>> =
-            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
-                ?.associate { (k, v) -> k to (if (v.isJsonArray) v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString } else emptyList()) }
-                .orEmpty()
+            (s[key] as? JsonObject)?.mapValues { (_, v) -> strings(v) }.orEmpty()
 
         private fun stringMap(s: JsonObject, key: String): Map<String, String> =
-            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
-                ?.mapNotNull { (k, v) -> v.takeIf { it.isJsonPrimitive }?.asString?.let { k to it } }?.toMap()
-                .orEmpty()
+            (s[key] as? JsonObject)?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.let { k to it } }?.toMap().orEmpty()
 
         /** Os failovers de cada canal: "off" = nenhum, uma chave, ou um array delas; um valor vazio fica de fora. */
         private fun failoverMap(s: JsonObject, key: String): Map<String, List<String>> =
-            s.get(key)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.mapNotNull { (k, v) ->
+            (s[key] as? JsonObject)?.mapNotNull { (k, v) ->
                 val list = when {
-                    v.isJsonArray -> v.asJsonArray.mapNotNull { e -> e.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotEmpty() && it != ChannelMatch.OFF } }.distinct()
-                    v.isJsonPrimitive -> v.asString.takeIf { it.isNotEmpty() }?.let { if (it == ChannelMatch.OFF) emptyList() else listOf(it) }
+                    v is JsonArray -> strings(v).filter { it.isNotEmpty() && it != ChannelMatch.OFF }.distinct()
+                    v is JsonPrimitive && v !is JsonNull -> v.content.takeIf { it.isNotEmpty() }?.let { if (it == ChannelMatch.OFF) emptyList() else listOf(it) }
                     else -> null
                 }
                 list?.let { k to it }
@@ -604,11 +654,11 @@ data class Prefs(
 
         /** As regras de cada lista: um array de {"find", "replace"}; uma regra sem "find" fica de fora. */
         private fun nameRules(s: JsonObject): Map<String, List<NameRule>> =
-            s.get(Key.NAME_RULES)?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.mapNotNull { (id, v) ->
-                val rules = v.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { e ->
-                    val o = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
-                    val find = o.get("find")?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                    NameRule(find, o.get("replace")?.takeIf { it.isJsonPrimitive }?.asString.orEmpty())
+            (s[Key.NAME_RULES] as? JsonObject)?.mapNotNull { (id, v) ->
+                val rules = (v as? JsonArray)?.mapNotNull { e ->
+                    val o = e as? JsonObject ?: return@mapNotNull null
+                    val find = prim(o, "find")?.content?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                    NameRule(find, prim(o, "replace")?.content.orEmpty())
                 }.orEmpty()
                 rules.takeIf { it.isNotEmpty() }?.let { id to it }
             }?.toMap().orEmpty()
@@ -624,20 +674,16 @@ data class Prefs(
 
         /** Uma língua preferida: um código ISO 639 (as Definições gravam o 639-1); outra coisa volta a Automático. */
         private fun language(s: JsonObject, key: String): String =
-            s.get(key)?.takeIf { it.isJsonPrimitive }?.asString?.trim()?.lowercase()?.takeIf { LANGUAGE_CODE.matches(it) }.orEmpty()
+            (s[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()?.lowercase()?.takeIf { LANGUAGE_CODE.matches(it) }.orEmpty()
 
         private val LANGUAGE_CODE = Regex("[a-z]{2,3}")
 
-        private fun stringSet(s: JsonObject, key: String): Set<String> =
-            s.get(key)?.takeIf { it.isJsonArray }?.asJsonArray
-                ?.mapNotNull { it.takeIf { e -> e.isJsonPrimitive }?.asString }?.toSet().orEmpty()
+        private fun stringSet(s: JsonObject, key: String): Set<String> = strings(s[key]).toSet()
 
         const val UI_SCALE_MIN = 80
         const val UI_SCALE_MAX = 120
 
-        /** O PIN nunca é guardado em claro, nem na conta. */
-        fun hashPin(pin: String): String =
-            // "i-tv:" é o sal de sempre (do nome antigo): mudá-lo invalidava os PINs já gravados na conta.
-            MessageDigest.getInstance("SHA-256").digest("i-tv:$pin".toByteArray()).joinToString("") { "%02x".format(it) }
+        /** O PIN nunca é guardado em claro, nem na conta ("i-tv:" é o sal de sempre: mudá-lo invalidava os PINs). */
+        fun hashPin(pin: String): String = Sha256.hex(Sha256.digest("i-tv:$pin".encodeToByteArray()))
     }
 }

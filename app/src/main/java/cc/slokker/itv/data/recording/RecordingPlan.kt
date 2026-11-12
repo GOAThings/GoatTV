@@ -1,5 +1,6 @@
 package cc.slokker.itv.data.recording
 
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.EpgEntry
 import java.text.Normalizer
 
@@ -10,9 +11,9 @@ import java.text.Normalizer
  */
 object RecordingPlan {
     /** As margens a escolher (minutos), antes e depois do programa. */
-    val PADDING_OPTIONS = listOf(0, 1, 2, 5, 10)
-    const val PADDING_BEFORE_DEFAULT = 1
-    const val PADDING_AFTER_DEFAULT = 2
+    val PADDING_OPTIONS = Prefs.Padding.OPTIONS
+    const val PADDING_BEFORE_DEFAULT = Prefs.Padding.BEFORE_DEFAULT
+    const val PADDING_AFTER_DEFAULT = Prefs.Padding.AFTER_DEFAULT
 
     /** O aviso "Mudar para X para gravar" aparece este tanto antes de a gravação começar (como os lembretes). */
     const val PROMPT_LEAD_MS = 60_000L

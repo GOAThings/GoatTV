@@ -266,7 +266,7 @@ class EpgRepository(
 /** Quando voltar a descarregar listas e guias (intervalos das definições). */
 object RefreshPolicy {
     /** 0 = sempre que se abre a app; o resto em horas. */
-    val OPTIONS = listOf(0, 3, 6, 8, 12, 24)
+    val OPTIONS = Prefs.Refresh.OPTIONS
 
     /** Entre tentativas falhadas, para não insistir com um fornecedor que está em baixo (ou a dar 429). */
     const val RETRY_MS = 30 * 60_000L

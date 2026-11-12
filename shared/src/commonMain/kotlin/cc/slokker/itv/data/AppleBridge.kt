@@ -3,6 +3,8 @@ package cc.slokker.itv.data
 import cc.slokker.itv.data.m3u.M3uCatchup
 import cc.slokker.itv.data.m3u.M3uParser
 import kotlinx.datetime.TimeZone
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * A porta da Apple (GoatCore em Swift) para [ChannelMatch], [ChannelVariants] e [ChannelNames]: só tipos que chegam
@@ -44,6 +46,26 @@ object AppleBridge {
     /** [ChannelNames.apply] com as regras partidas em [finds] e [replaces] (lado a lado). */
     fun names(name: String, finds: List<String>, replaces: List<String>): String =
         ChannelNames.apply(name, finds.zip(replaces) { f, r -> NameRule(f, r) })
+
+    // ---- Definições ---------------------------------------------------------------------------
+
+    /** As definições no texto JSON [json] (o `settings`), com os motores da Apple; um texto estragado dá as de padrão. */
+    fun prefs(json: String): Prefs {
+        return Prefs.from(obj(json), Prefs.Engine.APPLE)
+    }
+
+    fun prefsHashPin(pin: String): String = Prefs.hashPin(pin)
+
+    /** [SettingsPatch] em texto JSON (objetos); um texto estragado conta como {}. */
+    fun settingsDiff(base: String, target: String): String = SettingsPatch.diff(obj(base), obj(target)).toString()
+
+    fun settingsApply(base: String, patch: String): String = SettingsPatch.apply(obj(base), obj(patch)).toString()
+
+    fun settingsRebase(server: String, base: String, local: String): String =
+        SettingsPatch.rebase(obj(server), obj(base), obj(local)).toString()
+
+    private fun obj(json: String): JsonObject =
+        runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
 
     // ---- Listas M3U e catch-up ------------------------------------------------------------------
 

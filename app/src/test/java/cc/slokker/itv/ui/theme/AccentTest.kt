@@ -1,5 +1,8 @@
 package cc.slokker.itv.ui.theme
 
+import cc.slokker.itv.data.from
+import cc.slokker.itv.data.put
+import cc.slokker.itv.data.removePlaylist
 import cc.slokker.itv.data.Prefs
 import com.google.gson.JsonObject
 import org.junit.Assert.assertEquals

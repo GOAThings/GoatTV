@@ -235,6 +235,7 @@ class PersistedFormatTest {
         "timeshift" to (Prefs.Key.TIMESHIFT to false),
         "protectPaused" to (Prefs.Key.PROTECT_PAUSED to false),
         "userAgent" to (Prefs.Key.USER_AGENT to "VLC/3.0"),
+        "streamFormat" to (Prefs.Key.STREAM_FORMAT to "m3u8"),
         "autoStart" to (Prefs.Key.AUTO_START to true),
         "exitConfirm" to (Prefs.Key.EXIT_CONFIRM to false),
         "accent" to (Prefs.Key.ACCENT to "sunset"),
