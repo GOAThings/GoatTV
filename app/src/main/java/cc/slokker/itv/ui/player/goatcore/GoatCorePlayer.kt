@@ -245,9 +245,11 @@ class GoatCorePlayer(
 
     fun setSpeed(speed: Float) {
         if (speed == this.speed || speed <= 0f) return
+        Log.i(TAG, "speed $speed (${if (audioTrack != null) "audio clock" else if (bitstreamTrack != null) "passthrough" else "system clock"})")
         // Pelo relógio do sistema: continua de onde está, a contar à velocidade nova.
         val now = nowPtsUs()
         if (now != Long.MIN_VALUE && audioTrack == null) startWallClock(now)
+        audioClock.setSpeed(audioTrack, audioRate, speed)
         this.speed = speed
         audioTrack?.let { t -> runCatching { t.playbackParams = playbackParams(speed) } }
         // Em passthrough a TV não acelera o AC-3: fora de 1× o som em bruto cala-se (ver [bitstream]).
@@ -800,7 +802,7 @@ class GoatCorePlayer(
     private fun nowPtsUs(): Long {
         val track = audioTrack
         val base = audioBasePtsUs
-        if (track != null && base != Long.MIN_VALUE) return audioClock.now(track, base, audioRate, speed)
+        if (track != null && base != Long.MIN_VALUE) return audioClock.now(track, base, audioRate)
         if (clockBasePtsUs == Long.MIN_VALUE) return Long.MIN_VALUE
         return clockBasePtsUs + ((SystemClock.elapsedRealtimeNanos() / 1000 - clockBaseRealtimeUs) * speed).toLong()
     }
@@ -836,17 +838,52 @@ class GoatCorePlayer(
             }
         }
 
+        /**
+         * A velocidade: o AudioTrack conta as amostras que saem (tempo real), e a [speed] cada uma leva [speed] de
+         * conteúdo. O tempo do conteúdo conta-se desde a última mudança ([anchorFrames], [anchorUs]).
+         */
+        private var speed = 1f
+        private var anchorTrack: AudioTrack? = null
+        private var anchorFrames = 0L
+        private var anchorUs = 0L
+
+        /** As amostras que já saíram de [track] agora (pelo carimbo, ou pela cabeça sem ele). */
+        private fun framesNow(track: AudioTrack, playing: Boolean, rate: Int): Long =
+            if (playing && stampTrack === track) {
+                stampFrames + (System.nanoTime() - stampNanos) * rate / 1_000_000_000L
+            } else {
+                track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
+            }
+
+        /** O tempo do conteúdo (µs desde o início da faixa) ao fim de [frames] amostras tocadas. */
+        private fun contentUs(track: AudioTrack, frames: Long, rate: Int): Long {
+            if (anchorTrack !== track) {
+                anchorTrack = track
+                anchorFrames = 0
+                anchorUs = 0
+            }
+            return anchorUs + ((frames - anchorFrames) * 1_000_000.0 / rate * speed).toLong()
+        }
+
+        /** Muda a velocidade a partir de agora (o que já tocou fica contado à anterior). */
         @Synchronized
-        fun now(track: AudioTrack, baseUs: Long, rate: Int, speed: Float): Long {
+        fun setSpeed(track: AudioTrack?, rate: Int, newSpeed: Float) {
+            if (track != null) {
+                val frames = framesNow(track, track.playState == AudioTrack.PLAYSTATE_PLAYING, rate)
+                anchorUs = contentUs(track, frames, rate)
+                anchorFrames = frames
+            }
+            speed = newSpeed
+            ptsUs = Long.MIN_VALUE
+        }
+
+        @Synchronized
+        fun now(track: AudioTrack, baseUs: Long, rate: Int): Long {
             // Em pausa o carimbo fica parado no último (com a hora de então): só conta a tocar.
             val playing = track.playState == AudioTrack.PLAYSTATE_PLAYING
             // Um carimbo que falha de vez em quando (nos primeiros segundos é frequente) continua pelo último: a
             // posição da cabeça não desconta a latência da saída (o HDMI, centenas de ms) e o relógio saltava.
-            val raw = if (playing && stampTrack === track) {
-                baseUs + stampFrames * 1_000_000 / rate + ((System.nanoTime() - stampNanos) / 1000 * speed).toLong()
-            } else {
-                baseUs + (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) * 1_000_000 / rate
-            }
+            val raw = baseUs + contentUs(track, framesNow(track, playing, rate), rate)
             val nowUs = SystemClock.elapsedRealtimeNanos() / 1000
             // Parado (pausa, ou antes de tocar) o som manda.
             if (!playing || ptsUs == Long.MIN_VALUE) return reset(raw, nowUs)
