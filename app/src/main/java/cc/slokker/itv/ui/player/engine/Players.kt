@@ -2,6 +2,7 @@
 
 package cc.slokker.itv.ui.player.engine
 
+import cc.slokker.itv.ui.player.goatcore.UdpTsDataSource
 import android.content.Context
 import android.media.MediaFormat
 import android.os.Build
@@ -83,7 +84,8 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
     if (prefs.engine == Prefs.Engine.GOATCORE) {
         val capture = if (DebugEngine.capture) java.io.File(context.cacheDir, "goatcore.ts") else null
         val appContext = context.applicationContext
-        return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough, needsSdr = { f -> HdrType.needsSdr(appContext, f, prefs.hdr) })
+        return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough, needsSdr = { f -> HdrType.needsSdr(appContext, f, prefs.hdr) },
+            udp = UdpTsDataSource.Factory(appContext))
             .apply { playWhenReady = true }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
@@ -291,6 +293,9 @@ internal fun Player.loadStream(
         is GoatCoreMediaPlayer -> {
             if (candidate.isLocal) return setStream(candidate.url, FileDataSource.Factory(), hls = false, startMs = startMs)
             val scheme = candidate.url.substringBefore("://", "").lowercase()
+            // As listas das operadoras (multicast): o TS vem em pacotes UDP ou RTP.
+            val udp = udp
+            if (udp != null && UdpTsDataSource.handles(scheme)) return setStream(candidate.url, udp, hls = false)
             if (scheme != "http" && scheme != "https") {
                 setStream(candidate.url, FileDataSource.Factory(), hls = false)
                 return unsupported("$scheme:// stream")

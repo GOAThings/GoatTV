@@ -51,6 +51,8 @@ internal class GoatCoreMediaPlayer(
     private val passthrough: Boolean = false,
     /** O HDR: a box decide se a TV aceita o do canal (Definições → HDR; ver HdrType.needsSdr). */
     private val needsSdr: (Format) -> Boolean = { false },
+    /** Os canais em UDP/RTP (ver [cc.slokker.itv.ui.player.goatcore.UdpTsDataSource]). */
+    val udp: DataSource.Factory? = null,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null

@@ -19,6 +19,8 @@
     <!-- Ligação do canal (Definições → Canal atual → Ligação): por cabo ou Wi-Fi, a banda e a força do sinal. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Os canais em multicast (UDP/RTP) no Wi-Fi: sem este pedido o Android deita os pacotes fora. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Gravações: continuam com a app em segundo plano (serviço em primeiro plano, com notificação) e com o ecrã
          desligado; a notificação mostra-se no Android 13+ se o utilizador deixar. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
