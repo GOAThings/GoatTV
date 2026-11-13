@@ -180,7 +180,9 @@ internal fun rememberChannelPlayback(
             gate = if (policy.timeshift) StreamGate.MAIN else StreamGate(),
         ).also { it.freezeCapture = { latestCapture() } }
     }
-    val chosen = playback.engineFor(channelKey, DebugEngine.override ?: prefs.engine)
+    // O motor é sempre o GoatCore; o VLC só para um canal que ele não toque (ver ChannelPlayback.useVlc). A definição
+    // antiga (prefs.engine) já não conta; no debug, DebugEngine escolhe outro para comparar.
+    val chosen = playback.engineFor(channelKey, DebugEngine.override ?: Prefs.Engine.GOATCORE)
     val engineName = when {
         !ringOnly -> chosen
         ringHls -> Prefs.Engine.GOATCORE

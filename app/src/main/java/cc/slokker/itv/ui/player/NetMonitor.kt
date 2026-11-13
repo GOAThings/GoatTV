@@ -124,7 +124,8 @@ class NetMonitor(context: Context) : TransferListener {
             link = readLink()
             linkAt = now
         }
-        if (player !is ExoPlayer) {
+        // O VLC não diz o buffer: não se mede.
+        if (player !is ExoPlayer && player !is GoatCoreMediaPlayer) {
             _state.value = NetState(verdict = NetVerdict.UNSUPPORTED, link = link)
             return
         }
@@ -152,7 +153,7 @@ class NetMonitor(context: Context) : TransferListener {
         _state.value = evaluate(player, buffer)
     }
 
-    private fun evaluate(player: ExoPlayer, buffer: Long): NetState {
+    private fun evaluate(player: Player, buffer: Long): NetState {
         // Com o buffer cheio o player deixa de ler: vale a última velocidade medida (no último minuto).
         val getting = speedKbps(samples.takeLast(SPEED_WINDOW)) ?: speedKbps(samples)
         val needs = declaredKbps(player) ?: measuredKbps()
@@ -189,7 +190,8 @@ class NetMonitor(context: Context) : TransferListener {
     }
 
     /** O débito que o canal declara (HLS: o BANDWIDTH da variante); as streams .ts quase nunca o dizem. */
-    private fun declaredKbps(player: ExoPlayer): Int? {
+    private fun declaredKbps(player: Player): Int? {
+        if (player !is ExoPlayer) return null
         fun Format?.kbps() = this?.bitrate?.takeIf { it != Format.NO_VALUE && it > 0 }?.div(1_000)
         val video = player.videoFormat.kbps() ?: return null
         return video + (player.audioFormat.kbps() ?: 0)

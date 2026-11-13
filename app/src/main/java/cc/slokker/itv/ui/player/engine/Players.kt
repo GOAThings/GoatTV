@@ -290,6 +290,11 @@ internal fun Player.loadStream(
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is GoatCoreMediaPlayer -> {
             if (candidate.isLocal) return setStream(candidate.url, FileDataSource.Factory(), hls = false, startMs = startMs)
+            val scheme = candidate.url.substringBefore("://", "").lowercase()
+            if (scheme != "http" && scheme != "https") {
+                setStream(candidate.url, FileDataSource.Factory(), hls = false)
+                return unsupported("$scheme:// stream")
+            }
             val direct = httpFactory(channel, userAgent, transfer)
             // A pausa do direto: a ligação é do gravador e o motor lê o anel (como o ExoPlayer, ver Timeshift).
             timeshift?.openRing(candidate, direct, gate ?: StreamGate(), reconnectMs)?.let { (url, source) ->
@@ -346,8 +351,8 @@ internal fun resizeModeFor(aspect: String): Int = when (aspect) {
 internal const val FREEZE_WIDTH = 1280
 internal const val FREEZE_HEIGHT = 720
 
-/** O formato do vídeo a tocar (só o ExoPlayer o dá; com o VLC não há AFR nem a cadência do vidro). */
-internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat
+/** O formato do vídeo a tocar (o ExoPlayer e o GoatCore dão-no; com o VLC não há AFR nem a cadência do vidro). */
+internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat ?: (this as? GoatCoreMediaPlayer)?.videoFormat
 
 /** A ligação HTTP ao servidor do canal. */
 private fun httpFactory(channel: Channel?, userAgent: String, transfer: TransferListener?): DefaultHttpDataSource.Factory =

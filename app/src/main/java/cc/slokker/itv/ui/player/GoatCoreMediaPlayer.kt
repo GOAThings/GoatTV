@@ -13,6 +13,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackGroup
@@ -88,6 +89,13 @@ internal class GoatCoreMediaPlayer(
     /** As legendas escolhidas (o PID); -1 = desligadas. */
     private var chosenText = -1
     private var startPositionMs = -1L
+
+    /** O formato do vídeo a tocar (o do SPS: tamanho, cadência e cor), como o ExoPlayer.videoFormat. */
+    val videoFormat: Format?
+        get() = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO }?.getTrackFormat(0)
+
+    /** A velocidade pedida (fica para o motor seguinte, ao mudar de ponto ou de canal). */
+    private var speed = 1f
 
     /** Onde começar dentro do ficheiro (as gravações e o catch-up do Stalker; ver [TsSeek]); 0 = do início. */
     private var startMs = 0L
@@ -194,6 +202,7 @@ internal class GoatCoreMediaPlayer(
         main.removeCallbacks(starvation)
         main.postDelayed(starvation, 250)
         player.setVolume(effectiveVolume())
+        player.setSpeed(speed)
         player.setPaused(!playWhenReady)
         // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.
         val from = startMs
@@ -281,6 +290,12 @@ internal class GoatCoreMediaPlayer(
             change()
             invalidateState()
         }
+    }
+
+    /** Um endereço que o motor não lê (RTMP, RTSP, UDP…): falha já como formato não suportado, e o VLC fica com ele. */
+    fun unsupported(why: String) {
+        stopCore()
+        fail(PlaybackException("GoatCore: $why", null, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
     }
 
     private fun fail(e: PlaybackException) {
@@ -403,6 +418,7 @@ internal class GoatCoreMediaPlayer(
                 Player.COMMAND_SEEK_TO_DEFAULT_POSITION,
                 Player.COMMAND_GET_VOLUME,
                 Player.COMMAND_SET_VOLUME,
+                Player.COMMAND_SET_SPEED_AND_PITCH,
             )
             .build()
         val builder = State.Builder()
@@ -412,6 +428,7 @@ internal class GoatCoreMediaPlayer(
             .setVideoSize(videoSize)
             .setTrackSelectionParameters(params)
             .setVolume(volume)
+            .setPlaybackParameters(PlaybackParameters(speed))
             .setIsLoading(playbackState == Player.STATE_BUFFERING)
             .setCurrentCues(cues)
         val item = mediaItem
@@ -433,6 +450,7 @@ internal class GoatCoreMediaPlayer(
                 .setCurrentMediaItemIndex(0)
                 .setPlaybackState(playbackState)
                 .setContentPositionMs { core?.let(::position) ?: lastPositionMs }
+                .setTotalBufferedDurationMs { core?.bufferedMs ?: 0L }
         }
         if (firstFrame) {
             builder.setNewlyRenderedFirstFrame(true)
@@ -506,6 +524,12 @@ internal class GoatCoreMediaPlayer(
             stopCore()
             start()
         }
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
+        speed = playbackParameters.speed
+        core?.setSpeed(speed)
         return Futures.immediateVoidFuture()
     }
 

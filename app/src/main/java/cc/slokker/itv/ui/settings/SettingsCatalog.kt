@@ -50,13 +50,6 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 20),
         phone = Place(PhonePage.PLAYBACK, 10, PhoneSection.CONNECTION),
     )
-    val ENGINE = Setting.Choice(
-        Prefs.Key.ENGINE, { it.engine },
-        options = { s -> listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc, Prefs.Engine.GOATCORE to s.engineGoatCore) },
-        read = { it.prefs.engine },
-        tv = Place(TvPage.PLAYBACK, 30),
-        phone = Place(PhonePage.PLAYBACK, 20, PhoneSection.ADVANCED),
-    )
     val DECODER = Setting.Choice(
         Prefs.Key.DECODER, { it.decoder },
         options = ::decoders,
@@ -415,7 +408,7 @@ object SettingsCatalog {
 
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
-        STREAM_FORMAT, BUFFER, ENGINE, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
+        STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
