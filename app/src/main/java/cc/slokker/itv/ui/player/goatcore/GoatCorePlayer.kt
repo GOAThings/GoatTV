@@ -30,12 +30,21 @@ import java.util.concurrent.TimeUnit
  * Três threads: a da rede (lê e separa), a do vídeo e a do som. Uma instância por canal: para mudar de canal, [stop]
  * e outra nova (como na Apple, nada do canal anterior chega ao seguinte).
  */
-class GoatCorePlayer(private val surface: Surface, private val listener: Listener) {
+class GoatCorePlayer(
+    private val surface: Surface,
+    private val listener: Listener,
+    /** Vídeo por software (Definições → Descodificador; sempre no emulador, onde o de hardware bloqueia em 1080p). */
+    private val softwareVideo: Boolean = false,
+    /** Só no debug: guarda aqui os primeiros 12 MB do stream (para os analisar no PC). */
+    private val capture: java.io.File? = null,
+) {
     interface Listener {
         fun onFirstFrame(ms: Long)
         fun onTracks(tracks: List<TsTrack>)
-        fun onError(why: String)
+        /** Falhou; [unsupported]: um formato que este aparelho (ou este motor) não toca, e outro motor talvez sim. */
+        fun onError(why: String, unsupported: Boolean, cause: Throwable?)
         fun onEnded()
+        fun onVideoSize(width: Int, height: Int) {}
     }
 
     /** Números para o laboratório e para o registo. */
@@ -46,6 +55,10 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
         @Volatile var audioFrames = 0
         @Volatile var decoderErrors = 0
         @Volatile var jumps = 0
+        @Volatile var codecInputs = 0
+        @Volatile var codecOutputs = 0
+        @Volatile var codecFormatChanges = 0
+        @Volatile var configured = false
     }
 
     val stats = Stats()
@@ -90,7 +103,46 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
         threads.forEach { it.start() }
     }
 
+    @Volatile private var paused = false
+    @Volatile private var volume = 1f
+
+    /** Pausa: o som pára (e com ele o relógio) e a imagem espera. A rede continua até as filas encherem. */
+    fun setPaused(paused: Boolean) {
+        if (paused == this.paused) return
+        val t = audioTrack
+        if (t != null) {
+            runCatching { if (paused) t.pause() else t.play() }
+        } else if (paused) {
+            pausedAtUs = nowPtsUs()
+        } else if (pausedAtUs != Long.MIN_VALUE) {
+            // Sem som, o relógio do sistema não pára sozinho: recomeça de onde estava.
+            startWallClock(pausedAtUs)
+            pausedAtUs = Long.MIN_VALUE
+        }
+        this.paused = paused
+    }
+
+    @Volatile private var pausedAtUs = Long.MIN_VALUE
+
+    fun setVolume(volume: Float) {
+        this.volume = volume
+        audioTrack?.setVolume(volume)
+    }
+
+    /** O tempo do vídeo a mostrar agora (ms, no tempo seguido do canal), ou -1 antes de começar. */
+    val positionMs: Long
+        get() {
+            val now = nowPtsUs()
+            return if (now == Long.MIN_VALUE) -1 else now / 1000
+        }
+
     fun stop() {
+        if (running) {
+            Log.i(TAG, "stop after ${SystemClock.elapsedRealtime() - openedAt} ms: units=${stats.videoUnits} shown=${stats.framesRendered} " +
+                "late=${stats.framesLate} audio=${stats.audioFrames} jumps=${stats.jumps} decoderErrors=${stats.decoderErrors} " +
+                "configured=${stats.configured} in=${stats.codecInputs} out=${stats.codecOutputs} formats=${stats.codecFormatChanges} " +
+                "video=${threads.getOrNull(1)?.state}")
+        }
         running = false
         threads.forEach { it.interrupt() }
         threads.forEach { runCatching { it.join(1500) } }
@@ -104,20 +156,27 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
             override fun onSample(track: TsTrack, sample: TsSample) = sample(track, sample)
         })
         try {
+            val out = capture?.let { runCatching { java.io.FileOutputStream(it) }.getOrNull() }
+            var captured = 0L
             input().use { stream ->
                 val buf = ByteArray(64 * 1024)
                 while (running) {
                     val n = stream.read(buf)
                     if (n < 0) break
+                    if (out != null && captured < 12L * 1024 * 1024) {
+                        out.write(buf, 0, n)
+                        captured += n
+                    }
                     demuxer.feed(buf, 0, n)
                 }
             }
+            out?.close()
             demuxer.flush()
             if (running) listener.onEnded()
         } catch (e: InterruptedException) {
             // stop()
         } catch (e: Exception) {
-            if (running) fail("network: ${e.message}")
+            fail("network: ${e.message}", cause = e)
         }
     }
 
@@ -129,7 +188,7 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
             when (video.codec) {
                 Codec.H264 -> { nal = NalReader(hevc = false); hevc = false }
                 Codec.HEVC -> { nal = NalReader(hevc = true); hevc = true }
-                else -> fail("unsupported video ${video.codec}")
+                else -> fail("unsupported video ${video.codec}", unsupported = true)
             }
         }
         val audio = tracks.firstOrNull { it.kind == TrackKind.AUDIO }
@@ -152,15 +211,17 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
 
     private fun video(sample: TsSample) {
         val reader = nal ?: return
-        val unit = reader.unit(sample.data)
-        if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets.map { annexB(it) }
-        if (csd.isEmpty()) return
-        val pts = videoClock.unwrap(sample.pts)
+        val samplePts = videoClock.unwrap(sample.pts)
         if (videoClock.jumped) {
             stats.jumps++
             videoStart.restart()
         }
         if (sample.discontinuity) videoStart.restart()
+        // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com o tempo do primeiro).
+        val unit = reader.next(sample.data, samplePts, samplePts) ?: return
+        if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets.map { annexB(it) }
+        if (csd.isEmpty()) return
+        val pts = unit.pts
         if (!videoStart.pass(unit.keyframe, pts)) return
         stats.videoUnits++
         videoQueue.put(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
@@ -194,10 +255,11 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
                 format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd[0]))
                 format.setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(csd[1]))
             }
-            val c = MediaCodec.createDecoderByType(mime)
+            val c = decoderFor(mime, softwareVideo)
             codec = c
             c.configure(format, surface, null, 0)
             c.start()
+            stats.configured = true
             var pending: VideoUnit? = first
             val info = MediaCodec.BufferInfo()
             while (running) {
@@ -210,19 +272,29 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
                         b.clear()
                         b.put(unit.data)
                         c.queueInputBuffer(i, 0, unit.data.size, unit.ptsUs, if (unit.keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+                        stats.codecInputs++
                         pending = null
                     } else {
                         pending = unit
                     }
                 }
                 val o = c.dequeueOutputBuffer(info, 5_000)
-                if (o >= 0) render(c, o, info.presentationTimeUs)
+                if (o >= 0) {
+                    stats.codecOutputs++
+                    render(c, o, info.presentationTimeUs)
+                } else if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    stats.codecFormatChanges++
+                    val f = c.outputFormat
+                    val w = if (f.containsKey("crop-right")) f.getInteger("crop-right") - f.getInteger("crop-left") + 1 else f.getInteger(MediaFormat.KEY_WIDTH)
+                    val h = if (f.containsKey("crop-bottom")) f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1 else f.getInteger(MediaFormat.KEY_HEIGHT)
+                    listener.onVideoSize(w, h)
+                }
             }
         } catch (e: InterruptedException) {
             // stop()
         } catch (e: Exception) {
             stats.decoderErrors++
-            if (running) fail("video decoder: ${e.javaClass.simpleName} ${e.message}")
+            fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = true, cause = e)
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
@@ -231,6 +303,15 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
 
     /** Mostra a imagem na hora dela pelo relógio (o som, ou o do sistema); atrasada mais de 50 ms, salta-se. */
     private fun render(c: MediaCodec, index: Int, ptsUs: Long) {
+        // A primeira imagem mostra-se logo que está descodificada (como o ExoPlayer): mudar de canal parece mais rápido,
+        // e o som e as imagens seguintes acertam-se pelo relógio a partir daí.
+        if (!firstFrameReported) {
+            stats.framesRendered++
+            c.releaseOutputBuffer(index, true)
+            firstFrame()
+            return
+        }
+        while (running && paused) Thread.sleep(20)
         var now = clockNow(ptsUs)
         // À espera do som (no máximo meio segundo): a imagem fica no descodificador.
         while (running && now == Long.MIN_VALUE) {
@@ -273,7 +354,9 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
 
     private fun firstFrame() {
         firstFrameReported = true
-        listener.onFirstFrame(SystemClock.elapsedRealtime() - openedAt)
+        val ms = SystemClock.elapsedRealtime() - openedAt
+        Log.i(TAG, "first frame in $ms ms")
+        listener.onFirstFrame(ms)
     }
 
     private fun startWallClock(ptsUs: Long) {
@@ -313,8 +396,9 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
                 MediaCodec.createDecoderByType(mime)
             } catch (e: Exception) {
                 // Sem descodificador para este som no aparelho (o AC-3 em muitos): o vídeo segue com o relógio do sistema.
-                Log.w(TAG, "no audio decoder for $mime")
+                // Sem descodificador para este som no aparelho: outro motor (o VLC) talvez o tenha.
                 audioFailed = true
+                fail("no audio decoder for $mime", unsupported = true)
                 return
             }
             codec = c
@@ -347,7 +431,8 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
                     if (audioBasePtsUs == Long.MIN_VALUE) {
                         audioBasePtsUs = info.presentationTimeUs
                         audioTrack = t
-                        t.play()
+                        t.setVolume(volume)
+                        if (!paused) t.play()
                     }
                     val pcm = ByteArray(info.size)
                     buf.position(info.offset)
@@ -361,7 +446,7 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
             // stop()
         } catch (e: Exception) {
             stats.decoderErrors++
-            if (running) fail("audio decoder: ${e.javaClass.simpleName} ${e.message}")
+            fail("audio decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = true, cause = e)
         } finally {
             audioTrack = null
             runCatching { track?.stop() }
@@ -388,9 +473,10 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
             .build()
     }
 
-    private fun fail(why: String) {
+    private fun fail(why: String, unsupported: Boolean = false, cause: Throwable? = null) {
+        if (!running) return
         Log.w(TAG, why)
-        listener.onError(why)
+        listener.onError(why, unsupported, cause)
     }
 
     companion object {
@@ -411,5 +497,17 @@ class GoatCorePlayer(private val surface: Surface, private val listener: Listene
         }
 
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
+
+        /** Um descodificador para [mime]: com [software], o do próprio Android (c2.android / OMX.google), se houver. */
+        private fun decoderFor(mime: String, software: Boolean): MediaCodec {
+            if (software) {
+                val name = android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull { info ->
+                    !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) } &&
+                        (info.name.startsWith("c2.android.") || info.name.startsWith("OMX.google."))
+                }?.name
+                if (name != null) return MediaCodec.createByCodecName(name)
+            }
+            return MediaCodec.createDecoderByType(mime)
+        }
     }
 }

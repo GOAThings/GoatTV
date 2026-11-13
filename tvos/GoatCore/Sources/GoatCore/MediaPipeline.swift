@@ -136,22 +136,25 @@ public final class MediaPipeline {
 
     private func video(_ sample: TsSample) {
         guard let nal else { return }
-        let unit = nal.unit(annexB: sample.data)
-        if !unit.parameterSets.isEmpty {
-            let sets = unit.parameterSets.map { AppleMedia.shared.data(bytes: $0) as Data }
-            if let f = Self.videoFormat(sets, hevc: videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC") { videoFormat = f }
-        }
-        // Até à primeira imagem-chave com os parâmetros não há nada que se possa mostrar.
-        guard let format = videoFormat else { return }
-        let pts = videoClock.unwrap(ts: sample.pts)
+        let samplePts = videoClock.unwrap(ts: sample.pts)
         if videoClock.jumped {
             videoStart.restart()
             onJump?()
         }
         // Faltaram dados (a imagem que vinha não chegou inteira): espera-se pela próxima imagem-chave.
         if sample.discontinuity { videoStart.restart() }
+        let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
+        // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com os tempos do primeiro).
+        guard let unit = nal.next(annexB: sample.data, pts: samplePts, dts: sampleDts) else { return }
+        if !unit.parameterSets.isEmpty {
+            let sets = unit.parameterSets.map { AppleMedia.shared.data(bytes: $0) as Data }
+            if let f = Self.videoFormat(sets, hevc: videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC") { videoFormat = f }
+        }
+        // Até à primeira imagem-chave com os parâmetros não há nada que se possa mostrar.
+        guard let format = videoFormat else { return }
+        let pts = unit.pts
+        let dts = unit.dts
         guard videoStart.pass(keyframe: unit.keyframe, pts: pts) else { return }
-        let dts = sample.dts == sample.pts ? pts : videoClock.unwrap(ts: sample.dts)
         let data = AppleMedia.shared.data(bytes: unit.data) as Data
         guard let buffer = Self.sampleBuffer(data, format: format, pts: pts, dts: dts, duration: .invalid, samples: 1, packetSizes: nil) else { return }
         if !unit.keyframe, let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: true) as? [NSMutableDictionary] {

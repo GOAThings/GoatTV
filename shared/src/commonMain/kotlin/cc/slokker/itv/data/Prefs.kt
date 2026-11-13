@@ -301,10 +301,10 @@ data class Prefs(
         const val EXO = "exo"; const val VLC = "vlc"
         /** Só na Apple (o AetherEngine). */
         const val AETHER = "aether"
-        /** O motor próprio (experimental; por agora só na Apple). */
+        /** O motor próprio (experimental). */
         const val GOATCORE = "goatcore"
         /** Os do Android (a Apple passa os seus a [from]). */
-        val ALL = setOf(EXO, VLC)
+        val ALL = setOf(EXO, VLC, GOATCORE)
         val APPLE = setOf(EXO, VLC, AETHER, GOATCORE)
     }
 

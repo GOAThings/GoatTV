@@ -52,7 +52,7 @@ object SettingsCatalog {
     )
     val ENGINE = Setting.Choice(
         Prefs.Key.ENGINE, { it.engine },
-        options = { s -> listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc) },
+        options = { s -> listOf(Prefs.Engine.EXO to s.engineExo, Prefs.Engine.VLC to s.engineVlc, Prefs.Engine.GOATCORE to s.engineGoatCore) },
         read = { it.prefs.engine },
         tv = Place(TvPage.PLAYBACK, 30),
         phone = Place(PhonePage.PLAYBACK, 20, PhoneSection.ADVANCED),

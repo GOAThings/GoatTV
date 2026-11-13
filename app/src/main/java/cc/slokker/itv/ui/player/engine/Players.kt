@@ -47,6 +47,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.HdrType
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VlcPlayer
@@ -78,6 +79,10 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         } catch (e: Throwable) {
             Log.w("itv", "O VLC não arrancou; fica o ExoPlayer", e)
         }
+    }
+    if (prefs.engine == Prefs.Engine.GOATCORE) {
+        val capture = if (DebugEngine.capture) java.io.File(context.cacheDir, "goatcore.ts") else null
+        return GoatCoreMediaPlayer(softwareVideo, capture).apply { playWhenReady = true }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
     val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio, audioDelayMs = prefs.audioDelayMs)
@@ -281,6 +286,16 @@ internal fun Player.loadStream(
 ) {
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
+        is GoatCoreMediaPlayer -> {
+            // Uma gravação no disco lê-se do ficheiro; o resto pela mesma ligação do ExoPlayer, uma de cada vez.
+            val source: DataSource.Factory = if (candidate.isLocal) {
+                FileDataSource.Factory()
+            } else {
+                val direct = httpFactory(channel, userAgent, transfer)
+                gate?.factory(direct, exclusive = true) ?: direct
+            }
+            setStream(candidate.url, source, candidate.isHls)
+        }
         is ExoPlayer -> {
             // Uma gravação no disco (ver Recordings): lê-se o ficheiro, sem ligação ao fornecedor.
             if (candidate.isLocal) {

@@ -175,7 +175,8 @@ internal fun rememberChannelPlayback(
             gate = if (policy.timeshift) StreamGate.MAIN else StreamGate(),
         ).also { it.freezeCapture = { latestCapture() } }
     }
-    val build = PlayerBuild.of(prefs, if (forceExo) Prefs.Engine.EXO else playback.engineFor(channelKey, prefs.engine), policy.passthrough)
+    val chosen = DebugEngine.override ?: prefs.engine
+    val build = PlayerBuild.of(prefs, if (forceExo) Prefs.Engine.EXO else playback.engineFor(channelKey, chosen), policy.passthrough)
     // Criado (e ligado ao controlador) já aqui, para o ecrã ter o player na mesma composição.
     val engine = remember(build, enabled) {
         if (!enabled) return@remember null
@@ -185,4 +186,24 @@ internal fun rememberChannelPlayback(
     DisposableEffect(engine) { onDispose { engine?.let(playback::detach) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
     return playback
+}
+
+/**
+ * Só no debug e só neste aparelho: o motor a usar, sem mexer nas definições da conta (que sincronizam para os outros
+ * aparelhos). `adb shell setprop debug.goattv.engine goatcore` (vazio para voltar às definições); lê-se ao abrir a app.
+ */
+internal object DebugEngine {
+    val override: String? by lazy {
+        if (!cc.slokker.itv.BuildConfig.DEBUG) return@lazy null
+        runCatching {
+            Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.engine")).inputStream.bufferedReader().readText().trim()
+        }.getOrNull()?.takeIf { it in Prefs.Engine.ALL }
+    }
+
+    /** `adb shell setprop debug.goattv.capture 1`: o GoatCore guarda o início de cada canal em cache/goatcore.ts. */
+    val capture: Boolean by lazy {
+        cc.slokker.itv.BuildConfig.DEBUG && runCatching {
+            Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.capture")).inputStream.bufferedReader().readText().trim() == "1"
+        }.getOrDefault(false)
+    }
 }

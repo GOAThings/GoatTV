@@ -711,6 +711,7 @@ class Strings(context: Context) {
     val engine get() = s(R.string.engine)
     val engineExo get() = s(R.string.engine_exo)
     val engineVlc get() = s(R.string.engine_vlc)
+    val engineGoatCore get() = s(R.string.engine_goatcore)
     val usingVlc get() = s(R.string.using_vlc)
     val decoder get() = s(R.string.decoder)
     val deinterlace get() = s(R.string.deinterlace)

@@ -335,6 +335,7 @@
     <string name="engine">Pemutar</string>
     <string name="engine_exo">ExoPlayer (disarankan)</string>
     <string name="engine_vlc">VLC (membuka lebih banyak format)</string>
+    <string name="engine_goatcore">GoatCore (eksperimental)</string>
     <string name="engine_aether">AetherEngine (eksperimental)</string>
     <string name="using_vlc">Saluran ini diputar dengan VLC</string>
     <string name="decoder">Decoder video</string>

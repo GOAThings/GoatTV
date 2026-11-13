@@ -6,7 +6,14 @@ package cc.slokker.itv.media
  * [parameterSets] são os desta imagem quando ela os traz (VPS, SPS e PPS, por esta ordem; só SPS e PPS no H.264):
  * quem descodifica cria (ou recria) o formato com eles.
  */
-class VideoUnit(val data: ByteArray, val keyframe: Boolean, val parameterSets: List<ByteArray>)
+class VideoUnit(
+    val data: ByteArray,
+    val keyframe: Boolean,
+    val parameterSets: List<ByteArray>,
+    /** Os tempos da imagem (90 kHz), como os deu quem chamou [NalReader.next]; -1 em [NalReader.unit]. */
+    val pts: Long = -1,
+    val dts: Long = -1,
+)
 
 /**
  * Lê as imagens H.264 e HEVC no formato do TS ("Annex B": cada NAL começa por 00 00 01 ou 00 00 00 01). Guarda os
@@ -17,6 +24,39 @@ class NalReader(private val hevc: Boolean) {
     private var vps: ByteArray? = null
     private var sps: ByteArray? = null
     private var pps: ByteArray? = null
+
+    /** O SPS lido (H.264), para os cabeçalhos das fatias. */
+    private var spsInfo: H264Sps? = null
+
+    /** A primeira fatia da última imagem lida em [unit] (H.264), se se percebeu. */
+    private var lastSlice: H264Slice? = null
+
+    /** O primeiro campo de uma imagem entrelaçada, à espera do segundo. */
+    private class Held(val unit: VideoUnit, val frameNum: Int, val bottom: Boolean)
+    private var held: Held? = null
+
+    /**
+     * A imagem seguinte para o descodificador, com os tempos dela ([pts], [dts] do PES). Numa imagem entrelaçada enviada
+     * por campos (cada campo num PES), os dois campos saem juntos, com os tempos do primeiro: até chegar o segundo,
+     * devolve null. Os descodificadores do Android e da Apple não dão imagem com os campos soltos.
+     */
+    fun next(annexB: ByteArray, pts: Long, dts: Long): VideoUnit? {
+        val u = unit(annexB).let { VideoUnit(it.data, it.keyframe, it.parameterSets, pts, dts) }
+        val slice = lastSlice
+        val h = held
+        if (hevc || slice == null || !slice.field) {
+            // Uma imagem inteira: um campo que ficou sem par já não serve.
+            held = null
+            return u
+        }
+        if (h != null && h.frameNum == slice.frameNum && h.bottom != slice.bottom) {
+            held = null
+            return VideoUnit(h.unit.data + u.data, h.unit.keyframe || u.keyframe, h.unit.parameterSets.ifEmpty { u.parameterSets }, h.unit.pts, h.unit.dts)
+        }
+        held = Held(u, slice.frameNum, slice.bottom)
+        // O campo anterior não teve par: vai sozinho (melhor do que perdê-lo).
+        return h?.unit
+    }
 
     /** Os conjuntos de parâmetros já vistos, ou vazio se ainda falta algum (antes disso não se pode descodificar). */
     val parameterSets: List<ByteArray>
@@ -32,6 +72,7 @@ class NalReader(private val hevc: Boolean) {
         var keyframe = false
         var changed = false
         var sawSlice = false
+        lastSlice = null
         var size = 0
         val keep = ArrayList<IntArray>(nals.size)
         for (n in nals) {
@@ -44,14 +85,19 @@ class NalReader(private val hevc: Boolean) {
                 Role.SKIP -> {}
                 Role.KEY -> {
                     keyframe = true
+                    if (!hevc && !sawSlice) {
+                        sawSlice = true
+                        lastSlice = spsInfo?.let { H264Headers.slice(annexB, n[0], n[1], it) }
+                    }
                     keep += n
                     size += 4 + n[1] - n[0]
                 }
                 Role.OTHER -> {
                     // No H.264, muitos canais de TV não mandam IDR: as imagens só com fatias I também servem para entrar.
-                    if (!hevc && (type == 1 || type == 5) && !sawSlice) {
+                    if (!hevc && type == 1 && !sawSlice) {
                         sawSlice = true
-                        if (type == 1 && isIntraSlice(annexB, n[0] + 1, n[1])) keyframe = true
+                        if (isIntraSlice(annexB, n[0] + 1, n[1])) keyframe = true
+                        lastSlice = spsInfo?.let { H264Headers.slice(annexB, n[0], n[1], it) }
                     }
                     keep += n
                     size += 4 + n[1] - n[0]
@@ -76,6 +122,9 @@ class NalReader(private val hevc: Boolean) {
         vps = null
         sps = null
         pps = null
+        spsInfo = null
+        lastSlice = null
+        held = null
     }
 
     private enum class Role { VPS, SPS, PPS, KEY, SKIP, OTHER }
@@ -165,7 +214,10 @@ class NalReader(private val hevc: Boolean) {
         if (old != null && old.contentEquals(bytes)) return false
         when (slot) {
             0 -> vps = bytes
-            1 -> sps = bytes
+            1 -> {
+                sps = bytes
+                if (!hevc) spsInfo = H264Headers.sps(bytes, 0, bytes.size)
+            }
             else -> pps = bytes
         }
         return true

@@ -71,6 +71,35 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
         player = null
     }
 
+    private var exo: androidx.media3.exoplayer.ExoPlayer? = null
+
+    /** "exo:<endereço>": o mesmo canal no ExoPlayer, para comparar (o tempo até à primeira imagem e se a há). */
+    private fun playExo(url: String) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val p = androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+        exo = p
+        p.setVideoSurfaceView(surfaceView)
+        p.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onRenderedFirstFrame() {
+                firstMs = android.os.SystemClock.elapsedRealtime() - started
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                synchronized(errors) { errors += error.errorCodeName }
+            }
+        })
+        p.setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
+        p.prepare()
+        p.play()
+        main.postDelayed({
+            Log.i(TAG, "RESULT exo ch=$current first=$firstMs errors=$errors")
+            p.release()
+            exo = null
+            index++
+            playCurrent()
+        }, dwell)
+    }
+
     private fun playCurrent() {
         if (index >= seq.size * rounds) {
             Log.i(TAG, "DONE")
@@ -80,7 +109,9 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
         current = seq[index % seq.size]
         firstMs = -1
         errors = mutableListOf()
-        val p = GoatCorePlayer(surfaceView.holder.surface, object : GoatCorePlayer.Listener {
+        if (current.startsWith("exo:")) return playExo(current.removePrefix("exo:"))
+        val emulator = android.os.Build.HARDWARE in setOf("ranchu", "goldfish") && !intent.getBooleanExtra("hw", false)
+        val p = GoatCorePlayer(surfaceView.holder.surface, softwareVideo = emulator, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) {
                 firstMs = ms
             }
@@ -89,7 +120,7 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
                 Log.i(TAG, "tracks ch=$current ${tracks.joinToString { "${it.codec}/${it.language ?: "-"}" }}")
             }
 
-            override fun onError(why: String) {
+            override fun onError(why: String, unsupported: Boolean, cause: Throwable?) {
                 synchronized(errors) { errors += why }
             }
 

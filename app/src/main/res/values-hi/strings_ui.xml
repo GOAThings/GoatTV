@@ -335,6 +335,7 @@
     <string name="engine">प्लेयर</string>
     <string name="engine_exo">ExoPlayer (सुझाया गया)</string>
     <string name="engine_vlc">VLC (ज़्यादा फ़ॉर्मैट खोलता है)</string>
+    <string name="engine_goatcore">GoatCore (प्रायोगिक)</string>
     <string name="engine_aether">AetherEngine (प्रायोगिक)</string>
     <string name="using_vlc">यह चैनल VLC से चल रहा है</string>
     <string name="decoder">वीडियो डिकोडर</string>
