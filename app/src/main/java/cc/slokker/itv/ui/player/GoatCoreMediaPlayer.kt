@@ -54,6 +54,9 @@ internal class GoatCoreMediaPlayer(
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
 
+    /** O vídeo traz legendas fechadas (CEA-608): há a faixa "CC1" no menu. */
+    private var captionsFound = false
+
     private val main = Handler(Looper.getMainLooper())
 
     private var source: DataSource.Factory? = null
@@ -126,6 +129,7 @@ internal class GoatCoreMediaPlayer(
         chosenText = -1
         cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
         tsTracks = emptyList()
+        captionsFound = false
         playbackState = Player.STATE_IDLE
         error = null
         tracks = Tracks.EMPTY
@@ -173,6 +177,11 @@ internal class GoatCoreMediaPlayer(
             }
 
             override fun onVideoSize(width: Int, height: Int) = post(g) { videoSize = VideoSize(width, height) }
+
+            override fun onCaptionsFound() = post(g) {
+                captionsFound = true
+                this@GoatCoreMediaPlayer.tracks = tracksOf(tsTracks)
+            }
 
             override fun onVideoInfo(info: VideoInfo) = post(g) {
                 videoInfo = info
@@ -338,7 +347,14 @@ internal class GoatCoreMediaPlayer(
                 Tracks.Group(TrackGroup(id, format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(key == chosenText))
             }
         }
-        return Tracks(groups + teletext)
+        // As legendas fechadas que vêm dentro do vídeo (os canais americanos), quando as há.
+        val captions = if (!captionsFound) emptyList() else {
+            val key = GoatCorePlayer.CAPTIONS
+            val id = "goatcore:$key"
+            val format = Format.Builder().setId(id).setSampleMimeType(MimeTypes.APPLICATION_CEA608).setLabel("CC1").build()
+            listOf(Tracks.Group(TrackGroup(id, format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(key == chosenText)))
+        }
+        return Tracks(groups + teletext + captions)
     }
 
     /** Um Format com o que o SPS diz (para o selo HDR, o AFR e a decisão de converter para SDR). */

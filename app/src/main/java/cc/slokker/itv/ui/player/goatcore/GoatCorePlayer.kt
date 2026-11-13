@@ -17,6 +17,8 @@ import cc.slokker.itv.media.NalReader
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
 import cc.slokker.itv.media.StreamDemuxer
+import cc.slokker.itv.media.ClosedCaptions
+import cc.slokker.itv.media.Cea608Decoder
 import cc.slokker.itv.media.TeletextDecoder
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
@@ -65,6 +67,9 @@ class GoatCorePlayer(
 
         /** O que o SPS diz do vídeo (tamanho, cadência, cor/HDR): a primeira vez e quando muda. */
         fun onVideoInfo(info: VideoInfo) {}
+
+        /** O vídeo traz legendas fechadas (CEA-608): passam a poder escolher-se ([CAPTIONS]). */
+        fun onCaptionsFound() {}
 
         /** Legendas a mostrar às [atUs] (o relógio do motor, ver [nowUs]), durante [durationUs] (ou até às seguintes). */
         fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) {}
@@ -148,6 +153,15 @@ class GoatCorePlayer(
     private var textPid = -1
     private var dvb: androidx.media3.extractor.text.dvb.DvbParser? = null
     private var teletext: TeletextDecoder? = null
+
+    // As legendas fechadas (CEA-608) que vêm dentro do vídeo: descodificam-se sempre (ao escolher, o ecrã de agora já
+    // se sabe), pela ordem em que as imagens se mostram (com imagens B, a de descodificação é outra).
+    private val captions = Cea608Decoder()
+    private val captionQueue = ArrayList<Pair<Long, ByteArray>>()
+    private var captionsFound = false
+    private var captionsOn = false
+    private var captionLines: List<String> = emptyList()
+    private var captionLinesAt = 0L
 
     /**
      * Os últimos PES de cada faixa de legendas (DVB e teletexto), escolhida ou não: ao escolher uma, o que já passou
@@ -422,6 +436,7 @@ class GoatCorePlayer(
             queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe))
             return
         }
+        captions(sample.data, samplePts)
         val unit = reader!!.next(sample.data, samplePts, samplePts) ?: return
         // Os parâmetros mudaram a meio (outra qualidade do HLS, o canal mudou de resolução): o descodificador já está
         // configurado com os antigos, por isso os novos vão dentro desta imagem-chave e ele reconfigura-se sozinho.
@@ -441,6 +456,31 @@ class GoatCorePlayer(
         queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe))
     }
 
+    /** Os pares 608 desta imagem: por ordem de apresentação (umas imagens de folga chegam para as B) ao descodificador. */
+    private fun captions(data: ByteArray, pts: Long) {
+        val pairs = ClosedCaptions.field1(data, hevc)
+        if (pairs.isEmpty() && captionQueue.isEmpty()) return
+        if (pairs.isNotEmpty() && !captionsFound) {
+            captionsFound = true
+            listener.onCaptionsFound()
+        }
+        captionQueue += pts to pairs
+        if (captionQueue.size <= CAPTION_REORDER) return
+        val next = captionQueue.minBy { it.first }
+        captionQueue.remove(next)
+        captions.feed(next.second)?.let { lines ->
+            captionLines = lines
+            captionLinesAt = next.first
+            if (captionsOn) showCaptions(next.first, lines)
+        }
+    }
+
+    private fun showCaptions(pts: Long, lines: List<String>) {
+        if (pts <= 0 && lines.isEmpty()) return
+        val cues = if (lines.isEmpty()) emptyList() else listOf(androidx.media3.common.text.Cue.Builder().setText(lines.joinToString("\n")).build())
+        listener.onCues(pts * 100 / 9, cues, androidx.media3.common.C.TIME_UNSET)
+    }
+
     /** O SPS dos conjuntos [sets] (sem o código de início) em [VideoInfo], para quem mostra e para o descodificador. */
     private fun spsInfo(sets: List<ByteArray>) {
         val info = if (hevc) {
@@ -454,6 +494,15 @@ class GoatCorePlayer(
 
     /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
     private fun switchText(pid: Int) {
+        captionsOn = pid == CAPTIONS
+        if (captionsOn) {
+            teletext = null
+            dvb = null
+            textPid = -1
+            listener.onCues(Long.MIN_VALUE, emptyList(), 0)
+            showCaptions(captionLinesAt, captionLines)
+            return
+        }
         // Uma página de teletexto: o PID e o número da página juntos.
         if (pid > MAX_PID) {
             val track = allTracks.firstOrNull { it.pid == pid / 0x1000 && it.codec == Codec.TELETEXT }
@@ -1096,6 +1145,10 @@ class GoatCorePlayer(
 
         private const val NO_CHANGE = Int.MIN_VALUE
         private const val MAX_PID = 0x1FFF
+        private const val CAPTION_REORDER = 6
+
+        /** A faixa das legendas fechadas (CC1) no menu: um número que não é nenhum PID nem página de teletexto. */
+        const val CAPTIONS = 0x7FFF_FFF0
         private const val DRAIN_STALL_MS = 3_000L
 
         /** Os PES de legendas guardados por faixa (o teletexto pode vir em todas as imagens: ~30 s). */
