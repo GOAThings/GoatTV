@@ -74,6 +74,7 @@ fun MobileMain(vm: AppViewModel) {
     val content by vm.content.collectAsStateWithLifecycle()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val streamFormat by vm.streamFormat.collectAsStateWithLifecycle()
+    val extras by vm.extras.collectAsStateWithLifecycle()
     val current = channel ?: return
     val data = content ?: return
     // Ao abrir, o ecrã inicial (recentes e grupos) sem nada a dar, ou já o último canal (ver PhoneNav).
@@ -161,7 +162,8 @@ fun MobileMain(vm: AppViewModel) {
                 Spacer(Modifier.statusBarsPadding())
             } else {
                 Box(
-                    if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
+                    // Com o segundo canal, ao alto, os dois 16:9 um por cima do outro (como no iPhone).
+                    if (landscape) Modifier.fillMaxSize() else Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(if (extras.isEmpty()) 16f / 9f else 8f / 9f),
                 ) {
                     // O guia e a lista de canais estão por baixo do vídeo: em ecrã inteiro, volta-se ao alto para os ver.
                     VideoArea(

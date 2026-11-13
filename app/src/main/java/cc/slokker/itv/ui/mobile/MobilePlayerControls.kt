@@ -1,5 +1,15 @@
 package cc.slokker.itv.ui.mobile
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.LifecycleStartEffect
+import cc.slokker.itv.ui.player.SecondPickerState
+import cc.slokker.itv.ui.player.rememberSecondPlayback
+import cc.slokker.itv.ui.player.setAudible
+import cc.slokker.itv.ui.player.extraStatus
+import cc.slokker.itv.ui.player.engine.aspectOrNull
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -194,6 +204,31 @@ internal fun VideoArea(
             controls = false
         }
     }
+    // O segundo canal (como no iPhone): só em ecrã dividido, um por cima do outro ao alto e lado a lado deitado.
+    val extras by vm.extras.collectAsStateWithLifecycle()
+    val second = extras.firstOrNull()?.takeIf { !pip }
+    val streamFormat by vm.streamFormat.collectAsStateWithLifecycle()
+    /** O som (e o deslizar para mudar de canal) estão no segundo canal. */
+    var focusSecond by remember { mutableStateOf(false) }
+    val latestFocusSecond by rememberUpdatedState(focusSecond && second != null)
+    var picking by remember { mutableStateOf(false) }
+    val picker = remember { SecondPickerState() }
+    var secondView by remember { mutableStateOf<VideoView?>(null) }
+    val secondPlayback = rememberSecondPlayback(vm, 0, second, prefs, streamFormat) { ratio -> secondView?.setAspectRatio(ratio) }
+    val secondPlayer = secondPlayback?.player
+    LaunchedEffect(secondPlayer, secondView) {
+        val v = secondView ?: return@LaunchedEffect
+        secondPlayer?.setVideoSurfaceView(v.surfaceView)
+        secondPlayer?.videoSize?.aspectOrNull()?.let { v.setAspectRatio(it) }
+    }
+    LaunchedEffect(playback.player, secondPlayer, focusSecond, second == null) {
+        if (second == null) focusSecond = false
+        setAudible(playback.player, second == null || !focusSecond)
+        secondPlayer?.let { setAudible(it, focusSecond) }
+    }
+    // Numa janela pequena (PiP do sistema) só cabe um: o segundo fecha (e liberta a ligação dele), como ao sair da app.
+    LaunchedEffect(pip) { if (pip) vm.closeExtras() }
+    LifecycleStartEffect(Unit) { onStopOrDispose { vm.closeExtras() } }
     LaunchedEffect(controls) {
         while (controls) {
             delay(1_000)
@@ -213,22 +248,69 @@ internal fun VideoArea(
                     onDragEnd = {
                         if (kotlin.math.abs(drag) > ZAP_DRAG_PX) {
                             ZapTrace.key(what = "swipe")
-                            vm.zap(if (drag < 0) 1 else -1)
+                            val delta = if (drag < 0) 1 else -1
+                            if (latestFocusSecond) vm.zapExtra(0, delta) else vm.zap(delta)
                         }
                     },
                 ) { _, amount -> drag += amount }
             },
     ) {
-        AndroidView(
-            factory = { VideoView(it).also { v -> playback.view = v } },
-            update = {
-                playback.view = it
-                // Como na TV: o ecrã não se apaga enquanto o canal dá (ou carrega).
-                it.keepScreenOn = playback.playing || playback.buffering
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
-        playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        val accent = LocalAccent.current
+        /** Um dos dois canais: tocar no que está em silêncio passa-lhe o som; no que se ouve, mostra os botões. */
+        @Composable
+        fun Tile(modifier: Modifier, audible: Boolean, onFocus: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+            Box(
+                modifier
+                    .then(if (second != null && audible) Modifier.border(2.dp, accent.brush, androidx.compose.ui.graphics.RectangleShape) else Modifier)
+                    .pointerInput(second != null, audible) {
+                        detectTapGestures {
+                            if (second != null && !audible) {
+                                onFocus()
+                                controls = true
+                            } else {
+                                controls = !controls
+                            }
+                            touched++
+                        }
+                    },
+                content = content,
+            )
+        }
+        val main: @Composable BoxScope.() -> Unit = {
+            AndroidView(
+                factory = { VideoView(it).also { v -> playback.view = v } },
+                update = {
+                    playback.view = it
+                    // Como na TV: o ecrã não se apaga enquanto o canal dá (ou carrega).
+                    it.keepScreenOn = playback.playing || playback.buffering
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+        }
+        if (second == null) {
+            Box(Modifier.fillMaxSize(), content = main)
+        } else {
+            val split: @Composable (Modifier) -> Unit = { m ->
+                Tile(m, audible = !focusSecond, onFocus = { focusSecond = false }, content = main)
+                Tile(m, audible = focusSecond, onFocus = { focusSecond = true }) {
+                    AndroidView(
+                        factory = { VideoView(it).also { v -> secondView = v } },
+                        onRelease = { secondView = null },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    // Enquanto não dá: o nome e o estado (a sintonizar, sem sinal).
+                    extraStatus(secondPlayback, s)?.let { status ->
+                        Text("${second.channel.name} · $status", color = ItvColors.TextDim, fontSize = 12.sp, modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+            }
+            if (fullscreen) {
+                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(2.dp)) { split(Modifier.weight(1f).fillMaxHeight()) }
+            } else {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(2.dp)) { split(Modifier.weight(1f).fillMaxWidth()) }
+            }
+        }
         when {
             // Não arrancou: porquê (como na TV) e a próxima tentativa; o Play tenta outra vez.
             playback.failure != null -> Column(Modifier.align(Alignment.Center).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -286,6 +368,22 @@ internal fun VideoArea(
                 ReconnectIsland(channel.name, playback.nextTryAt, playback.retryDelayMs, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
             }
         }
+        // A escolha do segundo canal (lista → grupo → canal), numa janela; Voltar recua um passo.
+        if (picking) {
+            Dialog(onDismissRequest = { if (!picker.back()) { picking = false; picker.reset() } }) {
+                PhoneSecondPicker(
+                    vm = vm,
+                    state = picker,
+                    replacing = if (second != null) 0 else null,
+                    onPick = { content, ch, group ->
+                        vm.openExtra(content, ch, group, if (second != null) 0 else null)
+                        picking = false
+                        picker.reset()
+                    },
+                    modifier = Modifier.heightIn(max = 560.dp),
+                )
+            }
+        }
         if (controls && !pip) {
             // O vídeo escurece um pouco, para os botões se verem mesmo num vídeo claro.
             Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.28f)))
@@ -301,7 +399,13 @@ internal fun VideoArea(
                     ControlButton(ItvIcons.FullscreenExit, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton), onClick = onFullscreen)
                     Spacer(Modifier.weight(1f))
                     Text(formatTime(System.currentTimeMillis()), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp), style = LocalTextStyle.current.tabular)
+                    SecondButtons(second != null, onAdd = { picking = true }, onClose = { vm.closeExtras() })
                     onPip?.let { ControlButton(ItvIcons.Pip, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton), onClick = it) }
+                }
+            } else {
+                // Ao alto: os botões do segundo canal no canto de cima.
+                Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondButtons(second != null, onAdd = { picking = true }, onClose = { vm.closeExtras() })
                 }
             }
             Box(Modifier.align(if (fullscreen) Alignment.Center else BiasAlignment(0f, -0.3f))) {
@@ -609,6 +713,18 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                 }
             }
         }
+    }
+}
+
+/** Os botões do segundo canal: abrir um ([open] false), ou mudá-lo e fechá-lo. */
+@Composable
+private fun SecondButtons(open: Boolean, onAdd: () -> Unit, onClose: () -> Unit) {
+    val m = Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)
+    if (!open) {
+        ControlButton(ItvIcons.Split, m, onClick = onAdd)
+    } else {
+        ControlButton(ItvIcons.SwapPlaylist, m, onClick = onAdd)
+        ControlButton(ItvIcons.Close, m, onClick = onClose)
     }
 }
 

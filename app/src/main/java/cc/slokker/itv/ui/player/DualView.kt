@@ -59,6 +59,7 @@ import cc.slokker.itv.ui.i18n.I18n
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
@@ -169,6 +170,22 @@ internal class SecondPickerState {
         group = null
         loading = false
     }
+
+    /** Carrega a lista escolhida e passa aos grupos. */
+    fun open(vm: AppViewModel, scope: CoroutineScope, p: Playlist) {
+        loading = true
+        scope.launch {
+            try {
+                content = vm.loadForSecond(p)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                vm.showToast(explainPlaylistError(I18n.s, p.name, e).title)
+            } finally {
+                loading = false
+            }
+        }
+    }
 }
 
 /** Escolha do segundo canal, encostada à esquerda como a pesquisa. */
@@ -192,21 +209,6 @@ internal fun SecondChannelPicker(
     val group = state.group
     // Cada passo começa no primeiro item.
     LaunchedEffect(content, group, state.loading) { if (!state.loading) focusWithRetry(first) }
-
-    fun open(p: Playlist) {
-        state.loading = true
-        scope.launch {
-            try {
-                state.content = vm.loadForSecond(p)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                vm.showToast(explainPlaylistError(I18n.s, p.name, e).title)
-            } finally {
-                state.loading = false
-            }
-        }
-    }
 
     Column(
         modifier
@@ -247,7 +249,7 @@ internal fun SecondChannelPicker(
                     itemsIndexed(ordered, key = { _, p -> p.id }) { i, p ->
                         val ok = p in allowed
                         GlassRow(
-                            onClick = { open(p) },
+                            onClick = { state.open(vm, scope, p) },
                             modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
                             enabled = ok,
                             title = p.name,
