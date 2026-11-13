@@ -29,6 +29,11 @@ public struct TextTrack: Equatable, Sendable {
     /// qualquer PID).
     public var key: Int { page == 0 ? pid : pid * 0x1000 + page }
     public var isTeletext: Bool { page != 0 }
+    /// As legendas fechadas (CEA-608) que vêm dentro do vídeo.
+    public var isCaptions: Bool { pid == TextTrack.captions }
+
+    /// A faixa das legendas fechadas (CC1): um número que não é nenhum PID (como no Android).
+    public static let captions = 0x7FFF_FFF0
 }
 
 /// O vídeo do canal pelo SPS: o tamanho, a cadência (0 se não disser), o HDR e a descrição do formato (que leva a cor
@@ -113,11 +118,25 @@ public final class MediaPipeline {
     private var recentText: [Int: [TsSample]] = [:]
     private static let recentTextCount = 800
 
+    // As legendas fechadas: descodificam-se sempre, pela ordem em que as imagens se mostram (com imagens B, a de
+    // descodificação é outra); ao escolher, o ecrã de agora já se sabe.
+    private var captions = Cea608Decoder()
+    private var captionQueue: [(pts: Int64, pairs: KotlinByteArray)] = []
+    private var captionsOn = false
+    private var captionText = ""
+    private var captionAt: Int64 = -1
+    private static let captionReorder = 6
+
     /// As legendas a mostrar ([TextTrack.key]), ou nil para nenhumas.
     public func selectText(_ key: Int?) {
         teletext = nil
         dvb = nil
         textPid = nil
+        captionsOn = key == TextTrack.captions
+        if captionsOn {
+            if captionAt >= 0 { onText?(captionAt, captionText) }
+            return
+        }
         guard let key, let t = textTracks.first(where: { $0.key == key }) else { return }
         if t.isTeletext {
             teletext = TeletextDecoder(page: Int32(t.page))
@@ -160,6 +179,11 @@ public final class MediaPipeline {
         textTracks = []
         rawTracks = []
         recentText = [:]
+        captions = Cea608Decoder()
+        captionQueue = []
+        captionsOn = false
+        captionText = ""
+        captionAt = -1
         teletext = nil
         dvb = nil
         textPid = nil
@@ -186,6 +210,7 @@ public final class MediaPipeline {
             return MediaTrack(pid: Int(t.pid), codec: t.codec.name, kind: kind, language: t.language)
         }
         rawTracks = list
+        let hadCaptions = textTracks.contains { $0.isCaptions }
         textTracks = list.flatMap { t -> [TextTrack] in
             if t.codec.name == "DVB_SUBTITLE" {
                 return [TextTrack(pid: Int(t.pid), page: 0, language: t.language, hearingImpaired: false)]
@@ -194,6 +219,7 @@ public final class MediaPipeline {
                 TextTrack(pid: Int(t.pid), page: Int(p.page), language: p.language ?? t.language, hearingImpaired: p.type == 5)
             }
         }
+        if hadCaptions { textTracks.append(TextTrack(pid: TextTrack.captions, page: 0, language: nil, hearingImpaired: true)) }
         onTextTracks?(textTracks)
         let video = tracks.first { $0.kind == .video }
         if video?.pid != videoPid {
@@ -236,6 +262,25 @@ public final class MediaPipeline {
 
     // MARK: Legendas
 
+    /// Os pares 608 desta imagem, por ordem de apresentação (umas imagens de folga chegam para as B), ao descodificador.
+    private func readCaptions(_ data: KotlinByteArray, pts: Int64) {
+        let hevc = videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC"
+        let pairs = ClosedCaptions.shared.field1(annexB: data, hevc: hevc)
+        guard pairs.size > 0 || !captionQueue.isEmpty else { return }
+        if pairs.size > 0, !textTracks.contains(where: { $0.isCaptions }) {
+            textTracks.append(TextTrack(pid: TextTrack.captions, page: 0, language: nil, hearingImpaired: true))
+            onTextTracks?(textTracks)
+        }
+        captionQueue.append((pts, pairs))
+        guard captionQueue.count > Self.captionReorder,
+              let i = captionQueue.indices.min(by: { captionQueue[$0].pts < captionQueue[$1].pts }) else { return }
+        let next = captionQueue.remove(at: i)
+        guard let lines = captions.feed(pairs: next.pairs) else { return }
+        captionText = lines.joined(separator: "\n")
+        captionAt = next.pts
+        if captionsOn { onText?(next.pts, captionText) }
+    }
+
     /// Um PES das legendas escolhidas: o texto (teletexto) ou as imagens (DVB), quando mudam, no tempo do vídeo (ou
     /// do som, sem vídeo).
     private func text(_ sample: TsSample) {
@@ -270,6 +315,7 @@ public final class MediaPipeline {
         // Faltaram dados (a imagem que vinha não chegou inteira): espera-se pela próxima imagem-chave.
         if sample.discontinuity { videoStart.restart() }
         let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
+        readCaptions(sample.data, pts: samplePts)
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com os tempos do primeiro).
         guard let unit = nal.next(annexB: sample.data, pts: samplePts, dts: sampleDts) else { return }
         if !unit.parameterSets.isEmpty {

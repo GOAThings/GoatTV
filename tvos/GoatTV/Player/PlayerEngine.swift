@@ -1682,7 +1682,7 @@ extension PlayerEngine {
         return g.textTracks.map { t in
             let language = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 }
             let page = t.isTeletext ? String(t.page, radix: 16) : nil
-            let name = [language, page].compactMap { $0 }.joined(separator: " · ")
+            let name = t.isCaptions ? "CC1" : [language, page].compactMap { $0 }.joined(separator: " · ")
             return (Int32(truncatingIfNeeded: t.key), name, t.language, t.key == g.selectedText)
         }
     }

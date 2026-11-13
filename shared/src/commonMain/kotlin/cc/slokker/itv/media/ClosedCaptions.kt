@@ -225,7 +225,7 @@ class Cea608Decoder {
     private fun put(c: Char) {
         val line = target.rows[row]
         while (line.length < column) line.append(' ')
-        if (column < line.length) line.setCharAt(column, c) else line.append(c)
+        if (column < line.length) line[column] = c else line.append(c)
         if (column < 31) column++
     }
 
