@@ -133,14 +133,14 @@ fun PlayerScreen(vm: AppViewModel) {
     // canal. O player recria-se quando mudam as definições dele, ou quando este canal passa para o VLC.
     val host = remember { AppPlaybackHost(vm, { latestPrefs }, { latestData }) }
     // Gravações: a que decorre (o cartão "REC"), a pergunta antes de largar a ligação dela, o aviso de uma marcada e
-    // o canal cuja ligação é de uma gravação (o player abre-o pelo anel dela, com o ExoPlayer).
+    // o canal cuja ligação é de uma gravação (o player abre-o pelo anel dela: o GoatCore ou o ExoPlayer, nunca o VLC).
     val activeRecordings by vm.activeRecordings.collectAsStateWithLifecycle()
     val switchPrompt by vm.switchPrompt.collectAsStateWithLifecycle()
     val recordingPrompt by vm.recordingPrompt.collectAsStateWithLifecycle()
     val recordingRing by vm.recordingRing.collectAsStateWithLifecycle()
     val recordingSchedule by vm.recordingSchedule.collectAsStateWithLifecycle()
     val ringRecording = recordingRing?.let { it.playlistId == data.playlist.id && it.channelKey == current.key } == true
-    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net, forceExo = ringRecording) {
+    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net, ringOnly = ringRecording) {
         if (latestPrefs.freezeFrame) videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val player = checkNotNull(playback.player)
