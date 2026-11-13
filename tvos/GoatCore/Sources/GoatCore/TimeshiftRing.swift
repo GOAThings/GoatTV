@@ -149,6 +149,8 @@ public final class TimeshiftRing: @unchecked Sendable {
     static let maxPcrStepMs: Int64 = 5_000
     /// O PCR tem 33 bits a 90 kHz: dá a volta a cada ~26,5 h.
     static let pcrWrapMs: Int64 = (Int64(1) << 33) / 90
+    /// O direto estimado ([liveEdgeMs]) esquece-se 1 ms por cada tantos ms (2 %).
+    static let peakDecay: Int64 = 50
     static let fitAfterMs: Int64 = 60_000
     static let fitMargin = 1.15
     public static let minCapacity: Int64 = 32 * 1024 * 1024
@@ -183,6 +185,11 @@ public final class TimeshiftRing: @unchecked Sendable {
     private var lastPcr: Int64 = -1
     private var lastTick: Int64 = 0
     private var lastPcrAt: Int64 = 0
+    /// O tempo só pelo PCR: o tempo real contado sem PCR é provisório e [media] espera que o PCR o alcance.
+    private var pcrMedia: Int64 = 0
+    /// O maior avanço do vídeo sobre o relógio (ver [liveEdgeMs]) e quando foi.
+    private var peakOffset = Int64.min
+    private var peakAt: Int64 = 0
     private var newSegment = false
     private let scanner = TsScanner()
 
@@ -239,6 +246,27 @@ public final class TimeshiftRing: @unchecked Sendable {
 
     /// Tempo do vídeo no direto (o último byte que chegou).
     public var liveMediaMs: Int64 { locked { media } }
+
+    /// O direto como o espectador o vê: num servidor que manda às rajadas, [liveMediaMs] salta o tamanho de cada rajada
+    /// e fica parado até à seguinte. Aqui anda com o relógio desde a última rajada (o maior avanço do vídeo sobre o
+    /// relógio, a esquecer devagar), sem saltos e sem nunca ficar atrás do último byte.
+    public var liveEdgeMs: Int64 {
+        locked {
+            guard peakOffset != Int64.min else { return media }
+            let now = clock()
+            return max(media, now + decayedPeak(now))
+        }
+    }
+
+    private func decayedPeak(_ now: Int64) -> Int64 { peakOffset - (now - peakAt) / Self.peakDecay }
+
+    private func notePeak(_ now: Int64) {
+        let offset = media - now
+        if peakOffset == Int64.min || offset >= decayedPeak(now) {
+            peakOffset = offset
+            peakAt = now
+        }
+    }
 
     /// O ponto mais antigo para onde se pode recuar.
     public var oldest: Entry? { locked { head < entries.count ? entries[head] : nil } }
@@ -307,6 +335,7 @@ public final class TimeshiftRing: @unchecked Sendable {
                 lastTick = now
                 addEntry(newSegment ? segments[segments.count - 1] : scanner.lastPacket)
             }
+            notePeak(now)
             trim()
             fitToAge()
             lock.broadcast()
@@ -339,10 +368,19 @@ public final class TimeshiftRing: @unchecked Sendable {
         if lastPcr >= 0 {
             var d = pcrMs - lastPcr
             if d < -Self.pcrWrapMs / 2 { d += Self.pcrWrapMs }
-            // Um salto (canal trocado no servidor, relógio reposto): conta o tempo real que passou.
-            media += (0...Self.maxPcrStepMs).contains(d) ? d : arrival(now)
+            // O tempo do PCR desde o anterior, e não somado ao tempo real que entretanto se contou sem PCR (num
+            // servidor que manda às rajadas contava-se duas vezes). Um salto (canal trocado no servidor, relógio
+            // reposto): conta o tempo real que passou.
+            if (0...Self.maxPcrStepMs).contains(d) {
+                pcrMedia += d
+                media = max(media, pcrMedia)
+            } else {
+                media += arrival(now)
+                pcrMedia = media
+            }
         } else {
             media += arrival(now)
+            pcrMedia = media
         }
         lastPcr = pcrMs
         lastTick = now

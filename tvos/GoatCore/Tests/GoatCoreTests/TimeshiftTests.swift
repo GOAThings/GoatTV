@@ -216,6 +216,35 @@ extension CoreTests {
         try expect(r.liveMediaMs, before + 3_000 + 900)
     }
 
+    static func ringBurstsWithoutPcrAtTheStartAreNotCountedTwice() throws {
+        let clock = TestClock()
+        let (r, _) = try makeRing(clock)
+        defer { r.close() }
+        r.beginSegment()
+        try writeAll(r, tsStream(0, 4))
+        // A rajada seguinte, 4 s depois, começa com pacotes sem PCR: o tempo real conta até chegar o PCR, que o acerta.
+        clock.now += 4_000
+        try r.write((0..<10).flatMap { _ in tsPacket() })
+        try writeAll(r, tsStream(4_000, 4))
+        try expect(r.liveMediaMs, 7_900)
+    }
+
+    static func ringLiveEdgeMovesWithTheClockBetweenBursts() throws {
+        let clock = TestClock()
+        let (r, _) = try makeRing(clock)
+        defer { r.close() }
+        r.beginSegment()
+        try writeAll(r, tsStream(0, 4))
+        try expect(r.liveEdgeMs, 3_900)
+        // Nada chega durante 3 s: o direto continua a andar (menos 2 % que se esquece).
+        clock.now += 3_000
+        try expect(r.liveMediaMs, 3_900)
+        try expect(r.liveEdgeMs, 3_900 + 3_000 - 60)
+        // A rajada seguinte traz 4 s de uma vez: o direto vai para onde ela acaba.
+        try writeAll(r, tsStream(4_000, 4))
+        try expect(r.liveEdgeMs, 7_900)
+    }
+
     static func ringSegmentsDoNotMixAndReportBoundary() throws {
         let clock = TestClock()
         let (r, _) = try makeRing(clock)

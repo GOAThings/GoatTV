@@ -12,9 +12,28 @@ final class GoatCoreView: UIView {
         didSet { displayLayer.videoGravity = gravity }
     }
 
+    /// As legendas (teletexto) por cima do vídeo, em baixo e ao centro, como numa TV.
+    let subtitle: UILabel = {
+        let l = UILabel()
+        l.numberOfLines = 0
+        l.textAlignment = .center
+        l.textColor = .white
+        l.backgroundColor = UIColor.black.withAlphaComponent(0.75)
+        l.isHidden = true
+        return l
+    }()
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         layer.addSublayer(displayLayer)
+        addSubview(subtitle)
+    }
+
+    /// Mostra [text] nas legendas ("" esconde).
+    func showSubtitle(_ text: String) {
+        subtitle.text = text.isEmpty ? nil : text
+        subtitle.isHidden = text.isEmpty
+        setNeedsLayout()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -35,6 +54,12 @@ final class GoatCoreView: UIView {
         CATransaction.setDisableActions(true)
         displayLayer.frame = bounds
         CATransaction.commit()
+        // O tamanho da letra acompanha o do vídeo (no ecrã inteiro e no Picture in Picture da app).
+        subtitle.font = .systemFont(ofSize: max(12, bounds.height / 22), weight: .medium)
+        let maxWidth = bounds.width * 0.9
+        let size = subtitle.sizeThatFits(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        let width = min(maxWidth, size.width + 16)
+        subtitle.frame = CGRect(x: (bounds.width - width) / 2, y: bounds.height * 0.92 - size.height, width: width, height: size.height)
     }
 }
 
@@ -65,6 +90,13 @@ final class GoatCorePlayback: NSObject {
     /// A altura do vídeo e a cadência, quando já se sabem.
     private(set) var videoHeight = 0
     private(set) var tracks: [MediaTrack] = []
+    /// As legendas do teletexto do canal.
+    private(set) var textTracks: [TextTrack] = []
+    /// As legendas escolhidas ([TextTrack.key]); nil = nenhumas.
+    private(set) var selectedText: Int?
+    /// O texto à espera da sua hora (no relógio das camadas), pela ordem em que chegou.
+    private var pendingText: [(time: CMTime, text: String)] = []
+    private var subtitleTimer: Timer?
 
     /// O relógio e o som do canal a dar (novos em cada canal, como a camada do vídeo).
     private var synchronizer = AVSampleBufferRenderSynchronizer()
@@ -84,8 +116,9 @@ final class GoatCorePlayback: NSObject {
         view.backgroundColor = .black
     }
 
-    /// Abre [url] com estes cabeçalhos (o User-Agent e o Referer da lista).
-    func open(_ url: URL, headers: [String: String]) {
+    /// Abre [url] com estes cabeçalhos (o User-Agent e o Referer da lista). [startMs]: num TS gravado (as gravações,
+    /// o catch-up do Stalker), o ponto onde começar (ver TsSeek).
+    func open(_ url: URL, headers: [String: String], startMs: Int64 = 0) {
         stop()
         generation += 1
         let g = generation
@@ -95,6 +128,10 @@ final class GoatCorePlayback: NSObject {
         failure = nil
         videoHeight = 0
         tracks = []
+        textTracks = []
+        startTime = nil
+        firstPts = nil
+        clearSubtitles()
         // Tudo novo: a ligação anterior pode ainda entregar uma imagem antes de fechar, e ia parar ao leitor deste canal
         // (com outro relógio, a camada deixava de mostrar e só o som continuava).
         let display = view.freshLayer()
@@ -107,15 +144,17 @@ final class GoatCorePlayback: NSObject {
         let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer)
         s.rate = userRate
         selectedAudio = nil
+        selectedText = nil
         s.onEvent = { [weak self] event in
             Task { @MainActor in self?.sessionEvent(event, generation: g) }
         }
         session = s
-        s.start(url, headers: headers)
+        s.start(url, headers: headers, startMs: startMs)
     }
 
     func stop() {
         generation += 1
+        clearSubtitles()
         session?.cancel()
         session = nil
         synchronizer.rate = 0
@@ -129,12 +168,20 @@ final class GoatCorePlayback: NSObject {
             tracks = list
         case .videoSize(let height):
             videoHeight = height
-        case .started:
+        case .started(let time):
+            if startTime == nil { startTime = time }
             guard !reportedPlaying else { return }
             reportedPlaying = true
             onEvent?(.playing)
         case .httpStatus(let code):
             httpStatus = code
+        case .origin(let pts):
+            firstPts = pts
+        case .textTracks(let list):
+            textTracks = list
+        case .text(let time, let text):
+            pendingText.append((time, text))
+            showDueSubtitles()
         case .failed(let why):
             guard !reportedEnd else { return }
             reportedEnd = true
@@ -186,8 +233,29 @@ final class GoatCorePlayback: NSObject {
         }
     }
 
-    /// O tempo do vídeo (s) no relógio do canal.
-    var positionSeconds: Double { synchronizer.currentTime().seconds }
+    /// O tempo do vídeo (s): num ficheiro aberto a meio (ver [open]), desde o início dele (como os outros motores);
+    /// no resto, desde a primeira imagem deste stream (no catch-up, desde o ponto pedido).
+    var positionSeconds: Double {
+        if let firstPts, startTime != nil {
+            let now = synchronizer.currentTime().convertScale(90_000, method: .roundTowardZero).value
+            return Double(TsSeek.positionMs(pts: now, firstPts: firstPts)) / 1000
+        }
+        return Double(playedMs ?? 0) / 1000
+    }
+
+    /// O PTS do início do ficheiro, quando se abriu a meio.
+    private var firstPts: Int64?
+
+    /// Quanto vídeo já se mostrou desde a primeira imagem (ms), pelo relógio das camadas: não anda em pausa nem
+    /// parado à espera de dados, e os saltos do relógio do canal já vêm seguidos (TsClock). nil antes de começar.
+    var playedMs: Int64? {
+        guard let startTime else { return nil }
+        let t = (synchronizer.currentTime() - startTime).seconds
+        return t.isFinite ? max(0, Int64(t * 1000)) : nil
+    }
+
+    /// O tempo da primeira imagem (ou do primeiro som, sem vídeo) no relógio do canal.
+    private var startTime: CMTime?
 
     // MARK: Faixas
 
@@ -200,6 +268,41 @@ final class GoatCorePlayback: NSObject {
     func selectAudio(pid: Int) {
         selectedAudio = pid
         session?.selectAudio(pid)
+    }
+
+    /// As legendas ([TextTrack.key]), ou nil para nenhumas: as que estavam no ecrã saem.
+    func selectText(_ key: Int?) {
+        selectedText = key
+        clearSubtitles()
+        session?.selectText(key)
+    }
+
+    private func clearSubtitles() {
+        pendingText = []
+        view.showSubtitle("")
+    }
+
+    /// Põe as legendas cuja hora já chegou (a última ganha) e volta quando for a hora da seguinte.
+    private func showDueSubtitles() {
+        subtitleTimer?.invalidate()
+        subtitleTimer = nil
+        guard !pendingText.isEmpty else { return }
+        let now = synchronizer.currentTime()
+        guard now.isValid, startTime != nil else { return scheduleSubtitles(after: 0.1) }
+        while let first = pendingText.first, first.time <= now {
+            view.showSubtitle(first.text)
+            pendingText.removeFirst()
+        }
+        if let next = pendingText.first {
+            let wait = (next.time - now).seconds
+            scheduleSubtitles(after: min(max(wait, 0.01), 0.25))
+        }
+    }
+
+    private func scheduleSubtitles(after seconds: Double) {
+        subtitleTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.showDueSubtitles() }
+        }
     }
 
     // MARK: Picture in Picture
@@ -246,7 +349,14 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     enum Event {
         case tracks([MediaTrack])
         case videoSize(Int)
-        case started
+        /// A primeira imagem, com o tempo dela (onde o relógio começou).
+        case started(CMTime)
+        /// Abriu-se um ficheiro a meio: o PTS do início dele (90 kHz), para a posição contar desde lá.
+        case origin(Int64)
+        /// As legendas do teletexto do canal.
+        case textTracks([TextTrack])
+        /// As legendas escolhidas mudam a este tempo ("" limpa).
+        case text(CMTime, String)
         case httpStatus(Int)
         case failed(String)
         case ended
@@ -278,6 +388,16 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private var stalled = false
     private var watch: DispatchSourceTimer?
     private var reportedSize = false
+    /// A ligação (HTTP) ou o ficheiro (uma gravação no disco) de onde vem o stream.
+    private var task: URLSessionDataTask?
+    private var file: FileHandle?
+    /// À frente do relógio há tanto que se parou de ler (a camada guarda tudo o que recebe; sem isto, uma gravação
+    /// ou o anel atrás do direto, que chegam à velocidade do disco, enchiam a memória).
+    private var suspended = false
+    /// O stream acabou de chegar: o fim conta quando o relógio chegar ao último que está no leitor.
+    private var inputEnded = false
+    private static let maxAheadSeconds = 20.0
+    private static let resumeAheadSeconds = 10.0
 
     init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer) {
         self.display = display
@@ -293,11 +413,98 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         pipeline.onVideo = { [weak self] b in self?.video(b) }
         pipeline.onAudio = { [weak self] b in self?.audioSample(b) }
         pipeline.onUnsupported = { [weak self] what in self?.fail("unsupported \(what)") }
+        pipeline.onTextTracks = { [weak self] list in self?.onEvent?(.textTracks(list)) }
+        pipeline.onText = { [weak self] pts, text in
+            guard let self, !self.closed else { return }
+            self.onEvent?(.text(CMTime(value: pts, timescale: 90_000), text))
+        }
         // Um salto no relógio do canal já chega aqui com o tempo seguido (TsClock): o leitor continua sem parar.
         pipeline.onJump = {}
     }
 
-    func start(_ url: URL, headers: [String: String]) {
+    func start(_ url: URL, headers: [String: String], startMs: Int64) {
+        queue.async { self.startWatch() }
+        if url.isFileURL {
+            queue.async { self.openFile(url, startMs: startMs) }
+            return
+        }
+        guard startMs > 0 else {
+            queue.async { self.connect(url, headers: headers, from: 0) }
+            return
+        }
+        // O ponto pedido num ficheiro do fornecedor: umas leituras pequenas para saber onde fica, depois o stream daí.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let plan = Self.plan(url, headers: headers, startMs: startMs)
+            self.queue.async {
+                guard !self.closed else { return }
+                if let plan { self.onEvent?(.origin(plan.firstPts)) }
+                self.connect(url, headers: headers, from: plan?.position ?? 0)
+            }
+        }
+    }
+
+    /// As leituras do TsSeek num ficheiro HTTP (com Range), uma de cada vez e à espera de cada uma.
+    private static func plan(_ url: URL, headers: [String: String], startMs: Int64) -> TsSeek.Plan? {
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        func fetch(_ range: String) -> (Data, HTTPURLResponse)? {
+            var request = URLRequest(url: url)
+            for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+            request.setValue("bytes=\(range)", forHTTPHeaderField: "Range")
+            request.timeoutInterval = 10
+            let done = DispatchSemaphore(value: 0)
+            var result: (Data, HTTPURLResponse)?
+            session.dataTask(with: request) { data, response, _ in
+                if let data, let http = response as? HTTPURLResponse, http.statusCode == 206 { result = (data, http) }
+                done.signal()
+            }.resume()
+            done.wait()
+            return result
+        }
+        // O tamanho vem no Content-Range da primeira leitura ("bytes 0-1048575/123456789"); sem ele não se salta.
+        guard let first = fetch("0-\(TsSeek.probe - 1)"),
+              let total = (first.1.value(forHTTPHeaderField: "Content-Range")?.split(separator: "/").last).flatMap({ Int64($0) }) else { return nil }
+        return TsSeek.plan(length: total, startMs: startMs) { at, n in
+            if at == 0 { return first.0 }
+            return fetch("\(at)-\(at + Int64(n) - 1)")?.0 ?? Data()
+        }
+    }
+
+    /// Uma gravação no disco: lê-se aos bocados na fila (ver [pumpFile]), a começar no ponto pedido.
+    private func openFile(_ url: URL, startMs: Int64) {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return fail("file: cannot open") }
+        file = handle
+        if startMs > 0 {
+            let length = (try? handle.seekToEnd()).map { Int64($0) } ?? 0
+            let plan = try? TsSeek.plan(length: length, startMs: startMs) { at, n in
+                try handle.seek(toOffset: UInt64(at))
+                return try handle.read(upToCount: n) ?? Data()
+            }
+            if let plan { onEvent?(.origin(plan.firstPts)) }
+            try? handle.seek(toOffset: UInt64(plan?.position ?? 0))
+        }
+        pumpFile()
+    }
+
+    private func pumpFile() {
+        guard !closed, let file else { return }
+        if suspended {
+            queue.asyncAfter(deadline: .now() + 0.1) { self.pumpFile() }
+            return
+        }
+        guard let data = try? file.read(upToCount: 256 * 1024), !data.isEmpty else {
+            pipeline.flush()
+            inputEnded = true
+            if startTime == nil { finish() }
+            return
+        }
+        pipeline.feed(data)
+        queue.async { self.pumpFile() }
+    }
+
+    /// Na fila: abre a ligação (a partir de [position], com Range), se entretanto não se fechou.
+    private func connect(_ url: URL, headers: [String: String], from position: Int64) {
+        guard !closed else { return }
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 15
@@ -309,8 +516,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         urlSessionLock.withLock { $0 = s }
         var request = URLRequest(url: url)
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
-        s.dataTask(with: request).resume()
-        queue.async { self.startWatch() }
+        if position > 0 { request.setValue("bytes=\(position)-", forHTTPHeaderField: "Range") }
+        let t = s.dataTask(with: request)
+        task = t
+        t.resume()
     }
 
     /// Fecha já a ligação (o fornecedor pode só deixar uma de cada vez); o que ainda estiver na fila não chega ao leitor.
@@ -320,7 +529,14 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         queue.async {
             self.cancelled = true
             self.watch?.cancel()
+            try? self.file?.close()
+            self.file = nil
         }
+    }
+
+    /// Outras legendas ([TextTrack.key], nil = nenhumas): as que já passaram pelo leitor descodificam-se logo.
+    func selectText(_ key: Int?) {
+        queue.async { self.pipeline.selectText(key) }
     }
 
     /// Outra faixa de áudio: o som que já estava no leitor sai, e o novo entra a partir de agora.
@@ -370,9 +586,18 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         if let error {
             fail("network: \(error.localizedDescription)")
         } else {
-            cancelled = true
-            onEvent?(.ended)
+            // O fim conta quando o que está no leitor acabar de passar (ver [checkBuffer]).
+            inputEnded = true
+            if startTime == nil { finish() }
         }
+    }
+
+    /// O stream acabou e já se viu tudo.
+    private func finish() {
+        guard !cancelled else { return }
+        cancelled = true
+        watch?.cancel()
+        onEvent?(.ended)
     }
 
     private func fail(_ why: String) {
@@ -422,7 +647,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         startTime = time
         running = true
         synchronizer.setRate(userPaused ? 0 : rate, time: time)
-        onEvent?(.started)
+        onEvent?(.started(time))
     }
 
     /// Se a rede não acompanha, o relógio para à espera (em vez de mostrar imagens paradas com o som aos saltos) e
@@ -436,11 +661,24 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     private func checkBuffer() {
-        guard running, !cancelled, !userPaused else { return }
+        guard running, !cancelled else { return }
         let now = synchronizer.currentTime()
         let ahead = hasVideo ? lastVideo : lastAudio
         guard ahead.isValid, now.isValid else { return }
         let lead = (ahead - now).seconds
+        // Muito à frente: para de ler (a ligação fica à espera, como as filas do Android); retoma a meio.
+        if !suspended, lead > Self.maxAheadSeconds {
+            suspended = true
+            task?.suspend()
+        } else if suspended, lead < Self.resumeAheadSeconds {
+            suspended = false
+            task?.resume()
+        }
+        if inputEnded {
+            if lead <= 0.1 { finish() }
+            return
+        }
+        guard !userPaused else { return }
         if !stalled, lead < 0.05 {
             stalled = true
             synchronizer.rate = 0

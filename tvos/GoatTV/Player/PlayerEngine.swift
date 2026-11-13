@@ -698,10 +698,12 @@ final class PlayerEngine: NSObject {
                 }
             }
         case .goatcore:
-            // Ainda sem a pausa do direto: só o canal que uma gravação está a gravar se lê do anel dela.
-            if pausable, ChannelFeed.find(attempt.candidate.url) != nil,
+            // Como no VLC: pausar o direto lê do anel (a ligação é do gravador), e o canal que uma gravação está a
+            // gravar abre sempre pelo anel dela.
+            if pausable, timeshiftEnabled || ChannelFeed.find(attempt.candidate.url) != nil, !attempt.candidate.isHLS,
                let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
                 startGoatCore(local, ring: true)
+                startTimeshiftTicker()
             } else {
                 whenConnectionFree { [weak self] in self?.startGoatCore(url) }
             }
@@ -894,6 +896,11 @@ final class PlayerEngine: NSObject {
             hasPicture = true
             hideFreeze()
             checkApplePicture()
+        } else if backend == .goatcore {
+            // O GoatCore só diz "a dar" com a primeira imagem já no ecrã.
+            positionValid = true
+            hasPicture = true
+            hideFreeze()
         } else if backend == .aether {
             positionValid = true
             hasPicture = true
@@ -1188,15 +1195,26 @@ final class PlayerEngine: NSObject {
         g.isMuted = muted
         g.setAspect(aspect)
         g.rate = speed
-        g.open(url, headers: headers)
+        // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
+        g.open(url, headers: headers, startMs: ring ? 0 : openStartMs)
     }
 
     private func goatCoreEvent(_ event: GoatCorePlayback.Event) {
         guard backend == .goatcore else { return }
         switch event {
         case .playing:
+            // Depois de um salto na pausa do direto o canal continua "a dar": só volta a haver imagem.
+            if state == .playing {
+                positionValid = true
+                hasPicture = true
+                timeshift.seeking = false
+                hideFreeze()
+                return
+            }
             becamePlaying()
         case .failed, .ended:
+            // Pelo anel pode ser só o fim de uma ligação (há outra a seguir): continua no sítio certo.
+            if continueRing() { return }
             lastHTTPStatus = goatCorePlayback?.httpStatus
             DebugLog.add("Player: GoatCore \(event == .ended ? "ended" : "failed") (HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
             if state == .playing { fail() } else { next() }
@@ -1389,7 +1407,7 @@ extension PlayerEngine {
     func togglePause() {
         guard state == .playing else { return }
         // Pausa do direto: se o ponto da pausa já saiu do anel, continua do mais antigo que há.
-        if paused, backend == .vlc, let entry = timeshift.resumeEntry(positionMs: ringPosition) {
+        if paused, backend == .vlc || backend == .goatcore, let entry = timeshift.resumeEntry(positionMs: ringPosition) {
             reopenRing(entry, live: false)
             return
         }
@@ -1546,8 +1564,10 @@ extension PlayerEngine {
                             info: TrackInfo(language: t.language, label: t.name, selected: t.selected, forced: t.forced))
             }
         case .goatcore:
-            // As legendas ainda não (DVB e teletexto vêm a seguir).
-            return []
+            // O teletexto (as legendas DVB, em imagem, ainda não).
+            return goatCoreText.map { t in
+                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected))
+            }
         }
     }
 
@@ -1633,6 +1653,16 @@ extension PlayerEngine {
     }
 
     /// As faixas de áudio do GoatCore como o menu as mostra (o id é o PID).
+    /// As legendas do teletexto no GoatCore: a língua e o número da página ("Português · 888").
+    private var goatCoreText: [(id: Int32, name: String, language: String?, selected: Bool)] {
+        guard let g = goatCorePlayback else { return [] }
+        return g.textTracks.map { t in
+            let language = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 }
+            let name = [language, String(t.page, radix: 16)].compactMap { $0 }.joined(separator: " · ")
+            return (Int32(truncatingIfNeeded: t.key), name, t.language, t.key == g.selectedText)
+        }
+    }
+
     private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool)] {
         guard let g = goatCorePlayback else { return [] }
         let list = g.audioTracks
@@ -1727,7 +1757,9 @@ extension PlayerEngine {
             guard !tracks.isEmpty else { return [] }
             return [Track(id: -1, name: "")] + tracks.map { Track(id: Int32(truncatingIfNeeded: $0.id), name: $0.name) }
         case .goatcore:
-            return []
+            let tracks = goatCoreText
+            guard !tracks.isEmpty else { return [] }
+            return [Track(id: -1, name: "")] + tracks.map { Track(id: $0.id, name: $0.name) }
         }
     }
 
@@ -1742,7 +1774,7 @@ extension PlayerEngine {
         case .aether:
             return (aetherPlayback?.subtitleTracks.first { $0.selected }).map { Int32(truncatingIfNeeded: $0.id) } ?? -1
         case .goatcore:
-            return -1
+            return goatCorePlayback?.selectedText.map { Int32(truncatingIfNeeded: $0) } ?? -1
         }
     }
 
@@ -1764,7 +1796,7 @@ extension PlayerEngine {
         case .aether:
             aetherPlayback?.selectSubtitle(Int(id))
         case .goatcore:
-            break
+            goatCorePlayback?.selectText(id < 0 ? nil : Int(id))
         }
     }
 
@@ -1833,12 +1865,29 @@ extension PlayerEngine {
         }
     }
 
-    /// O VLC volta a ler o anel a partir de [entry] (recuar, avançar, voltar ao direto, continuar depois do fim de
-    /// uma ligação). O canal continua "a dar": sem a cápsula de sintonizar, nem a imagem congelada.
+    /// O VLC (ou o GoatCore) volta a ler o anel a partir de [entry] (recuar, avançar, voltar ao direto, continuar
+    /// depois do fim de uma ligação). O canal continua "a dar": sem a cápsula de sintonizar, nem a imagem congelada.
     fileprivate func reopenRing(_ entry: TimeshiftRing.Entry, live: Bool) {
-        guard backend == .vlc, let url = timeshift.prepare(at: entry, live: live) else { return }
+        guard backend == .vlc || backend == .goatcore, let url = timeshift.prepare(at: entry, live: live) else { return }
         DebugLog.add("Player: timeshift jump (\(live ? "live" : "behind"))")
         watchdog?.cancel()
+        if backend == .goatcore {
+            ringPlayedMs = 0
+            ringPlayingSince = nil
+            paused = false
+            positionValid = false
+            hasPicture = false
+            startGoatCore(url, ring: true)
+            resetTrackChoice()
+            scheduleTrackChoice()
+            watchdog = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled, let self, self.state == .playing, !self.positionValid else { return }
+                DebugLog.add("Player: no picture after a timeshift jump")
+                self.fail()
+            }
+            return
+        }
         vlc.stop()
         ringPlayedMs = 0
         ringPlayingSince = nil
@@ -1860,7 +1909,7 @@ extension PlayerEngine {
 
     /// O VLC chegou ao fim do que lia no anel: se há onde continuar, continua (e devolve true).
     fileprivate func continueRing() -> Bool {
-        guard backend == .vlc, timeshift.usesRing, let next = timeshift.entryAfterEnd() else { return false }
+        guard backend == .vlc || backend == .goatcore, timeshift.usesRing, let next = timeshift.entryAfterEnd() else { return false }
         reopenRing(next.entry, live: next.live)
         return true
     }
@@ -1912,7 +1961,7 @@ extension PlayerEngine {
     private func updateTimeshift() {
         defer { if openedLive, timeshift.atLive, speed != 1 { speed = 1 } }
         if timeshift.usesRing {
-            guard backend == .vlc else { return timeshift.unavailable() }
+            guard backend == .vlc || backend == .goatcore else { return timeshift.unavailable() }
             ringClock()
             timeshift.update(positionMs: ringPosition, paused: paused, settled: state == .playing && hasPicture && !timeshift.seeking,
                              programmeStart: programmeStart ?? { _ in nil })
@@ -1934,9 +1983,11 @@ extension PlayerEngine {
         }
     }
 
-    /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ver [ringPlayedMs]).
+    /// Quanto vídeo o VLC já mostrou desde que começou a ler o anel (ver [ringPlayedMs]). O GoatCore sabe-o pelo
+    /// relógio dele (que não conta as paragens à espera de dados nem os saltos do PCR).
     private var ringPosition: Int64 {
-        ringPlayedMs + (ringPlayingSince.map { Int64(Double(Self.uptimeMs() - $0) * Double(speed)) } ?? 0)
+        if backend == .goatcore { return goatCorePlayback?.playedMs ?? 0 }
+        return ringPlayedMs + (ringPlayingSince.map { Int64(Double(Self.uptimeMs() - $0) * Double(speed)) } ?? 0)
     }
 
     /// Acerta o relógio do anel com o estado do VLC: conta só a dar, com imagem e sem pausa.

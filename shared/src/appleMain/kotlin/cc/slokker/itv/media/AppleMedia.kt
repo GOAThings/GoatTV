@@ -31,4 +31,11 @@ object AppleMedia {
         val b = bytes(data)
         demuxer.feed(b, 0, b.size)
     }
+
+    /** As páginas de legendas do teletexto que a faixa [track] anuncia (ver [TeletextPage]). */
+    fun teletextPages(track: TsTrack): List<TeletextPage> =
+        if (track.codec == Codec.TELETEXT) TeletextPage.of(track.config).filter { it.isSubtitle } else emptyList()
+
+    /** O texto novo da página de [decoder] neste PES, as linhas juntas por "\n"; "" para limpar; null se não mudou. */
+    fun teletextText(decoder: TeletextDecoder, sample: TsSample): String? = decoder.feed(sample.data)?.joinToString("\n")
 }

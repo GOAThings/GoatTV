@@ -158,3 +158,54 @@ extension CoreTests {
         try expect(r.audio.count, 84)
     }
 }
+
+/// Saltar dentro de um TS gravado (TsSeek): o mesmo que o Android faz com as gravações e o catch-up do Stalker.
+extension CoreTests {
+    /// [seconds] de "vídeo": um pacote por cada 10 ms, cada um um PES de vídeo com o seu PTS (a começar em [firstPts]).
+    private static func pesStream(seconds: Int, firstPts: Int64) -> Data {
+        var out = Data()
+        for i in 0..<(seconds * 100) {
+            var p = [UInt8](repeating: 0xFF, count: 188)
+            p[0] = 0x47
+            p[1] = 0x41
+            p[2] = 0x00
+            p[3] = 0x10
+            let pts = (firstPts + Int64(i) * 900) & 0x1_FFFF_FFFF
+            let pes: [UInt8] = [0, 0, 1, 0xE0, 0, 0, 0x80, 0x80, 5,
+                                UInt8(0x21 | ((pts >> 29) & 0x0E)), UInt8((pts >> 22) & 0xFF), UInt8(0x01 | ((pts >> 14) & 0xFE)),
+                                UInt8((pts >> 7) & 0xFF), UInt8(0x01 | ((pts << 1) & 0xFE))]
+            p.replaceSubrange(4..<(4 + pes.count), with: pes)
+            out.append(contentsOf: p)
+        }
+        return out
+    }
+
+    static func tsSeekLandsNearThePoint() throws {
+        let file = pesStream(seconds: 200, firstPts: 5 * 90_000)
+        var reads = 0
+        let plan = TsSeek.plan(length: Int64(file.count), startMs: 100_000) { at, n in
+            reads += 1
+            return file.subdata(in: Int(at)..<min(file.count, Int(at) + n))
+        }
+        guard let plan else { throw Failure(description: "sem plano") }
+        try expect(plan.firstPts, 5 * 90_000)
+        // 100 s de 200: o pacote 10 000 (um por 10 ms), a menos de meio segundo.
+        try expect(abs(plan.position / 188 - 10_000) < 50, true, "posição \(plan.position / 188)")
+        try expect(plan.position % 188, 0)
+        try expect(reads, 3)
+        // A posição conta desde o início do ficheiro, também quando o relógio dá a volta aos 33 bits.
+        try expect(TsSeek.positionMs(pts: 5 * 90_000 + 90_000 * 42, firstPts: 5 * 90_000), 42_000)
+        try expect(TsSeek.positionMs(pts: 90_000, firstPts: 0x1_FFFF_FFFF - 89_999), 2_000)
+    }
+
+    static func tsSeekFromTheStartNeedsOneRead() throws {
+        let file = pesStream(seconds: 10, firstPts: 0)
+        var reads = 0
+        let plan = TsSeek.plan(length: Int64(file.count), startMs: 0) { at, n in
+            reads += 1
+            return file.subdata(in: Int(at)..<min(file.count, Int(at) + n))
+        }
+        try expect(plan, TsSeek.Plan(position: 0, firstPts: 0))
+        try expect(reads, 1)
+    }
+}

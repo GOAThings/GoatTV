@@ -15,6 +15,19 @@ public struct MediaTrack: Equatable, Sendable {
     public let language: String?
 }
 
+/// Uma página de legendas do teletexto (a faixa [pid], a página como se escreve: 0x888 = 888) que o canal anuncia.
+public struct TextTrack: Equatable, Sendable {
+    public let pid: Int
+    public let page: Int
+    /// A língua que o canal diz (ISO 639-2, em minúsculas), se disser.
+    public let language: String?
+    /// Legendas para surdos (o tipo 5 do teletexto).
+    public let hearingImpaired: Bool
+
+    /// Um número só para a faixa e a página (como no Android: acima de qualquer PID).
+    public var key: Int { pid * 0x1000 + page }
+}
+
 /// O motor GoatCore, do stream às amostras da Apple: o MPEG-TS que chega da rede é separado pelo núcleo partilhado
 /// (TsDemuxer, NalReader, AudioFrameReader, os mesmos do Android) e sai em CMSampleBuffer comprimidos, prontos para o
 /// AVSampleBufferDisplayLayer (que descodifica o H.264 e o HEVC pelo hardware) e o AVSampleBufferAudioRenderer.
@@ -29,6 +42,10 @@ public final class MediaPipeline {
     /// O canal saltou no tempo (outro encoder, o stream recomeçou). Os tempos que saem continuam seguidos (TsClock),
     /// por isso o leitor não precisa de fazer nada; serve para o registo.
     public var onJump: (() -> Void)?
+    /// As legendas do teletexto que o canal tem (a primeira vez e sempre que mudam).
+    public var onTextTracks: (([TextTrack]) -> Void)?
+    /// O texto das legendas escolhidas quando muda: o tempo (90 kHz, no relógio do vídeo) e as linhas ("" limpa).
+    public var onText: ((Int64, String) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -50,6 +67,22 @@ public final class MediaPipeline {
     private var audioFormatKey: GoatShared.AudioFormat?
     private var audioClock = TsClock()
     private var reportedUnsupported = false
+    private var textTracks: [TextTrack] = []
+    private var teletext: TeletextDecoder?
+    private var textPid: Int?
+    /// Os últimos PES de cada faixa de legendas: ao escolher uma, o que já passou mostra-se logo (ver [selectText]).
+    private var recentText: [Int: [TsSample]] = [:]
+    private static let recentTextCount = 800
+
+    /// As legendas a mostrar ([TextTrack.key]), ou nil para nenhumas.
+    public func selectText(_ key: Int?) {
+        teletext = nil
+        textPid = nil
+        guard let key, let t = textTracks.first(where: { $0.key == key }) else { return }
+        teletext = TeletextDecoder(page: Int32(t.page))
+        textPid = t.pid
+        for s in recentText[t.pid] ?? [] { text(s) }
+    }
 
     public init() {
         demuxer = TsDemuxer(listener: listener)
@@ -79,6 +112,10 @@ public final class MediaPipeline {
         audioFormatKey = nil
         audioClock.reset()
         reportedUnsupported = false
+        textTracks = []
+        recentText = [:]
+        teletext = nil
+        textPid = nil
     }
 
     // MARK: Do núcleo partilhado
@@ -101,6 +138,12 @@ public final class MediaPipeline {
             }
             return MediaTrack(pid: Int(t.pid), codec: t.codec.name, kind: kind, language: t.language)
         }
+        textTracks = list.flatMap { t in
+            AppleMedia.shared.teletextPages(track: t).map { p in
+                TextTrack(pid: Int(t.pid), page: Int(p.page), language: p.language ?? t.language, hearingImpaired: p.type == 5)
+            }
+        }
+        onTextTracks?(textTracks)
         let video = tracks.first { $0.kind == .video }
         if video?.pid != videoPid {
             videoPid = video?.pid
@@ -125,11 +168,30 @@ public final class MediaPipeline {
 
     private func sample(_ track: TsTrack, _ sample: TsSample) {
         let pid = Int(track.pid)
+        if track.kind.name == "SUBTITLE" {
+            var recent = recentText[pid] ?? []
+            recent.append(sample)
+            if recent.count > Self.recentTextCount { recent.removeFirst(recent.count - Self.recentTextCount) }
+            recentText[pid] = recent
+            if pid == textPid { text(sample) }
+            return
+        }
         if pid == videoPid {
             video(sample)
         } else if pid == (audioPid ?? tracks.first { $0.kind == .audio }?.pid) {
             audio(track, sample)
         }
+    }
+
+    // MARK: Legendas
+
+    /// Um PES de teletexto da faixa escolhida: o texto, quando muda, no tempo do vídeo (ou do som, sem vídeo).
+    private func text(_ sample: TsSample) {
+        guard let decoder = teletext, let text = AppleMedia.shared.teletextText(decoder: decoder, sample: sample) else { return }
+        let clock = videoPid != nil ? videoClock : audioClock
+        let pts = clock.map(ts: sample.pts)
+        guard pts >= 0 else { return }
+        onText?(pts, text)
     }
 
     // MARK: Vídeo
@@ -139,6 +201,8 @@ public final class MediaPipeline {
         let samplePts = videoClock.unwrap(ts: sample.pts)
         if videoClock.jumped {
             videoStart.restart()
+            // As legendas guardadas são do tempo de antes do salto: já não se acertam com a imagem.
+            recentText = [:]
             onJump?()
         }
         // Faltaram dados (a imagem que vinha não chegou inteira): espera-se pela próxima imagem-chave.

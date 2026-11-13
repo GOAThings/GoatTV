@@ -174,7 +174,7 @@ final class Timeshift {
         guard let s = session else { return }
         let ring = s.ring
         guard ring.isTs == true, !s.feed.recorder.notTs else { return unavailable() }
-        var live = ring.liveMediaMs
+        var live = ring.liveEdgeMs
         let at = s.startMediaMs + (positionMs ?? 0)
         // O programa no ponto que se vê (não no direto: em pausa no fim do jogo, o jogo fica até se passar dele).
         // Folga de um minuto antes do início, que as horas do guia raramente são certas.
@@ -182,7 +182,7 @@ final class Timeshift {
         let start = programmeStart(wall - (live - at))
         ring.setMaxAge(start == nil ? Self.noEpgAgeMs : Self.maxAgeMs)
         if let start { ring.dropBefore(live - (wall - start) - Self.programmeMarginMs) }
-        live = ring.liveMediaMs
+        live = ring.liveEdgeMs
         track(live: live, oldest: ring.oldest?.mediaMs ?? live, position: at, paused: paused, settled: settled, slack: Self.liveSlackMs)
         if !available { available = true }
     }
@@ -236,7 +236,7 @@ final class Timeshift {
     /// O ponto do anel [behind] ms atrás do direto; nil sem anel.
     func entry(behind: Int64) -> TimeshiftRing.Entry? {
         guard let ring = session?.ring else { return nil }
-        return ring.entry(atOrBefore: ring.liveMediaMs - baselineMs - behind)
+        return ring.entry(atOrBefore: ring.liveEdgeMs - baselineMs - behind)
     }
 
     /// Para voltar ao direto: um pouco antes do fim, para o VLC arrancar logo (e apanhar um keyframe) com o que já
