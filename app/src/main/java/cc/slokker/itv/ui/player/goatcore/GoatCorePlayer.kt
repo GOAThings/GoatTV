@@ -10,6 +10,7 @@ import android.util.Log
 import android.view.Surface
 import cc.slokker.itv.media.AudioFrameReader
 import cc.slokker.itv.media.Codec
+import cc.slokker.itv.media.Mpeg2Reader
 import cc.slokker.itv.media.NalReader
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
@@ -80,7 +81,11 @@ class GoatCorePlayer(
 
     // Rede (só a thread da rede).
     private var nal: NalReader? = null
+    private var mpeg2: Mpeg2Reader? = null
     private var hevc = false
+
+    /** O tipo do descodificador de vídeo do canal ("video/avc", "video/hevc", "video/mpeg2"). */
+    @Volatile private var videoMime = MediaFormat.MIMETYPE_VIDEO_AVC
     private var videoPid = -1
     private var audioPid = -1
     private var audioReader: AudioFrameReader? = null
@@ -192,8 +197,15 @@ class GoatCorePlayer(
         if (video != null && video.pid != videoPid) {
             videoPid = video.pid
             when (video.codec) {
-                Codec.H264 -> { nal = NalReader(hevc = false); hevc = false }
-                Codec.HEVC -> { nal = NalReader(hevc = true); hevc = true }
+                Codec.H264 -> { nal = NalReader(hevc = false); hevc = false; videoMime = MediaFormat.MIMETYPE_VIDEO_AVC }
+                Codec.HEVC -> { nal = NalReader(hevc = true); hevc = true; videoMime = MediaFormat.MIMETYPE_VIDEO_HEVC }
+                // O MPEG-2 (canais SD de cabo e satélite): muitas boxes têm descodificador de hardware para ele.
+                Codec.MPEG2_VIDEO -> if (hasDecoder(MediaFormat.MIMETYPE_VIDEO_MPEG2)) {
+                    mpeg2 = Mpeg2Reader()
+                    videoMime = MediaFormat.MIMETYPE_VIDEO_MPEG2
+                } else {
+                    fail("no video decoder for MPEG-2", unsupported = true)
+                }
                 else -> fail("unsupported video ${video.codec}", unsupported = true)
             }
         }
@@ -218,7 +230,9 @@ class GoatCorePlayer(
     }
 
     private fun video(sample: TsSample) {
-        val reader = nal ?: return
+        val reader = nal
+        val mpeg2 = mpeg2
+        if (reader == null && mpeg2 == null) return
         val samplePts = videoClock.unwrap(sample.pts)
         if (videoClock.jumped) {
             stats.jumps++
@@ -226,7 +240,16 @@ class GoatCorePlayer(
         }
         if (sample.discontinuity) videoStart.restart()
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com o tempo do primeiro).
-        val unit = reader.next(sample.data, samplePts, samplePts) ?: return
+        if (mpeg2 != null) {
+            // MPEG-2: a imagem vai como vem; o cabeçalho da sequência é o csd-0.
+            val unit = mpeg2.next(sample.data, samplePts, samplePts)
+            if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
+            if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) return
+            stats.videoUnits++
+            videoQueue.put(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe))
+            return
+        }
+        val unit = reader!!.next(sample.data, samplePts, samplePts) ?: return
         if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets.map { annexB(it) }
         if (csd.isEmpty()) return
         val pts = unit.pts
@@ -257,9 +280,11 @@ class GoatCorePlayer(
                 if (first.keyframe) break
             }
             previous?.join(2_000)
-            val mime = if (hevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
+            val mime = videoMime
             val format = MediaFormat.createVideoFormat(mime, 1920, 1080)
-            if (hevc) {
+            if (mime == MediaFormat.MIMETYPE_VIDEO_MPEG2) {
+                format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd.first()))
+            } else if (hevc) {
                 format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd.fold(ByteArray(0)) { a, b -> a + b }))
             } else {
                 // Todos os SPS no csd-0 e todos os PPS no csd-1 (as emissões mandam vários).

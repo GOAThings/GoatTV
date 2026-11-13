@@ -95,6 +95,27 @@ class TsSamplesTest {
     @Test
     fun h264OpenGopIFrames() = video("h264_opengop.ts", hevc = false, keyframes = 6)
 
+    /** MPEG-2: as imagens I contam como imagens-chave e o cabeçalho da sequência sai na primeira. */
+    private fun mpeg2(name: String, keyframes: Int) {
+        val c = read(name)
+        val track = c.tracks.first { it.kind == TrackKind.VIDEO }
+        assertEquals(Codec.MPEG2_VIDEO, track.codec)
+        val reader = Mpeg2Reader()
+        val units = c.samples.getValue(track.pid).map { reader.next(it.data, it.pts, it.dts) }
+        assertEquals(keyframes, units.count { it.keyframe }, name)
+        assertTrue(units.first().keyframe, name)
+        val header = units.first().parameterSets.single()
+        assertEquals(listOf(0, 0, 1, 0xB3), header.take(4).map { it.toInt() and 0xFF }, name)
+        // Com a extensão da sequência (MPEG-2, não MPEG-1).
+        assertTrue((4 until header.size - 3).any { header[it].toInt() == 0 && header[it + 1].toInt() == 0 && header[it + 2].toInt() == 1 && (header[it + 3].toInt() and 0xFF) == 0xB5 }, name)
+    }
+
+    @Test
+    fun mpeg2IAndP() = mpeg2("mpeg2_mp2.ts", keyframes = 5)
+
+    @Test
+    fun mpeg2WithBFrames() = mpeg2("mpeg2_b_aac.ts", keyframes = 9)
+
     @Test
     fun hevcUnits() = video("hevc_ac3.ts", hevc = true, keyframes = 2)
 
