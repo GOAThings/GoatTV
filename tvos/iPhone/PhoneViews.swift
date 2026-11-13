@@ -1619,6 +1619,9 @@ private struct MenuTab: View {
             .navigationDestination(for: Page.self) { page in
                 ScrollView {
                     VStack(spacing: 14) { rows(of: page) }.padding(.vertical, 8)
+                        // As páginas abertas por cima não recebem o espaço da barra de separadores (safeAreaInset de
+                        // fora do NavigationStack): sem esta margem, as últimas linhas ficavam por baixo dela.
+                        .padding(.bottom, 72)
                 }
                 .background(Theme.background)
                 .navigationTitle(title(of: page))
