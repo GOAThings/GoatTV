@@ -184,7 +184,7 @@ internal class VlcPlayer(
                 .setSampleMimeType(MimeTypes.VIDEO_UNKNOWN)
                 .setWidth(v.width)
                 .setHeight(v.height)
-                .apply { if (v.frameRateDen > 0) setFrameRate(v.frameRateNum.toFloat() / v.frameRateDen) }
+                .apply { if (v.frameRateDen > 0 && v.frameRateNum > 0) setFrameRate(v.frameRateNum.toFloat() / v.frameRateDen) }
                 .build()
             groups += Tracks.Group(TrackGroup("vlc:video", format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(true))
         }

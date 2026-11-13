@@ -1,7 +1,10 @@
 package cc.slokker.itv.media
 
-/** Uma qualidade de uma playlist HLS principal: a playlist dela, o débito e (se o disser) a altura da imagem. */
-class HlsVariant(val uri: String, val bandwidth: Long, val height: Int, val codecs: String?)
+/**
+ * Uma qualidade de uma playlist HLS principal: a playlist dela, o débito, (se o disser) a altura da imagem e o grupo de
+ * áudio ([audioGroup], o atributo AUDIO).
+ */
+class HlsVariant(val uri: String, val bandwidth: Long, val height: Int, val codecs: String?, val audioGroup: String? = null)
 
 /** A chave AES-128 de um segmento: o endereço dela e o vetor inicial (16 bytes; sem `IV`, o número de sequência). */
 class HlsKey(val uri: String, val iv: ByteArray)
@@ -50,6 +53,9 @@ class HlsPlaylist(
             var ended = false
             var unsupported: String? = null
             var pendingVariant: Map<String, String>? = null
+            // Os grupos de áudio cuja faixa principal vem numa playlist à parte (EXT-X-MEDIA com URI).
+            val separateAudio = HashSet<String>()
+            val audioWithoutUri = HashSet<String>()
             var pendingDuration = -1.0
             var discontinuity = false
             // A chave em vigor: o endereço e o IV dito (null = o número de sequência).
@@ -65,6 +71,14 @@ class HlsPlaylist(
                 if (line.isEmpty()) continue
                 when {
                     line.startsWith("#EXT-X-STREAM-INF:") -> pendingVariant = attributes(line.substringAfter(':'))
+                    line.startsWith("#EXT-X-MEDIA:") -> {
+                        val a = attributes(line.substringAfter(':'))
+                        val group = a["GROUP-ID"]
+                        if (a["TYPE"] == "AUDIO" && group != null) {
+                            // Uma faixa sem URI: o áudio do grupo vem dentro da qualidade. Só com URI, vem à parte.
+                            if (a["URI"] == null) audioWithoutUri += group else separateAudio += group
+                        }
+                    }
                     line.startsWith("#EXT-X-TARGETDURATION:") -> target = line.substringAfter(':').toDoubleOrNull() ?: target
                     line.startsWith("#EXT-X-MEDIA-SEQUENCE:") -> sequence = line.substringAfter(':').trim().toLongOrNull() ?: sequence
                     line.startsWith("#EXTINF:") -> pendingDuration = line.substringAfter(':').substringBefore(',').trim().toDoubleOrNull() ?: 0.0
@@ -94,7 +108,7 @@ class HlsPlaylist(
                     pendingVariant != null -> {
                         val a = pendingVariant
                         val height = a["RESOLUTION"]?.substringAfter('x', "")?.toIntOrNull() ?: 0
-                        variants += HlsVariant(resolve(base, line), a["BANDWIDTH"]?.toLongOrNull() ?: 0, height, a["CODECS"])
+                        variants += HlsVariant(resolve(base, line), a["BANDWIDTH"]?.toLongOrNull() ?: 0, height, a["CODECS"], a["AUDIO"])
                         pendingVariant = null
                     }
                     pendingDuration >= 0 -> {
@@ -113,7 +127,13 @@ class HlsPlaylist(
                     }
                 }
             }
-            return HlsPlaylist(variants, segments, target, ended, unsupported)
+            // O áudio numa playlist à parte o motor ainda não junta: ficam as qualidades com o áudio dentro; se não
+            // houver nenhuma, a playlist vai para outro motor (sem isto tocava sem som).
+            separateAudio -= audioWithoutUri
+            val muxed = variants.filter { it.audioGroup == null || it.audioGroup !in separateAudio }
+            val kept = if (muxed.isNotEmpty()) muxed else variants
+            if (muxed.isEmpty() && variants.isNotEmpty()) unsupported = unsupported ?: "audio in a separate playlist"
+            return HlsPlaylist(kept, segments, target, ended, unsupported)
         }
 
         /** `n[@o]` em [n, o] (o -1 quando não vem). */

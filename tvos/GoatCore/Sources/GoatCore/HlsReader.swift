@@ -160,6 +160,7 @@ public final class HlsReader: @unchecked Sendable {
         var base = mediaUrl ?? url.absoluteString
         var playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         if playlist.isMaster {
+            if let why = playlist.unsupported { throw Failure.unsupported(why) }
             // Começa na qualidade mais alta (uma TV, ou um telemóvel na Wi-Fi de casa); desce e sobe com a rede.
             variants = playlist.variants.sorted { $0.bandwidth < $1.bandwidth }
             guard !variants.isEmpty else { throw Failure.unsupported("empty master") }

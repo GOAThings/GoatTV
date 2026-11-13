@@ -17,6 +17,7 @@ import cc.slokker.itv.data.TimeshiftRing
 import cc.slokker.itv.ui.player.engine.OpenRetry
 import cc.slokker.itv.ui.player.engine.StreamGate
 import cc.slokker.itv.ui.player.engine.ZapTrace
+import cc.slokker.itv.ui.player.goatcore.UnsupportedStream
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -185,6 +186,11 @@ internal class ChannelFeed private constructor(
                     Log.d(TAG, "Ligação fechada (${ring.hashCode()})" + (error?.let { ": $it" } ?: ""))
                 }
                 if (closed) return
+                // Um formato que o motor não toca (HLS com o áudio à parte, cifra…): tentar outra vez não muda nada.
+                if (error is UnsupportedStream) {
+                    ring.endSegment(final = true, error = error)
+                    return
+                }
                 if (!everData) {
                     // Ainda não deu: mais umas tentativas seguidas, depressa se o servidor recusou por ainda não ter
                     // largado a ligação do canal anterior (ver OpenRetry); depois o erro vai para o player, que o explica.

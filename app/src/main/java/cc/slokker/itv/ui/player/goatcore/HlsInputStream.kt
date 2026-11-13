@@ -84,6 +84,7 @@ class HlsInputStream(
         var base = mediaUrl ?: url
         var playlist = HlsPlaylist.parse(fetch(base), base)
         if (playlist.isMaster) {
+            playlist.unsupported?.let { throw UnsupportedStream("HLS: $it") }
             // Começa na qualidade mais alta (é uma TV); desce e sobe com a rede (ver [measured]).
             variants = playlist.variants.sortedBy { it.bandwidth }
             level = variants.lastIndex

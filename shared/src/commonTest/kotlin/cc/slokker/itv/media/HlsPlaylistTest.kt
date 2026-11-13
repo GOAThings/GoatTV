@@ -119,4 +119,45 @@ class HlsPlaylistTest {
         assertEquals("http://h/v/init2.mp4", c.map?.uri)
         assertFalse(c.map!!.sameAs(b.map))
     }
+
+    @Test
+    fun audioInASeparatePlaylistIsLeftToAnotherEngine() {
+        val separate = HlsPlaylist.parse(
+            """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",DEFAULT=YES,URI="audio/en.m3u8"
+            #EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="a"
+            v/720.m3u8
+            """.trimIndent(),
+            "http://h/master.m3u8",
+        )
+        assertEquals("audio in a separate playlist", separate.unsupported)
+        // Com uma qualidade que traz o áudio dentro, fica só essa.
+        val mixed = HlsPlaylist.parse(
+            """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",DEFAULT=YES,URI="audio/en.m3u8"
+            #EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="a"
+            v/720.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=1000000
+            v/360.m3u8
+            """.trimIndent(),
+            "http://h/master.m3u8",
+        )
+        assertNull(mixed.unsupported)
+        assertEquals(listOf("http://h/v/360.m3u8"), mixed.variants.map { it.uri })
+        // Um grupo com uma faixa sem URI tem o áudio principal dentro; as outras línguas à parte não contam.
+        val inside = HlsPlaylist.parse(
+            """
+            #EXTM3U
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="pt",DEFAULT=YES
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",URI="audio/en.m3u8"
+            #EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="a"
+            v/720.m3u8
+            """.trimIndent(),
+            "http://h/master.m3u8",
+        )
+        assertNull(inside.unsupported)
+        assertEquals(1, inside.variants.size)
+    }
 }
