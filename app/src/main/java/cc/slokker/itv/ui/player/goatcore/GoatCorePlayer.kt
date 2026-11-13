@@ -411,12 +411,22 @@ class GoatCorePlayer(
             return
         }
         val unit = reader!!.next(sample.data, samplePts, samplePts) ?: return
-        if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets.map { annexB(it) }
+        // Os parâmetros mudaram a meio (outra qualidade do HLS, o canal mudou de resolução): o descodificador já está
+        // configurado com os antigos, por isso os novos vão dentro desta imagem-chave e ele reconfigura-se sozinho.
+        var inBand: ByteArray? = null
+        if (unit.parameterSets.isNotEmpty()) {
+            val sets = unit.parameterSets.map { annexB(it) }
+            if (csd.isNotEmpty() && (sets.size != csd.size || sets.indices.any { !sets[it].contentEquals(csd[it]) })) {
+                inBand = sets.fold(ByteArray(0)) { a, b -> a + b }
+            }
+            csd = sets
+        }
         if (csd.isEmpty()) return
         val pts = unit.pts
         if (!videoStart.pass(unit.keyframe, pts)) return
         stats.videoUnits++
-        queueVideo(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
+        val data = avccToAnnexB(unit.data)
+        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe))
     }
 
     /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
