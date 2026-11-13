@@ -73,6 +73,9 @@ internal class GoatCoreMediaPlayer(
 
     /** A faixa de áudio pedida (o PID); -1 = a que o motor escolheu. */
     private var chosenAudio = -1
+
+    /** As legendas escolhidas (o PID); -1 = desligadas. */
+    private var chosenText = -1
     private var startPositionMs = -1L
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
@@ -97,6 +100,8 @@ internal class GoatCoreMediaPlayer(
         this.hls = hls
         mediaItem = MediaItem.fromUri(url)
         chosenAudio = -1
+        chosenText = -1
+        cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
         tsTracks = emptyList()
         playbackState = Player.STATE_IDLE
         error = null
@@ -146,12 +151,36 @@ internal class GoatCoreMediaPlayer(
             }
 
             override fun onVideoSize(width: Int, height: Int) = post(g) { videoSize = VideoSize(width, height) }
+
+            override fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) = showCues(g, atUs, cues, durationUs)
         })
         core = player
         player.setVolume(effectiveVolume())
         player.setPaused(!playWhenReady)
         player.open { DataSourceInputStream(factory.createDataSource(), DataSpec(uri)).also { it.open() } }
         playbackState = Player.STATE_BUFFERING
+    }
+
+    private var cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
+
+    /** Mostra [list] quando o relógio do motor chegar a [atUs] (Long.MIN_VALUE = já), e tira-as ao fim de [durationUs]. */
+    private fun showCues(g: Int, atUs: Long, list: List<androidx.media3.common.text.Cue>, durationUs: Long) {
+        val now = core?.nowUs ?: Long.MIN_VALUE
+        val delayMs = if (atUs == Long.MIN_VALUE || now == Long.MIN_VALUE) 0 else ((atUs - now) / 1000).coerceIn(0, 10_000)
+        val group = androidx.media3.common.text.CueGroup(list, atUs.coerceAtLeast(0))
+        main.postDelayed({
+            if (g != generation) return@postDelayed
+            cues = group
+            invalidateState()
+            if (list.isNotEmpty() && durationUs > 0 && durationUs != C.TIME_UNSET) {
+                main.postDelayed({
+                    if (g == generation && cues === group) {
+                        cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
+                        invalidateState()
+                    }
+                }, durationUs / 1000)
+            }
+        }, delayMs)
     }
 
     private fun post(g: Int, change: () -> Unit) {
@@ -191,7 +220,7 @@ internal class GoatCoreMediaPlayer(
      */
     private fun tracksOf(list: List<TsTrack>): Tracks {
         val playing = chosenAudio.takeIf { pid -> list.any { it.pid == pid } } ?: core?.selectedAudio ?: -1
-        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO }.map { t ->
+        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE }.map { t ->
             val id = "goatcore:${t.pid}"
             val format = Format.Builder()
                 .setId(id)
@@ -199,8 +228,8 @@ internal class GoatCoreMediaPlayer(
                 .setLanguage(t.language)
                 .setLabel(t.language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage })
                 .build()
-            val supported = t.kind == TrackKind.VIDEO || GoatCorePlayer.playable(t.codec, passthrough)
-            val selected = t.kind == TrackKind.VIDEO || t.pid == playing
+            val supported = t.kind != TrackKind.AUDIO || GoatCorePlayer.playable(t.codec, passthrough)
+            val selected = t.kind == TrackKind.VIDEO || t.pid == playing || (t.kind == TrackKind.SUBTITLE && t.pid == chosenText)
             Tracks.Group(TrackGroup(id, format), false, intArrayOf(if (supported) C.FORMAT_HANDLED else C.FORMAT_UNSUPPORTED_TYPE), booleanArrayOf(selected))
         }
         return Tracks(groups)
@@ -214,6 +243,7 @@ internal class GoatCoreMediaPlayer(
         Codec.AC3 -> MimeTypes.AUDIO_AC3
         Codec.EAC3 -> MimeTypes.AUDIO_E_AC3
         Codec.MPEG_AUDIO -> MimeTypes.AUDIO_MPEG_L2
+        Codec.DVB_SUBTITLE -> MimeTypes.APPLICATION_DVBSUBS
         else -> MimeTypes.VIDEO_MP2T
     }
 
@@ -228,6 +258,7 @@ internal class GoatCoreMediaPlayer(
                 Player.COMMAND_RELEASE,
                 Player.COMMAND_SET_VIDEO_SURFACE,
                 Player.COMMAND_GET_TRACKS,
+                Player.COMMAND_GET_TEXT,
                 Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS,
                 Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
                 Player.COMMAND_GET_TIMELINE,
@@ -244,6 +275,7 @@ internal class GoatCoreMediaPlayer(
             .setTrackSelectionParameters(params)
             .setVolume(volume)
             .setIsLoading(playbackState == Player.STATE_BUFFERING)
+            .setCurrentCues(cues)
         val item = mediaItem
         if (item == null) {
             builder.setPlaybackState(Player.STATE_IDLE)
@@ -354,6 +386,15 @@ internal class GoatCoreMediaPlayer(
         if (pid != null && pid != chosenAudio) {
             chosenAudio = pid
             core?.selectAudio(pid)
+            tracks = tracksOf(tsTracks)
+        }
+        // As legendas: a escolhida (no menu, ou pela língua), ou nenhumas com o tipo desligado.
+        val textOff = C.TRACK_TYPE_TEXT in params.disabledTrackTypes
+        val text = if (textOff) -1 else params.overrides.values.firstOrNull { it.type == C.TRACK_TYPE_TEXT }?.mediaTrackGroup?.id
+            ?.removePrefix("goatcore:")?.toIntOrNull() ?: chosenText
+        if (text != chosenText) {
+            chosenText = text
+            core?.selectText(text)
             tracks = tracksOf(tsTracks)
         }
         return Futures.immediateVoidFuture()

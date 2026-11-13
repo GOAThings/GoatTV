@@ -5,8 +5,18 @@ enum class Codec { H264, HEVC, MPEG2_VIDEO, AAC_ADTS, AAC_LATM, MPEG_AUDIO, AC3,
 
 enum class TrackKind { VIDEO, AUDIO, SUBTITLE, DATA }
 
-/** Uma faixa do programa: o PID, o formato e a língua que o PMT diz (ISO 639-2, como vem: "por", "eng"…), se disser. */
-data class TsTrack(val pid: Int, val streamType: Int, val codec: Codec, val kind: TrackKind, val language: String?)
+/**
+ * Uma faixa do programa: o PID, o formato e a língua que o PMT diz (ISO 639-2, como vem: "por", "eng"…), se disser.
+ * [config]: nas legendas DVB, as páginas (composition e ancillary, 2 bytes cada) que o descodificador precisa.
+ */
+data class TsTrack(
+    val pid: Int,
+    val streamType: Int,
+    val codec: Codec,
+    val kind: TrackKind,
+    val language: String?,
+    val config: ByteArray? = null,
+)
 
 /**
  * Uma unidade de uma faixa (um PES inteiro: uma imagem, um ou mais blocos de áudio, uma legenda). [pts] e [dts] no
@@ -322,6 +332,7 @@ class TsDemuxer(private val listener: TsListener) {
 
     private fun track(type: Int, pid: Int, d: ByteArray, from: Int, to: Int): TsTrack {
         var language: String? = null
+        var config: ByteArray? = null
         var codec = when (type) {
             0x1B -> Codec.H264
             0x24 -> Codec.HEVC
@@ -349,6 +360,8 @@ class TsDemuxer(private val listener: TsListener) {
                 0x59 -> if (type == 0x06) {
                     codec = Codec.DVB_SUBTITLE
                     if (length >= 3) language = text(d, body, 3)
+                    // ISO 639 (3), subtitling_type (1), composition_page_id (2), ancillary_page_id (2).
+                    if (length >= 8) config = d.copyOfRange(body + 4, body + 8)
                 }
                 0x56 -> if (type == 0x06) {
                     codec = Codec.TELETEXT
@@ -371,7 +384,7 @@ class TsDemuxer(private val listener: TsListener) {
             Codec.DVB_SUBTITLE, Codec.TELETEXT -> TrackKind.SUBTITLE
             Codec.ID3, Codec.UNKNOWN -> TrackKind.DATA
         }
-        return TsTrack(pid, type, codec, kind, language?.lowercase()?.takeIf { it.isNotBlank() && it.all { c -> c in 'a'..'z' } })
+        return TsTrack(pid, type, codec, kind, language?.lowercase()?.takeIf { it.isNotBlank() && it.all { c -> c in 'a'..'z' } }, config)
     }
 
     private fun text(d: ByteArray, from: Int, n: Int): String = CharArray(n) { (d[from + it].toInt() and 0xFF).toChar() }.concatToString()

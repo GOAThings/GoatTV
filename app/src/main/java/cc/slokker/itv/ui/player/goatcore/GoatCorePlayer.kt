@@ -43,7 +43,7 @@ class GoatCorePlayer(
      * O motor do canal anterior a fechar: espera-se por ele antes de criar os descodificadores (os de 4K, sobretudo,
      * são poucos; criados antes de o anterior os largar, o sistema tira um a meio).
      */
-    private val previous: Thread? = null,
+    previous: Thread? = null,
     /** O AC-3/E-AC-3 vai tal como vem para a TV ou o recetor (Definições → Passthrough), se eles o aceitarem. */
     private val passthrough: Boolean = false,
 ) {
@@ -54,6 +54,9 @@ class GoatCorePlayer(
         fun onError(why: String, unsupported: Boolean, cause: Throwable?)
         fun onEnded()
         fun onVideoSize(width: Int, height: Int) {}
+
+        /** Legendas a mostrar às [atUs] (o relógio do motor, ver [nowUs]), durante [durationUs] (ou até às seguintes). */
+        fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) {}
     }
 
     /** Números para o laboratório e para o registo. */
@@ -72,6 +75,17 @@ class GoatCorePlayer(
 
     val stats = Stats()
 
+    /**
+     * O fecho do motor anterior: larga-se logo que se esperou por ele (cada motor a guardar o anterior fazia uma cadeia
+     * com todos os canais por onde se passou, e a app ficava sem memória ao fim de uns zaps em 4K).
+     */
+    @Volatile private var previous: Thread? = previous
+
+    private fun waitPrevious() {
+        previous?.join(2_000)
+        previous = null
+    }
+
     private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean)
     /** Um bloco de som para o descodificador, com o formato da faixa; [MARK] diz "mudou a faixa". */
     private class AudioUnit(val data: ByteArray, val ptsUs: Long, val format: cc.slokker.itv.media.AudioFormat?)
@@ -84,6 +98,23 @@ class GoatCorePlayer(
     }
 
     private val videoQueue = LinkedBlockingQueue<VideoUnit>(600)
+
+    /**
+     * Os bytes de vídeo na fila: a rede lê à frente até [MAX_VIDEO_BYTES] (em 4K, 600 imagens passavam dos 100 MB e a
+     * app ficava sem memória a mudar de canal).
+     */
+    private val videoBytes = java.util.concurrent.atomic.AtomicLong()
+
+    private fun queueVideo(unit: VideoUnit) {
+        while (running && videoBytes.get() > MAX_VIDEO_BYTES) Thread.sleep(5)
+        videoBytes.addAndGet(unit.data.size.toLong())
+        videoQueue.put(unit)
+    }
+
+    private fun takenVideo(unit: VideoUnit?): VideoUnit? {
+        if (unit != null) videoBytes.addAndGet(-unit.data.size.toLong())
+        return unit
+    }
     private val audioQueue = LinkedBlockingQueue<AudioUnit>(2000)
 
     @Volatile private var running = true
@@ -100,6 +131,21 @@ class GoatCorePlayer(
     private var videoPid = -1
     private var audioPid = -1
     private val audioTracks = HashMap<Int, AudioTrackState>()
+
+    /** As legendas pedidas (o PID, -1 = desligadas); [NO_CHANGE] = nada pedido. */
+    @Volatile private var requestedText = NO_CHANGE
+    private var textPid = -1
+    private var dvb: androidx.media3.extractor.text.dvb.DvbParser? = null
+    private val textClock = TsClock()
+    private var allTracks: List<TsTrack> = emptyList()
+
+    /** Mostra as legendas da faixa [pid] (DVB), ou nenhuma com -1. */
+    fun selectText(pid: Int) {
+        requestedText = pid
+    }
+
+    /** O tempo do relógio agora (µs), ou Long.MIN_VALUE antes de começar: as legendas acertam-se por ele. */
+    val nowUs: Long get() = nowPtsUs()
 
     /** A faixa de áudio pedida (o menu ou a língua das Definições); -1 = a escolhida ao abrir. */
     @Volatile private var requestedAudio = -1
@@ -172,8 +218,14 @@ class GoatCorePlayer(
                 "video=${threads.getOrNull(1)?.state}")
         }
         running = false
+        previous = null
         threads.forEach { it.interrupt() }
         threads.forEach { runCatching { it.join(1500) } }
+        // O que estava à espera sai já da memória (até 24 MB de vídeo).
+        videoQueue.clear()
+        videoBytes.set(0)
+        audioQueue.clear()
+        threads = emptyList()
     }
 
     // ---- Rede e núcleo partilhado ------------------------------------------------------------
@@ -209,6 +261,7 @@ class GoatCorePlayer(
     }
 
     private fun tracksChanged(tracks: List<TsTrack>) {
+        allTracks = tracks
         Log.i(TAG, "tracks " + tracks.joinToString { "${it.codec}${it.language?.let { l -> "/$l" } ?: ""}" })
         listener.onTracks(tracks)
         val video = tracks.firstOrNull { it.kind == TrackKind.VIDEO }
@@ -267,8 +320,14 @@ class GoatCorePlayer(
             requestedAudio = -1
             switchAudio(requested)
         }
+        val text = requestedText
+        if (text != NO_CHANGE) {
+            requestedText = NO_CHANGE
+            switchText(text)
+        }
         when (track.pid) {
             videoPid -> video(sample)
+            textPid -> text(sample)
             in audioTracks -> audio(track.pid, sample)
         }
     }
@@ -290,7 +349,7 @@ class GoatCorePlayer(
             if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
             if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) return
             stats.videoUnits++
-            videoQueue.put(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe))
+            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe))
             return
         }
         val unit = reader!!.next(sample.data, samplePts, samplePts) ?: return
@@ -299,7 +358,31 @@ class GoatCorePlayer(
         val pts = unit.pts
         if (!videoStart.pass(unit.keyframe, pts)) return
         stats.videoUnits++
-        videoQueue.put(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
+        queueVideo(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
+    }
+
+    /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
+    private fun switchText(pid: Int) {
+        val track = allTracks.firstOrNull { it.pid == pid && it.codec == Codec.DVB_SUBTITLE }
+        textPid = track?.pid ?: -1
+        textClock.reset()
+        // O descodificador do Media3 quer as páginas do PMT (composition e ancillary); sem elas, as do canal todo.
+        dvb = track?.let { androidx.media3.extractor.text.dvb.DvbParser(listOf(it.config ?: byteArrayOf(0, 1, 0, 1))) }
+        listener.onCues(Long.MIN_VALUE, emptyList(), 0)
+    }
+
+    /** Um PES de legendas DVB: data_identifier 0x20 e subtitle_stream_id 0x00, e o resto para o descodificador. */
+    private fun text(sample: TsSample) {
+        val parser = dvb ?: return
+        val d = sample.data
+        if (d.size < 3 || d[0].toInt() != 0x20 || d[1].toInt() != 0x00) return
+        val pts = textClock.unwrap(sample.pts).takeIf { it >= 0 }?.let { it * 100 / 9 } ?: return
+        runCatching {
+            parser.parse(d, 2, d.size - 2, androidx.media3.extractor.text.SubtitleParser.OutputOptions.allCues()) { c ->
+                val at = pts + (c.startTimeUs.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0)
+                listener.onCues(at, c.cues, c.durationUs)
+            }
+        }.onFailure { Log.w(TAG, "dvb subtitles: ${it.message}") }
     }
 
     private fun audio(pid: Int, sample: TsSample) {
@@ -327,10 +410,10 @@ class GoatCorePlayer(
             // A primeira imagem-chave com os parâmetros: é com ela que se configura.
             var first: VideoUnit
             while (true) {
-                first = videoQueue.take()
+                first = takenVideo(videoQueue.take())!!
                 if (first.keyframe) break
             }
-            previous?.join(2_000)
+            waitPrevious()
             val mime = videoMime
             val format = MediaFormat.createVideoFormat(mime, 1920, 1080)
             if (mime == MediaFormat.MIMETYPE_VIDEO_MPEG2) {
@@ -353,7 +436,7 @@ class GoatCorePlayer(
             val info = MediaCodec.BufferInfo()
             while (running) {
                 // Entrada: uma unidade por vez, sem bloquear a saída.
-                val unit = pending ?: videoQueue.poll(5, TimeUnit.MILLISECONDS)
+                val unit = pending ?: takenVideo(videoQueue.poll(5, TimeUnit.MILLISECONDS))
                 if (unit != null) {
                     val i = c.dequeueInputBuffer(5_000)
                     if (i >= 0) {
@@ -478,7 +561,7 @@ class GoatCorePlayer(
     // ---- Som ---------------------------------------------------------------------------------
 
     private fun audioLoop() {
-        previous?.join(2_000)
+        waitPrevious()
         var first = true
         try {
             while (running) {
@@ -797,6 +880,11 @@ class GoatCorePlayer(
         }
 
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
+
+        private const val NO_CHANGE = Int.MIN_VALUE
+
+        /** O máximo de vídeo à espera de ser descodificado (cerca de 8 s em 4K). */
+        private const val MAX_VIDEO_BYTES = 24L * 1024 * 1024
 
         /** A marca na fila do som: mudou a faixa. */
         private val MARK = AudioUnit(ByteArray(0), -1, null)
