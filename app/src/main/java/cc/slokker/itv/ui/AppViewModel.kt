@@ -668,8 +668,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val loaded = lists.view(raw)
         val playlist = loaded.playlist
         // A lista principal passou a ser a da conta de canais extra: ficam só os que cabem no plano dela.
-        if (playlist.type.kind.knowsConnectionLimit || playlist.type.kind.singleConnection) {
-            val limit = if (playlist.type.kind.singleConnection) 1 else loaded.account?.maxConnections ?: 1
+        loaded.account?.maxConnections?.takeIf { it > 0 }?.let { limit ->
             var users = 1
             val before = playback.extras.value.size
             playback.closeExtras { sv -> sv.content.playlist.sharesConnectionsWith(playlist) && ++users > limit }
@@ -1629,13 +1628,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun tiles(except: Int? = null): List<PlaylistContent> =
         (listOfNotNull(content.value) + playback.extras.value.map { it.content }).filterIndexed { i, _ -> i != except }
 
-    /** A conta de [playlist] tem uma ligação livre, com [open] já abertos? Um MAC (Stalker) é uma box: uma só. */
+    /**
+     * A conta de [playlist] tem uma ligação livre, com [open] já abertos? Só se limita quando o fornecedor diz o limite
+     * (o max_connections da conta Xtream): há quem deixe várias, e sem saber deixa-se tentar (se recusar, o canal diz
+     * "sem sinal" e tenta outra vez).
+     */
     private fun connectionFree(playlist: Playlist, open: List<PlaylistContent>): Boolean {
         val users = open.filter { it.playlist.sharesConnectionsWith(playlist) }
         if (users.isEmpty()) return true
-        if (playlist.type.kind.singleConnection) return false
-        if (!playlist.type.kind.knowsConnectionLimit) return true
-        val limit = users.firstNotNullOfOrNull { it.account?.maxConnections } ?: return false
+        val limit = users.firstNotNullOfOrNull { it.account?.maxConnections }?.takeIf { it > 0 } ?: return true
         return users.size < limit
     }
 
@@ -1758,7 +1759,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // A reserva só se abre se a conta dela tiver uma ligação livre (os outros canais no ecrã podem estar nela).
         val busy = content != null && run {
             val users = tiles(except = tile).count { it.playlist.sharesConnectionsWith(backup) }
-            users > 0 && (backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && users >= (content.account?.maxConnections ?: 1))
+            val limit = content.account?.maxConnections?.takeIf { it > 0 }
+            users > 0 && limit != null && users >= limit
         }
         if (busy) Log.i(TAG_BACKUP, "Reserva: outro canal no ecrã já usa a conta dela")
         val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
