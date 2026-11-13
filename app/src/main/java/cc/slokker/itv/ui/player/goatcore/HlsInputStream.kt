@@ -30,7 +30,14 @@ class UnsupportedStream(why: String) : IOException(why)
  * fragmentado seguido). Os segmentos cifrados com AES-128 decifram-se aqui; as outras cifras (SAMPLE-AES…) não:
  * [UnsupportedStream].
  */
-class HlsInputStream(private val source: DataSource.Factory, private val url: String) : InputStream() {
+class HlsInputStream(
+    private val source: DataSource.Factory,
+    private val url: String,
+    /** Num VOD (catch-up em HLS), o ponto onde começar: o segmento que o tem. */
+    private val startMs: Long = 0,
+    /** Num VOD aberto a meio: onde começa (ms) o segmento por onde se começou. */
+    private val onStart: (Long) -> Unit = {},
+) : InputStream() {
     private var mediaUrl: String? = null
     private var nextSequence = Long.MIN_VALUE
     private val pending = ArrayDeque<HlsSegment>()
@@ -79,7 +86,21 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
         ended = playlist.ended
         val segments = playlist.segments
         if (nextSequence == Long.MIN_VALUE && segments.isNotEmpty()) {
-            nextSequence = segments[if (ended) 0 else (segments.size - 3).coerceAtLeast(0)].sequence
+            var first = if (ended) 0 else (segments.size - 3).coerceAtLeast(0)
+            if (ended && startMs > 0) {
+                // O segmento onde fica o ponto pedido (pela soma das durações).
+                var at = 0L
+                for ((i, s) in segments.withIndex()) {
+                    val d = (s.duration * 1000).toLong()
+                    if (at + d > startMs || i == segments.lastIndex) {
+                        first = i
+                        break
+                    }
+                    at += d
+                }
+                onStart(at)
+            }
+            nextSequence = segments[first].sequence
         }
         for (s in segments) if (s.sequence >= nextSequence && pending.none { it.sequence == s.sequence }) pending.addLast(s)
         lastReload = SystemClock.elapsedRealtime()

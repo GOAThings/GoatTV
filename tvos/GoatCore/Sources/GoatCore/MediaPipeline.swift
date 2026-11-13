@@ -76,7 +76,8 @@ public final class MediaPipeline {
     public var audioPid: Int?
 
     private let listener = Listener()
-    private let demuxer: TsDemuxer
+    /// TS ou MP4 fragmentado (o fMP4 do HLS), escolhido pelos primeiros bytes.
+    private var demuxer: StreamDemuxer
     private var tracks: [MediaTrack] = []
     private var videoPid: Int?
     private var nal: NalReader?
@@ -116,13 +117,13 @@ public final class MediaPipeline {
     }
 
     public init() {
-        demuxer = TsDemuxer(listener: listener)
+        demuxer = StreamDemuxer(listener: listener)
         listener.owner = self
     }
 
     /// O que chegou da rede.
     public func feed(_ data: Data) {
-        AppleMedia.shared.feed(demuxer: demuxer, data: data)
+        if let why = AppleMedia.shared.feedStream(demuxer: demuxer, data: data) { unsupported(why) }
     }
 
     /// O fim do stream: o que estava a meio sai.
@@ -130,7 +131,7 @@ public final class MediaPipeline {
 
     /// Outra ligação: esquece tudo.
     public func reset() {
-        demuxer.reset()
+        demuxer = StreamDemuxer(listener: listener)
         tracks = []
         videoPid = nil
         nal = nil

@@ -365,12 +365,12 @@ final class PlayerEngine: NSObject {
     private func makeAttempts(_ candidates: [StreamCandidate]) -> [Attempt] {
         // AetherEngine: um HLS abre primeiro no da Apple (o mais rápido a mudar de canal) e, se não der, no AetherEngine;
         // o resto (.ts…) abre no AetherEngine e, em último caso, no VLC.
-        // GoatCore: o .ts abre no motor próprio e, se não der (um formato que ainda não toca), no VLC. O HLS ainda vai
-        // pelo da Apple.
+        // GoatCore: abre tudo no motor próprio (o HLS também, como no Android) e, se não der (um formato que ainda não
+        // toca: MPEG-2, SAMPLE-AES…), o HLS no da Apple e o resto no VLC.
         if engine == "goatcore" {
             return candidates.enumerated().flatMap { i, c -> [Attempt] in
                 c.isHLS
-                    ? [Attempt(candidate: c, backend: .apple, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
+                    ? [Attempt(candidate: c, backend: .goatcore, candidateIndex: i), Attempt(candidate: c, backend: .apple, candidateIndex: i)]
                     : [Attempt(candidate: c, backend: .goatcore, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
             }
         }
@@ -1196,7 +1196,8 @@ final class PlayerEngine: NSObject {
         g.setAspect(aspect)
         g.rate = speed
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
-        g.open(url, headers: headers, startMs: ring ? 0 : openStartMs)
+        let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
+        g.open(url, headers: headers, startMs: ring ? 0 : openStartMs, hls: hls)
     }
 
     private func goatCoreEvent(_ event: GoatCorePlayback.Event) {

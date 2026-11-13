@@ -86,6 +86,9 @@ internal class GoatCoreMediaPlayer(
     /** Com [startMs]: o PTS do início do ficheiro, para a posição contar desde lá (como no ExoPlayer). */
     @Volatile private var firstPts = -1L
 
+    /** Num HLS (VOD) aberto a meio: onde começa o segmento por onde se começou (ms). */
+    @Volatile private var offsetMs = 0L
+
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             if (pendingStart) start()
@@ -109,8 +112,9 @@ internal class GoatCoreMediaPlayer(
         this.source = source
         this.uri = Uri.parse(url)
         this.hls = hls
-        this.startMs = if (hls) 0L else startMs
+        this.startMs = startMs
         firstPts = -1L
+        offsetMs = 0L
         mediaItem = MediaItem.fromUri(url)
         chosenAudio = -1
         chosenText = -1
@@ -173,7 +177,7 @@ internal class GoatCoreMediaPlayer(
         // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.
         val from = startMs
         player.open {
-            if (hls) return@open cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString())
+            if (hls) return@open cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString(), from) { offsetMs = it }
             // Num ficheiro com ponto de partida: o byte onde ele fica (sem dar, do início).
             val plan = if (from > 0) runCatching { TsSeek.plan(factory, uri, from) }.onFailure { android.util.Log.w("GoatCore", "seek: ${it.message}") }.getOrNull() else null
             plan?.let { firstPts = it.firstPts }
@@ -283,7 +287,7 @@ internal class GoatCoreMediaPlayer(
         if (p < 0) return lastPositionMs
         firstPts.takeIf { it >= 0 }?.let { return TsSeek.positionMs(p, it) }
         if (startPositionMs < 0) startPositionMs = p
-        return p - startPositionMs
+        return offsetMs + p - startPositionMs
     }
 
     /**

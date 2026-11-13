@@ -32,6 +32,16 @@ object AppleMedia {
         demuxer.feed(b, 0, b.size)
     }
 
+    /** Junta ao [demuxer] (TS ou fMP4, escolhido pelos primeiros bytes) o que chegou; devolve porque é que o stream não se toca, ou null. */
+    fun feedStream(demuxer: StreamDemuxer, data: NSData): String? {
+        val b = bytes(data)
+        demuxer.feed(b, 0, b.size)
+        return demuxer.unsupported
+    }
+
+    /** O IV de [key] (16 bytes) para o CommonCrypto. */
+    fun iv(key: HlsKey): NSData = data(key.iv)
+
     /** As páginas de legendas do teletexto que a faixa [track] anuncia (ver [TeletextPage]). */
     fun teletextPages(track: TsTrack): List<TeletextPage> =
         if (track.codec == Codec.TELETEXT) TeletextPage.of(track.config).filter { it.isSubtitle } else emptyList()

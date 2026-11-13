@@ -181,7 +181,7 @@ final class GoatCorePlayback: NSObject {
 
     /// Abre [url] com estes cabeçalhos (o User-Agent e o Referer da lista). [startMs]: num TS gravado (as gravações,
     /// o catch-up do Stalker), o ponto onde começar (ver TsSeek).
-    func open(_ url: URL, headers: [String: String], startMs: Int64 = 0) {
+    func open(_ url: URL, headers: [String: String], startMs: Int64 = 0, hls: Bool = false) {
         stop()
         generation += 1
         let g = generation
@@ -194,6 +194,7 @@ final class GoatCorePlayback: NSObject {
         textTracks = []
         startTime = nil
         firstPts = nil
+        offsetMs = 0
         clearSubtitles()
         // Tudo novo: a ligação anterior pode ainda entregar uma imagem antes de fechar, e ia parar ao leitor deste canal
         // (com outro relógio, a camada deixava de mostrar e só o som continuava).
@@ -212,7 +213,7 @@ final class GoatCorePlayback: NSObject {
             Task { @MainActor in self?.sessionEvent(event, generation: g) }
         }
         session = s
-        s.start(url, headers: headers, startMs: startMs)
+        s.start(url, headers: headers, startMs: startMs, hls: hls)
     }
 
     func stop() {
@@ -241,6 +242,8 @@ final class GoatCorePlayback: NSObject {
             httpStatus = code
         case .origin(let pts):
             firstPts = pts
+        case .offset(let ms):
+            offsetMs = ms
         case .textTracks(let list):
             textTracks = list
         case .text(let time, let text):
@@ -307,8 +310,11 @@ final class GoatCorePlayback: NSObject {
             let now = synchronizer.currentTime().convertScale(90_000, method: .roundTowardZero).value
             return Double(TsSeek.positionMs(pts: now, firstPts: firstPts)) / 1000
         }
-        return Double(playedMs ?? 0) / 1000
+        return Double(offsetMs + (playedMs ?? 0)) / 1000
     }
+
+    /// Um HLS aberto a meio: onde começa o segmento por onde se começou (ms).
+    private var offsetMs: Int64 = 0
 
     /// O PTS do início do ficheiro, quando se abriu a meio.
     private var firstPts: Int64?
@@ -434,6 +440,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         case started(CMTime)
         /// Abriu-se um ficheiro a meio: o PTS do início dele (90 kHz), para a posição contar desde lá.
         case origin(Int64)
+        /// Um HLS (VOD) aberto a meio: o tempo (ms) do segmento por onde começou.
+        case offset(Int64)
         /// As legendas do teletexto do canal.
         case textTracks([TextTrack])
         /// As legendas escolhidas mudam a este tempo ("" limpa).
@@ -476,7 +484,12 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private var file: FileHandle?
     /// À frente do relógio há tanto que se parou de ler (a camada guarda tudo o que recebe; sem isto, uma gravação
     /// ou o anel atrás do direto, que chegam à velocidade do disco, enchiam a memória).
-    private var suspended = false
+    private var suspended = false {
+        didSet { hold.withLock { $0 = suspended } }
+    }
+    /// O mesmo, para o leitor do HLS (que corre noutra thread).
+    private let hold = OSAllocatedUnfairLock(initialState: false)
+    private var hls: HlsReader?
     /// O stream acabou de chegar: o fim conta quando o relógio chegar ao último que está no leitor.
     private var inputEnded = false
     private static let maxAheadSeconds = 20.0
@@ -509,8 +522,12 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         pipeline.onJump = {}
     }
 
-    func start(_ url: URL, headers: [String: String], startMs: Int64) {
+    func start(_ url: URL, headers: [String: String], startMs: Int64, hls: Bool) {
         queue.async { self.startWatch() }
+        if hls {
+            queue.async { self.openHls(url, headers: headers, startMs: startMs) }
+            return
+        }
         if url.isFileURL {
             queue.async { self.openFile(url, startMs: startMs) }
             return
@@ -555,6 +572,36 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             if at == 0 { return first.0 }
             return fetch("\(at)-\(at + Int64(n) - 1)")?.0 ?? Data()
         }
+    }
+
+    /// Um HLS: a playlist e os segmentos pelo HlsReader, que espera enquanto há muito à frente.
+    private func openHls(_ url: URL, headers: [String: String], startMs: Int64) {
+        guard !closed else { return }
+        let reader = HlsReader(url: url, headers: headers)
+        reader.startMs = startMs
+        reader.onStart = { [weak self] ms in self?.onEvent?(.offset(ms)) }
+        let hold = self.hold
+        reader.shouldWait = { hold.withLock { $0 } }
+        reader.onData = { [weak self] data in
+            guard let self else { return }
+            self.queue.async { if !self.closed { self.pipeline.feed(data) } }
+        }
+        reader.onEnd = { [weak self] error in
+            guard let self else { return }
+            self.queue.async {
+                guard !self.closed else { return }
+                if let error {
+                    if let f = error as? HlsReader.Failure, case .http(let code) = f { self.onEvent?(.httpStatus(code)) }
+                    self.fail("\(error)")
+                    return
+                }
+                self.pipeline.flush()
+                self.inputEnded = true
+                if self.startTime == nil { self.finish() }
+            }
+        }
+        hls = reader
+        reader.start()
     }
 
     /// Uma gravação no disco: lê-se aos bocados na fila (ver [pumpFile]), a começar no ponto pedido.
@@ -618,6 +665,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             self.watch?.cancel()
             try? self.file?.close()
             self.file = nil
+            self.hls?.stop()
+            self.hls = nil
         }
     }
 
@@ -692,6 +741,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         cancelled = true
         watch?.cancel()
         urlSessionLock.withLock { $0?.invalidateAndCancel() }
+        hls?.stop()
         onEvent?(.failed(why))
     }
 
