@@ -13,8 +13,18 @@ kotlin {
 
     // Só compila num Mac (o CI da Apple); no Linux estes alvos ficam de fora sozinhos. O macOS é para os testes do
     // GoatCore (`swift test` no Mac do CI), que agora usa este núcleo.
+    // GOATSHARED_SLICES (no CI) escolhe as fatias a compilar ("tvos,macos"…): cada uma leva minutos, e cada CI só
+    // precisa das suas. Sem ela, todas.
     val xcf = XCFramework("GoatShared")
-    listOf(tvosArm64(), tvosSimulatorArm64(), iosArm64(), iosSimulatorArm64(), macosArm64()).forEach { target ->
+    val slices = System.getenv("GOATSHARED_SLICES")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+    fun wanted(name: String) = slices == null || name in slices
+    listOfNotNull(
+        if (wanted("tvos")) tvosArm64() else null,
+        if (wanted("tvossim")) tvosSimulatorArm64() else null,
+        if (wanted("ios")) iosArm64() else null,
+        if (wanted("iossim")) iosSimulatorArm64() else null,
+        if (wanted("macos")) macosArm64() else null,
+    ).forEach { target ->
         target.binaries.framework {
             baseName = "GoatShared"
             isStatic = true

@@ -34,6 +34,9 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
       - name: Núcleo partilhado (GoatShared)
         run: scripts/build-shared.sh
+        # Só as fatias que este CI usa (ver shared/build.gradle.kts).
+        env:
+          GOATSHARED_SLICES: "tvossim"
       - name: XcodeGen
         run: scripts/fetch-xcodegen.sh
       - uses: actions/cache@v4
