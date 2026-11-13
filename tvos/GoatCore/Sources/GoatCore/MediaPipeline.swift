@@ -15,7 +15,8 @@ public struct MediaTrack: Equatable, Sendable {
     public let language: String?
 }
 
-/// Uma página de legendas do teletexto (a faixa [pid], a página como se escreve: 0x888 = 888) que o canal anuncia.
+/// Umas legendas do canal: uma faixa DVB (imagens; [page] 0) ou uma página do teletexto (a faixa [pid], a página
+/// como se escreve: 0x888 = 888).
 public struct TextTrack: Equatable, Sendable {
     public let pid: Int
     public let page: Int
@@ -24,8 +25,28 @@ public struct TextTrack: Equatable, Sendable {
     /// Legendas para surdos (o tipo 5 do teletexto).
     public let hearingImpaired: Bool
 
-    /// Um número só para a faixa e a página (como no Android: acima de qualquer PID).
-    public var key: Int { pid * 0x1000 + page }
+    /// Um número só para a faixa (DVB: o PID) ou para a faixa e a página (teletexto, como no Android: acima de
+    /// qualquer PID).
+    public var key: Int { page == 0 ? pid : pid * 0x1000 + page }
+    public var isTeletext: Bool { page != 0 }
+}
+
+/// Uma imagem das legendas DVB: onde fica no ecrã do emissor e os pixels (RGBA pré-multiplicado).
+public struct SubtitleImage: Sendable {
+    public let x: Int
+    public let y: Int
+    public let width: Int
+    public let height: Int
+    public let rgba: Data
+}
+
+/// As imagens a mostrar (vazio limpa) no ecrã do emissor ([displayWidth]×[displayHeight]) durante, no máximo,
+/// [timeoutSeconds] (0 = até às seguintes).
+public struct SubtitleImages: Sendable {
+    public let displayWidth: Int
+    public let displayHeight: Int
+    public let images: [SubtitleImage]
+    public let timeoutSeconds: Int
 }
 
 /// O motor GoatCore, do stream às amostras da Apple: o MPEG-TS que chega da rede é separado pelo núcleo partilhado
@@ -46,6 +67,8 @@ public final class MediaPipeline {
     public var onTextTracks: (([TextTrack]) -> Void)?
     /// O texto das legendas escolhidas quando muda: o tempo (90 kHz, no relógio do vídeo) e as linhas ("" limpa).
     public var onText: ((Int64, String) -> Void)?
+    /// As imagens das legendas DVB escolhidas quando mudam, com o tempo (90 kHz, no relógio do vídeo).
+    public var onImages: ((Int64, SubtitleImages) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -69,6 +92,8 @@ public final class MediaPipeline {
     private var reportedUnsupported = false
     private var textTracks: [TextTrack] = []
     private var teletext: TeletextDecoder?
+    private var dvb: DvbSubtitleDecoder?
+    private var rawTracks: [TsTrack] = []
     private var textPid: Int?
     /// Os últimos PES de cada faixa de legendas: ao escolher uma, o que já passou mostra-se logo (ver [selectText]).
     private var recentText: [Int: [TsSample]] = [:]
@@ -77,9 +102,15 @@ public final class MediaPipeline {
     /// As legendas a mostrar ([TextTrack.key]), ou nil para nenhumas.
     public func selectText(_ key: Int?) {
         teletext = nil
+        dvb = nil
         textPid = nil
         guard let key, let t = textTracks.first(where: { $0.key == key }) else { return }
-        teletext = TeletextDecoder(page: Int32(t.page))
+        if t.isTeletext {
+            teletext = TeletextDecoder(page: Int32(t.page))
+        } else {
+            guard let raw = rawTracks.first(where: { Int($0.pid) == t.pid }) else { return }
+            dvb = AppleMedia.shared.dvbDecoder(track: raw)
+        }
         textPid = t.pid
         for s in recentText[t.pid] ?? [] { text(s) }
     }
@@ -113,8 +144,10 @@ public final class MediaPipeline {
         audioClock.reset()
         reportedUnsupported = false
         textTracks = []
+        rawTracks = []
         recentText = [:]
         teletext = nil
+        dvb = nil
         textPid = nil
     }
 
@@ -138,8 +171,12 @@ public final class MediaPipeline {
             }
             return MediaTrack(pid: Int(t.pid), codec: t.codec.name, kind: kind, language: t.language)
         }
-        textTracks = list.flatMap { t in
-            AppleMedia.shared.teletextPages(track: t).map { p in
+        rawTracks = list
+        textTracks = list.flatMap { t -> [TextTrack] in
+            if t.codec.name == "DVB_SUBTITLE" {
+                return [TextTrack(pid: Int(t.pid), page: 0, language: t.language, hearingImpaired: false)]
+            }
+            return AppleMedia.shared.teletextPages(track: t).map { p in
                 TextTrack(pid: Int(t.pid), page: Int(p.page), language: p.language ?? t.language, hearingImpaired: p.type == 5)
             }
         }
@@ -185,13 +222,24 @@ public final class MediaPipeline {
 
     // MARK: Legendas
 
-    /// Um PES de teletexto da faixa escolhida: o texto, quando muda, no tempo do vídeo (ou do som, sem vídeo).
+    /// Um PES das legendas escolhidas: o texto (teletexto) ou as imagens (DVB), quando mudam, no tempo do vídeo (ou
+    /// do som, sem vídeo).
     private func text(_ sample: TsSample) {
-        guard let decoder = teletext, let text = AppleMedia.shared.teletextText(decoder: decoder, sample: sample) else { return }
         let clock = videoPid != nil ? videoClock : audioClock
-        let pts = clock.map(ts: sample.pts)
-        guard pts >= 0 else { return }
-        onText?(pts, text)
+        if let decoder = teletext {
+            guard let text = AppleMedia.shared.teletextText(decoder: decoder, sample: sample) else { return }
+            let pts = clock.map(ts: sample.pts)
+            if pts >= 0 { onText?(pts, text) }
+        } else if let decoder = dvb {
+            guard let page = AppleMedia.shared.dvbPage(decoder: decoder, sample: sample) else { return }
+            let pts = clock.map(ts: sample.pts)
+            guard pts >= 0 else { return }
+            let images = page.images.map { i in
+                SubtitleImage(x: Int(i.x), y: Int(i.y), width: Int(i.width), height: Int(i.height), rgba: AppleMedia.shared.pixels(image: i) as Data)
+            }
+            onImages?(pts, SubtitleImages(displayWidth: Int(page.displayWidth), displayHeight: Int(page.displayHeight),
+                                          images: images, timeoutSeconds: Int(page.timeoutSeconds)))
+        }
     }
 
     // MARK: Vídeo

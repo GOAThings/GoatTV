@@ -23,10 +23,54 @@ final class GoatCoreView: UIView {
         return l
     }()
 
+    /// As imagens das legendas DVB, no ecrã do emissor (ver [showSubtitleImages]).
+    private let imageLayer = UIView()
+    private var images: SubtitleImages?
+    /// O tamanho do vídeo (para pôr as imagens em cima dele, e não das barras pretas).
+    var videoSize: CGSize = .zero {
+        didSet { if videoSize != oldValue { setNeedsLayout() } }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         layer.addSublayer(displayLayer)
+        imageLayer.isUserInteractionEnabled = false
+        addSubview(imageLayer)
         addSubview(subtitle)
+    }
+
+    /// Mostra as imagens das legendas DVB (nil ou vazio limpa).
+    func showSubtitleImages(_ page: SubtitleImages?) {
+        images = page
+        imageLayer.subviews.forEach { $0.removeFromSuperview() }
+        for i in page?.images ?? [] {
+            guard let image = Self.cgImage(i) else { continue }
+            let v = UIImageView(image: UIImage(cgImage: image))
+            v.tag = imageLayer.subviews.count
+            imageLayer.addSubview(v)
+        }
+        setNeedsLayout()
+    }
+
+    private static func cgImage(_ i: SubtitleImage) -> CGImage? {
+        guard i.width > 0, i.height > 0, i.rgba.count >= i.width * i.height * 4,
+              let provider = CGDataProvider(data: i.rgba as CFData) else { return nil }
+        return CGImage(width: i.width, height: i.height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: i.width * 4,
+                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
+    }
+
+    /// Onde fica a imagem do vídeo dentro da vista (com o ajuste escolhido).
+    private var videoRect: CGRect {
+        guard videoSize.width > 0, videoSize.height > 0 else { return bounds }
+        switch gravity {
+        case .resize: return bounds
+        case .resizeAspectFill:
+            let scale = max(bounds.width / videoSize.width, bounds.height / videoSize.height)
+            let w = videoSize.width * scale, h = videoSize.height * scale
+            return CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
+        default: return AVMakeRect(aspectRatio: videoSize, insideRect: bounds)
+        }
     }
 
     /// Mostra [text] nas legendas ("" esconde).
@@ -60,6 +104,17 @@ final class GoatCoreView: UIView {
         let size = subtitle.sizeThatFits(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
         let width = min(maxWidth, size.width + 16)
         subtitle.frame = CGRect(x: (bounds.width - width) / 2, y: bounds.height * 0.92 - size.height, width: width, height: size.height)
+        // As imagens DVB: o ecrã do emissor (720×576, ou o que ele disser) é a imagem do vídeo.
+        imageLayer.frame = bounds
+        if let page = images, page.displayWidth > 0, page.displayHeight > 0 {
+            let rect = videoRect
+            let sx = rect.width / CGFloat(page.displayWidth)
+            let sy = rect.height / CGFloat(page.displayHeight)
+            for (v, i) in zip(imageLayer.subviews, page.images.filter { Self.cgImage($0) != nil }) {
+                v.frame = CGRect(x: rect.minX + CGFloat(i.x) * sx, y: rect.minY + CGFloat(i.y) * sy,
+                                 width: CGFloat(i.width) * sx, height: CGFloat(i.height) * sy)
+            }
+        }
     }
 }
 
@@ -94,8 +149,16 @@ final class GoatCorePlayback: NSObject {
     private(set) var textTracks: [TextTrack] = []
     /// As legendas escolhidas ([TextTrack.key]); nil = nenhumas.
     private(set) var selectedText: Int?
-    /// O texto à espera da sua hora (no relógio das camadas), pela ordem em que chegou.
-    private var pendingText: [(time: CMTime, text: String)] = []
+    /// O que mostrar nas legendas: texto (teletexto; "" limpa) ou imagens (DVB).
+    private enum Subtitle {
+        case text(String)
+        case images(SubtitleImages)
+    }
+
+    /// As legendas à espera da sua hora (no relógio das camadas), pela ordem em que chegaram.
+    private var pendingText: [(time: CMTime, subtitle: Subtitle)] = []
+    /// As imagens no ecrã saem a esta hora (o tempo da página DVB), se antes não vierem outras.
+    private var imagesExpire: CMTime?
     private var subtitleTimer: Timer?
 
     /// O relógio e o som do canal a dar (novos em cada canal, como a camada do vídeo).
@@ -166,8 +229,9 @@ final class GoatCorePlayback: NSObject {
         switch event {
         case .tracks(let list):
             tracks = list
-        case .videoSize(let height):
+        case .videoSize(let width, let height):
             videoHeight = height
+            view.videoSize = CGSize(width: width, height: height)
         case .started(let time):
             if startTime == nil { startTime = time }
             guard !reportedPlaying else { return }
@@ -180,7 +244,10 @@ final class GoatCorePlayback: NSObject {
         case .textTracks(let list):
             textTracks = list
         case .text(let time, let text):
-            pendingText.append((time, text))
+            pendingText.append((time, .text(text)))
+            showDueSubtitles()
+        case .images(let time, let page):
+            pendingText.append((time, .images(page)))
             showDueSubtitles()
         case .failed(let why):
             guard !reportedEnd else { return }
@@ -279,22 +346,36 @@ final class GoatCorePlayback: NSObject {
 
     private func clearSubtitles() {
         pendingText = []
+        imagesExpire = nil
         view.showSubtitle("")
+        view.showSubtitleImages(nil)
     }
 
     /// Põe as legendas cuja hora já chegou (a última ganha) e volta quando for a hora da seguinte.
     private func showDueSubtitles() {
         subtitleTimer?.invalidate()
         subtitleTimer = nil
-        guard !pendingText.isEmpty else { return }
+        guard !pendingText.isEmpty || imagesExpire != nil else { return }
         let now = synchronizer.currentTime()
         guard now.isValid, startTime != nil else { return scheduleSubtitles(after: 0.1) }
         while let first = pendingText.first, first.time <= now {
-            view.showSubtitle(first.text)
             pendingText.removeFirst()
+            switch first.subtitle {
+            case .text(let text):
+                view.showSubtitle(text)
+            case .images(let page):
+                view.showSubtitleImages(page)
+                imagesExpire = page.timeoutSeconds > 0 && !page.images.isEmpty
+                    ? first.time + CMTime(value: CMTimeValue(page.timeoutSeconds), timescale: 1) : nil
+            }
         }
-        if let next = pendingText.first {
-            let wait = (next.time - now).seconds
+        if let expire = imagesExpire, expire <= now {
+            imagesExpire = nil
+            view.showSubtitleImages(nil)
+        }
+        let next = [pendingText.first?.time, imagesExpire].compactMap { $0 }.min()
+        if let next {
+            let wait = (next - now).seconds
             scheduleSubtitles(after: min(max(wait, 0.01), 0.25))
         }
     }
@@ -348,7 +429,7 @@ extension GoatCorePlayback: AVPictureInPictureSampleBufferPlaybackDelegate {
 private final class StreamSession: NSObject, URLSessionDataDelegate {
     enum Event {
         case tracks([MediaTrack])
-        case videoSize(Int)
+        case videoSize(width: Int, height: Int)
         /// A primeira imagem, com o tempo dela (onde o relógio começou).
         case started(CMTime)
         /// Abriu-se um ficheiro a meio: o PTS do início dele (90 kHz), para a posição contar desde lá.
@@ -357,6 +438,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         case textTracks([TextTrack])
         /// As legendas escolhidas mudam a este tempo ("" limpa).
         case text(CMTime, String)
+        /// As imagens das legendas DVB escolhidas mudam a este tempo.
+        case images(CMTime, SubtitleImages)
         case httpStatus(Int)
         case failed(String)
         case ended
@@ -417,6 +500,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         pipeline.onText = { [weak self] pts, text in
             guard let self, !self.closed else { return }
             self.onEvent?(.text(CMTime(value: pts, timescale: 90_000), text))
+        }
+        pipeline.onImages = { [weak self] pts, page in
+            guard let self, !self.closed else { return }
+            self.onEvent?(.images(CMTime(value: pts, timescale: 90_000), page))
         }
         // Um salto no relógio do canal já chega aqui com o tempo seguido (TsClock): o leitor continua sem parar.
         pipeline.onJump = {}
@@ -620,7 +707,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         }
         if !reportedSize, let f = CMSampleBufferGetFormatDescription(b) {
             reportedSize = true
-            onEvent?(.videoSize(Int(CMVideoFormatDescriptionGetDimensions(f).height)))
+            let d = CMVideoFormatDescriptionGetDimensions(f)
+            onEvent?(.videoSize(width: Int(d.width), height: Int(d.height)))
         }
         display.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)

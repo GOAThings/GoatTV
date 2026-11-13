@@ -36,6 +36,24 @@ object AppleMedia {
     fun teletextPages(track: TsTrack): List<TeletextPage> =
         if (track.codec == Codec.TELETEXT) TeletextPage.of(track.config).filter { it.isSubtitle } else emptyList()
 
+    /** O descodificador das legendas DVB da faixa [track] (as páginas do PMT), ou null se não for DVB. */
+    fun dvbDecoder(track: TsTrack): DvbSubtitleDecoder? {
+        if (track.codec != Codec.DVB_SUBTITLE) return null
+        val c = track.config ?: byteArrayOf(0, 1, 0, 1)
+        if (c.size < 4) return null
+        return DvbSubtitleDecoder(((c[0].toInt() and 0xFF) shl 8) or (c[1].toInt() and 0xFF), ((c[2].toInt() and 0xFF) shl 8) or (c[3].toInt() and 0xFF))
+    }
+
+    /** A página nova das legendas DVB neste PES (data_identifier 0x20, subtitle_stream_id 0x00), ou null. */
+    fun dvbPage(decoder: DvbSubtitleDecoder, sample: TsSample): DvbSubtitlePage? {
+        val d = sample.data
+        if (d.size < 3 || d[0].toInt() != 0x20 || d[1].toInt() != 0x00) return null
+        return decoder.decode(d.copyOfRange(2, d.size))
+    }
+
+    /** Os pixels de [image] (RGBA pré-multiplicado) para o Core Graphics. */
+    fun pixels(image: DvbSubtitleImage): NSData = data(image.rgba)
+
     /** O texto novo da página de [decoder] neste PES, as linhas juntas por "\n"; "" para limpar; null se não mudou. */
     fun teletextText(decoder: TeletextDecoder, sample: TsSample): String? = decoder.feed(sample.data)?.joinToString("\n")
 }

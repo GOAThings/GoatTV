@@ -1564,7 +1564,7 @@ extension PlayerEngine {
                             info: TrackInfo(language: t.language, label: t.name, selected: t.selected, forced: t.forced))
             }
         case .goatcore:
-            // O teletexto (as legendas DVB, em imagem, ainda não).
+            // As legendas DVB (imagens) e as páginas do teletexto.
             return goatCoreText.map { t in
                 TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected))
             }
@@ -1653,12 +1653,13 @@ extension PlayerEngine {
     }
 
     /// As faixas de áudio do GoatCore como o menu as mostra (o id é o PID).
-    /// As legendas do teletexto no GoatCore: a língua e o número da página ("Português · 888").
+    /// As legendas no GoatCore: a língua e, no teletexto, o número da página ("Português · 888").
     private var goatCoreText: [(id: Int32, name: String, language: String?, selected: Bool)] {
         guard let g = goatCorePlayback else { return [] }
         return g.textTracks.map { t in
             let language = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 }
-            let name = [language, String(t.page, radix: 16)].compactMap { $0 }.joined(separator: " · ")
+            let page = t.isTeletext ? String(t.page, radix: 16) : nil
+            let name = [language, page].compactMap { $0 }.joined(separator: " · ")
             return (Int32(truncatingIfNeeded: t.key), name, t.language, t.key == g.selectedText)
         }
     }
