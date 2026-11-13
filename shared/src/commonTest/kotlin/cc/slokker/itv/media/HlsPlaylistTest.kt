@@ -56,9 +56,6 @@ class HlsPlaylistTest {
 
     @Test
     fun unsupportedKinds() {
-        val fmp4 = HlsPlaylist.parse("#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\na.m4s\n#EXT-X-ENDLIST", "http://h/x.m3u8")
-        assertEquals("fMP4 segments", fmp4.unsupported)
-        assertTrue(fmp4.ended)
         val sample = HlsPlaylist.parse("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:4,\na.ts", "http://h/x.m3u8")
         assertEquals("encrypted (SAMPLE-AES)", sample.unsupported)
         assertNull(HlsPlaylist.parse("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:4,\na.ts", "http://h/x.m3u8").unsupported)
@@ -90,5 +87,36 @@ class HlsPlaylistTest {
         assertEquals("http://h.example/live/ch/k2", b.key?.uri)
         assertEquals((0..15).toList(), b.key!!.iv.map { it.toInt() })
         assertNull(c.key)
+    }
+
+    @Test
+    fun fmp4MapAndByteRanges() {
+        val p = HlsPlaylist.parse(
+            """
+            #EXTM3U
+            #EXT-X-MAP:URI="main.mp4",BYTERANGE="720@0"
+            #EXTINF:4,
+            #EXT-X-BYTERANGE:1000@720
+            main.mp4
+            #EXTINF:4,
+            #EXT-X-BYTERANGE:500
+            main.mp4
+            #EXT-X-MAP:URI="init2.mp4"
+            #EXTINF:4,
+            b.m4s
+            #EXT-X-ENDLIST
+            """.trimIndent(),
+            "http://h/v/x.m3u8",
+        )
+        assertNull(p.unsupported)
+        assertTrue(p.ended)
+        val (a, b, c) = p.segments
+        assertEquals(listOf(720L, 1000L), listOf(a.range.offset, a.range.length))
+        assertEquals(listOf(1720L, 500L), listOf(b.range.offset, b.range.length))
+        assertEquals(listOf(0L, -1L), listOf(c.range.offset, c.range.length))
+        assertEquals(listOf(0L, 720L), listOf(a.map!!.offset, a.map!!.length))
+        assertTrue(a.map!!.sameAs(b.map))
+        assertEquals("http://h/v/init2.mp4", c.map?.uri)
+        assertFalse(c.map!!.sameAs(b.map))
     }
 }

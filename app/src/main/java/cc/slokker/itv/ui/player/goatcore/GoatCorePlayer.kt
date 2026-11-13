@@ -16,7 +16,7 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.GoatCoreFfmpegAudio
 import cc.slokker.itv.media.NalReader
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
-import cc.slokker.itv.media.TsDemuxer
+import cc.slokker.itv.media.StreamDemuxer
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
@@ -251,7 +251,7 @@ class GoatCorePlayer(
     // ---- Rede e núcleo partilhado ------------------------------------------------------------
 
     private fun readLoop(input: () -> InputStream) {
-        val demuxer = TsDemuxer(object : TsListener {
+        val demuxer = StreamDemuxer(object : TsListener {
             override fun onTracks(tracks: List<TsTrack>) = tracksChanged(tracks)
             override fun onSample(track: TsTrack, sample: TsSample) = sample(track, sample)
         })
@@ -268,6 +268,7 @@ class GoatCorePlayer(
                         captured += n
                     }
                     demuxer.feed(buf, 0, n)
+                    demuxer.unsupported?.let { throw UnsupportedStream(it) }
                 }
             }
             out?.close()

@@ -5,11 +5,13 @@ package cc.slokker.itv.ui.player.goatcore
 import android.net.Uri
 import android.os.SystemClock
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
 import cc.slokker.itv.media.HlsPlaylist
+import cc.slokker.itv.media.HlsRange
 import cc.slokker.itv.media.HlsSegment
 import java.io.IOException
 import java.io.InputStream
@@ -22,10 +24,11 @@ import javax.crypto.spec.SecretKeySpec
 class UnsupportedStream(why: String) : IOException(why)
 
 /**
- * Um canal HLS lido como um só MPEG-TS: a playlist (a principal escolhe a qualidade mais alta) e os segmentos, um
+ * Um canal HLS lido como um só stream: a playlist (a principal escolhe a qualidade mais alta) e os segmentos, um
  * atrás do outro, pela mesma ligação do resto ([source], uma de cada vez). Num direto começa três segmentos antes do
- * fim e vai relendo a playlist. Os segmentos cifrados com AES-128 decifram-se aqui; os fMP4 e as outras cifras
- * (SAMPLE-AES…) não: [UnsupportedStream].
+ * fim e vai relendo a playlist. Nos fMP4, o segmento de inicialização vai à frente sempre que muda (fica um MP4
+ * fragmentado seguido). Os segmentos cifrados com AES-128 decifram-se aqui; as outras cifras (SAMPLE-AES…) não:
+ * [UnsupportedStream].
  */
 class HlsInputStream(private val source: DataSource.Factory, private val url: String) : InputStream() {
     private var mediaUrl: String? = null
@@ -38,9 +41,16 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
     // A última chave lida (a mesma serve muitos segmentos seguidos).
     private var keyUri: String? = null
     private var keyBytes: ByteArray? = null
+    // O segmento de inicialização que já foi (o próximo que for diferente vai antes do seu segmento).
+    private var sentMap: HlsRange? = null
 
     private fun fetchBytes(u: String): ByteArray =
         DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { it.readBytes() }
+
+    private fun open(r: HlsRange): InputStream {
+        val spec = DataSpec.Builder().setUri(Uri.parse(r.uri)).setPosition(r.offset).setLength(if (r.length < 0) C.LENGTH_UNSET.toLong() else r.length).build()
+        return DataSourceInputStream(source.createDataSource(), spec).also { it.open() }
+    }
 
     private fun fetch(u: String): String = fetchBytes(u).decodeToString()
 
@@ -96,7 +106,14 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
                 reload()
                 continue
             }
-            val segment = pending.removeFirst()
+            val segment = pending.first()
+            // O moov antes dos segmentos que o usam (lido inteiro: é pequeno, e a ligação é uma de cada vez).
+            segment.map?.takeIf { !it.sameAs(sentMap) }?.let { map ->
+                sentMap = map
+                current = open(map).use { it.readBytes() }.inputStream()
+                continue
+            }
+            pending.removeFirst()
             nextSequence = segment.sequence + 1
             // A chave lê-se antes de abrir o segmento: uma ligação de cada vez.
             val cipher = segment.key?.let { key ->
@@ -104,7 +121,7 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
                     init(Cipher.DECRYPT_MODE, SecretKeySpec(keyFor(key.uri), "AES"), IvParameterSpec(key.iv))
                 }
             }
-            val raw = DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(segment.uri))).also { it.open() }
+            val raw = open(segment.range)
             current = cipher?.let { CipherInputStream(raw, it) } ?: raw
         }
     }

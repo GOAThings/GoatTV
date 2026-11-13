@@ -6,15 +6,30 @@ class HlsVariant(val uri: String, val bandwidth: Long, val height: Int, val code
 /** A chave AES-128 de um segmento: o endereço dela e o vetor inicial (16 bytes; sem `IV`, o número de sequência). */
 class HlsKey(val uri: String, val iv: ByteArray)
 
+/** Um pedaço de um endereço: [length] bytes a partir de [offset] ([length] -1 = o ficheiro todo). */
+class HlsRange(val uri: String, val offset: Long, val length: Long) {
+    fun sameAs(other: HlsRange?): Boolean = other != null && other.uri == uri && other.offset == offset && other.length == length
+}
+
 /**
- * Um segmento da playlist: o endereço, o número de sequência, a duração (s), se vem depois de uma descontinuidade e,
- * se vier cifrado (AES-128, o segmento inteiro em CBC), a [key].
+ * Um segmento da playlist: os bytes ([range]), o número de sequência, a duração (s), se vem depois de uma
+ * descontinuidade, se vier cifrado (AES-128, o segmento inteiro em CBC) a [key] e, nos fMP4, o segmento de
+ * inicialização ([map], o `moov`) que tem de ir antes.
  */
-class HlsSegment(val uri: String, val sequence: Long, val duration: Double, val discontinuity: Boolean, val key: HlsKey?)
+class HlsSegment(
+    val range: HlsRange,
+    val sequence: Long,
+    val duration: Double,
+    val discontinuity: Boolean,
+    val key: HlsKey?,
+    val map: HlsRange?,
+) {
+    val uri: String get() = range.uri
+}
 
 /**
  * Uma playlist HLS lida: ou principal ([variants]), ou de segmentos ([segments]). [unsupported] diz porque é que o
- * motor não a toca (segmentos fMP4, cifra que não é AES-128 por segmento: SAMPLE-AES…), e então outro motor fica com ela.
+ * motor não a toca (cifra que não é AES-128 por segmento: SAMPLE-AES…), e então outro motor fica com ela.
  */
 class HlsPlaylist(
     val variants: List<HlsVariant>,
@@ -40,6 +55,11 @@ class HlsPlaylist(
             // A chave em vigor: o endereço e o IV dito (null = o número de sequência).
             var keyUri: String? = null
             var keyIv: ByteArray? = null
+            var map: HlsRange? = null
+            // EXT-X-BYTERANGE do próximo segmento, e onde acabou o último pedaço (para os que não dizem o início).
+            var pendingRange: LongArray? = null
+            var lastEnd = 0L
+            var lastUri: String? = null
             for (raw in text.lineSequence()) {
                 val line = raw.trim()
                 if (line.isEmpty()) continue
@@ -50,8 +70,12 @@ class HlsPlaylist(
                     line.startsWith("#EXTINF:") -> pendingDuration = line.substringAfter(':').substringBefore(',').trim().toDoubleOrNull() ?: 0.0
                     line == "#EXT-X-DISCONTINUITY" -> discontinuity = true
                     line == "#EXT-X-ENDLIST" -> ended = true
-                    // fMP4: este motor ainda não o lê.
-                    line.startsWith("#EXT-X-MAP:") -> unsupported = unsupported ?: "fMP4 segments"
+                    line.startsWith("#EXT-X-MAP:") -> {
+                        val a = attributes(line.substringAfter(':'))
+                        val range = a["BYTERANGE"]?.let { byteRange(it) }
+                        map = a["URI"]?.let { HlsRange(resolve(base, it), range?.get(1) ?: 0, range?.get(0) ?: -1) }
+                    }
+                    line.startsWith("#EXT-X-BYTERANGE:") -> pendingRange = byteRange(line.substringAfter(':'))
                     line.startsWith("#EXT-X-KEY:") -> {
                         val a = attributes(line.substringAfter(':'))
                         when (val method = a["METHOD"]) {
@@ -75,13 +99,28 @@ class HlsPlaylist(
                     }
                     pendingDuration >= 0 -> {
                         val key = keyUri?.let { HlsKey(it, keyIv ?: sequenceIv(sequence)) }
-                        segments += HlsSegment(resolve(base, line), sequence++, pendingDuration, discontinuity, key)
+                        val uri = resolve(base, line)
+                        val range = pendingRange?.let { r ->
+                            val offset = if (r[1] >= 0) r[1] else if (uri == lastUri) lastEnd else 0
+                            lastEnd = offset + r[0]
+                            HlsRange(uri, offset, r[0])
+                        } ?: HlsRange(uri, 0, -1)
+                        lastUri = uri
+                        pendingRange = null
+                        segments += HlsSegment(range, sequence++, pendingDuration, discontinuity, key, map)
                         pendingDuration = -1.0
                         discontinuity = false
                     }
                 }
             }
             return HlsPlaylist(variants, segments, target, ended, unsupported)
+        }
+
+        /** `n[@o]` em [n, o] (o -1 quando não vem). */
+        private fun byteRange(text: String): LongArray? {
+            val length = text.substringBefore('@').trim().toLongOrNull() ?: return null
+            val offset = if ('@' in text) text.substringAfter('@').trim().toLongOrNull() ?: return null else -1L
+            return longArrayOf(length, offset)
         }
 
         /** O IV de quando a etiqueta não o diz: o número de sequência em 16 bytes, big-endian. */
