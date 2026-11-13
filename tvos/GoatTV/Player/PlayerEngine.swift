@@ -621,9 +621,12 @@ final class PlayerEngine: NSObject {
     }
 
     private func start() {
-        // Uma gravação deste canal: abre-se o endereço que ela grava (é a mesma ligação).
+        // Uma gravação deste canal: abre-se o endereço que ela grava (é a mesma ligação), num motor que leia o anel
+        // dela: o GoatCore; num .ts também o VLC ou o AetherEngine (o leitor da Apple nunca).
         if index == 0, pausable, let feed = ChannelFeed.current, !feed.isClosed,
-           let i = attempts.firstIndex(where: { $0.candidate.url == feed.url && $0.backend == .vlc }), i > 0 {
+           let i = attempts.firstIndex(where: { a in
+               a.candidate.url == feed.url && (a.backend == .goatcore || (a.backend != .apple && !a.candidate.isHLS))
+           }), i > 0 {
             fallback.restart(at: i)
         }
         guard let linkResolver, index == 0 else {
@@ -700,7 +703,8 @@ final class PlayerEngine: NSObject {
         case .goatcore:
             // Como no VLC: pausar o direto lê do anel (a ligação é do gravador), e o canal que uma gravação está a
             // gravar abre sempre pelo anel dela.
-            // Um HLS também: o gravador lê os segmentos seguidos (HlsReader); em fMP4 não é TS e o GoatCore liga-se ele.
+            // Um HLS também: o gravador lê os segmentos seguidos (HlsReader), os fMP4 passados a TS; só um fMP4 cifrado
+            // não é TS, e aí o GoatCore liga-se ele.
             if pausable, timeshiftEnabled || ChannelFeed.find(attempt.candidate.url) != nil,
                let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds,
                                           hls: attempt.candidate.isHLS) {
