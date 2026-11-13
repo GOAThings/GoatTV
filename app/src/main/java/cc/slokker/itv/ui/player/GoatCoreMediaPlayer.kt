@@ -27,6 +27,7 @@ import androidx.media3.datasource.HttpDataSource
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TeletextPage
+import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.ui.player.goatcore.GoatCorePlayer
 import cc.slokker.itv.ui.player.goatcore.TsSeek
@@ -47,7 +48,12 @@ internal class GoatCoreMediaPlayer(
     private val capture: java.io.File? = null,
     /** AC-3/E-AC-3 em bruto para a TV ou o recetor (ver [GoatCorePlayer.passthrough]). */
     private val passthrough: Boolean = false,
+    /** O HDR: a box decide se a TV aceita o do canal (Definições → HDR; ver HdrType.needsSdr). */
+    private val needsSdr: (Format) -> Boolean = { false },
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
+    /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
+    private var videoInfo: VideoInfo? = null
+
     private val main = Handler(Looper.getMainLooper())
 
     private var source: DataSource.Factory? = null
@@ -139,7 +145,8 @@ internal class GoatCoreMediaPlayer(
         val uri = uri ?: return
         val g = ++generation
         startPositionMs = -1
-        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough, listener = object : GoatCorePlayer.Listener {
+        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
+            needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
@@ -166,6 +173,11 @@ internal class GoatCoreMediaPlayer(
             }
 
             override fun onVideoSize(width: Int, height: Int) = post(g) { videoSize = VideoSize(width, height) }
+
+            override fun onVideoInfo(info: VideoInfo) = post(g) {
+                videoInfo = info
+                this@GoatCoreMediaPlayer.tracks = tracksOf(tsTracks)
+            }
 
             override fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) = showCues(g, atUs, cues, durationUs)
         })
@@ -299,7 +311,8 @@ internal class GoatCoreMediaPlayer(
         fun label(language: String?) = language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage }
         val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE }.map { t ->
             val id = "goatcore:${t.pid}"
-            val format = Format.Builder()
+            val info = videoInfo.takeIf { t.kind == TrackKind.VIDEO }
+            val format = (info?.let { videoFormat(it) } ?: Format.Builder())
                 .setId(id)
                 .setSampleMimeType(mimeOf(t.codec))
                 .setLanguage(t.language)
@@ -327,6 +340,21 @@ internal class GoatCoreMediaPlayer(
         }
         return Tracks(groups + teletext)
     }
+
+    /** Um Format com o que o SPS diz (para o selo HDR, o AFR e a decisão de converter para SDR). */
+    private fun videoFormat(info: VideoInfo): Format.Builder = Format.Builder()
+        .setWidth(info.width)
+        .setHeight(info.height)
+        .apply { if (info.fps > 0) setFrameRate(info.fps) }
+        .setColorInfo(
+            androidx.media3.common.ColorInfo.Builder()
+                .setColorSpace(androidx.media3.common.ColorInfo.isoColorPrimariesToColorSpace(info.primaries))
+                .setColorTransfer(androidx.media3.common.ColorInfo.isoTransferCharacteristicsToColorTransfer(info.transfer))
+                .setColorRange(if (info.fullRange) C.COLOR_RANGE_FULL else C.COLOR_RANGE_LIMITED)
+                .setLumaBitdepth(info.bitDepth)
+                .setChromaBitdepth(info.bitDepth)
+                .build(),
+        )
 
     private fun mimeOf(codec: Codec): String = when (codec) {
         Codec.H264 -> MimeTypes.VIDEO_H264

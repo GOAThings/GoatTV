@@ -21,6 +21,7 @@ import cc.slokker.itv.media.TeletextDecoder
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
+import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
@@ -48,6 +49,11 @@ class GoatCorePlayer(
     previous: Thread? = null,
     /** O AC-3/E-AC-3 vai tal como vem para a TV ou o recetor (Definições → Passthrough), se eles o aceitarem. */
     private val passthrough: Boolean = false,
+    /**
+     * O descodificador deve converter este vídeo para SDR (a TV não aceita o HDR dele, ou "Converter para SDR"); ver
+     * HdrType.needsSdr.
+     */
+    private val needsSdr: (VideoInfo) -> Boolean = { false },
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -56,6 +62,9 @@ class GoatCorePlayer(
         fun onError(why: String, unsupported: Boolean, cause: Throwable?)
         fun onEnded()
         fun onVideoSize(width: Int, height: Int) {}
+
+        /** O que o SPS diz do vídeo (tamanho, cadência, cor/HDR): a primeira vez e quando muda. */
+        fun onVideoInfo(info: VideoInfo) {}
 
         /** Legendas a mostrar às [atUs] (o relógio do motor, ver [nowUs]), durante [durationUs] (ou até às seguintes). */
         fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) {}
@@ -171,6 +180,9 @@ class GoatCorePlayer(
 
     /** Os conjuntos de parâmetros da última imagem-chave (Annex B), para configurar o descodificador. */
     @Volatile private var csd: List<ByteArray> = emptyList()
+
+    /** O que o SPS em uso diz do vídeo (a cor vai para o descodificador ao configurar). */
+    @Volatile private var videoInfo: VideoInfo? = null
     @Volatile private var audioFormat: cc.slokker.itv.media.AudioFormat? = null
 
     // Relógio: o tempo do vídeo que corresponde a [clockBaseRealtimeUs] (ou à cabeça do AudioTrack).
@@ -416,10 +428,10 @@ class GoatCorePlayer(
         var inBand: ByteArray? = null
         if (unit.parameterSets.isNotEmpty()) {
             val sets = unit.parameterSets.map { annexB(it) }
-            if (csd.isNotEmpty() && (sets.size != csd.size || sets.indices.any { !sets[it].contentEquals(csd[it]) })) {
-                inBand = sets.fold(ByteArray(0)) { a, b -> a + b }
-            }
+            val changed = csd.isEmpty() || sets.size != csd.size || sets.indices.any { !sets[it].contentEquals(csd[it]) }
+            if (csd.isNotEmpty() && changed) inBand = sets.fold(ByteArray(0)) { a, b -> a + b }
             csd = sets
+            if (changed) spsInfo(unit.parameterSets)
         }
         if (csd.isEmpty()) return
         val pts = unit.pts
@@ -427,6 +439,17 @@ class GoatCorePlayer(
         stats.videoUnits++
         val data = avccToAnnexB(unit.data)
         queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe))
+    }
+
+    /** O SPS dos conjuntos [sets] (sem o código de início) em [VideoInfo], para quem mostra e para o descodificador. */
+    private fun spsInfo(sets: List<ByteArray>) {
+        val info = if (hevc) {
+            sets.firstOrNull { it.isNotEmpty() && ((it[0].toInt() shr 1) and 0x3F) == 33 }?.let { VideoInfo.hevc(it) }
+        } else {
+            sets.firstOrNull { it.isNotEmpty() && (it[0].toInt() and 0x1F) == 7 }?.let { VideoInfo.h264(it) }
+        } ?: return
+        videoInfo = info
+        listener.onVideoInfo(info)
     }
 
     /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
@@ -528,6 +551,18 @@ class GoatCorePlayer(
                 format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(sps))
                 format.setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(pps))
             }
+            // A cor do SPS (como o ExoPlayer faz): os descodificadores que não leem o VUI ficam a saber que é HDR.
+            videoInfo?.let { info ->
+                val standard = androidx.media3.common.ColorInfo.isoColorPrimariesToColorSpace(info.primaries)
+                val transfer = androidx.media3.common.ColorInfo.isoTransferCharacteristicsToColorTransfer(info.transfer)
+                if (standard > 0) format.setInteger(MediaFormat.KEY_COLOR_STANDARD, standard)
+                if (transfer > 0) format.setInteger(MediaFormat.KEY_COLOR_TRANSFER, transfer)
+                if (standard > 0) format.setInteger(MediaFormat.KEY_COLOR_RANGE, if (info.fullRange) MediaFormat.COLOR_RANGE_FULL else MediaFormat.COLOR_RANGE_LIMITED)
+                // A TV não aceita este HDR (ou pediu-se SDR): o descodificador converte (Android 13+).
+                if (info.isHdr && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && needsSdr(info)) {
+                    format.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
+                }
+            }
             val c = decoderFor(mime, softwareVideo)
             codec = c
             c.configure(format, surface, null, 0)
@@ -570,7 +605,9 @@ class GoatCorePlayer(
             stats.decoderErrors++
             // Só não criar ou configurar o descodificador quer dizer formato que o aparelho não toca; depois disso é
             // uma falha como as outras (volta-se a tentar).
-            fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = !stats.configured, cause = e)
+            // Sem ter saído uma única imagem, é o formato que este descodificador não faz (HEVC de 10 bits num que só faz
+            // 8, um perfil a mais…): outro motor talvez sim (o ExoPlayer tem o FFmpeg).
+            fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = !stats.configured || stats.codecOutputs == 0, cause = e)
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
