@@ -37,6 +37,11 @@ class GoatCorePlayer(
     private val softwareVideo: Boolean = false,
     /** Só no debug: guarda aqui os primeiros 12 MB do stream (para os analisar no PC). */
     private val capture: java.io.File? = null,
+    /**
+     * O motor do canal anterior a fechar: espera-se por ele antes de criar os descodificadores (os de 4K, sobretudo,
+     * são poucos; criados antes de o anterior os largar, o sistema tira um a meio).
+     */
+    private val previous: Thread? = null,
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -181,6 +186,7 @@ class GoatCorePlayer(
     }
 
     private fun tracksChanged(tracks: List<TsTrack>) {
+        Log.i(TAG, "tracks " + tracks.joinToString { "${it.codec}${it.language?.let { l -> "/$l" } ?: ""}" })
         listener.onTracks(tracks)
         val video = tracks.firstOrNull { it.kind == TrackKind.VIDEO }
         if (video != null && video.pid != videoPid) {
@@ -191,7 +197,9 @@ class GoatCorePlayer(
                 else -> fail("unsupported video ${video.codec}", unsupported = true)
             }
         }
-        val audio = tracks.firstOrNull { it.kind == TrackKind.AUDIO }
+        // A primeira faixa de áudio que este aparelho descodifica (um canal com MP2 e AC-3 toca o que puder).
+        val audios = tracks.filter { it.kind == TrackKind.AUDIO }
+        val audio = audios.firstOrNull { mimeOf(it.codec)?.let(::hasDecoder) == true } ?: audios.firstOrNull()
         if (audio != null && audio.pid != audioPid) {
             audioPid = audio.pid
             audioReader = when (audio.codec) {
@@ -230,6 +238,7 @@ class GoatCorePlayer(
     private fun audio(sample: TsSample) {
         val reader = audioReader ?: return
         for (frame in reader.frames(sample.data, sample.pts, sample.discontinuity)) {
+            if (audioFormat != reader.format) reader.format?.let { Log.i(TAG, "audio ${it.codec} ${it.sampleRate} Hz ${it.channels} ch") }
             audioFormat = reader.format
             val pts = audioClock.unwrap(frame.pts)
             audioQueue.put(AudioUnit(frame.data, pts * 100 / 9))
@@ -247,6 +256,7 @@ class GoatCorePlayer(
                 first = videoQueue.take()
                 if (first.keyframe) break
             }
+            previous?.join(2_000)
             val mime = if (hevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
             val format = MediaFormat.createVideoFormat(mime, 1920, 1080)
             if (hevc) {
@@ -287,6 +297,7 @@ class GoatCorePlayer(
                     val f = c.outputFormat
                     val w = if (f.containsKey("crop-right")) f.getInteger("crop-right") - f.getInteger("crop-left") + 1 else f.getInteger(MediaFormat.KEY_WIDTH)
                     val h = if (f.containsKey("crop-bottom")) f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1 else f.getInteger(MediaFormat.KEY_HEIGHT)
+                    Log.i(TAG, "video ${w}x$h ${c.name}")
                     listener.onVideoSize(w, h)
                 }
             }
@@ -294,7 +305,9 @@ class GoatCorePlayer(
             // stop()
         } catch (e: Exception) {
             stats.decoderErrors++
-            fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = true, cause = e)
+            // Só não criar ou configurar o descodificador quer dizer formato que o aparelho não toca; depois disso é
+            // uma falha como as outras (volta-se a tentar).
+            fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = !stats.configured, cause = e)
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
@@ -383,13 +396,8 @@ class GoatCorePlayer(
         try {
             val first = audioQueue.take()
             val f = audioFormat ?: return
-            val mime = when (f.codec) {
-                Codec.AAC_ADTS -> MediaFormat.MIMETYPE_AUDIO_AAC
-                Codec.AC3 -> MediaFormat.MIMETYPE_AUDIO_AC3
-                Codec.EAC3 -> MediaFormat.MIMETYPE_AUDIO_EAC3
-                Codec.MPEG_AUDIO -> "audio/mpeg-L2"
-                else -> return
-            }
+            val mime = mimeOf(f.codec) ?: return
+            previous?.join(2_000)
             val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
             if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
             val c = try {
@@ -481,6 +489,25 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+
+        /** O tipo do MediaCodec para o som em [codec], ou null se não houver. */
+        fun mimeOf(codec: Codec): String? = when (codec) {
+            Codec.AAC_ADTS -> MediaFormat.MIMETYPE_AUDIO_AAC
+            Codec.AC3 -> MediaFormat.MIMETYPE_AUDIO_AC3
+            Codec.EAC3 -> MediaFormat.MIMETYPE_AUDIO_EAC3
+            Codec.MPEG_AUDIO -> "audio/mpeg-L2"
+            else -> null
+        }
+
+        private val decoders = HashMap<String, Boolean>()
+
+        /** Há um descodificador para [mime] neste aparelho? */
+        fun hasDecoder(mime: String): Boolean = synchronized(decoders) {
+            decoders.getOrPut(mime) {
+                android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos
+                    .any { !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, ignoreCase = true) } }
+            }
+        }
 
         /** Os NAL com o tamanho à frente (o que o NalReader dá) com o código de início (o que o MediaCodec quer). */
         fun avccToAnnexB(avcc: ByteArray): ByteArray {

@@ -53,6 +53,9 @@ internal class GoatCoreMediaPlayer(
     private var core: GoatCorePlayer? = null
     private var generation = 0
 
+    /** O motor anterior a fechar (ver [GoatCorePlayer.previous]). */
+    private var closing: Thread? = null
+
     private var playbackState = Player.STATE_IDLE
     private var playWhenReady = false
     private var error: PlaybackException? = null
@@ -108,7 +111,7 @@ internal class GoatCoreMediaPlayer(
         if (hls) return fail(PlaybackException("GoatCore: HLS not yet", null, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
         val g = ++generation
         startPositionMs = -1
-        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, listener = object : GoatCorePlayer.Listener {
+        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
@@ -160,8 +163,8 @@ internal class GoatCoreMediaPlayer(
         val c = core ?: return
         core = null
         lastPositionMs = position(c)
-        // O stop espera pelas threads do motor: fora do thread principal.
-        Thread({ c.stop() }, "goatcore-stop").start()
+        // O stop espera pelas threads do motor: fora do thread principal. O seguinte espera por ele.
+        closing = Thread({ c.stop() }, "goatcore-stop").also { it.start() }
     }
 
     private fun position(c: GoatCorePlayer): Long {

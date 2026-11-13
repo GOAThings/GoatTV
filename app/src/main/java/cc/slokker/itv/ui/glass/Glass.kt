@@ -145,11 +145,17 @@ fun Modifier.glass(
                     val image = backdrop?.image
                     val video = backdrop?.videoBounds ?: Rect.Zero
                     if (image != null && !video.isEmpty) {
+                        // Com barras (um filme em 2.4:1, ou 4:3), o painel passa para lá da imagem: o fundo desfocado
+                        // estica-se até cobrir o painel todo, senão ficava às faixas (escuro, desfocado, escuro).
+                        val left = minOf(video.left, origin.x)
+                        val top = minOf(video.top, origin.y)
+                        val right = maxOf(video.right, origin.x + size.width)
+                        val bottom = maxOf(video.bottom, origin.y + size.height)
                         drawImage(
                             image = image,
                             srcSize = IntSize(image.width, image.height),
-                            dstOffset = IntOffset((video.left - origin.x).roundToInt(), (video.top - origin.y).roundToInt()),
-                            dstSize = IntSize(video.width.roundToInt(), video.height.roundToInt()),
+                            dstOffset = IntOffset((left - origin.x).roundToInt(), (top - origin.y).roundToInt()),
+                            dstSize = IntSize((right - left).roundToInt(), (bottom - top).roundToInt()),
                             filterQuality = FilterQuality.Low,
                             colorFilter = Vibrancy,
                         )
