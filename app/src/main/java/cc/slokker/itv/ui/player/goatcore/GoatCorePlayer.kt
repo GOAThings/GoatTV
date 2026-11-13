@@ -11,6 +11,7 @@ import android.view.Surface
 import cc.slokker.itv.media.AudioFrameReader
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.Mpeg2Reader
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.GoatCoreFfmpegAudio
 import cc.slokker.itv.media.NalReader
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
@@ -237,8 +238,7 @@ class GoatCorePlayer(
     }
 
     /** Este som toca aqui: há descodificador, ou vai em bruto para a TV (passthrough). */
-    private fun playable(codec: Codec): Boolean =
-        mimeOf(codec)?.let(::hasDecoder) == true || (passthrough && encodingOf(codec)?.let { directSupported(it, 48000) } == true)
+    private fun playable(codec: Codec): Boolean = Companion.playable(codec, passthrough)
 
     /** Passa a tocar a faixa de áudio [pid] (o menu, ou a língua preferida). */
     fun selectAudio(pid: Int) {
@@ -503,6 +503,8 @@ class GoatCorePlayer(
     private fun session(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, initial: Boolean): Boolean {
         if (passthrough) encodingOf(f.codec)?.takeIf { directSupported(it, f.sampleRate) }?.let { return bitstream(firstUnit, f, it) }
         val mime = mimeOf(f.codec) ?: return true
+        // Sem descodificador no aparelho (a SHIELD não tem AC-3), o FFmpeg da app (o mesmo do ExoPlayer).
+        if (!hasDecoder(mime) && GoatCoreFfmpegAudio.supports(mime)) return ffmpegSession(firstUnit, f, mime, initial)
         val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
         if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
         val c = try {
@@ -583,6 +585,59 @@ class GoatCorePlayer(
             runCatching { track?.release() }
             runCatching { c.stop() }
             runCatching { c.release() }
+        }
+    }
+
+    /** Como [session], com o FFmpeg a descodificar. */
+    private fun ffmpegSession(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, mime: String, initial: Boolean): Boolean {
+        val dec = try {
+            GoatCoreFfmpegAudio(mime, f.sampleRate, f.channels, f.config)
+        } catch (e: Exception) {
+            if (initial) {
+                audioFailed = true
+                fail("ffmpeg audio: ${e.message}", unsupported = true, cause = e)
+            }
+            return !initial
+        }
+        Log.i(TAG, "audio ffmpeg ${f.codec} ${f.channels} ch")
+        var track: AudioTrack? = null
+        try {
+            var pending: AudioUnit? = firstUnit
+            while (running) {
+                val unit = pending ?: audioQueue.poll(5, TimeUnit.MILLISECONDS)
+                if (unit === MARK) {
+                    handOver()
+                    return true
+                }
+                pending = if (unit != null && !dec.queue(unit.data, unit.ptsUs)) unit else null
+                while (running) {
+                    val (pcm, ptsUs) = dec.take() ?: break
+                    if (pcm.isEmpty()) continue
+                    val t = track ?: newTrack(dec.sampleRate, dec.channels).also { track = it }
+                    if (audioTrack !== t) {
+                        if (audioBasePtsUs == Long.MIN_VALUE && !startAudioAt(ptsUs)) continue
+                        audioBasePtsUs = ptsUs
+                        audioTrack = t
+                        t.setVolume(volume)
+                        if (!paused) t.play()
+                    }
+                    t.write(pcm, 0, pcm.size)
+                    stats.audioFrames++
+                }
+                if (pending != null) Thread.sleep(2)
+            }
+            return false
+        } catch (e: InterruptedException) {
+            throw e
+        } catch (e: Exception) {
+            stats.decoderErrors++
+            fail("ffmpeg audio: ${e.javaClass.simpleName} ${e.message}", unsupported = initial && audioTrack == null, cause = e)
+            return false
+        } finally {
+            if (audioTrack === track) audioTrack = null
+            runCatching { track?.stop() }
+            runCatching { track?.release() }
+            runCatching { dec.release() }
         }
     }
 
@@ -684,6 +739,13 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+
+        /** Este som toca neste aparelho: descodificador do sistema, o FFmpeg da app, ou em bruto pelo HDMI. */
+        fun playable(codec: Codec, passthrough: Boolean): Boolean {
+            val mime = mimeOf(codec) ?: return false
+            return hasDecoder(mime) || GoatCoreFfmpegAudio.supports(mime) ||
+                (passthrough && encodingOf(codec)?.let { directSupported(it, 48000) } == true)
+        }
 
         /** A codificação do AudioTrack para mandar [codec] em bruto (passthrough), ou null. */
         fun encodingOf(codec: Codec): Int? = when (codec) {

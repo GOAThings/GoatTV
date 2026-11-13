@@ -43,6 +43,7 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
         seq = (intent.getStringExtra("seq") ?: "h264_aac").split(',').map { it.trim() }.filter { it.isNotEmpty() }
         dwell = intent.getLongExtra("dwell", 6000)
         rounds = intent.getIntExtra("rounds", 1)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         surfaceView = SurfaceView(this)
         label = TextView(this).apply {
             setTextColor(Color.YELLOW)

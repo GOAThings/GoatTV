@@ -199,7 +199,7 @@ internal class GoatCoreMediaPlayer(
                 .setLanguage(t.language)
                 .setLabel(t.language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage })
                 .build()
-            val supported = t.kind == TrackKind.VIDEO || GoatCorePlayer.mimeOf(t.codec)?.let(GoatCorePlayer::hasDecoder) == true
+            val supported = t.kind == TrackKind.VIDEO || GoatCorePlayer.playable(t.codec, passthrough)
             val selected = t.kind == TrackKind.VIDEO || t.pid == playing
             Tracks.Group(TrackGroup(id, format), false, intArrayOf(if (supported) C.FORMAT_HANDLED else C.FORMAT_UNSUPPORTED_TYPE), booleanArrayOf(selected))
         }
