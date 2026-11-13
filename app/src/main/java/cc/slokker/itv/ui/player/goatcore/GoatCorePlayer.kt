@@ -758,7 +758,7 @@ class GoatCorePlayer(
         // Sem descodificador no aparelho (a SHIELD não tem AC-3), o FFmpeg da app (o mesmo do ExoPlayer).
         if (!hasDecoder(mime) && GoatCoreFfmpegAudio.supports(mime)) return ffmpegSession(firstUnit, f, mime, initial)
         val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
-        if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
+        if (f.codec == Codec.AAC_ADTS || f.codec == Codec.AAC_LATM) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
         val c = try {
             MediaCodec.createDecoderByType(mime)
         } catch (e: Exception) {
@@ -1023,7 +1023,8 @@ class GoatCorePlayer(
 
         /** O tipo do MediaCodec para o som em [codec], ou null se não houver. */
         fun mimeOf(codec: Codec): String? = when (codec) {
-            Codec.AAC_ADTS -> MediaFormat.MIMETYPE_AUDIO_AAC
+            // O LATM sai do AudioFrameReader como blocos AAC crus com o AudioSpecificConfig: o mesmo descodificador.
+            Codec.AAC_ADTS, Codec.AAC_LATM -> MediaFormat.MIMETYPE_AUDIO_AAC
             Codec.AC3 -> MediaFormat.MIMETYPE_AUDIO_AC3
             Codec.EAC3 -> MediaFormat.MIMETYPE_AUDIO_EAC3
             Codec.MPEG_AUDIO -> "audio/mpeg-L2"

@@ -308,7 +308,7 @@ public final class MediaPipeline {
             audioFormatKey = nil
             audioClock.reset()
             switch track.codec.name {
-            case "AAC_ADTS", "AC3", "EAC3", "MPEG_AUDIO": audio = AudioFrameReader(codec: track.codec)
+            case "AAC_ADTS", "AAC_LATM", "AC3", "EAC3", "MPEG_AUDIO": audio = AudioFrameReader(codec: track.codec)
             default:
                 audio = nil
                 unsupported("audio \(track.codec.name)")
@@ -340,7 +340,7 @@ public final class MediaPipeline {
         asbd.mSampleRate = Float64(f.sampleRate)
         asbd.mChannelsPerFrame = UInt32(f.channels)
         switch f.codec.name {
-        case "AAC_ADTS":
+        case "AAC_ADTS", "AAC_LATM":
             asbd.mFormatID = kAudioFormatMPEG4AAC
             asbd.mFormatFlags = UInt32(MPEG4ObjectID.AAC_LC.rawValue)
             asbd.mFramesPerPacket = 1024

@@ -1,8 +1,8 @@
 package cc.slokker.itv.media
 
 /**
- * Um bloco de áudio comprimido, inteiro, como o descodificador do sistema o quer (AAC sem o cabeçalho ADTS; AC-3,
- * E-AC-3 e MPEG áudio tal como vêm). [pts] no relógio do TS (90 kHz); [samples] por canal neste bloco.
+ * Um bloco de áudio comprimido, inteiro, como o descodificador do sistema o quer (AAC sem o cabeçalho ADTS nem o
+ * LATM; AC-3, E-AC-3 e MPEG áudio tal como vêm). [pts] no relógio do TS (90 kHz); [samples] por canal neste bloco.
  */
 class AudioFrame(val data: ByteArray, val pts: Long, val samples: Int)
 
@@ -50,10 +50,16 @@ class AudioFrameReader(private val codec: Codec) {
                 clock = pts
                 resynced = true
             }
-            val payload = if (codec == Codec.AAC_ADTS) buf.copyOfRange(i + h.skip, i + h.size) else buf.copyOfRange(i, i + h.size)
-            format = h.format
+            val payload = h.payload ?: if (codec == Codec.AAC_ADTS) buf.copyOfRange(i + h.skip, i + h.size) else buf.copyOfRange(i, i + h.size)
+            // Um LATM que reusa a configuração e ainda não se viu nenhuma: salta-se (não se sabe o que é).
+            val f = h.format
+            if (f == null || payload.isEmpty()) {
+                i += h.size
+                continue
+            }
+            format = f
             out += AudioFrame(payload, clock, h.samples)
-            if (clock >= 0) clock += h.samples * 90_000L / h.format.sampleRate
+            if (clock >= 0) clock += h.samples * 90_000L / f.sampleRate
             i += h.size
         }
         rest = buf.copyOfRange(i, buf.size)
@@ -65,15 +71,124 @@ class AudioFrameReader(private val codec: Codec) {
         rest = ByteArray(0)
         restPts = -1
         format = null
+        latmConfig = null
     }
 
-    private class Header(val size: Int, val skip: Int, val samples: Int, val format: AudioFormat)
+    /** [payload]: o bloco já tirado (o LATM não está alinhado aos bytes); null = os bytes do cabeçalho em diante. */
+    private class Header(val size: Int, val skip: Int, val samples: Int, val format: AudioFormat?, val payload: ByteArray? = null)
 
     private fun header(d: ByteArray, at: Int): Header? = when (codec) {
         Codec.AAC_ADTS -> adts(d, at)
         Codec.AC3, Codec.EAC3 -> ac3(d, at)
         Codec.MPEG_AUDIO -> mpeg(d, at)
+        Codec.AAC_LATM -> loas(d, at)
         else -> null
+    }
+
+    // ---- LATM (AAC no DVB-T/T2 e nos IPTV que o reencaminham) ---------------------------------------
+
+    /** A última StreamMuxConfig (os blocos com useSameStreamMux reusam-na). */
+    private var latmConfig: AudioFormat? = null
+
+    /**
+     * LOAS: a sincronização 0x2B7 (11 bits) e o tamanho (13 bits), depois um AudioMuxElement com a configuração (ou
+     * o "usa a mesma") e o bloco AAC. Só um programa, uma camada e um sub-bloco (o que os emissores mandam).
+     */
+    private fun loas(d: ByteArray, at: Int): Header? {
+        if (at + 3 > d.size || u(d, at) != 0x56 || (u(d, at + 1) and 0xE0) != 0xE0) return null
+        val length = ((u(d, at + 1) and 0x1F) shl 8) or u(d, at + 2)
+        val size = 3 + length
+        if (at + size > d.size) return Header(size, 0, 1024, null)
+        val bits = BitReader(d, at + 3)
+        if (bits.read(1) == 0) {
+            latmConfig = streamMuxConfig(bits) ?: return Header(size, 0, 1024, null)
+        }
+        val config = latmConfig ?: return Header(size, 0, 1024, null)
+        // PayloadLengthInfo (frameLengthType 0): bytes de 255 somados até um que não seja.
+        var payloadLength = 0
+        do {
+            val b = bits.read(8)
+            payloadLength += b
+        } while (b == 255)
+        if (payloadLength <= 0 || payloadLength > length) return Header(size, 0, 1024, null)
+        val payload = ByteArray(payloadLength) { bits.read(8).toByte() }
+        return Header(size, 0, 1024, config, payload)
+    }
+
+    private fun latmValue(bits: BitReader): Int {
+        val bytes = bits.read(2)
+        var v = 0
+        repeat(bytes + 1) { v = (v shl 8) or bits.read(8) }
+        return v
+    }
+
+    private fun streamMuxConfig(bits: BitReader): AudioFormat? {
+        val version = bits.read(1)
+        if (version == 1 && bits.read(1) != 0) return null // audioMuxVersionA
+        if (version == 1) latmValue(bits) // taraBufferFullness
+        bits.read(1) // allStreamsSameTimeFraming
+        if (bits.read(6) != 0) return null // numSubFrames
+        if (bits.read(4) != 0) return null // numProgram
+        if (bits.read(3) != 0) return null // numLayer
+        val asc: AudioFormat
+        if (version == 0) {
+            asc = audioSpecificConfig(bits) ?: return null
+        } else {
+            val ascBits = latmValue(bits)
+            val start = bits.position
+            asc = audioSpecificConfig(bits) ?: return null
+            bits.skip(ascBits - (bits.position - start))
+        }
+        if (bits.read(3) != 0) return null // frameLengthType: só o 0 (tamanho variável)
+        bits.read(8) // latmBufferFullness
+        if (bits.read(1) == 1) {
+            // otherDataPresent
+            if (version == 1) {
+                latmValue(bits)
+            } else {
+                do {
+                    val esc = bits.read(1)
+                    bits.read(8)
+                } while (esc == 1)
+            }
+        }
+        if (bits.read(1) == 1) bits.read(8) // crcCheckPresent
+        return asc
+    }
+
+    /**
+     * O AudioSpecificConfig lido dos bits (copiado tal qual para o descodificador): o tipo, a frequência e os canais; no
+     * AAC (tipos 1–4, também por baixo do SBR/PS) o GASpecificConfig, para saber onde acaba.
+     */
+    private fun audioSpecificConfig(bits: BitReader): AudioFormat? {
+        val start = bits.position
+        fun objectType(): Int {
+            val t = bits.read(5)
+            return if (t == 31) 32 + bits.read(6) else t
+        }
+        fun rate(): Int {
+            val index = bits.read(4)
+            return if (index == 15) bits.read(24) else AAC_RATES.getOrNull(index) ?: 0
+        }
+        var type = objectType()
+        val rate = rate()
+        val channelConfig = bits.read(4)
+        if (type == 5 || type == 29) {
+            rate() // a frequência do SBR (o descodificador acha-a sozinho)
+            type = objectType()
+        }
+        if (type !in 1..4 || rate == 0 || channelConfig == 0) return null
+        bits.read(1) // frameLengthFlag
+        if (bits.read(1) == 1) bits.read(14) // dependsOnCoreCoder: coreCoderDelay
+        bits.read(1) // extensionFlag
+        val used = bits.position - start
+        val config = ByteArray((used + 7) / 8)
+        val copy = bits.copy(start)
+        for (k in 0 until used) {
+            if (copy.read(1) == 1) config[k / 8] = (config[k / 8].toInt() or (0x80 ushr (k % 8))).toByte()
+        }
+        val channels = if (channelConfig == 7) 8 else channelConfig
+        return AudioFormat(Codec.AAC_LATM, rate, channels, config)
     }
 
     private fun u(d: ByteArray, i: Int) = d[i].toInt() and 0xFF
@@ -165,6 +280,17 @@ class AudioFrameReader(private val codec: Codec) {
 
     private class BitReader(private val d: ByteArray, private var byte: Int) {
         private var bit = 0
+        private val origin = byte
+
+        /** Os bits já lidos desde o início. */
+        val position: Int get() = (byte - origin) * 8 + bit
+
+        fun skip(n: Int) {
+            if (n > 0) repeat(n) { read(1) }
+        }
+
+        /** Um leitor novo no bit [from] (contado como [position]). */
+        fun copy(from: Int): BitReader = BitReader(d, origin).also { it.skip(from) }
 
         fun read(n: Int): Int {
             var v = 0
