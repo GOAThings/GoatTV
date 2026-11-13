@@ -60,6 +60,13 @@ class AudioFrameReader(private val codec: Codec) {
                 i += h.size
                 continue
             }
+            if (h.dependent) {
+                // Os canais a mais do E-AC-3 juntam-se ao bloco de que dependem (o descodificador quer os dois juntos).
+                val last = out.lastOrNull()
+                if (last != null) out[out.lastIndex] = AudioFrame(last.data + payload, last.pts, last.samples)
+                i += h.size
+                continue
+            }
             format = f
             out += AudioFrame(payload, clock, h.samples)
             if (clock >= 0) clock += h.samples * 90_000L / f.sampleRate
@@ -84,7 +91,12 @@ class AudioFrameReader(private val codec: Codec) {
                 continue
             }
             if (i + h.size > data.size) break
-            h.format?.let { out += RawAudioFrame(i, h.size, h.samples, it.sampleRate) }
+            val last = out.lastOrNull()
+            if (h.dependent && last != null && last.offset + last.size == i) {
+                out[out.lastIndex] = RawAudioFrame(last.offset, last.size + h.size, last.samples, last.sampleRate)
+            } else {
+                h.format?.let { out += RawAudioFrame(i, h.size, h.samples, it.sampleRate) }
+            }
             i += h.size
         }
         return out
@@ -97,8 +109,12 @@ class AudioFrameReader(private val codec: Codec) {
         latmConfig = null
     }
 
-    /** [payload]: o bloco já tirado (o LATM não está alinhado aos bytes); null = os bytes do cabeçalho em diante. */
-    private class Header(val size: Int, val skip: Int, val samples: Int, val format: AudioFormat?, val payload: ByteArray? = null)
+    /**
+     * [payload]: o bloco já tirado (o LATM não está alinhado aos bytes); null = os bytes do cabeçalho em diante.
+     * [dependent]: uma sub-stream dependente do E-AC-3 (os canais a mais do 7.1), que vai no mesmo pacote do bloco
+     * anterior e não conta tempo.
+     */
+    private class Header(val size: Int, val skip: Int, val samples: Int, val format: AudioFormat?, val payload: ByteArray? = null, val dependent: Boolean = false)
 
     private fun header(d: ByteArray, at: Int): Header? = when (codec) {
         Codec.AAC_ADTS -> adts(d, at)
@@ -252,7 +268,9 @@ class AudioFrameReader(private val codec: Codec) {
             if (rate == 0 || size < 8) return null
             val acmod = (u(d, at + 4) shr 1) and 0x07
             val lfe = u(d, at + 4) and 0x01
-            Header(size, 0, intArrayOf(1, 2, 3, 6)[numblkscod] * 256, AudioFormat(Codec.EAC3, rate, ACMOD_CHANNELS[acmod] + lfe, ByteArray(0)))
+            // strmtyp 1: uma sub-stream dependente (os canais a mais), que vai com o bloco independente anterior.
+            val dependent = u(d, at + 2) shr 6 == 1
+            Header(size, 0, intArrayOf(1, 2, 3, 6)[numblkscod] * 256, AudioFormat(Codec.EAC3, rate, ACMOD_CHANNELS[acmod] + lfe, ByteArray(0)), dependent = dependent)
         } else {
             null
         }

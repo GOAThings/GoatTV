@@ -108,6 +108,11 @@ public final class MediaPipeline {
     private var audioFormat: CMAudioFormatDescription?
     private var audioFormatKey: GoatShared.AudioFormat?
     private var audioClock = TsClock()
+    /// O áudio contado às amostras: onde começou a sequência sem buracos (em amostras, na [audioRunRate]) e quantas já
+    /// foram. Ver [audioTime].
+    private var audioRunStart: Int64 = -1
+    private var audioRunSamples: Int64 = 0
+    private var audioRunRate: Int32 = 0
     private var reportedUnsupported = false
     private var textTracks: [TextTrack] = []
     private var teletext: TeletextDecoder?
@@ -175,6 +180,7 @@ public final class MediaPipeline {
         audioFormat = nil
         audioFormatKey = nil
         audioClock.reset()
+        audioRunStart = -1
         reportedUnsupported = false
         textTracks = []
         rawTracks = []
@@ -374,6 +380,7 @@ public final class MediaPipeline {
             audioFormat = nil
             audioFormatKey = nil
             audioClock.reset()
+            audioRunStart = -1
             switch track.codec.name {
             case "AAC_ADTS", "AAC_LATM", "AC3", "EAC3", "MPEG_AUDIO": audio = AudioFrameReader(codec: track.codec)
             default:
@@ -393,14 +400,43 @@ public final class MediaPipeline {
         // Um bloco por amostra (com a descrição do pacote): o renderizador decide como os junta.
         for frame in frames {
             let pts = audioClock.unwrap(ts: frame.pts)
-            if audioClock.jumped { onJump?() }
+            if audioClock.jumped {
+                onJump?()
+                audioRunStart = -1
+            }
             let data = AppleMedia.shared.data(bytes: frame.data) as Data
-            let duration = CMTime(value: CMTimeValue(frame.samples), timescale: CMTimeScale(f.sampleRate))
-            if let buffer = Self.sampleBuffer(data, format: format, pts: pts, dts: pts, duration: duration, samples: 1, packetSizes: [data.count]) {
+            let rate = CMTimeScale(f.sampleRate)
+            let duration = CMTime(value: CMTimeValue(frame.samples), timescale: rate)
+            let time = audioTime(pts, rate: rate, samples: Int64(frame.samples))
+            if let buffer = Self.sampleBuffer(data, format: format, time: time, duration: duration, packetSizes: [data.count]) {
                 onAudio?(buffer)
             }
         }
     }
+
+    /// O tempo de um bloco de áudio às amostras, seguido do anterior. Os PTS dos IPTV tremem uns milissegundos de PES
+    /// para PES, e o renderizador da Apple toca cada bloco no tempo exato: um buraco ou uma sobreposição de 1–2 ms
+    /// ouvia-se como um estalo (o Android escreve os blocos seguidos e não sofria disto). Só um salto maior do que
+    /// [audioSlackTicks] (falta de dados, outro programa) recomeça a conta no PTS do bloco.
+    private func audioTime(_ pts: Int64, rate: CMTimeScale, samples: Int64) -> CMTime {
+        if pts >= 0, rate > 0 {
+            let expected = audioRunStart >= 0 && rate == audioRunRate
+                ? (audioRunStart + audioRunSamples) * 90_000 / Int64(rate) : Int64.min
+            if expected == Int64.min || abs(pts - expected) > Self.audioSlackTicks {
+                audioRunStart = pts * Int64(rate) / 90_000
+                audioRunSamples = 0
+                audioRunRate = rate
+            }
+        } else if audioRunStart < 0 || rate != audioRunRate {
+            return .invalid
+        }
+        let time = CMTime(value: audioRunStart + audioRunSamples, timescale: rate)
+        audioRunSamples += samples
+        return time
+    }
+
+    /// 40 ms: mais do que o tremer dos PTS, menos do que se nota entre a imagem e o som.
+    private static let audioSlackTicks: Int64 = 3_600
 
     static func audioFormat(_ f: GoatShared.AudioFormat) -> CMAudioFormatDescription? {
         var asbd = AudioStreamBasicDescription()
@@ -438,6 +474,13 @@ public final class MediaPipeline {
 
     static func sampleBuffer(_ data: Data, format: CMFormatDescription, pts: Int64, dts: Int64, duration: CMTime, samples: Int,
                              packetSizes: [Int]?) -> CMSampleBuffer? {
+        sampleBuffer(data, format: format, time: pts >= 0 ? CMTime(value: pts, timescale: 90_000) : .invalid,
+                     decode: dts >= 0 ? CMTime(value: dts, timescale: 90_000) : .invalid,
+                     duration: duration, samples: samples, packetSizes: packetSizes)
+    }
+
+    static func sampleBuffer(_ data: Data, format: CMFormatDescription, time: CMTime, decode: CMTime? = nil, duration: CMTime,
+                             samples: Int = 1, packetSizes: [Int]?) -> CMSampleBuffer? {
         var block: CMBlockBuffer?
         guard CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil, blockLength: data.count, blockAllocator: nil,
                                                  customBlockSource: nil, offsetToData: 0, dataLength: data.count, flags: 0,
@@ -446,9 +489,7 @@ public final class MediaPipeline {
             CMBlockBufferReplaceDataBytes(with: raw.baseAddress!, blockBuffer: block, offsetIntoDestination: 0, dataLength: data.count)
         }
         guard copied == noErr else { return nil }
-        var timing = CMSampleTimingInfo(duration: duration,
-                                        presentationTimeStamp: pts >= 0 ? CMTime(value: pts, timescale: 90_000) : .invalid,
-                                        decodeTimeStamp: dts >= 0 ? CMTime(value: dts, timescale: 90_000) : .invalid)
+        var timing = CMSampleTimingInfo(duration: duration, presentationTimeStamp: time, decodeTimeStamp: decode ?? time)
         var buffer: CMSampleBuffer?
         if let packetSizes {
             var descriptions = packetSizes.reduce(into: (0, [AudioStreamPacketDescription]())) { acc, size in
