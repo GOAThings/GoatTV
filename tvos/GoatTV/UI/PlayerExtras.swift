@@ -347,6 +347,8 @@ struct SleepWarning: View {
 struct SecondChannelPicker: View {
     @Environment(\.panelActivity) private var panelActivity
     @Environment(AppModel.self) private var model
+    /// O lugar extra cujo canal se vai mudar (larga a sua ligação), ou nil para um canal novo.
+    let replacing: Int?
     let onPick: (PlaylistContent, Channel, String) -> Void
     let onClose: () -> Void
 
@@ -355,7 +357,8 @@ struct SecondChannelPicker: View {
     @State private var loading = false
     @FocusState private var focus: String?
 
-    init(onPick: @escaping (PlaylistContent, Channel, String) -> Void, onClose: @escaping () -> Void) {
+    init(replacing: Int? = nil, onPick: @escaping (PlaylistContent, Channel, String) -> Void, onClose: @escaping () -> Void) {
+        self.replacing = replacing
         self.onPick = onPick
         self.onClose = onClose
     }
@@ -395,14 +398,14 @@ struct SecondChannelPicker: View {
                                 .focused($focus, equals: "g:\(g.id)")
                         }
                     } else {
-                        let allowed = model.playlists.filter { model.secondAllowed($0) }
+                        let allowed = model.playlists.filter { model.secondAllowed($0, replacing: replacing) }
                         if allowed.isEmpty {
                             Text(s.t("Your plan only allows one connection: add another playlist to watch two channels.",
                                      "O teu plano só deixa uma ligação: junta outra lista para veres dois canais."))
                                 .font(Fonts.rowSubtitle).foregroundStyle(Theme.textDim).padding(16)
                         }
-                        ForEach(allowed + model.playlists.filter { !model.secondAllowed($0) }) { p in
-                            let ok = model.secondAllowed(p)
+                        ForEach(allowed + model.playlists.filter { !model.secondAllowed($0, replacing: replacing) }) { p in
+                            let ok = model.secondAllowed(p, replacing: replacing)
                             Button { open(p) } label: {
                                 RowContent(title: p.name, subtitle: !ok ? s.t("Only one connection", "Só uma ligação")
                                            : (p.id == model.content?.playlist.id ? s.t("Playlist in use", "Lista em uso") : nil))
@@ -435,7 +438,7 @@ struct SecondChannelPicker: View {
             } else if let content {
                 focus = model.groupsForSecond(content).first.map { "g:\($0.id)" }
             } else {
-                focus = model.playlists.first { model.secondAllowed($0) }.map { "p:\($0.id)" }
+                focus = model.playlists.first { model.secondAllowed($0, replacing: replacing) }.map { "p:\($0.id)" }
             }
         }
     }
@@ -450,5 +453,25 @@ struct SecondChannelPicker: View {
             }
             loading = false
         }
+    }
+}
+
+/// Onde fica cada lugar com [count] canais (2–4), em frações do ecrã (como no Android). O lugar 0 é o grande na imagem
+/// na imagem (os outros ficam em coluna no canto de cima à direita); no dividido, 2 canais ficam lado a lado (16:9
+/// cada) e 3 ou 4 numa grelha 2×2 (com 3, o terceiro ao centro em baixo).
+func tileRects(_ count: Int, split: Bool) -> [CGRect] {
+    guard count > 1 else { return [CGRect(x: 0, y: 0, width: 1, height: 1)] }
+    if !split {
+        let f: CGFloat = 0.25, mx: CGFloat = 0.017, my: CGFloat = 0.03, gap: CGFloat = 0.015
+        return [CGRect(x: 0, y: 0, width: 1, height: 1)] + (1..<count).map { k in
+            CGRect(x: 1 - f - mx, y: my + CGFloat(k - 1) * (f + gap), width: f, height: f)
+        }
+    }
+    switch count {
+    case 2: return [CGRect(x: 0, y: 0.25, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0.25, width: 0.5, height: 0.5)]
+    case 3: return [CGRect(x: 0, y: 0, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5),
+                    CGRect(x: 0.25, y: 0.5, width: 0.5, height: 0.5)]
+    default: return [CGRect(x: 0, y: 0, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5),
+                     CGRect(x: 0, y: 0.5, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5)]
     }
 }

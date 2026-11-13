@@ -234,7 +234,7 @@ struct PhoneSecondPicker: View {
 
     var body: some View {
         let s = model.strings
-        let allowed = model.playlists.filter(model.secondAllowed)
+        let allowed = model.playlists.filter { model.secondAllowed($0, replacing: model.second == nil ? nil : 0) }
         NavigationStack {
             List {
                 if loading {

@@ -178,7 +178,7 @@ extension AppModel {
     /// sem eles, os escolhidos à mão ou o automático). Os da reserva ficam de fora sem reserva, quando ela não carrega,
     /// ou quando abri-la passava o limite de ligações dela; os da própria lista, quando ela está em baixo (falhavam
     /// também).
-    private func backupStreams(_ main: PlaylistContent, _ channel: Channel, chosen: [String]? = nil) async -> [FailoverStream] {
+    private func backupStreams(_ main: PlaylistContent, _ channel: Channel, chosen: [String]? = nil, tile: Int = 0) async -> [FailoverStream] {
         let id = main.playlist.id
         // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
         let backup = backupOf(id).flatMap { sameAccount($0, main.playlist) ? nil : $0 }
@@ -187,11 +187,11 @@ extension AppModel {
             content = await backupContent(backup)
             if content == nil { DebugLog.add("Backup: \(backup.name) channels did not load") }
         }
-        // O segundo canal já usa a conta da reserva e ela só deixa uma ligação: não se abre outra.
+        // A reserva só se abre se a conta dela tiver uma ligação livre (os outros canais no ecrã podem estar nela).
         var busy = false
-        if let backup, let c = content, let sp = second?.content.playlist, sameAccount(sp, backup) || sp.id == backup.id,
-           backup.type == .stalker || (backup.type == .xtream && (c.account?.maxConnections ?? 1) < 2) {
-            DebugLog.add("Backup: the second channel already uses its account")
+        if let backup, let limit = content?.account?.maxConnections, limit > 0,
+           tiles(except: tile).filter({ sameAccount($0.playlist, backup) }).count >= limit {
+            DebugLog.add("Backup: another channel on screen already uses its account")
             busy = true
         }
         let m: ChannelMatcher
@@ -263,6 +263,50 @@ extension AppModel {
             if streams.isEmpty { self.player.backupUnavailable() } else { self.openFailovers(streams) }
         }
         return true
+    }
+
+    /// O direto de um canal extra (o do leitor [engine]) não abriu: os failovers dele, como os do principal (a
+    /// reserva só se a conta dela tiver uma ligação livre).
+    func extraStartFailover(engine: Int, status: Int?) -> Bool {
+        guard let slot = extras.firstIndex(where: { $0.engine == engine }) else { return false }
+        let v = extras[slot]
+        guard backupOf(v.content.playlist.id) != nil || v.content.variants[v.channel.key] != nil else { return false }
+        if ProviderOutage.providerWide(status) { providerOutage.markDown(v.content.playlist.id, now: Self.uptimeMs()) }
+        Task { [weak self] in
+            guard let self else { return }
+            let streams = await self.backupStreams(v.content, v.channel, tile: slot + 1)
+            guard let now = self.extras.first(where: { $0.engine == engine }), now.channel.key == v.channel.key else { return }
+            let player = self.extraPlayers[engine]
+            guard let first = streams.first else {
+                player.backupUnavailable()
+                return
+            }
+            self.extraFailovers[engine] = Array(streams.dropFirst())
+            self.openExtraBackup(first, engine: engine)
+        }
+        return true
+    }
+
+    /// Um failover de um canal extra também não abriu: o seguinte, se houver.
+    func extraFailoverFailed(engine: Int) -> Bool {
+        guard var queue = extraFailovers[engine], !queue.isEmpty,
+              let key = extras.first(where: { $0.engine == engine })?.channel.key else { return false }
+        let next = queue.removeFirst()
+        extraFailovers[engine] = queue
+        Task { @MainActor [weak self] in
+            guard let self, self.extras.first(where: { $0.engine == engine })?.channel.key == key else { return }
+            self.openExtraBackup(next, engine: engine)
+        }
+        return true
+    }
+
+    private func openExtraBackup(_ stream: FailoverStream, engine: Int) {
+        let stalker = loader.stalker
+        let playlist = stream.playlist
+        let channel = stream.channel
+        DebugLog.add("Backup: extra channel -> \"\(channel.name)\" (\(playlist.name))")
+        extraPlayers[engine].playBackup(stream.candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
+                                        linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
     }
 
     /// A lista principal esteve em baixo há pouco: o canal novo vai logo aos failovers, sem esperar pelas tentativas de

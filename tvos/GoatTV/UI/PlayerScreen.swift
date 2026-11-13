@@ -67,10 +67,14 @@ struct PlayerScreen: View {
     @State private var sleepWarning: Int?
     // Versão nova (ver UpdateCard)
     @State private var updateHidesIn = updateCardSeconds
-    // Segundo canal
+    // Canais extra (até 3, 4 no ecrã com o principal)
     @State private var split = false
-    @State private var swapped = false
-    @State private var focusSecond = false
+    /// O canal na imagem grande (no dividido, no primeiro lugar): 0 é o principal, 1… os extra.
+    @State private var bigTile = 0
+    /// O canal com foco: é o que se ouve e o que ↑/↓ mudam (0 = o principal).
+    @State private var focusTile = 0
+    /// O lugar extra cujo canal a escolha vai mudar, ou nil para acrescentar um.
+    @State private var pickerSlot: Int?
     @FocusState private var focus: Focus?
 
     /// Onde fica um vídeo: tamanho (nil = ecrã inteiro), canto e margens.
@@ -83,25 +87,37 @@ struct PlayerScreen: View {
         var z: Double = 0
 
         static let full = VideoBox()
-        static let pip = VideoBox(size: CGSize(width: 704, height: 396), alignment: .topTrailing, top: 48, trailing: 64, z: 0.5)
-        static let left = VideoBox(size: CGSize(width: 960, height: 540), alignment: .leading)
-        static let right = VideoBox(size: CGSize(width: 960, height: 540), alignment: .trailing)
     }
 
-    private var mainBox: VideoBox {
-        // Com o guia aberto o vídeo continua em ecrã inteiro (o guia fica por cima, escurecido).
-        if tvGuide { return .full }
-        guard model.second != nil else { return .full }
-        if split { return swapped ? .right : .left }
-        return swapped ? .pip : .full
+    private var tileCount: Int { 1 + model.extras.count }
+
+    /// Os canais pela ordem dos lugares: o da imagem grande primeiro, os outros pela ordem deles.
+    private var order: [Int] {
+        let big = min(max(bigTile, 0), tileCount - 1)
+        return [big] + (0..<tileCount).filter { $0 != big }
     }
 
-    private var secondBox: VideoBox {
-        if split { return swapped ? .left : .right }
-        return swapped ? .full : .pip
+    /// Onde fica o canal [tile] (0 = o principal). Com o guia aberto o principal continua em ecrã inteiro (o guia
+    /// fica por cima, escurecido).
+    private func box(of tile: Int) -> VideoBox {
+        if tvGuide || tileCount == 1 { return .full }
+        let r = tileRects(tileCount, split: split)[order.firstIndex(of: tile) ?? 0]
+        if r.width >= 1, r.height >= 1 { return .full }
+        let w: CGFloat = 1920, h: CGFloat = 1080
+        return VideoBox(size: CGSize(width: r.width * w, height: r.height * h), alignment: .topLeading,
+                        top: r.minY * h, leading: r.minX * w, z: split ? 0 : 0.5)
     }
 
-    private func videoView(_ view: UIView, box: VideoBox, name: String?, audible: Bool) -> some View {
+    /// Enquanto um canal extra não dá: a sintonizar, ou sem sinal (a voltar a tentar).
+    private func extraStatus(_ p: PlayerEngine) -> String? {
+        switch p.state {
+        case .playing: return p.reconnects > 0 ? model.strings.r("no_signal") : nil
+        case .failed: return model.strings.r("no_signal")
+        default: return p.reconnects > 0 ? model.strings.r("no_signal") : model.strings.r("tuning")
+        }
+    }
+
+    private func videoView(_ view: UIView, box: VideoBox, name: String?, audible: Bool, status: String? = nil) -> some View {
         let small = box.size != nil
         return VideoSurface(view: view)
             .frame(width: box.size?.width, height: box.size?.height)
@@ -110,6 +126,13 @@ struct PlayerScreen: View {
                 if small, !tvGuide {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .strokeBorder(audible ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(0.35)), lineWidth: audible ? 5 : 2)
+                }
+            }
+            .overlay {
+                if let status, !tvGuide {
+                    Text(status)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
                 }
             }
             .overlay(alignment: .bottomLeading) {
@@ -136,10 +159,13 @@ struct PlayerScreen: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // O vídeo: em ecrã inteiro, pequeno no canto com o guia aberto, ou com o segundo canal ao lado.
-            videoView(model.player.view, box: mainBox, name: model.current?.name, audible: model.second == nil || !focusSecond)
+            videoView(model.player.view, box: box(of: 0), name: model.current?.name, audible: tileCount == 1 || focusTile == 0)
 
-            if let second = model.second, !tvGuide {
-                videoView(model.secondPlayer.view, box: secondBox, name: second.channel.name, audible: focusSecond)
+            if !tvGuide {
+                ForEach(Array(model.extras.enumerated()), id: \.element.engine) { i, extra in
+                    let p = model.player(of: extra)
+                    videoView(p.view, box: box(of: i + 1), name: extra.channel.name, audible: focusTile == i + 1, status: extraStatus(p))
+                }
             }
 
             surface
@@ -307,9 +333,9 @@ struct PlayerScreen: View {
             if let rec = model.recordings.active.first, panel == .none, !tvGuide, !recordingCard {
                 VStack {
                     HStack {
-                        if model.second == nil { Spacer() }
+                        if model.extras.isEmpty { Spacer() }
                         RecPill(info: rec)
-                        if model.second != nil { Spacer() }
+                        if !model.extras.isEmpty { Spacer() }
                     }
                     Spacer()
                 }
@@ -322,9 +348,11 @@ struct PlayerScreen: View {
 
             if panel == .second {
                 HStack {
-                    SecondChannelPicker(onPick: { c, ch, g in
-                        model.openSecond(c, ch, groupId: g)
-                        focusSecond = false
+                    SecondChannelPicker(replacing: pickerSlot, onPick: { c, ch, g in
+                        let slot = pickerSlot
+                        model.openExtra(c, ch, groupId: g, slot: slot)
+                        // O canal novo fica com o foco (e o som); mudar um deixa o foco nele.
+                        focusTile = (slot ?? (model.extras.count - 1)) + 1
                         closePanel()
                     }, onClose: closePanel)
                     Spacer(minLength: 0)
@@ -353,7 +381,7 @@ struct PlayerScreen: View {
             if recordingCard, panel == .none, !tvGuide {
                 VStack {
                     HStack(alignment: .top) {
-                        if model.second == nil { Spacer() }
+                        if model.extras.isEmpty { Spacer() }
                         if let prompt = model.switchPrompt, prompt.live {
                             BehindLiveSwitchCard(prompt: prompt)
                         } else if let prompt = model.switchPrompt {
@@ -361,7 +389,7 @@ struct PlayerScreen: View {
                         } else if let soon = model.recordings.prompt {
                             RecordingPromptCard(recording: soon)
                         }
-                        if model.second != nil { Spacer() }
+                        if !model.extras.isEmpty { Spacer() }
                     }
                     Spacer()
                 }
@@ -431,10 +459,17 @@ struct PlayerScreen: View {
         .animation(.easeOut(duration: 0.18), value: zapCard)
         .animation(.easeOut(duration: 0.25), value: tvGuide)
         .animation(.easeOut(duration: 0.25), value: split)
-        .animation(.easeOut(duration: 0.25), value: swapped)
+        .animation(.easeOut(duration: 0.25), value: bigTile)
+        .animation(.easeOut(duration: 0.25), value: tileCount)
         // Só tem som o canal com foco.
-        .onChange(of: focusSecond) { _, _ in applyAudio() }
-        .onChange(of: model.second?.channel.key) { _, _ in applyAudio() }
+        .onChange(of: focusTile) { _, _ in applyAudio() }
+        .onChange(of: model.extras.map(\.channel.key)) { _, _ in
+            // Um canal extra fechou: o foco e a imagem grande não podem ficar num lugar que já não existe.
+            if focusTile >= tileCount { focusTile = tileCount - 1 }
+            if bigTile >= tileCount { bigTile = 0 }
+            if tileCount == 1 { split = false }
+            applyAudio()
+        }
         .animation(.easeOut(duration: 0.18), value: reminder)
         .animation(.easeOut(duration: 0.18), value: model.switchPrompt?.id)
         .animation(.easeOut(duration: 0.18), value: model.recordings.prompt?.id)
@@ -611,7 +646,7 @@ struct PlayerScreen: View {
     private var timeshift: Timeshift { model.player.timeshift }
 
     /// A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal).
-    private var tsActive: Bool { model.catchup == nil && model.second == nil && timeshift.available }
+    private var tsActive: Bool { model.catchup == nil && model.extras.isEmpty && timeshift.available }
 
     /// Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up (← → recuar/avançar,
     /// OK pausa, ↑ ↓ só mostram a barra, Voltar direto).
@@ -642,14 +677,7 @@ struct PlayerScreen: View {
     private var backAction: (() -> Void)? {
         if model.catchup != nil { return { model.exitCatchup() } }
         if tsShifted { return { tsGoLive() } }
-        if model.second != nil {
-            return {
-                model.closeSecond()
-                focusSecond = false
-                split = false
-                swapped = false
-            }
-        }
+        if !model.extras.isEmpty { return { closeFocusedExtra() } }
         if exitArmed { return nil }
         if model.prefs.backAction == Prefs.BackAction.guide {
             return {
@@ -662,10 +690,16 @@ struct PlayerScreen: View {
     }
 
     private func applyAudio() {
-        let dual = model.second != nil
-        model.player.setMuted(dual && focusSecond)
-        model.secondPlayer.setMuted(!focusSecond)
-        if !dual { focusSecond = false }
+        if focusTile >= tileCount { focusTile = 0 }
+        model.player.setMuted(tileCount > 1 && focusTile != 0)
+        let audible = focusTile > 0 ? model.extras[focusTile - 1].engine : nil
+        for (i, p) in model.extraPlayers.enumerated() { p.setMuted(i != audible) }
+    }
+
+    /// Fecha o canal extra com foco (com o foco no principal, o último que se abriu).
+    private func closeFocusedExtra() {
+        guard !model.extras.isEmpty else { return }
+        model.closeExtra(focusTile > 0 ? focusTile - 1 : model.extras.count - 1)
     }
 
     private func armExit() {
@@ -734,12 +768,15 @@ struct PlayerScreen: View {
             }
             return
         }
-        // Dois canais: ← → passam o foco (e o som) de um para o outro; ↑ ↓ mudam o canal com foco.
-        if model.second != nil {
+        // Vários canais: ← → passam o foco (e o som) pela ordem dos lugares; ↑ ↓ mudam o canal com foco.
+        if !model.extras.isEmpty {
+            let o = order
+            let at = o.firstIndex(of: focusTile) ?? 0
             switch direction {
-            case .left, .right: focusSecond.toggle()
-            case .up: if focusSecond { model.zapSecond(-1) } else { model.zap(-1) }
-            case .down: if focusSecond { model.zapSecond(1) } else { model.zap(1) }
+            case .left: focusTile = o[(at - 1 + o.count) % o.count]
+            case .right: focusTile = o[(at + 1) % o.count]
+            case .up: if focusTile > 0 { model.zapExtra(focusTile - 1, -1) } else { model.zap(-1) }
+            case .down: if focusTile > 0 { model.zapExtra(focusTile - 1, 1) } else { model.zap(1) }
             @unknown default: break
             }
             return
@@ -779,10 +816,10 @@ struct PlayerScreen: View {
             let player = model.player
             VStack {
                 HStack {
-                    if model.second == nil { Spacer() }
+                    if model.extras.isEmpty { Spacer() }
                     TuningPill(channel: model.current?.name ?? "", reconnecting: player.wasPlaying, attempt: player.reconnects,
                                nextTryAt: player.nextTryAt, waitSeconds: player.retryDelay, failover: model.failoverConnecting)
-                    if model.second != nil { Spacer() }
+                    if !model.extras.isEmpty { Spacer() }
                 }
                 Spacer()
             }
@@ -908,25 +945,33 @@ struct PlayerScreen: View {
                         focusLater(.surface)
                     }
                 }
-                if model.second == nil {
+                if model.extras.isEmpty {
                     chip("second", "rectangle.inset.topright.filled", s.t("Second channel", "Segundo canal")) {
                         hud = false
+                        pickerSlot = nil
                         panel = .second
                     }
                 } else {
-                    chip("swapdual", "arrow.left.arrow.right", s.t("Swap channels", "Trocar canais")) { swapped.toggle() }
-                    chip("layout", split ? "rectangle.inset.topright.filled" : "rectangle.split.2x1",
+                    if model.extras.count < AppModel.maxExtras {
+                        chip("addchannel", "plus.rectangle.on.rectangle", s.r("add_channel")) {
+                            hud = false
+                            pickerSlot = nil
+                            panel = .second
+                        }
+                    }
+                    // O canal com foco passa para a imagem grande (se já lá está, troca com o seguinte).
+                    chip("swapdual", "arrow.left.arrow.right", s.t("Swap channels", "Trocar canais")) {
+                        let o = order
+                        bigTile = focusTile != o[0] ? focusTile : o[1]
+                    }
+                    chip("layout", split ? "rectangle.inset.topright.filled" : "rectangle.split.2x2",
                          split ? s.t("Picture in picture", "Imagem na imagem") : s.t("Split screen", "Ecrã dividido")) { split.toggle() }
-                    chip("changesecond", "rectangle.2.swap", s.t("Change second", "Mudar o segundo")) {
+                    chip("changesecond", "rectangle.2.swap", s.r("change_this_channel")) {
                         hud = false
+                        pickerSlot = focusTile > 0 ? focusTile - 1 : model.extras.count - 1
                         panel = .second
                     }
-                    chip("closesecond", "xmark", s.t("Close second", "Fechar o segundo")) {
-                        model.closeSecond()
-                        focusSecond = false
-                        split = false
-                        swapped = false
-                    }
+                    chip("closesecond", "xmark", s.r("close_this_channel")) { closeFocusedExtra() }
                 }
                 chip("sleep", "moon.zzz.fill", model.sleepAt.map { s.t("Off in %@ min", "Desliga em %@ min", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.t("Sleep timer", "Temporizador")) {
                     hud = false

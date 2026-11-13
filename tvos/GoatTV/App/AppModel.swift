@@ -73,17 +73,27 @@ final class AppModel {
     }
 
     private(set) var switchPrompt: SwitchPrompt?
-    /// O leitor do segundo canal (imagem na imagem ou ecrã dividido).
-    let secondPlayer = PlayerEngine()
+    /// Os leitores dos canais extra (imagem na imagem ou ecrã dividido): até três, quatro no ecrã com o principal.
+    let extraPlayers = [PlayerEngine(), PlayerEngine(), PlayerEngine()]
+    static let maxExtras = 3
 
-    /// O segundo canal: a lista dele (pode ser outra), o canal e os canais por onde ↑/↓ andam.
+    /// Um canal extra: a lista dele (pode ser outra), o canal, os canais por onde ↑/↓ andam e o leitor que usa (fica
+    /// o mesmo enquanto ele está aberto: fechar outro não o faz voltar a abrir).
     struct SecondView {
         let content: PlaylistContent
         var channel: Channel
         let zapList: [Channel]
+        let engine: Int
     }
 
-    private(set) var second: SecondView?
+    /// Os canais extra, pela ordem em que se abriram (o lugar 1 do ecrã é o primeiro).
+    private(set) var extras: [SecondView] = []
+    /// O primeiro canal extra (o iPhone só tem um, sempre em ecrã dividido).
+    var second: SecondView? { extras.first }
+    var secondPlayer: PlayerEngine { extraPlayers[extras.first?.engine ?? 0] }
+    func player(of extra: SecondView) -> PlayerEngine { extraPlayers[extra.engine] }
+    /// Os failovers de cada leitor extra que ainda faltam experimentar (ver [extraStartFailover]).
+    @ObservationIgnored var extraFailovers: [Int: [FailoverStream]] = [:]
 
     /// A cobertura da reserva de cada lista (o subtítulo da linha "Lista de reserva", ver BackupPlaylist.swift).
     var backupCoverage: [String: BackupCoverage] = [:]
@@ -201,6 +211,11 @@ final class AppModel {
         player.skipMain = { [weak self] in self?.skipToBackup() ?? false }
         player.onBackupPlaying = { [weak self] in self?.backupPlaying() }
         player.onBackupFailed = { [weak self] in self?.failoverFailed() ?? false }
+        // Os canais extra também passam aos failovers (como no Android).
+        for (i, engine) in extraPlayers.enumerated() {
+            engine.onStartFailed = { [weak self] status in self?.extraStartFailover(engine: i, status: status) ?? false }
+            engine.onBackupFailed = { [weak self] in self?.extraFailoverFailed(engine: i) ?? false }
+        }
         wireRecordings()
         // Pausar o direto: guarda-se só o programa que se está a ver.
         player.programmeStart = { [weak self] wall in self?.programmeStart(at: wall) }
@@ -605,7 +620,7 @@ final class AppModel {
         player.reconnectSeconds = prefs.reconnectSeconds
         player.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
         player.aspect = prefs.aspect
-        for engine in [player, secondPlayer] {
+        for engine in [player] + extraPlayers {
             engine.zapDelayMs = prefs.zapDelayMs
             engine.audioLanguage = prefs.audioLanguage
             engine.subtitleLanguage = prefs.subtitleLanguage
@@ -621,11 +636,13 @@ final class AppModel {
             engine.audioDelayMs = prefs.audioDelayMs
             engine.hdr = prefs.hdr
         }
-        secondPlayer.controlsDisplay = false
-        secondPlayer.ownsProviderConnection = false
+        for engine in extraPlayers {
+            engine.controlsDisplay = false
+            engine.ownsProviderConnection = false
+            // Os canais extra só escolhem o áudio (como no Android).
+            engine.subtitlesByLanguage = false
+        }
         recordings.setPadding(before: prefs.recordPaddingBeforeMin, after: prefs.recordPaddingAfterMin)
-        // O segundo canal só escolhe o áudio (como no Android).
-        secondPlayer.subtitlesByLanguage = false
         player.afrFallback = prefs.afrFallback
         player.afrMode = prefs.afrMode
         // Pausar o direto: só no canal principal (o segundo abre o stream como sempre).
@@ -1042,6 +1059,17 @@ final class AppModel {
         let options = ContentView.options(prefs, playlistId: raw.playlist.id)
         let loaded = ContentView.apply(raw, options)
         let samePlaylist = content?.playlist.id == loaded.playlist.id
+        // A lista principal passou a ser a da conta de canais extra: ficam só os que cabem no plano dela.
+        if let limit = loaded.account?.maxConnections, limit > 0 {
+            var users = 1
+            let before = extras.count
+            closeExtras { v in
+                guard self.sameAccount(v.content.playlist, loaded.playlist) else { return false }
+                users += 1
+                return users > limit
+            }
+            if extras.count < before { showToast(strings.r("second_closed_same_account")) }
+        }
         rawContent = raw
         shownOptions = options
         content = loaded
@@ -1410,13 +1438,25 @@ final class AppModel {
             a.username?.trimmingCharacters(in: .whitespaces) == b.username?.trimmingCharacters(in: .whitespaces))
     }
 
-    /// Pode-se ver o segundo canal de [playlist]? Da conta da lista principal só se o plano deixar 2+ ligações.
-    func secondAllowed(_ playlist: Playlist) -> Bool {
-        // Um MAC é uma box: uma ligação de cada vez.
-        if playlist.type == .stalker { return false }
-        guard let main = content else { return true }
-        guard sameAccount(playlist, main.playlist), main.playlist.type == .xtream else { return true }
-        return (main.account?.maxConnections ?? 0) >= 2
+    /// Pode-se abrir mais um canal de [playlist] ([replacing]: o lugar extra que vai mudar de canal e larga a sua ligação)?
+    func secondAllowed(_ playlist: Playlist, replacing: Int? = nil) -> Bool {
+        connectionFree(playlist, tiles(except: replacing.map { $0 + 1 }))
+    }
+
+    /// As listas dos canais no ecrã: 0 é o principal, 1… os extra. [except]: um deles fica de fora (o que vai mudar de
+    /// canal, ou passar à reserva, e larga a sua ligação).
+    func tiles(except: Int? = nil) -> [PlaylistContent] {
+        let all = (content.map { [$0] } ?? []) + extras.map(\.content)
+        return all.enumerated().filter { $0.offset != except }.map(\.element)
+    }
+
+    /// A conta de [playlist] tem uma ligação livre, com [open] já abertos? Só se limita quando o fornecedor diz o limite
+    /// (o max_connections da conta Xtream): há quem deixe várias, e sem saber deixa-se tentar (se recusar, o canal diz
+    /// "sem sinal" e tenta outra vez).
+    func connectionFree(_ playlist: Playlist, _ open: [PlaylistContent]) -> Bool {
+        let users = open.filter { sameAccount($0.playlist, playlist) }
+        guard !users.isEmpty, let limit = users.lazy.compactMap({ $0.account?.maxConnections }).first, limit > 0 else { return true }
+        return users.count < limit
     }
 
     /// Os canais de [playlist] para escolher o segundo canal (a lista em uso, da cache, ou descarregados), com as opções dela.
@@ -1461,25 +1501,46 @@ final class AppModel {
         secondLibrary(c).channels(in: groupId)
     }
 
-    func openSecond(_ c: PlaylistContent, _ channel: Channel, groupId: String) {
+    /// Abre um canal extra (ou, com [slot], muda o desse lugar).
+    func openExtra(_ c: PlaylistContent, _ channel: Channel, groupId: String, slot: Int? = nil) {
         let list = channelsForSecond(c, groupId)
-        second = SecondView(content: c, channel: channel, zapList: list.isEmpty ? [channel] : list)
-        playSecond()
+        let zap = list.isEmpty ? [channel] : list
+        if let slot, extras.indices.contains(slot) {
+            extras[slot] = SecondView(content: c, channel: channel, zapList: zap, engine: extras[slot].engine)
+            playExtra(slot)
+            return
+        }
+        guard extras.count < Self.maxExtras,
+              let engine = extraPlayers.indices.first(where: { i in !extras.contains { $0.engine == i } }) else { return }
+        extras.append(SecondView(content: c, channel: channel, zapList: zap, engine: engine))
+        playExtra(extras.count - 1)
     }
 
-    private func playSecond() {
-        guard let second else { return }
-        let candidates = streamCandidates(playlist: second.content.playlist, channel: second.channel, preferred: prefs.streamFormat,
-                                          allowedFormats: second.content.account?.allowedFormats ?? [])
-        secondPlayer.reconnectSeconds = prefs.reconnectSeconds
-        secondPlayer.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
-        secondPlayer.play(candidates, channelKey: second.channel.key, live: true, userAgent: second.channel.userAgent ?? prefs.userAgent,
-                          referrer: second.channel.referrer)
+    /// O segundo canal do iPhone: abre-o, ou muda o que lá está.
+    func openSecond(_ c: PlaylistContent, _ channel: Channel, groupId: String) {
+        openExtra(c, channel, groupId: groupId, slot: extras.isEmpty ? nil : 0)
     }
 
-    /// ↑/↓ no segundo canal (dá a volta nas pontas, como o principal).
-    func zapSecond(_ delta: Int) {
-        guard var s = second else { return }
+    private func playExtra(_ slot: Int) {
+        guard extras.indices.contains(slot) else { return }
+        let v = extras[slot]
+        let engine = extraPlayers[v.engine]
+        extraFailovers[v.engine] = nil
+        let candidates = streamCandidates(playlist: v.content.playlist, channel: v.channel, preferred: prefs.streamFormat,
+                                          allowedFormats: v.content.account?.allowedFormats ?? [])
+        engine.reconnectSeconds = prefs.reconnectSeconds
+        engine.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
+        let stalker = loader.stalker
+        let playlist = v.content.playlist, channel = v.channel
+        engine.play(candidates, channelKey: v.channel.key, live: true, userAgent: v.channel.userAgent ?? prefs.userAgent,
+                    referrer: v.channel.referrer,
+                    linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
+    }
+
+    /// ↑/↓ no canal extra do lugar [slot] (dá a volta nas pontas, como o principal).
+    func zapExtra(_ slot: Int, _ delta: Int) {
+        guard extras.indices.contains(slot) else { return }
+        var s = extras[slot]
         let id = s.content.playlist.id
         let list = s.zapList.filter { !prefs.isLocked(id, $0.categoryId) || unlocked.contains("\(id):\($0.categoryId)") }
         guard list.count > 1 else { return }
@@ -1487,15 +1548,28 @@ final class AppModel {
         let key = s.channel.key
         let i = list.firstIndex { $0.key == key } ?? 0
         s.channel = list[((i + step) % list.count + list.count) % list.count]
-        second = s
-        playSecond()
+        extras[slot] = s
+        playExtra(slot)
     }
 
-    func closeSecond() {
-        secondPlayer.stop()
-        second = nil
-        player.setMuted(false)
+    func zapSecond(_ delta: Int) { zapExtra(0, delta) }
+
+    /// Fecha o canal extra do lugar [slot] (os outros continuam no leitor deles).
+    func closeExtra(_ slot: Int) {
+        guard extras.indices.contains(slot) else { return }
+        let v = extras.remove(at: slot)
+        extraFailovers[v.engine] = nil
+        extraPlayers[v.engine].stop()
+        if extras.isEmpty { player.setMuted(false) }
     }
+
+    /// Fecha todos os canais extra (ou só os de que [drop] diz que sim).
+    func closeExtras(where drop: (SecondView) -> Bool = { _ in true }) {
+        let dropped = extras.indices.filter { drop(extras[$0]) }
+        for slot in dropped.reversed() { closeExtra(slot) }
+    }
+
+    func closeSecond() { closeExtras() }
 
     func playPrevious() {
         guard let previous, !(library?.isGroupLocked(previous.categoryId) ?? true) else { return }
