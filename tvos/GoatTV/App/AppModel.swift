@@ -613,7 +613,9 @@ final class AppModel {
             engine.freezeFrame = prefs.freezeFrame
             engine.preferSurround = prefs.surroundDefault
             engine.passthrough = prefs.audioPassthrough
-            engine.engine = prefs.engine
+            // O motor é sempre o GoatCore (como no Android); o leitor da Apple e o VLC ficam só como reserva automática
+            // para o que ele não toca (ver PlayerEngine.makeAttempts). A definição antiga já não conta.
+            engine.engine = "goatcore"
             engine.softwareDecoder = prefs.decoder == "sw"
             engine.deinterlace = prefs.deinterlace
             engine.audioDelayMs = prefs.audioDelayMs

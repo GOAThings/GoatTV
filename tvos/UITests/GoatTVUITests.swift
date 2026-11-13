@@ -59,14 +59,11 @@ final class GoatTVUITests: XCTestCase {
         press(.down, wait: 1); press(.right, wait: 1.5); shot("guide-moved")
         press(.menu, wait: 2)
 
-        // O outro motor: VLC.
+        // As definições da reprodução.
         press(.left, wait: 2); press(.left, wait: 2)
         guard focusGear() else { return shot("no-gear-2") }
         press(.select, wait: 2)
         open("playback"); shot("playback")
-        open("engine"); shot("engine")
-        if focus("o1") { press(.select, wait: 1.5) }
-        shot("playback-vlc")
         // As linhas novas (como no Android TV): o modo do AFR e a língua do áudio.
         open("afr"); shot("afr-modes")
         press(.menu, wait: 1)

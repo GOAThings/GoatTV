@@ -745,7 +745,7 @@ struct SettingsPanel: View {
                       "Liga Igualar a frame rate nas definições do Apple TV (Vídeo e áudio → Igualar conteúdo)")
                 : s.r("afr_sub")
             return [
-                pickItem("stream_format"), pickItem("buffer"), pickItem("engine"), pickItem("decoder"), pickItem("deinterlace"),
+                pickItem("stream_format"), pickItem("buffer"), pickItem("decoder"), pickItem("deinterlace"),
                 pickItem("aspect"),
                 .toggle("freeze_frame", s.r("freeze_frame"), prefs.freezeFrame, subtitle: s.r("freeze_frame_sub")) {
                     model.setPref("freeze_frame", .bool($0))
@@ -1433,13 +1433,6 @@ struct SettingsPanel: View {
             return (s.t("When the app opens", "Ao abrir a app"),
                     [o("last", s.t("Last channel", "Último canal")), o("list", s.t("Last channel with the list open", "Último canal com a lista aberta"))],
                     .string(p.startup))
-        case "engine":
-            return (s.t("Player", "Player"),
-                    [o("exo", s.t("Apple + VLC", "Apple + VLC")),
-                     o("vlc", s.t("VLC only (for streams that don't open)", "Só VLC (para streams que não abram)")),
-                     o("aether", s.t("Apple + AetherEngine (experimental)", "Apple + AetherEngine (experimental)")),
-                     o("goatcore", s.t("GoatCore (experimental)", "GoatCore (experimental)"))],
-                    .string(p.engine))
         case "decoder":
             return (s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"),
                     [o("hw", s.t("Hardware", "Hardware")), o("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))],
