@@ -3,12 +3,18 @@ package cc.slokker.itv.media
 /** Uma qualidade de uma playlist HLS principal: a playlist dela, o débito e (se o disser) a altura da imagem. */
 class HlsVariant(val uri: String, val bandwidth: Long, val height: Int, val codecs: String?)
 
-/** Um segmento da playlist: o endereço, o número de sequência, a duração (s) e se vem depois de uma descontinuidade. */
-class HlsSegment(val uri: String, val sequence: Long, val duration: Double, val discontinuity: Boolean)
+/** A chave AES-128 de um segmento: o endereço dela e o vetor inicial (16 bytes; sem `IV`, o número de sequência). */
+class HlsKey(val uri: String, val iv: ByteArray)
+
+/**
+ * Um segmento da playlist: o endereço, o número de sequência, a duração (s), se vem depois de uma descontinuidade e,
+ * se vier cifrado (AES-128, o segmento inteiro em CBC), a [key].
+ */
+class HlsSegment(val uri: String, val sequence: Long, val duration: Double, val discontinuity: Boolean, val key: HlsKey?)
 
 /**
  * Uma playlist HLS lida: ou principal ([variants]), ou de segmentos ([segments]). [unsupported] diz porque é que o
- * motor não a toca (segmentos fMP4, cifra que não é AES-128 por segmento…), e então outro motor fica com ela.
+ * motor não a toca (segmentos fMP4, cifra que não é AES-128 por segmento: SAMPLE-AES…), e então outro motor fica com ela.
  */
 class HlsPlaylist(
     val variants: List<HlsVariant>,
@@ -31,6 +37,9 @@ class HlsPlaylist(
             var pendingVariant: Map<String, String>? = null
             var pendingDuration = -1.0
             var discontinuity = false
+            // A chave em vigor: o endereço e o IV dito (null = o número de sequência).
+            var keyUri: String? = null
+            var keyIv: ByteArray? = null
             for (raw in text.lineSequence()) {
                 val line = raw.trim()
                 if (line.isEmpty()) continue
@@ -41,11 +50,21 @@ class HlsPlaylist(
                     line.startsWith("#EXTINF:") -> pendingDuration = line.substringAfter(':').substringBefore(',').trim().toDoubleOrNull() ?: 0.0
                     line == "#EXT-X-DISCONTINUITY" -> discontinuity = true
                     line == "#EXT-X-ENDLIST" -> ended = true
-                    // fMP4 e cifra: este motor ainda não os lê.
+                    // fMP4: este motor ainda não o lê.
                     line.startsWith("#EXT-X-MAP:") -> unsupported = unsupported ?: "fMP4 segments"
                     line.startsWith("#EXT-X-KEY:") -> {
-                        val method = attributes(line.substringAfter(':'))["METHOD"]
-                        if (method != null && method != "NONE") unsupported = unsupported ?: "encrypted ($method)"
+                        val a = attributes(line.substringAfter(':'))
+                        when (val method = a["METHOD"]) {
+                            null, "NONE" -> { keyUri = null; keyIv = null }
+                            "AES-128" -> {
+                                val uri = a["URI"]
+                                if (uri == null) unsupported = unsupported ?: "AES-128 without a key URI"
+                                keyUri = uri?.let { resolve(base, it) }
+                                keyIv = a["IV"]?.let { hex(it) }
+                                if (a["IV"] != null && keyIv == null) unsupported = unsupported ?: "AES-128 with a bad IV"
+                            }
+                            else -> unsupported = unsupported ?: "encrypted ($method)"
+                        }
                     }
                     line.startsWith("#") -> {}
                     pendingVariant != null -> {
@@ -55,13 +74,31 @@ class HlsPlaylist(
                         pendingVariant = null
                     }
                     pendingDuration >= 0 -> {
-                        segments += HlsSegment(resolve(base, line), sequence++, pendingDuration, discontinuity)
+                        val key = keyUri?.let { HlsKey(it, keyIv ?: sequenceIv(sequence)) }
+                        segments += HlsSegment(resolve(base, line), sequence++, pendingDuration, discontinuity, key)
                         pendingDuration = -1.0
                         discontinuity = false
                     }
                 }
             }
             return HlsPlaylist(variants, segments, target, ended, unsupported)
+        }
+
+        /** O IV de quando a etiqueta não o diz: o número de sequência em 16 bytes, big-endian. */
+        private fun sequenceIv(sequence: Long): ByteArray {
+            val iv = ByteArray(16)
+            for (i in 0 until 8) iv[15 - i] = (sequence ushr (8 * i)).toByte()
+            return iv
+        }
+
+        /** `0x` e 32 dígitos hexadecimais em 16 bytes (os que faltam à esquerda são zeros); null se não for isso. */
+        private fun hex(text: String): ByteArray? {
+            val digits = text.removePrefix("0x").removePrefix("0X")
+            if (digits.isEmpty() || digits.length > 32) return null
+            val padded = digits.padStart(32, '0')
+            val out = ByteArray(16)
+            for (i in 0 until 16) out[i] = (padded.substring(2 * i, 2 * i + 2).toIntOrNull(16) ?: return null).toByte()
+            return out
         }
 
         /** Os atributos de uma etiqueta (`BANDWIDTH=1280000,CODECS="avc1.64001f,mp4a.40.2"`), com as aspas tiradas. */

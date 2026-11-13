@@ -13,6 +13,10 @@ import cc.slokker.itv.media.HlsPlaylist
 import cc.slokker.itv.media.HlsSegment
 import java.io.IOException
 import java.io.InputStream
+import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /** Um stream que este motor não toca (o leitor passa a outro). */
 class UnsupportedStream(why: String) : IOException(why)
@@ -20,7 +24,8 @@ class UnsupportedStream(why: String) : IOException(why)
 /**
  * Um canal HLS lido como um só MPEG-TS: a playlist (a principal escolhe a qualidade mais alta) e os segmentos, um
  * atrás do outro, pela mesma ligação do resto ([source], uma de cada vez). Num direto começa três segmentos antes do
- * fim e vai relendo a playlist. Os segmentos fMP4 e os cifrados não: [UnsupportedStream].
+ * fim e vai relendo a playlist. Os segmentos cifrados com AES-128 decifram-se aqui; os fMP4 e as outras cifras
+ * (SAMPLE-AES…) não: [UnsupportedStream].
  */
 class HlsInputStream(private val source: DataSource.Factory, private val url: String) : InputStream() {
     private var mediaUrl: String? = null
@@ -30,9 +35,24 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
     private var ended = false
     private var targetMs = 6_000L
     private var lastReload = 0L
+    // A última chave lida (a mesma serve muitos segmentos seguidos).
+    private var keyUri: String? = null
+    private var keyBytes: ByteArray? = null
 
-    private fun fetch(u: String): String =
-        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { it.readBytes().decodeToString() }
+    private fun fetchBytes(u: String): ByteArray =
+        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { it.readBytes() }
+
+    private fun fetch(u: String): String = fetchBytes(u).decodeToString()
+
+    private fun keyFor(uri: String): ByteArray {
+        if (uri != keyUri) {
+            val bytes = fetchBytes(uri)
+            if (bytes.size != 16) throw UnsupportedStream("HLS: AES-128 key of ${bytes.size} bytes")
+            keyUri = uri
+            keyBytes = bytes
+        }
+        return keyBytes!!
+    }
 
     private fun reload() {
         var base = mediaUrl ?: url
@@ -78,7 +98,14 @@ class HlsInputStream(private val source: DataSource.Factory, private val url: St
             }
             val segment = pending.removeFirst()
             nextSequence = segment.sequence + 1
-            current = DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(segment.uri))).also { it.open() }
+            // A chave lê-se antes de abrir o segmento: uma ligação de cada vez.
+            val cipher = segment.key?.let { key ->
+                Cipher.getInstance("AES/CBC/PKCS5Padding").apply {
+                    init(Cipher.DECRYPT_MODE, SecretKeySpec(keyFor(key.uri), "AES"), IvParameterSpec(key.iv))
+                }
+            }
+            val raw = DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(segment.uri))).also { it.open() }
+            current = cipher?.let { CipherInputStream(raw, it) } ?: raw
         }
     }
 

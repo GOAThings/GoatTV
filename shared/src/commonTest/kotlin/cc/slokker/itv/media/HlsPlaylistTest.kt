@@ -59,8 +59,36 @@ class HlsPlaylistTest {
         val fmp4 = HlsPlaylist.parse("#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:4,\na.m4s\n#EXT-X-ENDLIST", "http://h/x.m3u8")
         assertEquals("fMP4 segments", fmp4.unsupported)
         assertTrue(fmp4.ended)
-        val aes = HlsPlaylist.parse("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"k\"\n#EXTINF:4,\na.ts", "http://h/x.m3u8")
-        assertEquals("encrypted (AES-128)", aes.unsupported)
+        val sample = HlsPlaylist.parse("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:4,\na.ts", "http://h/x.m3u8")
+        assertEquals("encrypted (SAMPLE-AES)", sample.unsupported)
         assertNull(HlsPlaylist.parse("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:4,\na.ts", "http://h/x.m3u8").unsupported)
+    }
+
+    @Test
+    fun aes128Keys() {
+        val p = HlsPlaylist.parse(
+            """
+            #EXTM3U
+            #EXT-X-MEDIA-SEQUENCE:258
+            #EXT-X-KEY:METHOD=AES-128,URI="/keys/1.key"
+            #EXTINF:4,
+            a.ts
+            #EXT-X-KEY:METHOD=AES-128,URI="k2",IV=0x000102030405060708090A0B0C0D0E0F
+            #EXTINF:4,
+            b.ts
+            #EXT-X-KEY:METHOD=NONE
+            #EXTINF:4,
+            c.ts
+            """.trimIndent(),
+            "http://h.example/live/ch/index.m3u8",
+        )
+        assertNull(p.unsupported)
+        val (a, b, c) = p.segments
+        assertEquals("http://h.example/keys/1.key", a.key?.uri)
+        // Sem IV: a sequência (258 = 0x0102) em big-endian.
+        assertEquals(List(14) { 0 } + listOf(1, 2), a.key!!.iv.map { it.toInt() })
+        assertEquals("http://h.example/live/ch/k2", b.key?.uri)
+        assertEquals((0..15).toList(), b.key!!.iv.map { it.toInt() })
+        assertNull(c.key)
     }
 }
