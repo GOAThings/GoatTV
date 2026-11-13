@@ -8,6 +8,7 @@ import os
 /// - num direto começa três segmentos antes do fim e vai relendo a playlist;
 /// - os segmentos cifrados com AES-128 decifram-se aqui;
 /// - nos fMP4, o segmento de inicialização vai à frente sempre que muda.
+/// - com o áudio numa playlist à parte, lê-se um segmento de cada, à vez, e sai um TS só com os dois (HlsMerger).
 /// As outras cifras (SAMPLE-AES…) dão [Failure.unsupported] e o leitor passa a outro motor.
 public final class HlsReader: @unchecked Sendable {
     public enum Failure: Error, CustomStringConvertible {
@@ -63,13 +64,37 @@ public final class HlsReader: @unchecked Sendable {
 
     // MARK: Leitura
 
-    private var mediaUrl: String?
-    private var nextSequence = Int64.min
-    private var pending: [HlsSegment] = []
-    private var ended = false
-    private var targetMs: Int64 = 6_000
-    private var lastReload: Date = .distantPast
-    private var sentMap: HlsRange?
+    /// Uma playlist de segmentos lida em sequência: a do vídeo ([main], que pode ser a principal e muda de qualidade)
+    /// ou a do áudio à parte. [seconds]: quanto já se leu (é por aí que se escolhe o lado a ler a seguir).
+    private final class Lane {
+        var mediaUrl: String
+        let main: Bool
+        var nextSequence = Int64.min
+        var pending: [HlsSegment] = []
+        var ended = false
+        var targetMs: Int64 = 6_000
+        var lastReload: Date = .distantPast
+        /// O segmento de inicialização que já foi (o próximo que for diferente vai antes do seu segmento).
+        var sentMap: HlsRange?
+        var seconds = 0.0
+        /// Mudou-se de qualidade: se a nova não continuar a numeração, volta-se ao ponto do direto.
+        var resync = false
+        /// Num direto: quanto antes do fim se começou (ms), para o áudio começar no mesmo ponto que o vídeo.
+        var liveOffsetMs: Int64 = -1
+
+        init(_ url: String, main: Bool) {
+            mediaUrl = url
+            self.main = main
+        }
+
+        /// Um VOD lido até ao fim.
+        var isDone: Bool { ended && pending.isEmpty && nextSequence != Int64.min }
+    }
+
+    private lazy var video = Lane(url.absoluteString, main: true)
+    /// O áudio à parte (EXT-X-MEDIA com URI) e quem o junta ao vídeo; nil quando vem dentro dos segmentos.
+    private var audio: Lane?
+    private var merger: GoatShared.HlsMergeBuffer?
     private var keyUri: String?
     private var keyBytes: Data?
     /// As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
@@ -77,47 +102,86 @@ public final class HlsReader: @unchecked Sendable {
     private var level = -1
     private var slow = 0
     private var fast = 0
-    /// Mudou-se de qualidade: se a nova não continuar a numeração, volta-se ao ponto do direto.
-    private var resync = false
 
     private func run() {
         do {
             while !isStopped {
-                if pending.isEmpty {
-                    if ended, nextSequence != Int64.min { break }
-                    // Um direto: a playlist volta a ler-se a meio da duração de um segmento.
-                    let wait = Double(targetMs) / 2000 - Date().timeIntervalSince(lastReload)
-                    if wait > 0, nextSequence != Int64.min { Thread.sleep(forTimeInterval: wait) }
-                    try reload()
-                    continue
-                }
                 while shouldWait?() == true, !isStopped { Thread.sleep(forTimeInterval: 0.1) }
-                guard !isStopped, let segment = pending.first else { break }
-                // O moov antes dos segmentos que o usam.
-                if let map = segment.map, !map.sameAs(other: sentMap) {
-                    sentMap = map
-                    deliver(try fetch(map.uri, offset: map.offset, length: map.length))
-                    continue
-                }
-                pending.removeFirst()
-                nextSequence = segment.sequence + 1
-                let started = Date()
-                var data = try fetch(segment.range.uri, offset: segment.range.offset, length: segment.range.length)
-                measured(bytes: data.count, seconds: Date().timeIntervalSince(started), duration: segment.duration)
-                if let key = segment.key {
-                    // A chave lê-se antes de o segmento seguinte abrir: uma ligação de cada vez.
-                    let bytes = try keyFor(key.uri)
-                    guard let plain = Self.decrypt(data, key: bytes, iv: AppleMedia.shared.iv(key: key) as Data) else {
-                        throw Failure.network("AES-128 decrypt")
-                    }
-                    data = plain
-                }
-                deliver(data)
+                guard !isStopped, let chunk = try nextChunk() else { break }
+                deliver(chunk)
             }
             if !isStopped { onEnd?(nil) }
         } catch {
             if !isStopped { onEnd?(error) }
         }
+    }
+
+    /// O pedaço seguinte do stream: um segmento (ou, com o áudio à parte, o que os dois já juntaram); nil no fim.
+    private func nextChunk() throws -> Data? {
+        guard let merger, let audio else {
+            guard let data = try next(video) else { return nil }
+            // A playlist principal pode ter dito agora que o áudio vem à parte: este já vai pelo junta-dois.
+            if let merger = self.merger {
+                let out = merger.video(data: data)
+                if out.isEmpty { return try nextChunk() }
+                return out
+            }
+            return data
+        }
+        while !isStopped {
+            // O lado que vai mais atrás lê o segmento seguinte; um que acabou deixa o outro ir até ao fim.
+            let videoDone = video.isDone, audioDone = audio.isDone
+            if videoDone, audioDone {
+                let out = merger.finish()
+                return out.isEmpty ? nil : out
+            }
+            var out = Data()
+            if !audioDone, videoDone || audio.seconds < video.seconds {
+                if let d = try next(audio) { out = merger.audio(data: d) }
+            } else if let d = try next(video) {
+                out = merger.video(data: d)
+            }
+            if let why = merger.unsupported { throw Failure.unsupported(why) }
+            if !out.isEmpty { return out }
+        }
+        return nil
+    }
+
+    /// O segmento seguinte de [lane] (com o init segment à frente, se mudou), decifrado; nil no fim de um VOD.
+    private func next(_ lane: Lane) throws -> Data? {
+        while !isStopped {
+            if lane.pending.isEmpty {
+                if lane.ended, lane.nextSequence != Int64.min { return nil }
+                // Um direto: a playlist volta a ler-se a meio da duração de um segmento.
+                let wait = Double(lane.targetMs) / 2000 - Date().timeIntervalSince(lane.lastReload)
+                if wait > 0, lane.nextSequence != Int64.min { Thread.sleep(forTimeInterval: wait) }
+                try reload(lane)
+                continue
+            }
+            let segment = lane.pending.removeFirst()
+            lane.nextSequence = segment.sequence + 1
+            // O moov antes dos segmentos que o usam.
+            var map: Data?
+            if let m = segment.map, !m.sameAs(other: lane.sentMap) {
+                lane.sentMap = m
+                map = try fetch(m.uri, offset: m.offset, length: m.length)
+            }
+            let started = Date()
+            var data = try fetch(segment.range.uri, offset: segment.range.offset, length: segment.range.length)
+            if lane.main { measured(bytes: data.count, seconds: Date().timeIntervalSince(started), duration: segment.duration) }
+            lane.seconds += segment.duration
+            if let key = segment.key {
+                // A chave lê-se antes de o segmento seguinte abrir: uma ligação de cada vez.
+                let bytes = try keyFor(key.uri)
+                guard let plain = Self.decrypt(data, key: bytes, iv: AppleMedia.shared.iv(key: key) as Data) else {
+                    throw Failure.network("AES-128 decrypt")
+                }
+                data = plain
+            }
+            if let map { return map + data }
+            return data
+        }
+        return nil
     }
 
     /// Um segmento de [duration] s chegou em [seconds]: a rede não chega (mais do que dura, ou mais de 80 % duas
@@ -143,12 +207,12 @@ public final class HlsReader: @unchecked Sendable {
 
     private func switchTo(_ next: Int) {
         level = next
-        mediaUrl = variants[next].uri
+        video.mediaUrl = variants[next].uri
         slow = 0
         fast = 0
-        pending.removeAll()
-        resync = true
-        lastReload = .distantPast
+        video.pending.removeAll()
+        video.resync = true
+        video.lastReload = .distantPast
     }
 
     private func deliver(_ data: Data) {
@@ -156,8 +220,8 @@ public final class HlsReader: @unchecked Sendable {
         onData?(data)
     }
 
-    private func reload() throws {
-        var base = mediaUrl ?? url.absoluteString
+    private func reload(_ lane: Lane) throws {
+        var base = lane.mediaUrl
         var playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         if playlist.isMaster {
             if let why = playlist.unsupported { throw Failure.unsupported(why) }
@@ -166,40 +230,60 @@ public final class HlsReader: @unchecked Sendable {
             guard !variants.isEmpty else { throw Failure.unsupported("empty master") }
             level = variants.count - 1
             base = variants[level].uri
+            if let a = variants[level].audioUri {
+                audio = Lane(a, main: false)
+                merger = GoatShared.HlsMergeBuffer()
+            }
             playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         }
-        mediaUrl = base
+        lane.mediaUrl = base
         if let why = playlist.unsupported { throw Failure.unsupported(why) }
-        targetMs = min(max(Int64(playlist.targetDuration * 1000), 1_000), 20_000)
-        ended = playlist.ended
+        lane.targetMs = min(max(Int64(playlist.targetDuration * 1000), 1_000), 20_000)
+        lane.ended = playlist.ended
         let segments = playlist.segments
-        if nextSequence == Int64.min, !segments.isEmpty {
-            var first = ended ? 0 : max(0, segments.count - 3)
-            if ended, startMs > 0 {
-                // O segmento onde fica o ponto pedido (pela soma das durações).
-                var at: Int64 = 0
-                for (i, s) in segments.enumerated() {
-                    let d = Int64(s.duration * 1000)
-                    if at + d > startMs || i == segments.count - 1 {
-                        first = i
-                        break
-                    }
-                    at += d
+        if lane.nextSequence == Int64.min, !segments.isEmpty {
+            lane.nextSequence = segments[firstSegment(lane, segments)].sequence
+        }
+        if lane.resync {
+            lane.resync = false
+            if !lane.ended, !segments.isEmpty, !segments.contains(where: { $0.sequence == lane.nextSequence }) {
+                lane.nextSequence = segments[max(0, segments.count - 3)].sequence
+            }
+        }
+        for s in segments where s.sequence >= lane.nextSequence && !lane.pending.contains(where: { $0.sequence == s.sequence }) {
+            lane.pending.append(s)
+        }
+        lane.lastReload = Date()
+    }
+
+    /// Por onde começar: num VOD o do ponto pedido; num direto três antes do fim (o áudio, à mesma distância).
+    private func firstSegment(_ lane: Lane, _ segments: [HlsSegment]) -> Int {
+        if lane.ended {
+            guard startMs > 0 else { return 0 }
+            // O segmento onde fica o ponto pedido (pela soma das durações).
+            var at: Int64 = 0
+            for (i, s) in segments.enumerated() {
+                let d = Int64(s.duration * 1000)
+                if at + d > startMs || i == segments.count - 1 {
+                    if lane.main { onStart?(at) }
+                    return i
                 }
-                onStart?(at)
+                at += d
             }
-            nextSequence = segments[first].sequence
+            return 0
         }
-        if resync {
-            resync = false
-            if !ended, !segments.isEmpty, !segments.contains(where: { $0.sequence == nextSequence }) {
-                nextSequence = segments[max(0, segments.count - 3)].sequence
-            }
+        if lane.main {
+            let first = max(0, segments.count - 3)
+            lane.liveOffsetMs = segments[first...].reduce(Int64(0)) { $0 + Int64($1.duration * 1000) }
+            return first
         }
-        for s in segments where s.sequence >= nextSequence && !pending.contains(where: { $0.sequence == s.sequence }) {
-            pending.append(s)
+        guard video.liveOffsetMs >= 0 else { return max(0, segments.count - 3) }
+        var fromEnd: Int64 = 0
+        for i in segments.indices.reversed() {
+            fromEnd += Int64(segments[i].duration * 1000)
+            if fromEnd >= video.liveOffsetMs { return i }
         }
-        lastReload = Date()
+        return 0
     }
 
     private func keyFor(_ uri: String) throws -> Data {
