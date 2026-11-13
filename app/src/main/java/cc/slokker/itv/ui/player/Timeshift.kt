@@ -116,18 +116,29 @@ internal class Timeshift(context: Context) {
 
     /** Como [open], para o motor GoatCore: o endereço no anel e a fonte que o lê (ver [GoatCoreMediaPlayer.setStream]). */
     fun openRing(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, reconnectMs: Long): Pair<String, DataSource.Factory>? {
-        val (s, offset) = openSession(candidate, direct, gate, DefaultExtractorsFactory(), reconnectMs) ?: return null
+        // O GoatCore lê o HLS como um stream seguido (HlsDataSource): o anel grava-o como um .ts.
+        val (s, offset) = openSession(candidate, direct, gate, DefaultExtractorsFactory(), reconnectMs, hlsAsStream = true) ?: return null
         return s.dataAt(offset)
     }
 
-    private fun openSession(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, extractors: ExtractorsFactory, reconnectMs: Long): Pair<Session, Long>? {
+    private fun openSession(
+        candidate: StreamCandidate,
+        direct: DataSource.Factory,
+        gate: StreamGate,
+        extractors: ExtractorsFactory,
+        reconnectMs: Long,
+        hlsAsStream: Boolean = false,
+    ): Pair<Session, Long>? {
         clear()
-        if (candidate.isHls) {
+        if (candidate.isHls && !hlsAsStream) {
             hls = true
             return null
         }
+        // Um HLS para o GoatCore: os segmentos seguidos. Se forem fMP4 o anel não serve (não é TS) e o player lê esta
+        // mesma ligação diretamente (RingDataSource), sem pausa.
+        val source = if (candidate.isHls) cc.slokker.itv.ui.player.goatcore.HlsDataSource.Factory(direct) else direct
         val reused = ChannelFeed.find(candidate.url)?.takeIf { it.hold(ChannelFeed.Holder.PLAYER) }
-        val feed = reused ?: ChannelFeed.open(dir, candidate.url, direct, gate, reconnectMs, ChannelFeed.Holder.PLAYER) ?: return null
+        val feed = reused ?: ChannelFeed.open(dir, candidate.url, source, gate, reconnectMs, ChannelFeed.Holder.PLAYER) ?: return null
         feed.onReconnect = { n, at, waitMs -> onReconnect?.invoke(n, at, waitMs) }
         feed.onConnected = { onConnected?.invoke() }
         val s = Session(feed, extractors)
