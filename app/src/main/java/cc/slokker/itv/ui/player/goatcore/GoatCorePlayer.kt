@@ -255,6 +255,8 @@ class GoatCorePlayer(
             if (running) listener.onEnded()
         } catch (e: InterruptedException) {
             // stop()
+        } catch (e: UnsupportedStream) {
+            fail(e.message ?: "unsupported stream", unsupported = true, cause = e)
         } catch (e: Exception) {
             fail("network: ${e.message}", cause = e)
         }

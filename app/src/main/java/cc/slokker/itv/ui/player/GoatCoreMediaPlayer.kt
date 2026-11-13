@@ -120,8 +120,6 @@ internal class GoatCoreMediaPlayer(
         pendingStart = false
         val factory = source ?: return
         val uri = uri ?: return
-        // O HLS ainda não: o leitor passa ao VLC.
-        if (hls) return fail(PlaybackException("GoatCore: HLS not yet", null, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
         val g = ++generation
         startPositionMs = -1
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough, listener = object : GoatCorePlayer.Listener {
@@ -157,7 +155,11 @@ internal class GoatCoreMediaPlayer(
         core = player
         player.setVolume(effectiveVolume())
         player.setPaused(!playWhenReady)
-        player.open { DataSourceInputStream(factory.createDataSource(), DataSpec(uri)).also { it.open() } }
+        // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.
+        player.open {
+            if (hls) cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString())
+            else DataSourceInputStream(factory.createDataSource(), DataSpec(uri)).also { it.open() }
+        }
         playbackState = Player.STATE_BUFFERING
     }
 

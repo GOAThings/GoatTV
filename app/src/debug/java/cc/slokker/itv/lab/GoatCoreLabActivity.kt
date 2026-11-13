@@ -136,7 +136,14 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
         })
         player = p
         val name = current
-        p.open { if (name.startsWith("http")) URL(name).openStream() else PacedAsset(assets.open("goatcore/$name.ts").use { it.readBytes() }, 2.0) }
+        p.open {
+            when {
+                // "hls:<endereço>": um canal HLS pelos segmentos.
+                name.startsWith("hls:") -> cc.slokker.itv.ui.player.goatcore.HlsInputStream(androidx.media3.datasource.DefaultHttpDataSource.Factory(), name.removePrefix("hls:"))
+                name.startsWith("http") -> URL(name).openStream()
+                else -> PacedAsset(assets.open("goatcore/$name.ts").use { it.readBytes() }, 2.0)
+            }
+        }
         main.postDelayed(::report, dwell)
         tick()
     }
