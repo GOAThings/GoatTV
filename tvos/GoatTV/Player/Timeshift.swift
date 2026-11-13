@@ -92,11 +92,12 @@ final class Timeshift {
     /// livre, sem porta). [reconnectSeconds]: de quanto em quanto tempo o gravador volta a ligar se a ligação cair.
     /// Se a ligação deste canal já está aberta (uma gravação dele), o leitor lê dela, uns segundos atrás do direto.
     @MainActor
-    func open(_ url: URL, userAgent: String, referrer: String?, reconnectSeconds: Int) -> URL? {
+    /// [hls]: um canal HLS para o GoatCore, gravado como um stream seguido (os segmentos um atrás do outro).
+    func open(_ url: URL, userAgent: String, referrer: String?, reconnectSeconds: Int, hls: Bool = false) -> URL? {
         clear()
         let shared = ChannelFeed.find(url.absoluteString).flatMap { $0.hold(.player) ? $0 : nil }
         guard let feed = shared ?? ChannelFeed.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds,
-                                                    holder: .player) else { return nil }
+                                                    holder: .player, hls: hls) else { return nil }
         let server = RingServer(ring: feed.ring)
         do {
             try server.start()
@@ -328,6 +329,9 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
     private let request: URLRequest
     private let reconnectSeconds: Int
     private var previous: TimeshiftRecorder?
+    /// Um canal HLS: lido pelo HlsReader (os segmentos seguidos) em vez de uma ligação só.
+    private let hls: Bool
+    private var hlsReader: HlsReader?
     /// A fila da ligação: os avisos da URLSession e as tentativas, um de cada vez.
     private let queue: OperationQueue
     private var urlSession: URLSession?
@@ -360,11 +364,12 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         case empty
     }
 
-    init(ring: TimeshiftRing, request: URLRequest, reconnectSeconds: Int, previous: TimeshiftRecorder?) {
+    init(ring: TimeshiftRing, request: URLRequest, reconnectSeconds: Int, previous: TimeshiftRecorder?, hls: Bool = false) {
         self.ring = ring
         self.request = request
         self.reconnectSeconds = reconnectSeconds
         self.previous = previous
+        self.hls = hls
         queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         queue.name = "timeshift-recorder"
@@ -415,9 +420,14 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
     }
 
     func close() {
-        let running: URLSessionDataTask? = locked {
+        let (running, reader): (URLSessionDataTask?, HlsReader?) = locked {
             closed = true
-            return task
+            return (task, hlsReader)
+        }
+        if let reader {
+            reader.stop()
+            queue.addOperation { [self] in finish() }
+            return
         }
         // Uma leitura presa (servidor parado) só acabava no timeout: cancela-se já, para libertar a ligação.
         if let running { running.cancel() } else { queue.addOperation { [self] in finish() } }
@@ -430,6 +440,27 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         }
         gotData = false
         refused = nil
+        if hls, let url = request.url {
+            let reader = HlsReader(url: url, headers: request.allHTTPHeaderFields ?? [:])
+            reader.onData = { [weak self] data in
+                guard let self else { return }
+                self.queue.addOperation { self.received(data) }
+            }
+            reader.onEnd = { [weak self] error in
+                guard let self else { return }
+                self.queue.addOperation {
+                    if let f = error as? HlsReader.Failure, case .http(let code) = f {
+                        self.refused = code
+                        self.locked { self.status = code }
+                    }
+                    self.locked { self.hlsReader = nil }
+                    self.completed(error)
+                }
+            }
+            locked { hlsReader = reader }
+            reader.start()
+            return
+        }
         let t = urlSession.dataTask(with: request)
         locked { task = t }
         t.resume()
@@ -485,6 +516,15 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
                     return
                 }
             }
+        }
+        if !received(data) { dataTask.cancel() }
+    }
+
+    /// Os dados que chegaram (da ligação ou do HlsReader) vão para o anel; false se a ligação deve fechar.
+    @discardableResult
+    private func received(_ data: Data) -> Bool {
+        guard !isClosed, !data.isEmpty else { return false }
+        if !gotData {
             gotData = true
             ring.beginSegment()
             if everData { onConnected?() }
@@ -495,14 +535,24 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         do {
             try ring.write(data)
         } catch {
-            dataTask.cancel()
-            return
+            stopHls()
+            return false
         }
-        // Não é TS (um MP4 num link sem extensão…): o anel não serve, o leitor liga-se ele próprio.
+        // Não é TS (um MP4 num link sem extensão, um HLS em fMP4…): o anel não serve, o leitor liga-se ele próprio.
         if ring.isTs == false {
             locked { notTsFlag = true }
-            dataTask.cancel()
+            stopHls()
+            return false
         }
+        return true
+    }
+
+    /// O HlsReader para (e avisa pelo onEnd, que acaba a ligação como as outras).
+    private func stopHls() {
+        guard let reader = locked({ hlsReader }) else { return }
+        reader.stop()
+        locked { hlsReader = nil }
+        queue.addOperation { [self] in completed(nil) }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -511,6 +561,11 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
             locked { status = http.statusCode }
             if !(200..<300).contains(http.statusCode) { refused = http.statusCode }
         }
+        completed(error)
+    }
+
+    /// A ligação (ou o HlsReader) acabou: fecha, desiste, ou volta a ligar.
+    private func completed(_ error: Error?) {
         if isClosed {
             finish()
             return

@@ -700,8 +700,10 @@ final class PlayerEngine: NSObject {
         case .goatcore:
             // Como no VLC: pausar o direto lê do anel (a ligação é do gravador), e o canal que uma gravação está a
             // gravar abre sempre pelo anel dela.
-            if pausable, timeshiftEnabled || ChannelFeed.find(attempt.candidate.url) != nil, !attempt.candidate.isHLS,
-               let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds) {
+            // Um HLS também: o gravador lê os segmentos seguidos (HlsReader); em fMP4 não é TS e o GoatCore liga-se ele.
+            if pausable, timeshiftEnabled || ChannelFeed.find(attempt.candidate.url) != nil,
+               let local = timeshift.open(url, userAgent: userAgent, referrer: referrer, reconnectSeconds: reconnectSeconds,
+                                          hls: attempt.candidate.isHLS) {
                 startGoatCore(local, ring: true)
                 startTimeshiftTicker()
             } else {
@@ -1918,6 +1920,14 @@ extension PlayerEngine {
 
     /// O stream afinal não é TS: o gravador já largou a ligação; o VLC abre-o diretamente, sem a pausa do direto.
     fileprivate func openDirect() {
+        if backend == .goatcore, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) {
+            // O mesmo no GoatCore: larga o anel e liga-se ele (um HLS em fMP4 pelo HlsReader dele).
+            goatCorePlayback?.stop()
+            timeshiftTicker?.cancel()
+            timeshift.clear()
+            whenConnectionFree { [weak self] in self?.startGoatCore(url) }
+            return
+        }
         if backend == .aether, attempts.indices.contains(index), let url = URL(string: attempts[index].candidate.url) {
             // O mesmo no AetherEngine: larga o anel e liga-se ele.
             aetherPlayback?.stop()

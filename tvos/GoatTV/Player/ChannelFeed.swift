@@ -48,7 +48,7 @@ final class ChannelFeed {
     /// Abre [url] num anel novo, segura por [holder]. Fecha antes a que estiver aberta. nil sem espaço para o anel.
     /// [maxBytes]: o tamanho máximo do anel (o da pausa do direto, ou um pequeno para uma gravação sem ninguém a ver).
     static func open(_ url: URL, userAgent: String, referrer: String?, reconnectSeconds: Int, holder: Holder,
-                     maxBytes: Int64? = nil) -> ChannelFeed? {
+                     maxBytes: Int64? = nil, hls: Bool = false) -> ChannelFeed? {
         current?.close()
         guard let capacity = capacity(maxBytes ?? Timeshift.maxBytes) else { return nil }
         generation += 1
@@ -63,7 +63,7 @@ final class ChannelFeed {
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let referrer, !referrer.isEmpty { request.setValue(referrer, forHTTPHeaderField: "Referer") }
-        let recorder = TimeshiftRecorder(ring: ring, request: request, reconnectSeconds: reconnectSeconds, previous: last)
+        let recorder = TimeshiftRecorder(ring: ring, request: request, reconnectSeconds: reconnectSeconds, previous: last, hls: hls)
         let feed = ChannelFeed(ring: ring, url: url.absoluteString, recorder: recorder)
         // Os avisos do gravador chegam de outra fila; uma ligação já fechada não avisa ninguém.
         recorder.onReconnect = { [weak feed] attempt, wait in

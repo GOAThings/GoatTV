@@ -72,6 +72,13 @@ public final class HlsReader: @unchecked Sendable {
     private var sentMap: HlsRange?
     private var keyUri: String?
     private var keyBytes: Data?
+    /// As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
+    private var variants: [HlsVariant] = []
+    private var level = -1
+    private var slow = 0
+    private var fast = 0
+    /// Mudou-se de qualidade: se a nova não continuar a numeração, volta-se ao ponto do direto.
+    private var resync = false
 
     private func run() {
         do {
@@ -94,7 +101,9 @@ public final class HlsReader: @unchecked Sendable {
                 }
                 pending.removeFirst()
                 nextSequence = segment.sequence + 1
+                let started = Date()
                 var data = try fetch(segment.range.uri, offset: segment.range.offset, length: segment.range.length)
+                measured(bytes: data.count, seconds: Date().timeIntervalSince(started), duration: segment.duration)
                 if let key = segment.key {
                     // A chave lê-se antes de o segmento seguinte abrir: uma ligação de cada vez.
                     let bytes = try keyFor(key.uri)
@@ -111,6 +120,37 @@ public final class HlsReader: @unchecked Sendable {
         }
     }
 
+    /// Um segmento de [duration] s chegou em [seconds]: a rede não chega (mais do que dura, ou mais de 80 % duas
+    /// vezes) → a qualidade que caiba; folga grande quatro vezes seguidas → uma acima. Como no Android.
+    private func measured(bytes: Int, seconds: Double, duration: Double) {
+        guard variants.count > 1, duration > 0 else { return }
+        let ratio = seconds / duration
+        let bps = Double(bytes) * 8 / max(seconds, 0.001)
+        if ratio > 0.8 { slow += 1 }
+        if ratio > 1.0 || (ratio > 0.8 && slow >= 2) {
+            let fits = max(0, variants.lastIndex(where: { Double($0.bandwidth) <= bps * 0.7 }) ?? 0)
+            if fits < level { switchTo(fits) } else { slow = 0 }
+            return
+        }
+        if ratio <= 0.8 { slow = 0 }
+        if level < variants.count - 1, ratio < 0.3, bps > Double(variants[level + 1].bandwidth) * 1.5 {
+            fast += 1
+            if fast >= 4 { switchTo(level + 1) }
+        } else {
+            fast = 0
+        }
+    }
+
+    private func switchTo(_ next: Int) {
+        level = next
+        mediaUrl = variants[next].uri
+        slow = 0
+        fast = 0
+        pending.removeAll()
+        resync = true
+        lastReload = .distantPast
+    }
+
     private func deliver(_ data: Data) {
         guard !isStopped, !data.isEmpty else { return }
         onData?(data)
@@ -120,9 +160,11 @@ public final class HlsReader: @unchecked Sendable {
         var base = mediaUrl ?? url.absoluteString
         var playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         if playlist.isMaster {
-            // A qualidade mais alta (é uma TV, ou um telemóvel na Wi-Fi de casa).
-            guard let variant = playlist.variants.max(by: { $0.bandwidth < $1.bandwidth }) else { throw Failure.unsupported("empty master") }
-            base = variant.uri
+            // Começa na qualidade mais alta (uma TV, ou um telemóvel na Wi-Fi de casa); desce e sobe com a rede.
+            variants = playlist.variants.sorted { $0.bandwidth < $1.bandwidth }
+            guard !variants.isEmpty else { throw Failure.unsupported("empty master") }
+            level = variants.count - 1
+            base = variants[level].uri
             playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         }
         mediaUrl = base
@@ -146,6 +188,12 @@ public final class HlsReader: @unchecked Sendable {
                 onStart?(at)
             }
             nextSequence = segments[first].sequence
+        }
+        if resync {
+            resync = false
+            if !ended, !segments.isEmpty, !segments.contains(where: { $0.sequence == nextSequence }) {
+                nextSequence = segments[max(0, segments.count - 3)].sequence
+            }
         }
         for s in segments where s.sequence >= nextSequence && !pending.contains(where: { $0.sequence == s.sequence }) {
             pending.append(s)
