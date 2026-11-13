@@ -72,6 +72,9 @@
     <string name="split_screen">Layar terbagi</string>
     <string name="picture_in_picture">Gambar dalam gambar</string>
     <string name="change_second">Ganti saluran ke-2</string>
+    <string name="add_channel">Tambah saluran</string>
+    <string name="change_this_channel">Ganti saluran ini</string>
+    <string name="close_this_channel">Tutup saluran ini</string>
     <string name="close_second">Tutup saluran ke-2</string>
     <string name="no_signal">Tidak ada sinyal</string>
     <string name="loading_short">Memuat…</string>

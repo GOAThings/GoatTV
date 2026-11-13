@@ -72,6 +72,9 @@
     <string name="split_screen">Разделённый экран</string>
     <string name="picture_in_picture">Картинка в картинке</string>
     <string name="change_second">Сменить 2-й канал</string>
+    <string name="add_channel">Добавить канал</string>
+    <string name="change_this_channel">Сменить этот канал</string>
+    <string name="close_this_channel">Закрыть этот канал</string>
     <string name="close_second">Закрыть 2-й канал</string>
     <string name="no_signal">Нет сигнала</string>
     <string name="loading_short">Загрузка…</string>

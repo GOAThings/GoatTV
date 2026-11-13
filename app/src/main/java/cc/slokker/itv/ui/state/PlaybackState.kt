@@ -23,7 +23,7 @@ class PlaybackState(
     private val onTuned: (Channel) -> Unit,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    /** Segundo canal no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
+    /** Um canal extra no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
     data class SecondView(val content: PlaylistContent, val channel: Channel, val zapList: List<Channel>)
 
     /** Grupo do canal a ver: é por ele que CH+/CH− navegam e é o que o painel de canais abre. */
@@ -37,8 +37,9 @@ class PlaybackState(
     private val _catchup = MutableStateFlow<Catchup?>(null)
     val catchup: StateFlow<Catchup?> = _catchup.asStateFlow()
 
-    private val _second = MutableStateFlow<SecondView?>(null)
-    val second: StateFlow<SecondView?> = _second.asStateFlow()
+    /** Os canais extra no ecrã com o principal (até [MAX_EXTRAS]: 2, 3 ou 4 canais ao todo), pela ordem em que se abriram. */
+    private val _extras = MutableStateFlow<List<SecondView>>(emptyList())
+    val extras: StateFlow<List<SecondView>> = _extras.asStateFlow()
 
     /** Canais da categoria onde se carregou OK: é por eles que CH+/CH− navegam. */
     private var zapList: List<Channel> = emptyList()
@@ -162,27 +163,43 @@ class PlaybackState(
 
     // ---- Segundo canal -------------------------------------------------------------------------
 
-    fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) {
-        _second.value = SecondView(content, channel, catalogFor(content).channelsOf(groupId).ifEmpty { listOf(channel) })
+    /** Abre [channel] num canal extra: no lugar [slot], ou num lugar novo (null; se já houver o máximo, no último). */
+    fun openExtra(content: PlaylistContent, channel: Channel, groupId: String, slot: Int? = null) {
+        val view = SecondView(content, channel, catalogFor(content).channelsOf(groupId).ifEmpty { listOf(channel) })
+        val list = _extras.value
+        _extras.value = when {
+            slot != null && slot in list.indices -> list.toMutableList().also { it[slot] = view }
+            list.size < MAX_EXTRAS -> list + view
+            else -> list.dropLast(1) + view
+        }
     }
 
-    /** ↑/↓ no segundo canal (dá a volta nas pontas, como o principal). */
-    fun zapSecond(delta: Int) {
-        val current = _second.value ?: return
+    /** ↑/↓ no canal extra [slot] (dá a volta nas pontas, como o principal). */
+    fun zapExtra(slot: Int, delta: Int) {
+        val list = _extras.value
+        val current = list.getOrNull(slot) ?: return
         if (current.zapList.size < 2) return
         val index = current.zapList.indexOfFirst { it.uid == current.channel.uid }.coerceAtLeast(0)
         val catalog = catalogFor(current.content)
         val next = nextAllowed(current.zapList, index, delta) { catalog.isGroupLocked(it.categoryId) } ?: return
-        _second.value = current.copy(channel = next)
+        _extras.value = list.toMutableList().also { it[slot] = current.copy(channel = next) }
     }
 
-    fun closeSecond() {
-        _second.value = null
+    fun closeExtra(slot: Int) {
+        val list = _extras.value
+        if (slot in list.indices) _extras.value = list.filterIndexed { i, _ -> i != slot }
+    }
+
+    /** Fecha os canais extra de que [drop] diz que sim. */
+    fun closeExtras(drop: (SecondView) -> Boolean) {
+        val list = _extras.value
+        val kept = list.filterNot(drop)
+        if (kept.size != list.size) _extras.value = kept
     }
 
     /** Esquece o que está a tocar (outra sessão, outro perfil, ou já não há listas). */
     fun reset() {
-        _second.value = null
+        _extras.value = emptyList()
         _playing.value = null
         _catchup.value = null
         zapList = emptyList()
@@ -193,5 +210,8 @@ class PlaybackState(
     companion object {
         /** Tempo num canal para contar como visto (anterior e Recentes). */
         const val WATCHED_MS = 5_000L
+
+        /** Canais extra no máximo: 4 no ecrã com o principal. */
+        const val MAX_EXTRAS = 3
     }
 }

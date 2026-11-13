@@ -72,6 +72,9 @@
     <string name="split_screen">화면 분할</string>
     <string name="picture_in_picture">PIP 화면</string>
     <string name="change_second">두 번째 채널 변경</string>
+    <string name="add_channel">채널 추가</string>
+    <string name="change_this_channel">이 채널 변경</string>
+    <string name="close_this_channel">이 채널 닫기</string>
     <string name="close_second">두 번째 채널 닫기</string>
     <string name="no_signal">신호 없음</string>
     <string name="loading_short">불러오는 중…</string>

@@ -55,8 +55,14 @@ internal class AppPlaybackHost(
  * O segundo canal: outra lista, sem catch-up nem cartão de erro (a etiqueta diz "sem sinal"). Não toca no formato
  * da conta principal; as definições lêem-se a cada tentativa (o User-Agent novo vale já na seguinte).
  */
-internal class SecondPlaybackHost(private val vm: AppViewModel, private val latestPrefs: () -> Prefs) : PlaybackHost {
+internal class SecondPlaybackHost(private val vm: AppViewModel, private val slot: Int, private val latestPrefs: () -> Prefs) : PlaybackHost {
     override val prefs: Prefs get() = latestPrefs()
+
+    /** Os failovers do canal deste lugar: os da lista dele, e os da reserva se a conta dela tiver uma ligação livre. */
+    override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> {
+        val view = vm.extras.value.getOrNull(slot)?.takeIf { it.channel.uid == request.channel.uid } ?: return emptyList()
+        return vm.backupStreams(view.content, request.channel, tile = slot + 1)
+    }
     override val streamsDisabled: Boolean get() = vm.streamsDisabled
     override fun onFormatWorked(format: String) = Unit
     override fun exitCatchup() = Unit

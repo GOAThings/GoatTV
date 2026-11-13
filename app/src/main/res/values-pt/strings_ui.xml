@@ -72,6 +72,9 @@
     <string name="split_screen">Ecrã dividido</string>
     <string name="picture_in_picture">Imagem na imagem</string>
     <string name="change_second">Mudar 2.º canal</string>
+    <string name="add_channel">Acrescentar canal</string>
+    <string name="change_this_channel">Mudar este canal</string>
+    <string name="close_this_channel">Fechar este canal</string>
     <string name="close_second">Fechar 2.º canal</string>
     <string name="no_signal">Sem sinal</string>
     <string name="loading_short">A carregar…</string>

@@ -32,13 +32,14 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 
 /** Os botões da barra completa que mexem no ecrã do player (abrir um painel, trocar os canais...). */
-internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
+internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, ADD_CHANNEL, CLOSE_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
 
 /**
  * Os botões da barra completa (OK no vídeo). O que é só pedir ao ViewModel (imagem, favorito, ver do início,
  * fechar o segundo canal) faz-se aqui; o que abre ou troca coisas no ecrã vai para [onAction].
- * [live]: o programa a dar; [pauseLive]: há pausa do direto; [second]: há segundo canal; [recording]: este canal está
- * a gravar (o botão pára), senão "Gravar" aparece com a pausa do direto (grava-se do anel dela).
+ * [live]: o programa a dar; [pauseLive]: há pausa do direto; [second]: há canais extra no ecrã ([canAddChannel]: cabe
+ * mais um, até 4); [recording]: este canal está a gravar (o botão pára), senão "Gravar" aparece com a pausa do direto
+ * (grava-se do anel dela).
  */
 @Composable
 internal fun HudButtons(
@@ -51,6 +52,7 @@ internal fun HudButtons(
     pauseLive: Boolean,
     recording: Boolean,
     second: Boolean,
+    canAddChannel: Boolean,
     /** A lista tem reserva e é direto: o botão "Canal de reserva". */
     backup: Boolean,
     dualLayout: DualLayout,
@@ -110,8 +112,9 @@ internal fun HudButtons(
                 if (dualLayout == DualLayout.PIP) s.splitScreen else s.pictureInPicture,
                 { onAction(HudAction.LAYOUT) },
             )
-            GlassChipButton(ItvIcons.Pip, s.changeSecond, { onAction(HudAction.SECOND_CHANNEL) })
-            GlassChipButton(ItvIcons.Close, s.closeSecond, { vm.closeSecond() })
+            if (canAddChannel) GlassChipButton(ItvIcons.Pip, s.addChannel, { onAction(HudAction.ADD_CHANNEL) })
+            GlassChipButton(ItvIcons.Pip, s.changeThisChannel, { onAction(HudAction.SECOND_CHANNEL) })
+            GlassChipButton(ItvIcons.Close, s.closeThisChannel, { onAction(HudAction.CLOSE_CHANNEL) })
         }
         GlassChipButton(ItvIcons.Search, s.search, { onAction(HudAction.SEARCH) })
         GlassChipButton(ItvIcons.Guide, s.tvGuide, { onAction(HudAction.GUIDE) })

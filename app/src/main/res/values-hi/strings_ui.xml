@@ -72,6 +72,9 @@
     <string name="split_screen">स्प्लिट स्क्रीन</string>
     <string name="picture_in_picture">पिक्चर-इन-पिक्चर</string>
     <string name="change_second">दूसरा चैनल बदलें</string>
+    <string name="add_channel">चैनल जोड़ें</string>
+    <string name="change_this_channel">यह चैनल बदलें</string>
+    <string name="close_this_channel">यह चैनल बंद करें</string>
     <string name="close_second">दूसरा चैनल बंद करें</string>
     <string name="no_signal">कोई सिग्नल नहीं</string>
     <string name="loading_short">लोड हो रहा है…</string>

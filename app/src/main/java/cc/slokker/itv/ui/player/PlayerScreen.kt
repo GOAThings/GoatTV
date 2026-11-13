@@ -2,6 +2,11 @@
 
 package cc.slokker.itv.ui.player
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.key
+import cc.slokker.itv.ui.state.PlaybackState
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -207,22 +212,33 @@ fun PlayerScreen(vm: AppViewModel) {
     var catchupPosition by remember { mutableLongStateOf(0L) }
     /** Pausar, recuar e avançar, o mesmo no catch-up e na pausa do direto (ver TvSeek). */
     val seek = remember { TvSeek() }
-    // Segundo canal (imagem na imagem / dividido).
-    val second by vm.second.collectAsStateWithLifecycle()
+    // Os canais extra (imagem na imagem / dividido): até 3, 4 no ecrã com o principal.
+    val extras by vm.extras.collectAsStateWithLifecycle()
     var dualLayout by remember { mutableStateOf(DualLayout.PIP) }
-    /** Trocados: o segundo canal na imagem grande (ou à esquerda, no dividido). */
-    var swapped by remember { mutableStateOf(false) }
-    /** O som (e as setas ↑/↓) estão no segundo canal. */
-    var focusSecond by remember { mutableStateOf(false) }
+    /** O canal na imagem grande (no dividido, no primeiro lugar): 0 é o principal, 1… os extra. */
+    var bigTile by remember { mutableIntStateOf(0) }
+    /** O canal com foco: é o que se ouve e o que ↑/↓ mudam (0 = o principal). */
+    var focusTile by remember { mutableIntStateOf(0) }
     var showSecondPicker by remember { mutableStateOf(false) }
+    /** O lugar cujo canal a escolha vai mudar, ou null para acrescentar um. */
+    var pickerSlot by remember { mutableStateOf<Int?>(null) }
     val secondPicker = remember { SecondPickerState() }
-    var smallView by remember { mutableStateOf<VideoView?>(null) }
-    // Onde cada player desenha: o principal no grande, a não ser que estejam trocados.
-    val mainView = if (second != null && swapped) smallView else videoView
-    val secondView = if (swapped) videoView else smallView
-    val latestSecondView by rememberUpdatedState(secondView)
+    /** As imagens dos lugares 1–3 (a do lugar 0, a grande, é [videoView]). */
+    val smallViews = remember { mutableStateListOf<VideoView?>(null, null, null) }
+    val tileCount = 1 + extras.size
+    /** Os canais pela ordem dos lugares: o da imagem grande primeiro, os outros pela ordem deles. */
+    val order = bigTile.coerceIn(0, tileCount - 1).let { big -> listOf(big) + (0 until tileCount).filter { it != big } }
+    val latestOrder by rememberUpdatedState(order)
+    /** Onde o canal [tile] desenha. */
+    fun viewOf(tile: Int): VideoView? = latestOrder.indexOf(tile).let { p -> if (p <= 0) videoView else smallViews.getOrNull(p - 1) }
+    val mainView = viewOf(0)
     val latestMainView by rememberUpdatedState(mainView)
-    val secondPlayback = rememberSecondPlayback(vm, second, prefs, streamFormat) { ratio -> latestSecondView?.setAspectRatio(ratio) }
+    val extraPlaybacks = (0 until PlaybackState.MAX_EXTRAS).map { slot ->
+        rememberSecondPlayback(vm, slot, extras.getOrNull(slot), prefs, streamFormat) { ratio -> viewOf(slot + 1)?.setAspectRatio(ratio) }
+    }
+    val extraPlayers = extraPlaybacks.map { it?.player }
+    /** Fecha o canal extra com foco (com o foco no principal, o último que se abriu). */
+    fun closeFocusedExtra() = vm.closeExtra(if (focusTile > 0) focusTile - 1 else extras.lastIndex)
     val overlayOpen = showGuide || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
 
     /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
@@ -286,7 +302,7 @@ fun PlayerScreen(vm: AppViewModel) {
     LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
 
     /** A pausa do direto vale para este canal (o principal, em direto e sem o segundo canal). */
-    fun tsActive() = catchup == null && second == null && timeshift.available
+    fun tsActive() = catchup == null && extras.isEmpty() && timeshift.available
 
     /** Em pausa, atrás do direto, ou a escolher para onde ir: as teclas são as do catch-up. */
     fun tsShifted() = tsActive() && (seek.paused || !timeshift.atLive || seek.pending != null)
@@ -407,36 +423,29 @@ fun PlayerScreen(vm: AppViewModel) {
         seek.commit(latestSeekTarget, target)
     }
 
-    // Cada player na sua imagem. Ao trocar, primeiro larga-se a imagem antiga (dois players não podem partilhar uma).
-    LaunchedEffect(player, secondPlayback, mainView, secondView) {
-        val p2 = secondPlayback?.player
-        player.clearVideoSurface()
-        p2?.clearVideoSurface()
-        mainView?.let { v ->
-            player.setVideoSurfaceView(v.surfaceView)
-            player.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
-        }
-        if (p2 != null) {
-            secondView?.let { v ->
-                p2.setVideoSurfaceView(v.surfaceView)
-                p2.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
+    // Cada player na sua imagem. Ao trocar, primeiro largam-se as imagens antigas (dois players não podem partilhar uma).
+    LaunchedEffect(player, extraPlayers, order, videoView, smallViews.toList()) {
+        val players = listOf<Player?>(player) + extraPlayers
+        players.forEach { it?.clearVideoSurface() }
+        players.forEachIndexed { tile, p ->
+            if (p == null || tile >= tileCount) return@forEachIndexed
+            viewOf(tile)?.let { v ->
+                p.setVideoSurfaceView(v.surfaceView)
+                p.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
             }
         }
     }
 
     // Só um dos canais tem som: o que tem o foco.
-    LaunchedEffect(player, secondPlayback, focusSecond) {
-        val p2 = secondPlayback?.player
-        setAudible(player, p2 == null || !focusSecond)
-        p2?.let { setAudible(it, focusSecond) }
+    LaunchedEffect(player, extraPlayers, focusTile, tileCount) {
+        setAudible(player, focusTile == 0 || tileCount == 1)
+        extraPlayers.forEachIndexed { i, p -> p?.let { setAudible(it, focusTile == i + 1) } }
     }
 
-    // Sem segundo canal, tudo volta ao normal.
-    LaunchedEffect(second == null) {
-        if (second == null) {
-            swapped = false
-            focusSecond = false
-        }
+    // Um canal extra fechou: o foco e a imagem grande não podem ficar num lugar que já não existe.
+    LaunchedEffect(tileCount) {
+        if (focusTile >= tileCount) focusTile = tileCount - 1
+        if (bigTile >= tileCount) bigTile = 0
     }
 
     LaunchedEffect(prefs.aspect, videoView) {
@@ -478,8 +487,8 @@ fun PlayerScreen(vm: AppViewModel) {
         vm.onPlayerVisible(true)
         onStopOrDispose {
             vm.onPlayerVisible(false)
-            // O segundo canal fecha-se ao sair da app (liberta a ligação do outro fornecedor).
-            vm.closeSecond()
+            // Os canais extra fecham-se ao sair da app (libertam as ligações dos outros fornecedores).
+            vm.closeExtras()
             playback.stop()
             seek.reset()
             frameRateMatcher?.restore()
@@ -632,7 +641,7 @@ fun PlayerScreen(vm: AppViewModel) {
             info = infoVisible && playback.failure == null,
             catchup = catchup != null,
             shifted = tsShifted(),
-            second = second != null,
+            second = extras.isNotEmpty(),
             backOpensGuide = prefs.backAction == Prefs.BackAction.GUIDE,
             exitConfirm = prefs.exitConfirm,
         )
@@ -666,7 +675,7 @@ fun PlayerScreen(vm: AppViewModel) {
             TvBack.HIDE_INFO -> infoVisible = false
             TvBack.EXIT_CATCHUP -> vm.exitCatchup()
             TvBack.GO_LIVE -> seek.goLive(ring)
-            TvBack.CLOSE_SECOND -> vm.closeSecond()
+            TvBack.CLOSE_SECOND -> closeFocusedExtra()
             TvBack.OPEN_GUIDE -> {
                 showGuide = true
                 guideFromBack = true
@@ -894,16 +903,19 @@ fun PlayerScreen(vm: AppViewModel) {
                             }
                         }
                     }
-                    // Dois canais: ← → passam o foco (e o som) de um para o outro; ↑ ↓ mudam o canal com foco.
-                    if (second != null) {
+                    // Vários canais: ← → passam o foco (e o som) de um para o seguinte; ↑ ↓ mudam o canal com foco.
+                    if (extras.isNotEmpty()) {
                         when (code) {
                             AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                focusSecond = !focusSecond
+                                val step = if (code == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1
+                                // Pela ordem dos lugares no ecrã.
+                                val at = order.indexOf(focusTile).coerceAtLeast(0)
+                                focusTile = order[(at + step + tileCount) % tileCount]
                                 return@onKeyEvent true
                             }
                             AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                                 val delta = if (code == AndroidKeyEvent.KEYCODE_DPAD_UP) -1 else 1
-                                if (focusSecond) vm.zapSecond(if (prefs.reverseZap) -delta else delta) else zap(delta)
+                                if (focusTile > 0) vm.zapExtra(focusTile - 1, if (prefs.reverseZap) -delta else delta) else zap(delta)
                                 return@onKeyEvent true
                             }
                         }
@@ -947,51 +959,53 @@ fun PlayerScreen(vm: AppViewModel) {
                     }
                 },
         ) {
-            val split = second != null && dualLayout == DualLayout.SPLIT && !showGuide
-            val bigModifier = when {
-                split -> Modifier.align(Alignment.CenterStart).fillMaxWidth(0.5f).aspectRatio(16f / 9f)
-                else -> Modifier.fillMaxSize()
-            }
-            val smallModifier = if (split) {
-                Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.5f).aspectRatio(16f / 9f)
-            } else {
-                Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 32.dp).size(PIP_WIDTH, PIP_HEIGHT)
-            }
-            Box(bigModifier) {
-                AndroidView(
-                    factory = { ctx ->
-                        VideoView(ctx).also { view ->
-                            view.onBoundsChanged = { backdrop.videoBounds = it }
-                            videoView = view
-                        }
-                    },
-                    update = { it.keepScreenOn = playback.playing || playback.buffering },
-                    modifier = Modifier.fillMaxSize(),
-                )
-
-                // Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto).
-                playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
-            }
-
-            // Segundo canal: a imagem pequena (por cima da grande) ou a metade direita.
-            if (second != null && !showGuide) {
-                Box(smallModifier.background(Color.Black)) {
+            val multi = extras.isNotEmpty() && !showGuide
+            val split = multi && dualLayout == DualLayout.SPLIT
+            val rects = if (multi) tileRects(tileCount, dualLayout) else listOf(TileRect(0f, 0f, 1f, 1f))
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val tileModifiers = rects.map { r -> Modifier.offset(maxWidth * r.x, maxHeight * r.y).size(maxWidth * r.w, maxHeight * r.h) }
+                Box(tileModifiers[0]) {
                     AndroidView(
-                        factory = { ctx -> VideoView(ctx, overlay = true).also { smallView = it } },
-                        onRelease = { smallView = null },
+                        factory = { ctx ->
+                            VideoView(ctx).also { view ->
+                                view.onBoundsChanged = { backdrop.videoBounds = it }
+                                videoView = view
+                            }
+                        },
+                        update = { it.keepScreenOn = playback.playing || playback.buffering },
                         modifier = Modifier.fillMaxSize(),
                     )
+
+                    // Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto).
+                    if (order.first() == 0) playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
                 }
-                DualDecorations(
-                    second = second!!,
-                    mainChannel = current,
-                    playback = secondPlayback,
-                    swapped = swapped,
-                    focusSecond = focusSecond,
-                    split = split,
-                    bigModifier = bigModifier,
-                    smallModifier = smallModifier,
-                )
+
+                // Os canais extra: as imagens pequenas (por cima da grande) ou os outros lugares do dividido.
+                if (multi) {
+                    for (position in 1 until tileCount) {
+                        key(position) {
+                            Box(tileModifiers[position].background(Color.Black)) {
+                                AndroidView(
+                                    factory = { ctx -> VideoView(ctx, overlay = true).also { smallViews[position - 1] = it } },
+                                    onRelease = { smallViews[position - 1] = null },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                    }
+                    val s = LocalStrings.current
+                    TileDecorations(
+                        tiles = order.map { tile ->
+                            if (tile == 0) {
+                                TileInfo(current.name, audible = focusTile == 0, status = null)
+                            } else {
+                                TileInfo(extras[tile - 1].channel.name, audible = focusTile == tile, status = extraStatus(extraPlaybacks[tile - 1], s))
+                            }
+                        },
+                        modifiers = tileModifiers,
+                        split = split,
+                    )
+                }
             }
 
             AnimatedVisibility(panel != Panel.None, enter = fadeIn(), exit = fadeOut()) {
@@ -1028,7 +1042,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     waitMs = playback.retryDelayMs,
                     failover = playback.onBackup?.takeIf { !playback.wasPlaying }?.let { LocalStrings.current.backupConnectingTo(it.label, it.position, it.total) },
                     modifier = Modifier
-                        .align(if (second != null) Alignment.TopStart else Alignment.TopEnd)
+                        .align(if (extras.isNotEmpty()) Alignment.TopStart else Alignment.TopEnd)
                         // A gravar, fica por baixo da cápsula da gravação (no mesmo canto).
                         .padding(top = if (activeRecordings.isNotEmpty() && !covered()) recPillTop() + 54.dp else 0.dp),
                 )
@@ -1063,7 +1077,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     HudButtons(
                         vm, current, live, prefs.aspect, isFavorite, sleepAt,
                         pauseLive = tsActive(), recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
-                        second = second != null, backup = catchup == null && vm.backupOf(data.playlist.id) != null,
+                        second = extras.isNotEmpty(), canAddChannel = extras.size < PlaybackState.MAX_EXTRAS,
+                        backup = catchup == null && vm.backupOf(data.playlist.id) != null,
                         dualLayout = dualLayout, firstFocus = hudFocus,
                     ) { action ->
                         when (action) {
@@ -1077,12 +1092,20 @@ fun PlayerScreen(vm: AppViewModel) {
                                 infoVisible = false
                                 showRecordings = true
                             }
-                            HudAction.SECOND_CHANNEL -> {
+                            // O primeiro canal extra, ou mudar o canal com foco (com o foco no principal, o último aberto).
+                            HudAction.SECOND_CHANNEL, HudAction.ADD_CHANNEL -> {
                                 infoVisible = false
+                                pickerSlot = when {
+                                    action == HudAction.ADD_CHANNEL || extras.isEmpty() -> null
+                                    focusTile > 0 -> focusTile - 1
+                                    else -> extras.lastIndex
+                                }
                                 secondPicker.reset()
                                 showSecondPicker = true
                             }
-                            HudAction.SWAP -> swapped = !swapped
+                            HudAction.CLOSE_CHANNEL -> closeFocusedExtra()
+                            // O canal com foco passa para a imagem grande (se já lá está, troca com o seguinte).
+                            HudAction.SWAP -> bigTile = if (focusTile != order.first()) focusTile else order[1]
                             HudAction.LAYOUT -> dualLayout = if (dualLayout == DualLayout.PIP) DualLayout.SPLIT else DualLayout.PIP
                             HudAction.SEARCH -> {
                                 infoVisible = false
@@ -1212,11 +1235,11 @@ fun PlayerScreen(vm: AppViewModel) {
                 SecondChannelPicker(
                     vm = vm,
                     state = secondPicker,
+                    replacing = pickerSlot,
                     width = (prefs.panelWidth + 60).dp,
                     onPick = { content, ch, group ->
-                        vm.openSecond(content, ch, group)
+                        vm.openExtra(content, ch, group, pickerSlot)
                         showSecondPicker = false
-                        focusSecond = false
                     },
                 )
             }
@@ -1255,7 +1278,7 @@ fun PlayerScreen(vm: AppViewModel) {
             reminder?.let { ReminderCard(it, reminderSwitchIn, Modifier.align(Alignment.BottomEnd)) }
             // Com um painel ou as Definições abertas, a cápsula sai (tapava o cabeçalho deles).
             // O canto da gravação (o da cápsula de voltar a ligar): à esquerda com o segundo canal à direita.
-            val recCorner = if (second != null) Alignment.TopStart else Alignment.TopEnd
+            val recCorner = if (extras.isNotEmpty()) Alignment.TopStart else Alignment.TopEnd
             activeRecordings.firstOrNull()?.let {
                 // O número a escrever tapa o canto por uns segundos: a cápsula sai até ele acabar.
                 if (!covered() && numberEntry.isEmpty() && switchPrompt == null) {

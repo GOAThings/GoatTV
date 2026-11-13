@@ -54,13 +54,14 @@ internal data class PlaybackPolicy(
         val PHONE = TV.copy(diagnostics = false, surroundDefault = false)
 
         /**
-         * O segundo canal (imagem na imagem): outra lista, sem pausa, sem VLC, PCM, a tentar sempre de 3 em 3 s.
+         * Os canais extra (imagem na imagem, ecrã dividido): sem pausa, sem VLC, PCM, a tentar sempre de 3 em 3 s,
+         * e com os failovers do canal (os da reserva só com uma ligação livre na conta dela).
          * O áudio segue a língua preferida (quando é o que se ouve); legendas não há.
          */
         val SECOND = PlaybackPolicy(
             maxStartRetries = Int.MAX_VALUE, reconnectFloorMs = 3_000L, alwaysRetry = true, timeshift = false,
             vlcFallback = false, learnFormat = false, diagnostics = false, passthrough = false,
-            surroundDefault = false, subtitleLanguage = false, failover = false,
+            surroundDefault = false, subtitleLanguage = false, failover = true,
         )
     }
 }

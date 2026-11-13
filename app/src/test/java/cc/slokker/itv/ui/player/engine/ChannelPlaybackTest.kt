@@ -877,18 +877,19 @@ class ChannelPlaybackTest {
     }
 
     @Test
-    fun catchUpESegundoCanalNaoPassamParaAReserva() {
+    fun catchUpNaoPassaParaAReservaMasOsCanaisExtraSim() {
         host.backup = backupStream()
         val cu = Catchup(channel, "P", 0L, 3_600_000L)
         val p = playback()
         p.tuneNow(PlaybackRequest(channel, cu, 0L, listOf(ts)))
         p.onError(engine, ioError)
         assertEquals(0, host.backupAsked)
+        // Um canal extra (ecrã dividido) que não abre também vai aos failovers dele.
         val e2 = FakeEngine()
         val second = playback(PlaybackPolicy.SECOND, e2)
         second.tuneNow(live(ts))
         second.onError(e2, ioError)
-        assertEquals(0, host.backupAsked)
+        assertEquals(1, host.backupAsked)
     }
 
     @Test

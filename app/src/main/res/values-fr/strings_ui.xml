@@ -72,6 +72,9 @@
     <string name="split_screen">Écran partagé</string>
     <string name="picture_in_picture">Image dans l\'image</string>
     <string name="change_second">Changer la 2e chaîne</string>
+    <string name="add_channel">Ajouter une chaîne</string>
+    <string name="change_this_channel">Changer cette chaîne</string>
+    <string name="close_this_channel">Fermer cette chaîne</string>
     <string name="close_second">Fermer la 2e chaîne</string>
     <string name="no_signal">Pas de signal</string>
     <string name="loading_short">Chargement…</string>

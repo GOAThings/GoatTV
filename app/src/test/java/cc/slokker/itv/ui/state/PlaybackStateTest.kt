@@ -140,19 +140,31 @@ class PlaybackStateTest {
     }
 
     @Test
-    fun `second view zaps its own list and skips locked groups`() {
+    fun `extra views zap their own list and skip locked groups`() {
         val other = PlaylistContent.build(Playlist("p2", PlaylistType.M3U, "Outra", url = "u"), listOf(Category("g", "G")), listOf(
             Channel(0, "o1", 1, "Um", null, "g"),
             Channel(1, "o2", 2, "Dois", null, "g"),
         ))
-        state.openSecond(other, other.channels[0], "g")
-        state.zapSecond(1)
-        assertEquals("o2", state.second.value?.channel?.key)
+        state.openExtra(other, other.channels[0], "g")
+        state.zapExtra(0, 1)
+        assertEquals("o2", state.extras.value[0].channel.key)
         prefs = prefs.copy(lockedGroups = prefs.lockedGroups + "p2:g")
-        state.zapSecond(1)
-        assertEquals("o2", state.second.value?.channel?.key)
-        state.closeSecond()
-        assertNull(state.second.value)
+        state.zapExtra(0, 1)
+        assertEquals("o2", state.extras.value[0].channel.key)
+        state.closeExtra(0)
+        assertEquals(emptyList<PlaybackState.SecondView>(), state.extras.value)
+    }
+
+    @Test
+    fun `up to three extras, a full screen replaces the last and a slot can be changed`() {
+        val other = PlaylistContent.build(Playlist("p2", PlaylistType.M3U, "Outra", url = "u"), listOf(Category("g", "G")),
+            (0 until 5).map { Channel(it, "o$it", it + 1, "C$it", null, "g") })
+        for (i in 0 until 4) state.openExtra(other, other.channels[i], "g")
+        assertEquals(listOf("o0", "o1", "o3"), state.extras.value.map { it.channel.key })
+        state.openExtra(other, other.channels[4], "g", slot = 1)
+        assertEquals(listOf("o0", "o4", "o3"), state.extras.value.map { it.channel.key })
+        state.closeExtra(0)
+        assertEquals(listOf("o4", "o3"), state.extras.value.map { it.channel.key })
     }
 
     @Test

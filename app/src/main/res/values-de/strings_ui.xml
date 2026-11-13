@@ -72,6 +72,9 @@
     <string name="split_screen">Geteilter Bildschirm</string>
     <string name="picture_in_picture">Bild im Bild</string>
     <string name="change_second">2. Sender wechseln</string>
+    <string name="add_channel">Sender hinzufügen</string>
+    <string name="change_this_channel">Diesen Sender wechseln</string>
+    <string name="close_this_channel">Diesen Sender schließen</string>
     <string name="close_second">2. Sender schließen</string>
     <string name="no_signal">Kein Signal</string>
     <string name="loading_short">Wird geladen…</string>

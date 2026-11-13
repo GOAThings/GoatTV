@@ -72,6 +72,9 @@
     <string name="split_screen">تقسيم الشاشة</string>
     <string name="picture_in_picture">صورة داخل صورة</string>
     <string name="change_second">تغيير القناة الثانية</string>
+    <string name="add_channel">إضافة قناة</string>
+    <string name="change_this_channel">تغيير هذه القناة</string>
+    <string name="close_this_channel">إغلاق هذه القناة</string>
     <string name="close_second">إغلاق القناة الثانية</string>
     <string name="no_signal">لا توجد إشارة</string>
     <string name="loading_short">جارٍ التحميل…</string>

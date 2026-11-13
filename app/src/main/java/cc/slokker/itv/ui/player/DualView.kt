@@ -68,8 +68,36 @@ import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.common.focusWithRetry
 
-/** Como se mostram os dois canais. */
+/** Como se mostram os canais: um grande e os outros pequenos por cima, ou o ecrã dividido entre todos. */
 internal enum class DualLayout { PIP, SPLIT }
+
+/** Um lugar no ecrã, em frações dele (0–1): canto, largura e altura. */
+internal data class TileRect(val x: Float, val y: Float, val w: Float, val h: Float)
+
+/**
+ * Onde fica cada lugar com [count] canais (2–4). O lugar 0 é o grande na imagem na imagem (os outros ficam em coluna
+ * no canto de cima à direita); no dividido, 2 canais ficam lado a lado (16:9 cada) e 3 ou 4 numa grelha 2×2 (com 3, o
+ * terceiro ao centro em baixo).
+ */
+internal fun tileRects(count: Int, layout: DualLayout): List<TileRect> {
+    if (count <= 1) return listOf(TileRect(0f, 0f, 1f, 1f))
+    return when (layout) {
+        DualLayout.PIP -> listOf(TileRect(0f, 0f, 1f, 1f)) + (1 until count).map { k ->
+            TileRect(1f - PIP_FRACTION - PIP_MARGIN_X, PIP_MARGIN_Y + (k - 1) * (PIP_FRACTION + PIP_GAP), PIP_FRACTION, PIP_FRACTION)
+        }
+        DualLayout.SPLIT -> when (count) {
+            2 -> listOf(TileRect(0f, 0.25f, 0.5f, 0.5f), TileRect(0.5f, 0.25f, 0.5f, 0.5f))
+            3 -> listOf(TileRect(0f, 0f, 0.5f, 0.5f), TileRect(0.5f, 0f, 0.5f, 0.5f), TileRect(0.25f, 0.5f, 0.5f, 0.5f))
+            else -> listOf(TileRect(0f, 0f, 0.5f, 0.5f), TileRect(0.5f, 0f, 0.5f, 0.5f), TileRect(0f, 0.5f, 0.5f, 0.5f), TileRect(0.5f, 0.5f, 0.5f, 0.5f))
+        }
+    }
+}
+
+/** A imagem pequena: um quarto da largura (e da altura: fica 16:9 num ecrã 16:9), afastada das margens. */
+private const val PIP_FRACTION = 0.25f
+private const val PIP_MARGIN_X = 0.017f
+private const val PIP_MARGIN_Y = 0.03f
+private const val PIP_GAP = 0.015f
 
 /** Liga/desliga o som de um player (sem som não chega a abrir o áudio: dá para ter passthrough num e PCM no outro). */
 internal fun setAudible(player: Player, audible: Boolean) {
@@ -79,19 +107,21 @@ internal fun setAudible(player: Player, audible: Boolean) {
 }
 
 /**
- * O segundo canal: o mesmo [ChannelPlayback] do principal, com a política do segundo (sem pausa do direto nem
- * VLC, áudio PCM, a voltar a tentar sozinho de 3 em 3 s). Só há player enquanto houver segundo canal (null sem ele).
+ * Um canal extra (o do lugar [slot]): o mesmo [ChannelPlayback] do principal, com a política dos extra (sem pausa do
+ * direto nem VLC, áudio PCM, a voltar a tentar sozinho de 3 em 3 s, com failovers). Só há player enquanto houver canal
+ * nesse lugar (null sem ele).
  */
 @Composable
 internal fun rememberSecondPlayback(
     vm: AppViewModel,
+    slot: Int,
     second: PlaybackState.SecondView?,
     prefs: Prefs,
     streamFormat: String?,
     onVideoSize: (Float) -> Unit,
 ): ChannelPlayback? {
     val latestPrefs by rememberUpdatedState(prefs)
-    val host = remember { SecondPlaybackHost(vm) { latestPrefs } }
+    val host = remember { SecondPlaybackHost(vm, slot) { latestPrefs } }
     val playback = rememberChannelPlayback(PlaybackPolicy.SECOND, host, prefs, channelKey = null, enabled = second != null)
     val player = playback.player
     val latestOnVideoSize by rememberUpdatedState(onVideoSize)
@@ -146,6 +176,8 @@ internal class SecondPickerState {
 internal fun SecondChannelPicker(
     vm: AppViewModel,
     state: SecondPickerState,
+    /** O lugar cujo canal se vai mudar (larga a sua ligação), ou null para um canal novo. */
+    replacing: Int?,
     width: Dp,
     onPick: (PlaylistContent, Channel, String) -> Unit,
     modifier: Modifier = Modifier,
@@ -205,7 +237,7 @@ internal fun SecondChannelPicker(
             state.loading -> Text(s.loadingShort, color = ItvColors.TextDim, modifier = Modifier.padding(8.dp))
 
             content == null -> {
-                val allowed = playlists.filter { vm.secondAllowed(it) }
+                val allowed = playlists.filter { vm.secondAllowed(it, replacing) }
                 if (allowed.isEmpty()) {
                     Text(s.secondNeedsOther, color = ItvColors.TextDim, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(8.dp))
                 }
@@ -266,41 +298,33 @@ internal fun SecondChannelPicker(
     }
 }
 
+/** Um canal no ecrã, para a decoração: o nome, se é o que se ouve, e o estado (null = a dar). */
+internal class TileInfo(val name: String, val audible: Boolean, val status: String?)
+
+/** O estado de um canal extra para a etiqueta: sem sinal (não arrancou, ou caiu e ainda não voltou), a sintonizar, ou null. */
+internal fun extraStatus(playback: ChannelPlayback?, s: cc.slokker.itv.ui.i18n.Strings): String? = when {
+    playback != null && !playback.ready && (playback.failure != null || playback.reconnects > 0) -> s.noSignal
+    playback?.ready != true -> s.tuning
+    else -> null
+}
+
 /**
- * Por cima das duas imagens: contorno no canal com foco e uma etiqueta com o nome, o som e o estado.
- * Os [bigModifier]/[smallModifier] são os mesmos das imagens (filhos da mesma Box), para ficarem certinhos.
+ * Por cima das imagens: contorno no canal com foco (o que se ouve) e uma etiqueta com o nome, o som e o estado.
+ * [modifiers]: os de cada lugar (os mesmos das imagens, filhos da mesma Box); [tiles] pela ordem dos lugares. Na
+ * imagem na imagem, o canal em ecrã inteiro não leva etiqueta (para esse há a informação normal).
  */
 @Composable
-internal fun DualDecorations(
-    second: PlaybackState.SecondView,
-    mainChannel: Channel,
-    playback: ChannelPlayback?,
-    swapped: Boolean,
-    focusSecond: Boolean,
-    split: Boolean,
-    bigModifier: Modifier,
-    smallModifier: Modifier,
-) {
-    val s = LocalStrings.current
+internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, split: Boolean) {
     val accent = LocalAccent.current
-    val secondModifier = if (swapped) bigModifier else smallModifier
-    val mainModifier = if (swapped) smallModifier else bigModifier
-    // Sem sinal: não arrancou, ou caiu e ainda não voltou; a sintonizar: a abrir.
-    val secondStatus = when {
-        playback != null && !playback.ready && (playback.failure != null || playback.reconnects > 0) -> s.noSignal
-        playback?.ready != true -> s.tuning
-        else -> null
-    }
-
-    @Composable
-    fun Decoration(modifier: Modifier, name: String, audible: Boolean, small: Boolean, status: String?, showLabel: Boolean) {
+    tiles.forEachIndexed { position, tile ->
+        val small = !split && position > 0
         val border = when {
-            audible && (split || small) -> Modifier.border(3.dp, accent.brush, RoundedCornerShape(4.dp))
+            tile.audible && (split || small) -> Modifier.border(3.dp, accent.brush, RoundedCornerShape(4.dp))
             small -> Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
             else -> Modifier
         }
-        Box(modifier.then(border)) {
-            if (showLabel) {
+        Box(modifiers[position].then(border)) {
+            if (split || small) {
                 Row(
                     Modifier
                         .align(Alignment.BottomStart)
@@ -310,12 +334,12 @@ internal fun DualDecorations(
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (audible) {
+                    if (tile.audible) {
                         Icon(ItvIcons.Audio, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(
-                        listOfNotNull(name, status).joinToString(" · "),
+                        listOfNotNull(tile.name, tile.status).joinToString(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -324,8 +348,4 @@ internal fun DualDecorations(
             }
         }
     }
-
-    // A etiqueta do canal em ecrã inteiro (imagem na imagem) não aparece: para esse há a informação normal.
-    Decoration(mainModifier, mainChannel.name, audible = !focusSecond, small = !split && swapped, status = null, showLabel = split || swapped)
-    Decoration(secondModifier, second.channel.name, audible = focusSecond, small = !split && !swapped, status = secondStatus, showLabel = split || !swapped)
 }

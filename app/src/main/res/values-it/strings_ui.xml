@@ -72,6 +72,9 @@
     <string name="split_screen">Schermo diviso</string>
     <string name="picture_in_picture">Picture-in-picture</string>
     <string name="change_second">Cambia 2° canale</string>
+    <string name="add_channel">Aggiungi canale</string>
+    <string name="change_this_channel">Cambia questo canale</string>
+    <string name="close_this_channel">Chiudi questo canale</string>
     <string name="close_second">Chiudi 2° canale</string>
     <string name="no_signal">Nessun segnale</string>
     <string name="loading_short">Caricamento…</string>

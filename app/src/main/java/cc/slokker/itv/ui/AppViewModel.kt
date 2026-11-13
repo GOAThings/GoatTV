@@ -254,7 +254,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val reminders: StateFlow<List<Reminder>> = reminderList.reminders
 
     /** Segundo canal no ecrã (imagem na imagem / dividido). Pode ser de outra lista (outro fornecedor). */
-    val second: StateFlow<PlaybackState.SecondView?> = playback.second
+    /** Os canais extra no ecrã com o principal (2, 3 ou 4 ao todo). */
+    val extras: StateFlow<List<PlaybackState.SecondView>> = playback.extras
 
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
@@ -666,13 +667,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // A lista como se mostra (nomes limpos, variantes juntas): é esta que se abre daqui para a frente.
         val loaded = lists.view(raw)
         val playlist = loaded.playlist
-        playback.second.value?.let { sv ->
-            // A lista principal passou a ser a da conta do segundo canal, e o plano só tem 1 ligação.
-            val twoAllowed = !playlist.type.kind.knowsConnectionLimit || (loaded.account?.maxConnections ?: 0) >= 2
-            if (sv.content.playlist.sharesConnectionsWith(playlist) && !twoAllowed) {
-                playback.closeSecond()
-                showToast(I18n.s.secondClosedSameAccount)
-            }
+        // A lista principal passou a ser a da conta de canais extra: ficam só os que cabem no plano dela.
+        if (playlist.type.kind.knowsConnectionLimit || playlist.type.kind.singleConnection) {
+            val limit = if (playlist.type.kind.singleConnection) 1 else loaded.account?.maxConnections ?: 1
+            var users = 1
+            val before = playback.extras.value.size
+            playback.closeExtras { sv -> sv.content.playlist.sharesConnectionsWith(playlist) && ++users > limit }
+            if (playback.extras.value.size < before) showToast(I18n.s.secondClosedSameAccount)
         }
         guide.clearShort()
         guide.open(loaded)
@@ -865,7 +866,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _screen.value = Screen.Welcome
             }
             playlist.id == content.value?.playlist?.id -> switchPlaylist(remaining.first())
-            playback.second.value?.content?.playlist?.id == playlist.id -> playback.closeSecond()
+            else -> playback.closeExtras { it.content.playlist.id == playlist.id }
         }
     }
 
@@ -1615,17 +1616,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Segundo canal -------------------------------------------------------------------------
 
     /**
-     * Pode-se ver o segundo canal de [playlist]? Da conta da lista principal só se o plano deixar 2+ ligações
-     * (nas M3U não se sabe: deixa-se tentar).
+     * Pode-se abrir um canal extra de [playlist] (no lugar [replacing], ou num novo)? Só se a conta dela ainda tiver
+     * uma ligação livre, contando o principal e os outros canais extra (nas M3U não se sabe: deixa-se tentar).
      */
-    fun secondAllowed(playlist: Playlist): Boolean {
-        // Um MAC é uma box: uma ligação de cada vez.
+    fun secondAllowed(playlist: Playlist, replacing: Int? = null): Boolean =
+        connectionFree(playlist, tiles(except = replacing?.let { it + 1 }))
+
+    /**
+     * Os canais no ecrã (a conta de cada um e o que ela diz do plano): 0 é o principal, 1… os extra. [except]: um
+     * deles fica de fora (o que vai mudar de canal, ou passar à reserva, e larga a sua ligação).
+     */
+    private fun tiles(except: Int? = null): List<PlaylistContent> =
+        (listOfNotNull(content.value) + playback.extras.value.map { it.content }).filterIndexed { i, _ -> i != except }
+
+    /** A conta de [playlist] tem uma ligação livre, com [open] já abertos? Um MAC (Stalker) é uma box: uma só. */
+    private fun connectionFree(playlist: Playlist, open: List<PlaylistContent>): Boolean {
+        val users = open.filter { it.playlist.sharesConnectionsWith(playlist) }
+        if (users.isEmpty()) return true
         if (playlist.type.kind.singleConnection) return false
-        val main = content.value ?: return true
-        if (!playlist.sharesConnectionsWith(main.playlist)) return true
-        if (!main.playlist.type.kind.knowsConnectionLimit) return true
-        val limit = main.account?.maxConnections ?: return false
-        return limit >= 2
+        if (!playlist.type.kind.knowsConnectionLimit) return true
+        val limit = users.firstNotNullOfOrNull { it.account?.maxConnections } ?: return false
+        return users.size < limit
     }
 
     /** As listas Stalker só existem sem conta: com conta, o site expõe o portal como M3U. */
@@ -1656,12 +1667,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun channelsForSecond(content: PlaylistContent, groupId: String): List<Channel> = catalogFor(content).channelsOf(groupId)
 
-    fun openSecond(content: PlaylistContent, channel: Channel, groupId: String) = playback.openSecond(content, channel, groupId)
+    /** Abre um canal extra (no lugar [slot], ou num novo). */
+    fun openExtra(content: PlaylistContent, channel: Channel, groupId: String, slot: Int? = null) = playback.openExtra(content, channel, groupId, slot)
 
-    /** ↑/↓ no segundo canal (dá a volta nas pontas, como o principal). */
-    fun zapSecond(delta: Int) = playback.zapSecond(delta)
+    /** ↑/↓ no canal extra [slot] (dá a volta nas pontas, como o principal). */
+    fun zapExtra(slot: Int, delta: Int) = playback.zapExtra(slot, delta)
 
-    fun closeSecond() = playback.closeSecond()
+    fun closeExtra(slot: Int) = playback.closeExtra(slot)
+
+    fun closeExtras() = playback.closeExtras { true }
 
     // ---- Lista de reserva ------------------------------------------------------------------------
 
@@ -1735,18 +1749,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * carrega, ou quando abri-la passava o limite de ligações dela (o segundo canal já está nessa conta); os da própria
      * lista, quando ela está em baixo (ver [providerOutage]: falhavam também). Vazia se não houver nenhum.
      */
-    internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null): List<BackupStream> {
+    internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null, tile: Int = 0): List<BackupStream> {
         if (streamsDisabled) return emptyList()
         val id = main.playlist.id
         // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
         val backup = backupOf(id)?.takeUnless { it.sharesConnectionsWith(main.playlist) }
         val content = backup?.let { b -> backupContent(b) ?: null.also { Log.i(TAG_BACKUP, "Reserva ${b.name}: os canais não carregaram") } }
-        val busy = content != null && playback.second.value?.content?.playlist?.let { sp ->
-            val limit = content.account?.maxConnections
-            val one = backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && (limit ?: 1) < 2
-            sp.sharesConnectionsWith(backup) && one
-        } == true
-        if (busy) Log.i(TAG_BACKUP, "Reserva: o segundo canal já usa a conta dela")
+        // A reserva só se abre se a conta dela tiver uma ligação livre (os outros canais no ecrã podem estar nela).
+        val busy = content != null && run {
+            val users = tiles(except = tile).count { it.playlist.sharesConnectionsWith(backup) }
+            users > 0 && (backup.type.kind.singleConnection || backup.type.kind.knowsConnectionLimit && users >= (content.account?.maxConnections ?: 1))
+        }
+        if (busy) Log.i(TAG_BACKUP, "Reserva: outro canal no ecrã já usa a conta dela")
         val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
         val manual = backupManual(id)
         val variants = main.variants[channel.key].orEmpty()

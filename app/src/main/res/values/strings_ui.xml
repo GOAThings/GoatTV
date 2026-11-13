@@ -73,6 +73,9 @@
     <string name="split_screen">Split screen</string>
     <string name="picture_in_picture">Picture in picture</string>
     <string name="change_second">Change 2nd channel</string>
+    <string name="add_channel">Add channel</string>
+    <string name="change_this_channel">Change this channel</string>
+    <string name="close_this_channel">Close this channel</string>
     <string name="close_second">Close 2nd channel</string>
     <string name="no_signal">No signal</string>
     <string name="loading_short">Loading…</string>

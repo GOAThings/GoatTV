@@ -72,6 +72,9 @@
     <string name="split_screen">Bölünmüş ekran</string>
     <string name="picture_in_picture">Pencere içinde pencere</string>
     <string name="change_second">2. kanalı değiştir</string>
+    <string name="add_channel">Kanal ekle</string>
+    <string name="change_this_channel">Bu kanalı değiştir</string>
+    <string name="close_this_channel">Bu kanalı kapat</string>
     <string name="close_second">2. kanalı kapat</string>
     <string name="no_signal">Sinyal yok</string>
     <string name="loading_short">Yükleniyor…</string>
