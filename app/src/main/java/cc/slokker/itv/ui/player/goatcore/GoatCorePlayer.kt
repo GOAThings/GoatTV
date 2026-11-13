@@ -912,9 +912,10 @@ class GoatCorePlayer(
     // ---- Som ---------------------------------------------------------------------------------
 
     private fun audioLoop() {
-        waitPrevious()
         var first = true
         try {
+            // Dentro do try: um stop() logo a seguir ao arranque interrompe esta espera (e fechava a app).
+            waitPrevious()
             while (running) {
                 // Uma sessão por faixa: muda-se de faixa com uma marca na fila (ver switchAudio).
                 val unit = audioQueue.take()
