@@ -121,6 +121,8 @@ internal fun codecName(mime: String?): String? = when (mime) {
     MimeTypes.AUDIO_MPEG_L2 -> "MP2"
     MimeTypes.AUDIO_MPEG -> "MP3"
     MimeTypes.APPLICATION_DVBSUBS -> "DVB"
+    // As legendas em teletexto do GoatCore (ver GoatCoreMediaPlayer.TELETEXT_MIME).
+    "text/x-dvb-teletext" -> "Teletext"
     MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> "Closed captions"
     null -> null
     else -> mime.substringAfter('/').uppercase()

@@ -7,7 +7,8 @@ enum class TrackKind { VIDEO, AUDIO, SUBTITLE, DATA }
 
 /**
  * Uma faixa do programa: o PID, o formato e a língua que o PMT diz (ISO 639-2, como vem: "por", "eng"…), se disser.
- * [config]: nas legendas DVB, as páginas (composition e ancillary, 2 bytes cada) que o descodificador precisa.
+ * [config]: nas legendas DVB, as páginas (composition e ancillary, 2 bytes cada) que o descodificador precisa; no
+ * teletexto, as páginas anunciadas (ver [TeletextPage.of]).
  */
 data class TsTrack(
     val pid: Int,
@@ -363,9 +364,11 @@ class TsDemuxer(private val listener: TsListener) {
                     // ISO 639 (3), subtitling_type (1), composition_page_id (2), ancillary_page_id (2).
                     if (length >= 8) config = d.copyOfRange(body + 4, body + 8)
                 }
-                0x56 -> if (type == 0x06) {
+                // teletext / VBI teletext: as páginas (5 bytes cada: língua, tipo e magazine, página), ver TeletextPage.
+                0x56, 0x46 -> if (type == 0x06) {
                     codec = Codec.TELETEXT
                     if (length >= 3 && language == null) language = text(d, body, 3)
+                    if (length >= 5) config = (config ?: ByteArray(0)) + d.copyOfRange(body, body + length / 5 * 5)
                 }
                 // registration_descriptor: "AC-3", "EAC3", "HEVC", "ID3 "…
                 0x05 -> if (length >= 4 && codec == Codec.UNKNOWN) codec = when (text(d, body, 4)) {

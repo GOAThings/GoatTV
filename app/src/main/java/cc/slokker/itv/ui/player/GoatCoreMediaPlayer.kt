@@ -26,6 +26,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.TrackKind
+import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.ui.player.goatcore.GoatCorePlayer
 import cc.slokker.itv.ui.player.goatcore.TsSeek
@@ -291,19 +292,36 @@ internal class GoatCoreMediaPlayer(
      */
     private fun tracksOf(list: List<TsTrack>): Tracks {
         val playing = chosenAudio.takeIf { pid -> list.any { it.pid == pid } } ?: core?.selectedAudio ?: -1
+        fun label(language: String?) = language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage }
         val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE }.map { t ->
             val id = "goatcore:${t.pid}"
             val format = Format.Builder()
                 .setId(id)
                 .setSampleMimeType(mimeOf(t.codec))
                 .setLanguage(t.language)
-                .setLabel(t.language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage })
+                .setLabel(label(t.language))
                 .build()
             val supported = t.kind != TrackKind.AUDIO || GoatCorePlayer.playable(t.codec, passthrough)
             val selected = t.kind == TrackKind.VIDEO || t.pid == playing || (t.kind == TrackKind.SUBTITLE && t.pid == chosenText)
             Tracks.Group(TrackGroup(id, format), false, intArrayOf(if (supported) C.FORMAT_HANDLED else C.FORMAT_UNSUPPORTED_TYPE), booleanArrayOf(selected))
         }
-        return Tracks(groups)
+        // O teletexto: cada página de legendas é uma faixa (a chave junta o PID e a página, ver GoatCorePlayer.teletextKey).
+        val teletext = list.filter { it.codec == Codec.TELETEXT }.flatMap { t ->
+            TeletextPage.of(t.config).filter { it.isSubtitle }.map { page ->
+                val key = GoatCorePlayer.teletextKey(t.pid, page.page)
+                val id = "goatcore:$key"
+                val language = page.language ?: t.language
+                val format = Format.Builder()
+                    .setId(id)
+                    .setSampleMimeType(TELETEXT_MIME)
+                    .setLanguage(language)
+                    .setLabel(listOfNotNull(label(language), "${page.page.toString(16)}").joinToString(" · "))
+                    .setRoleFlags(if (page.type == 5) C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND else 0)
+                    .build()
+                Tracks.Group(TrackGroup(id, format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(key == chosenText))
+            }
+        }
+        return Tracks(groups + teletext)
     }
 
     private fun mimeOf(codec: Codec): String = when (codec) {
@@ -474,5 +492,8 @@ internal class GoatCoreMediaPlayer(
     private companion object {
         /** Sem imagem há mais do que isto, a dar, é uma paragem à espera de dados. */
         const val STARVED_MS = 700L
+
+        /** O Media3 não tem tipo para o teletexto: "text/…" basta para ser uma faixa de legendas. */
+        const val TELETEXT_MIME = "text/x-dvb-teletext"
     }
 }

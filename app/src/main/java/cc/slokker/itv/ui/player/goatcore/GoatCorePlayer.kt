@@ -17,6 +17,7 @@ import cc.slokker.itv.media.NalReader
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
 import cc.slokker.itv.media.StreamDemuxer
+import cc.slokker.itv.media.TeletextDecoder
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
@@ -137,9 +138,16 @@ class GoatCorePlayer(
     @Volatile private var requestedText = NO_CHANGE
     private var textPid = -1
     private var dvb: androidx.media3.extractor.text.dvb.DvbParser? = null
+    private var teletext: TeletextDecoder? = null
+
+    /**
+     * Os últimos PES de cada faixa de legendas (DVB e teletexto), escolhida ou não: ao escolher uma, o que já passou
+     * descodifica-se logo, em vez de só se ver o que chega depois (o motor lê ~20 s à frente da imagem).
+     */
+    private val recentText = HashMap<Int, ArrayDeque<TsSample>>()
     private var allTracks: List<TsTrack> = emptyList()
 
-    /** Mostra as legendas da faixa [pid] (DVB), ou nenhuma com -1. */
+    /** Mostra as legendas da faixa [pid] (DVB) ou da página de teletexto ([teletextKey]), ou nenhuma com -1. */
     fun selectText(pid: Int) {
         requestedText = pid
     }
@@ -273,6 +281,8 @@ class GoatCorePlayer(
             }
             out?.close()
             demuxer.flush()
+            // O fim do ficheiro não é o fim do que se vê: as filas têm até uns 20 s (o fim de uma gravação também).
+            drain()
             if (running) listener.onEnded()
         } catch (e: InterruptedException) {
             // stop()
@@ -281,6 +291,24 @@ class GoatCorePlayer(
         } catch (e: Exception) {
             fail("network: ${e.message}", cause = e)
         }
+    }
+
+    /** Espera que as filas saiam (em pausa, espera); sem sair nada durante [DRAIN_STALL_MS] a dar, desiste. */
+    private fun drain() {
+        var last = lastOutputAt
+        var since = SystemClock.elapsedRealtime()
+        while (running && (videoQueue.isNotEmpty() || audioQueue.isNotEmpty())) {
+            Thread.sleep(100)
+            val now = SystemClock.elapsedRealtime()
+            if (paused || lastOutputAt != last) {
+                last = lastOutputAt
+                since = now
+            } else if (now - since > DRAIN_STALL_MS) {
+                break
+            }
+        }
+        // O que o descodificador e o som ainda têm por mostrar.
+        if (running) Thread.sleep(500)
     }
 
     private fun tracksChanged(tracks: List<TsTrack>) {
@@ -348,6 +376,11 @@ class GoatCorePlayer(
             requestedText = NO_CHANGE
             switchText(text)
         }
+        if (track.kind == TrackKind.SUBTITLE) {
+            val recent = recentText.getOrPut(track.pid) { ArrayDeque() }
+            recent.addLast(sample)
+            if (recent.size > RECENT_TEXT) recent.removeFirst()
+        }
         when (track.pid) {
             videoPid -> video(sample)
             textPid -> text(sample)
@@ -362,6 +395,8 @@ class GoatCorePlayer(
         val samplePts = videoClock.unwrap(sample.pts)
         if (videoClock.jumped) {
             stats.jumps++
+            // As legendas guardadas são do tempo de antes do salto: já não se acertam com a imagem.
+            recentText.clear()
             videoStart.restart()
         }
         if (sample.discontinuity) videoStart.restart()
@@ -386,15 +421,34 @@ class GoatCorePlayer(
 
     /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
     private fun switchText(pid: Int) {
+        // Uma página de teletexto: o PID e o número da página juntos.
+        if (pid > MAX_PID) {
+            val track = allTracks.firstOrNull { it.pid == pid / 0x1000 && it.codec == Codec.TELETEXT }
+            textPid = track?.pid ?: -1
+            teletext = track?.let { TeletextDecoder(pid % 0x1000) }
+            dvb = null
+            listener.onCues(Long.MIN_VALUE, emptyList(), 0)
+            replayText()
+            return
+        }
+        teletext = null
         val track = allTracks.firstOrNull { it.pid == pid && it.codec == Codec.DVB_SUBTITLE }
         textPid = track?.pid ?: -1
         // O descodificador do Media3 quer as páginas do PMT (composition e ancillary); sem elas, as do canal todo.
         dvb = track?.let { androidx.media3.extractor.text.dvb.DvbParser(listOf(it.config ?: byteArrayOf(0, 1, 0, 1))) }
         listener.onCues(Long.MIN_VALUE, emptyList(), 0)
+        replayText()
+    }
+
+    /** As legendas da faixa escolhida que já passaram pelo leitor: as que ainda estão no ecrã aparecem já. */
+    private fun replayText() {
+        val recent = recentText[textPid] ?: return
+        for (s in recent.toList()) text(s)
     }
 
     /** Um PES de legendas DVB: data_identifier 0x20 e subtitle_stream_id 0x00, e o resto para o descodificador. */
     private fun text(sample: TsSample) {
+        teletext?.let { teletext(it, sample); return }
         val parser = dvb ?: return
         val d = sample.data
         if (d.size < 3 || d[0].toInt() != 0x20 || d[1].toInt() != 0x00) return
@@ -409,6 +463,17 @@ class GoatCorePlayer(
                 listener.onCues(at, c.cues, c.durationUs)
             }
         }.onFailure { Log.w(TAG, "dvb subtitles: ${it.message}") }
+    }
+
+    /** Um PES de teletexto: a página escolhida, quando muda, num só bloco em baixo (como numa TV), até à seguinte. */
+    private fun teletext(decoder: TeletextDecoder, sample: TsSample) {
+        val lines = decoder.feed(sample.data) ?: return
+        val clock = if (videoPid >= 0) videoClock else audioTracks[audioPid]?.clock ?: return
+        val pts = clock.map(sample.pts).takeIf { it >= 0 }?.let { it * 100 / 9 } ?: return
+        val cues = if (lines.isEmpty()) emptyList() else listOf(
+            androidx.media3.common.text.Cue.Builder().setText(lines.joinToString("\n")).build(),
+        )
+        listener.onCues(pts, cues, androidx.media3.common.C.TIME_UNSET)
     }
 
     private fun audio(pid: Int, sample: TsSample) {
@@ -982,6 +1047,14 @@ class GoatCorePlayer(
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
 
         private const val NO_CHANGE = Int.MIN_VALUE
+        private const val MAX_PID = 0x1FFF
+        private const val DRAIN_STALL_MS = 3_000L
+
+        /** Os PES de legendas guardados por faixa (o teletexto pode vir em todas as imagens: ~30 s). */
+        private const val RECENT_TEXT = 800
+
+        /** A faixa de uma página de teletexto: o PID e a página (0x888…) num só número, acima de qualquer PID. */
+        fun teletextKey(pid: Int, page: Int): Int = pid * 0x1000 + page
 
         /** Sem imagem há mais do que isto, o relógio do sistema volta a acertar-se pela imagem seguinte. */
         private const val RESYNC_AFTER_MS = 500L
