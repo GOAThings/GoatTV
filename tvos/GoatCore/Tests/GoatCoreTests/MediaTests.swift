@@ -171,9 +171,13 @@ extension CoreTests {
             p[2] = 0x00
             p[3] = 0x10
             let pts = (firstPts + Int64(i) * 900) & 0x1_FFFF_FFFF
-            let pes: [UInt8] = [0, 0, 1, 0xE0, 0, 0, 0x80, 0x80, 5,
-                                UInt8(0x21 | ((pts >> 29) & 0x0E)), UInt8((pts >> 22) & 0xFF), UInt8(0x01 | ((pts >> 14) & 0xFE)),
-                                UInt8((pts >> 7) & 0xFF), UInt8(0x01 | ((pts << 1) & 0xFE))]
+            var pes: [UInt8] = [0, 0, 1, 0xE0, 0, 0, 0x80, 0x80, 5]
+            let p0: Int64 = 0x21 | ((pts >> 29) & 0x0E)
+            let p1: Int64 = (pts >> 22) & 0xFF
+            let p2: Int64 = 0x01 | ((pts >> 14) & 0xFE)
+            let p3: Int64 = (pts >> 7) & 0xFF
+            let p4: Int64 = 0x01 | ((pts << 1) & 0xFE)
+            for v in [p0, p1, p2, p3, p4] { pes.append(UInt8(v)) }
             p.replaceSubrange(4..<(4 + pes.count), with: pes)
             out.append(contentsOf: p)
         }

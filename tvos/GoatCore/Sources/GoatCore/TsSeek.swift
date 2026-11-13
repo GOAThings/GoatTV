@@ -58,8 +58,17 @@ public enum TsSeek {
             let stream = bytes[p + 3]
             guard bytes[p + 7] & 0x80 != 0 else { continue }
             let q = p + 9
-            let v = (Int64(bytes[q] >> 1) & 7) << 30 | Int64(bytes[q + 1]) << 22 | (Int64(bytes[q + 2]) >> 1) << 15
-                | Int64(bytes[q + 3]) << 7 | Int64(bytes[q + 4]) >> 1
+            // Aos bocados: numa expressão só, o compilador de Swift desiste.
+            let b0: Int64 = (Int64(bytes[q]) >> 1) & 7
+            let b1: Int64 = Int64(bytes[q + 1])
+            let b2: Int64 = Int64(bytes[q + 2]) >> 1
+            let b3: Int64 = Int64(bytes[q + 3])
+            let b4: Int64 = Int64(bytes[q + 4]) >> 1
+            var v: Int64 = b0 << 30
+            v |= b1 << 22
+            v |= b2 << 15
+            v |= b3 << 7
+            v |= b4
             if (0xE0...0xEF).contains(stream) { video.append(v) } else { other.append(v) }
         }
         let list = video.isEmpty ? other : video
