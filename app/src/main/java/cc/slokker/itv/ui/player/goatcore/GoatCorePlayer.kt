@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
@@ -175,8 +176,15 @@ class GoatCorePlayer(
 
     fun open(input: () -> InputStream) {
         val net = Thread({ readLoop(input) }, "goatcore-net")
-        val video = Thread({ videoLoop() }, "goatcore-video")
-        val audio = Thread({ audioLoop() }, "goatcore-audio")
+        // Prioridade de imagem e de som (como o ExoPlayer): o trabalho da app no arranque não lhes tira a CPU.
+        val video = Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+            videoLoop()
+        }, "goatcore-video")
+        val audio = Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            audioLoop()
+        }, "goatcore-audio")
         threads = listOf(net, video, audio)
         threads.forEach { it.start() }
     }
@@ -209,12 +217,19 @@ class GoatCorePlayer(
         bitstreamTrack?.setVolume(volume)
     }
 
-    /** O tempo do vídeo a mostrar agora (ms, no tempo seguido do canal), ou -1 antes de começar. */
+    /**
+     * Onde vai o que se vê (ms, no tempo seguido do canal), ou -1 antes de começar: a última imagem mostrada, ou o
+     * relógio num canal só de som. É por ela que a pausa do direto mede quanto está atrás.
+     */
     val positionMs: Long
         get() {
+            val shown = lastShownPtsUs
+            if (videoPid >= 0 && shown != Long.MIN_VALUE) return shown / 1000
             val now = nowPtsUs()
             return if (now == Long.MIN_VALUE) -1 else now / 1000
         }
+
+    @Volatile private var lastShownPtsUs = Long.MIN_VALUE
 
     fun stop() {
         if (running) {
@@ -443,8 +458,8 @@ class GoatCorePlayer(
             var pending: VideoUnit? = first
             val info = MediaCodec.BufferInfo()
             while (running) {
-                // Entrada: uma unidade por vez, sem bloquear a saída.
-                val unit = pending ?: takenVideo(videoQueue.poll(5, TimeUnit.MILLISECONDS))
+                // Entrada: uma unidade por vez, sem bloquear a saída (a espera é a da saída; esperar na fila alocava).
+                val unit = pending ?: takenVideo(videoQueue.poll())
                 if (unit != null) {
                     val i = c.dequeueInputBuffer(5_000)
                     if (i >= 0) {
@@ -492,6 +507,7 @@ class GoatCorePlayer(
             stats.framesRendered++
             c.releaseOutputBuffer(index, true)
             lastOutputAt = SystemClock.elapsedRealtime()
+            lastShownPtsUs = ptsUs
             firstFrame()
             return
         }
@@ -507,16 +523,22 @@ class GoatCorePlayer(
             Thread.sleep(10)
             now = clockNow(ptsUs)
         }
-        val early = ptsUs - now
-        if (early > 0) Thread.sleep((early / 1000).coerceAtMost(200))
+        // A imagem vai para o ecrã até [RELEASE_AHEAD_US] antes da hora, com a hora marcada (como o ExoPlayer): uma
+        // paragem desta thread depois disso (o GC da app no arranque chega a 150 ms) já não a atrasa.
+        var early = ptsUs - now
+        while (running && early > RELEASE_AHEAD_US) {
+            Thread.sleep(((early - RELEASE_AHEAD_US) / 1000).coerceIn(1, 200))
+            early = ptsUs - nowPtsUs()
+        }
         val late = nowPtsUs() - ptsUs
         if (late > 50_000) {
             stats.framesLate++
             c.releaseOutputBuffer(index, false)
         } else {
             stats.framesRendered++
-            c.releaseOutputBuffer(index, true)
+            c.releaseOutputBuffer(index, System.nanoTime() - late * 1000)
             lastOutputAt = SystemClock.elapsedRealtime()
+            lastShownPtsUs = ptsUs
             if (!firstFrameReported) firstFrame()
         }
     }
@@ -558,19 +580,73 @@ class GoatCorePlayer(
     private fun nowPtsUs(): Long {
         val track = audioTrack
         val base = audioBasePtsUs
-        if (track != null && base != Long.MIN_VALUE) {
-            // O carimbo do AudioTrack (a amostra que está a sair agora, com a hora) é o mais certo, também em
-            // passthrough pelo HDMI; antes de o haver, a posição da cabeça.
-            val ts = android.media.AudioTimestamp()
-            if (runCatching { track.getTimestamp(ts) }.getOrDefault(false) && ts.framePosition > 0) {
-                val sinceUs = (System.nanoTime() - ts.nanoTime) / 1000
-                return base + ts.framePosition * 1_000_000 / audioRate + sinceUs
-            }
-            val played = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
-            return base + played * 1_000_000 / audioRate
-        }
+        if (track != null && base != Long.MIN_VALUE) return audioClock.now(track, base, audioRate)
         if (clockBasePtsUs == Long.MIN_VALUE) return Long.MIN_VALUE
         return clockBasePtsUs + SystemClock.elapsedRealtimeNanos() / 1000 - clockBaseRealtimeUs
+    }
+
+    private val audioClock = AudioClock()
+
+    /**
+     * O relógio pelo som. O carimbo do AudioTrack (a amostra que está a sair agora, com a hora) é o mais certo, também
+     * em passthrough pelo HDMI; antes de o haver, a posição da cabeça. Nos primeiros segundos ambos andam aos saltos
+     * (±100 ms) e as imagens saíam aos solavancos: o relógio anda com o tempo real e acerta-se pelo som aos poucos; uma
+     * diferença grande (o som começou, recomeçou, ou mudou) acerta-o de vez. [now] não aloca nada: a thread do vídeo,
+     * ao alocar no arranque da app, ficava parada à espera do GC.
+     */
+    private class AudioClock {
+        private val ts = android.media.AudioTimestamp()
+        private var stampTrack: AudioTrack? = null
+        private var stampFrames = 0L
+        private var stampNanos = 0L
+        private var ptsUs = Long.MIN_VALUE
+        private var atUs = 0L
+
+        /**
+         * Lê o carimbo de [track]; só na thread do som, depois de cada escrita (o getTimestamp aloca, e a thread do
+         * vídeo não pode).
+         */
+        fun sample(track: AudioTrack) {
+            if (track.playState != AudioTrack.PLAYSTATE_PLAYING) return
+            if (!runCatching { track.getTimestamp(ts) }.getOrDefault(false) || ts.framePosition <= 0) return
+            synchronized(this) {
+                stampTrack = track
+                stampFrames = ts.framePosition
+                stampNanos = ts.nanoTime
+            }
+        }
+
+        @Synchronized
+        fun now(track: AudioTrack, baseUs: Long, rate: Int): Long {
+            // Em pausa o carimbo fica parado no último (com a hora de então): só conta a tocar.
+            val playing = track.playState == AudioTrack.PLAYSTATE_PLAYING
+            // Um carimbo que falha de vez em quando (nos primeiros segundos é frequente) continua pelo último: a
+            // posição da cabeça não desconta a latência da saída (o HDMI, centenas de ms) e o relógio saltava.
+            val raw = if (playing && stampTrack === track) {
+                baseUs + stampFrames * 1_000_000 / rate + (System.nanoTime() - stampNanos) / 1000
+            } else {
+                baseUs + (track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) * 1_000_000 / rate
+            }
+            val nowUs = SystemClock.elapsedRealtimeNanos() / 1000
+            // Parado (pausa, ou antes de tocar) o som manda.
+            if (!playing || ptsUs == Long.MIN_VALUE) return reset(raw, nowUs)
+            val predicted = ptsUs + (nowUs - atUs)
+            val error = raw - predicted
+            if (error > MAX_ERROR_US || error < -MAX_ERROR_US) return reset(raw, nowUs)
+            ptsUs = predicted + error / 16
+            atUs = nowUs
+            return ptsUs
+        }
+
+        private fun reset(rawUs: Long, nowUs: Long): Long {
+            ptsUs = rawUs
+            atUs = nowUs
+            return rawUs
+        }
+
+        private companion object {
+            const val MAX_ERROR_US = 250_000L
+        }
     }
 
     // ---- Som ---------------------------------------------------------------------------------
@@ -667,6 +743,7 @@ class GoatCorePlayer(
                     buf.get(pcm)
                     c.releaseOutputBuffer(o, false)
                     t.write(pcm, 0, pcm.size)
+                    audioClock.sample(t)
                     stats.audioFrames++
                     if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
@@ -721,6 +798,7 @@ class GoatCorePlayer(
                         if (!paused) t.play()
                     }
                     t.write(pcm, 0, pcm.size)
+                    audioClock.sample(t)
                     stats.audioFrames++
                     if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
@@ -774,6 +852,7 @@ class GoatCorePlayer(
                     if (!paused) t.play()
                 }
                 t.write(u.data, 0, u.data.size)
+                audioClock.sample(t)
                 stats.audioFrames++
                 if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
             }
@@ -903,6 +982,9 @@ class GoatCorePlayer(
 
         /** Sem imagem há mais do que isto, o relógio do sistema volta a acertar-se pela imagem seguinte. */
         private const val RESYNC_AFTER_MS = 500L
+
+        /** Quanto antes da hora uma imagem vai para o ecrã (com a hora marcada). */
+        private const val RELEASE_AHEAD_US = 50_000L
 
         /** O máximo de vídeo à espera de ser descodificado (cerca de 8 s em 4K). */
         private const val MAX_VIDEO_BYTES = 24L * 1024 * 1024
