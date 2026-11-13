@@ -144,6 +144,12 @@ class GoatCorePlayer(
         requestedText = pid
     }
 
+    /** A última imagem mostrada (ou, num canal só de som, o último som escrito): elapsedRealtime, 0 antes da primeira. */
+    @Volatile private var lastOutputAt = 0L
+
+    /** Há quanto tempo não sai imagem (ou som, sem vídeo): parado à espera de dados se for muito. 0 antes de começar. */
+    val starvedMs: Long get() = lastOutputAt.takeIf { it > 0 }?.let { SystemClock.elapsedRealtime() - it } ?: 0
+
     /** O tempo do relógio agora (µs), ou Long.MIN_VALUE antes de começar: as legendas acertam-se por ele. */
     val nowUs: Long get() = nowPtsUs()
 
@@ -485,10 +491,16 @@ class GoatCorePlayer(
         if (!firstFrameReported) {
             stats.framesRendered++
             c.releaseOutputBuffer(index, true)
+            lastOutputAt = SystemClock.elapsedRealtime()
             firstFrame()
             return
         }
         while (running && paused) Thread.sleep(20)
+        // Pelo relógio do sistema (sem som, ou em passthrough), uma paragem da rede não o pára: a primeira imagem
+        // depois dela volta a acertá-lo, senão saíam todas atrasadas.
+        if (audioTrack == null && clockBasePtsUs != Long.MIN_VALUE && SystemClock.elapsedRealtime() - lastOutputAt > RESYNC_AFTER_MS) {
+            startWallClock(ptsUs)
+        }
         var now = clockNow(ptsUs)
         // À espera do som (no máximo meio segundo): a imagem fica no descodificador.
         while (running && now == Long.MIN_VALUE) {
@@ -504,6 +516,7 @@ class GoatCorePlayer(
         } else {
             stats.framesRendered++
             c.releaseOutputBuffer(index, true)
+            lastOutputAt = SystemClock.elapsedRealtime()
             if (!firstFrameReported) firstFrame()
         }
     }
@@ -655,6 +668,7 @@ class GoatCorePlayer(
                     c.releaseOutputBuffer(o, false)
                     t.write(pcm, 0, pcm.size)
                     stats.audioFrames++
+                    if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
             }
             return false
@@ -708,6 +722,7 @@ class GoatCorePlayer(
                     }
                     t.write(pcm, 0, pcm.size)
                     stats.audioFrames++
+                    if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
                 if (pending != null) Thread.sleep(2)
             }
@@ -760,6 +775,7 @@ class GoatCorePlayer(
                 }
                 t.write(u.data, 0, u.data.size)
                 stats.audioFrames++
+                if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
             }
             return false
         } finally {
@@ -884,6 +900,9 @@ class GoatCorePlayer(
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
 
         private const val NO_CHANGE = Int.MIN_VALUE
+
+        /** Sem imagem há mais do que isto, o relógio do sistema volta a acertar-se pela imagem seguinte. */
+        private const val RESYNC_AFTER_MS = 500L
 
         /** O máximo de vídeo à espera de ser descodificado (cerca de 8 s em 4K). */
         private const val MAX_VIDEO_BYTES = 24L * 1024 * 1024

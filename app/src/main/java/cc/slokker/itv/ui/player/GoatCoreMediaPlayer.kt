@@ -126,6 +126,8 @@ internal class GoatCoreMediaPlayer(
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
+                main.removeCallbacks(starvation)
+                main.postDelayed(starvation, 250)
             }
 
             override fun onTracks(tracks: List<TsTrack>) = post(g) {
@@ -165,6 +167,24 @@ internal class GoatCoreMediaPlayer(
 
     private var cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
 
+    /**
+     * De quarto em quarto de segundo, a dar: sem imagem há mais de [STARVED_MS], o estado passa a "a carregar" (como o
+     * ExoPlayer quando o buffer esvazia), e o leitor conta a paragem e volta a ligar se não recuperar (ChannelPlayback).
+     */
+    private val starvation = object : Runnable {
+        override fun run() {
+            val c = core ?: return
+            if (playWhenReady && (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)) {
+                val next = if (c.starvedMs > STARVED_MS) Player.STATE_BUFFERING else Player.STATE_READY
+                if (next != playbackState && (next == Player.STATE_BUFFERING || c.starvedMs < STARVED_MS)) {
+                    playbackState = next
+                    invalidateState()
+                }
+            }
+            main.postDelayed(this, 250)
+        }
+    }
+
     /** Mostra [list] quando o relógio do motor chegar a [atUs] (Long.MIN_VALUE = já), e tira-as ao fim de [durationUs]. */
     private fun showCues(g: Int, atUs: Long, list: List<androidx.media3.common.text.Cue>, durationUs: Long) {
         val now = core?.nowUs ?: Long.MIN_VALUE
@@ -202,6 +222,7 @@ internal class GoatCoreMediaPlayer(
 
     private fun stopCore() {
         generation++
+        main.removeCallbacks(starvation)
         val c = core ?: return
         core = null
         lastPositionMs = position(c)
@@ -400,5 +421,10 @@ internal class GoatCoreMediaPlayer(
             tracks = tracksOf(tsTracks)
         }
         return Futures.immediateVoidFuture()
+    }
+
+    private companion object {
+        /** Sem imagem há mais do que isto, a dar, é uma paragem à espera de dados. */
+        const val STARVED_MS = 700L
     }
 }
