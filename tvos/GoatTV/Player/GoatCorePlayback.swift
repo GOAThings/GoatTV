@@ -542,6 +542,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             self.onEvent?(.tracks(tracks))
         }
         pipeline.onVideo = { [weak self] b in self?.video(b) }
+        pipeline.onCodedVideo = { [weak self] v in self?.codedVideo(v) }
         pipeline.onAudio = { [weak self] b in self?.audioSample(b) }
         pipeline.onUnsupported = { [weak self] what in self?.fail("unsupported \(what)") }
         pipeline.onTextTracks = { [weak self] list in self?.onEvent?(.textTracks(list)) }
@@ -784,6 +785,23 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     // MARK: Amostras e relógio
 
     private var closed: Bool { cancelled || stopped.withLock { $0 } }
+
+    /// O MPEG-2, descodificado aqui pelo FFmpeg (ver SoftwareVideo).
+    private var software: SoftwareVideo?
+    private var softwareFailed = false
+
+    private func codedVideo(_ v: CodedVideo) {
+        guard !closed, !softwareFailed else { return }
+        if software == nil {
+            software = SoftwareVideo()
+            if software == nil {
+                softwareFailed = true
+                fail("unsupported video MPEG2_VIDEO")
+                return
+            }
+        }
+        for b in software?.decode(v) ?? [] { video(b) }
+    }
 
     private func video(_ b: CMSampleBuffer) {
         guard !closed else { return }

@@ -150,7 +150,23 @@ extension CoreTests {
         try expect(asbd.mFormatID, kAudioFormatEnhancedAC3)
     }
 
-    /// O MPEG-2 ainda não: diz que não toca (para o leitor passar ao VLC), e o áudio MP2 sai na mesma.
+    /// Com quem descodifique o MPEG-2 (a app, pelo FFmpeg), ele sai comprimido: a começar numa imagem-chave com o
+    /// cabeçalho da sequência, com os tempos a subir, e o canal não conta como não suportado.
+    static func goatCoreMpeg2GoesToSoftware() throws {
+        let pipeline = MediaPipeline()
+        var coded: [CodedVideo] = []
+        pipeline.onCodedVideo = { coded.append($0) }
+        let r = try run("mpeg2_mp2", pipeline: pipeline)
+        try expect(r.unsupported, [])
+        try expect(r.video.count, 0)
+        try expect(coded.isEmpty, false)
+        try expect(coded[0].keyframe, true)
+        try expect(coded[0].data.range(of: Data([0, 0, 1, 0xB3])) != nil, true)
+        try expect(coded.map(\.dts) == coded.map(\.dts).sorted(), true)
+        try expect(r.audio.count, 84)
+    }
+
+    /// Sem ele, diz que não toca (para o leitor passar ao VLC), e o áudio MP2 sai na mesma.
     static func goatCoreMpeg2IsReported() throws {
         let r = try run("mpeg2_mp2")
         try expect(r.unsupported, ["video MPEG2_VIDEO"])

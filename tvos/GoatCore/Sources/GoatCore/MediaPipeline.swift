@@ -49,6 +49,15 @@ public struct VideoDetails: @unchecked Sendable {
     public let format: CMVideoFormatDescription
 }
 
+/// Uma imagem de vídeo comprimida que o hardware não descodifica (MPEG-2): vai para um descodificador em software.
+/// Tempos em 90 kHz, seguidos como os das outras amostras.
+public struct CodedVideo: @unchecked Sendable {
+    public let data: Data
+    public let pts: Int64
+    public let dts: Int64
+    public let keyframe: Bool
+}
+
 /// Uma imagem das legendas DVB: onde fica no ecrã do emissor e os pixels (RGBA pré-multiplicado).
 public struct SubtitleImage: Sendable {
     public let x: Int
@@ -89,6 +98,9 @@ public final class MediaPipeline {
     public var onImages: ((Int64, SubtitleImages) -> Void)?
     /// O vídeo (tamanho, cadência, HDR): a primeira vez e quando os parâmetros mudam.
     public var onVideoDetails: ((VideoDetails) -> Void)?
+    /// O vídeo MPEG-2 (os canais SD de cabo e satélite), comprimido: o VideoToolbox não o descodifica, quem usa o
+    /// pipeline descodifica-o com o FFmpeg. Sem quem o faça, o MPEG-2 conta como formato que este motor não toca.
+    public var onCodedVideo: ((CodedVideo) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -101,6 +113,7 @@ public final class MediaPipeline {
     private var tracks: [MediaTrack] = []
     private var videoPid: Int?
     private var nal: NalReader?
+    private var mpeg2: Mpeg2Reader?
     private var videoFormat: CMVideoFormatDescription?
     private var videoClock = TsClock()
     /// Só se manda vídeo a partir de uma imagem-chave, sem as imagens que dependem de antes dela (o verde e os borrões).
@@ -180,6 +193,7 @@ public final class MediaPipeline {
         tracks = []
         videoPid = nil
         nal = nil
+        mpeg2 = nil
         videoFormat = nil
         videoClock.reset()
         videoStart.restart()
@@ -243,10 +257,12 @@ public final class MediaPipeline {
             videoPid = video?.pid
             videoFormat = nil
             nal = nil
+            mpeg2 = nil
             if let video {
                 switch video.codec {
                 case "H264": nal = NalReader(hevc: false)
                 case "HEVC": nal = NalReader(hevc: true)
+                case "MPEG2_VIDEO" where onCodedVideo != nil: mpeg2 = Mpeg2Reader()
                 default: unsupported("video \(video.codec)")
                 }
             }
@@ -285,6 +301,10 @@ public final class MediaPipeline {
         let hevc = videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC"
         let cc = ClosedCaptions.shared.ccData(data: data, hevc: hevc, mpeg2: false)
         guard cc.size > 0 || !captionQueue.isEmpty else { return }
+        queueCaptions(cc, pts: pts)
+    }
+
+    private func queueCaptions(_ cc: KotlinByteArray, pts: Int64) {
         captionQueue.append((pts, cc))
         guard captionQueue.count > Self.captionReorder,
               let i = captionQueue.indices.min(by: { captionQueue[$0].pts < captionQueue[$1].pts }) else { return }
@@ -329,6 +349,10 @@ public final class MediaPipeline {
     // MARK: Vídeo
 
     private func video(_ sample: TsSample) {
+        if mpeg2 != nil {
+            mpeg2Video(sample)
+            return
+        }
         guard let nal else { return }
         let samplePts = videoClock.unwrap(ts: sample.pts)
         if videoClock.jumped {
@@ -367,6 +391,31 @@ public final class MediaPipeline {
             attachments.first?[kCMSampleAttachmentKey_DependsOnOthers] = true
         }
         onVideo?(buffer)
+    }
+
+    /// MPEG-2: a imagem sai como vem (com o cabeçalho da sequência nas imagens I), a partir da primeira imagem-chave
+    /// com ele, para o descodificador em software.
+    private func mpeg2Video(_ sample: TsSample) {
+        guard let mpeg2 else { return }
+        let samplePts = videoClock.unwrap(ts: sample.pts)
+        if videoClock.jumped {
+            videoStart.restart()
+            recentText = [:]
+            onJump?()
+        }
+        if sample.discontinuity { videoStart.restart() }
+        let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
+        let cc = ClosedCaptions.shared.ccData(data: sample.data, hevc: false, mpeg2: true)
+        if cc.size > 0 || !captionQueue.isEmpty { queueCaptions(cc, pts: samplePts) }
+        let unit = mpeg2.next(data: sample.data, pts: samplePts, dts: sampleDts)
+        guard let header = mpeg2.sequenceHeader, videoStart.pass(keyframe: unit.keyframe, pts: unit.pts) else { return }
+        var data = AppleMedia.shared.data(bytes: unit.data) as Data
+        // Uma imagem I sem o cabeçalho da sequência (há emissores que só o mandam de vez em quando): leva-o à frente,
+        // para o descodificador poder começar nela.
+        if unit.keyframe, data.range(of: Data([0, 0, 1, 0xB3])) == nil {
+            data = (AppleMedia.shared.data(bytes: header) as Data) + data
+        }
+        onCodedVideo?(CodedVideo(data: data, pts: unit.pts, dts: unit.dts, keyframe: unit.keyframe))
     }
 
     static func videoFormat(_ sets: [Data], hevc: Bool) -> CMVideoFormatDescription? {
