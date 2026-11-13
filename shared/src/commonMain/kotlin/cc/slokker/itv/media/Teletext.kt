@@ -28,12 +28,19 @@ data class TeletextPage(val language: String?, val type: Int, val page: Int) {
  * A página fica pronta quando chega o cabeçalho seguinte da mesma magazine (ou de qualquer uma, em modo série).
  * [feed] devolve o texto a mostrar quando muda: as linhas que se veem (o que está nas caixas, ou a linha toda), e
  * uma lista vazia para limpar.
+ *
+ * O alfabeto vem do grupo (X/28 da página, M/29 da magazine, ou o da [language] do PMT quando o canal não diz) e da
+ * variante nacional do cabeçalho (C12–C14): é assim que se leem canais russos, gregos, polacos, turcos, hebraicos.
  */
-class TeletextDecoder(private val page: Int) {
+class TeletextDecoder(private val page: Int, language: String? = null) {
     private val magazine = (page shr 8) and 7
     private val rows = arrayOfNulls<ByteArray>(25)
     private var collecting = false
     private var charset = 0
+    private val defaultGroup = languageGroup(language)
+    private var pageGroup = -1
+    private var magazineGroup = -1
+    private var table: CharArray = G0.getValue(0)
     private var shown: List<String> = emptyList()
 
     /** Um PES (data_identifier e unidades): o texto novo, se a página mudou; null se não mudou. */
@@ -80,16 +87,33 @@ class TeletextDecoder(private val page: Int) {
                 collecting = true
                 // C12–C14: a variante nacional dos caracteres latinos (C12 é o bit mais alto da tabela).
                 charset = ((c11 shr 1) and 1) * 4 + ((c11 shr 2) and 1) * 2 + ((c11 shr 3) and 1)
+                pageGroup = -1
                 // C4 (apagar) ou uma página nova: as linhas de antes saem.
                 if ((c4 and 8) != 0) rows.fill(null)
             }
             return done
         }
         if (collecting && mag == magazine && packet in 1..24) rows[packet] = data
+        // X/28/0 e X/28/4 (a página) ou M/29/0 e M/29/4 (a magazine toda): o alfabeto, no 1.º tripleto (bits 8–14).
+        if (mag == magazine && (packet == 28 && collecting || packet == 29)) {
+            val designation = hamming(data[0])
+            val triplet = hamming24(data, 1)
+            if ((designation == 0 || designation == 4) && triplet >= 0) {
+                val group = ((triplet shr 7) and 0x7F) shr 3
+                if (packet == 28) pageGroup = group else magazineGroup = group
+            }
+        }
         return null
     }
 
+    /** O alfabeto da página: o grupo com a variante do cabeçalho; se essa combinação não existir, o código do grupo. */
+    private fun chooseTable(): CharArray {
+        val group = if (pageGroup >= 0) pageGroup else if (magazineGroup >= 0) magazineGroup else defaultGroup
+        return G0[group * 8 + charset] ?: G0[group * 8] ?: G0[charset] ?: G0.getValue(0)
+    }
+
     private fun publish(): List<String>? {
+        table = chooseTable()
         val text = (1..24).mapNotNull { rows[it]?.let(::rowText) }.filter { it.isNotBlank() }
         rows.fill(null)
         if (text == shown) return null
@@ -108,33 +132,115 @@ class TeletextDecoder(private val page: Int) {
                 c == 0x0B -> inBox = true
                 c == 0x0A -> if (boxed) inBox = false
                 !inBox -> {}
-                c < 0x20 || c == 0x7F -> out.append(' ')
-                else -> out.append(char(c))
+                c < 0x20 -> out.append(' ')
+                else -> out.append(table[c - 0x20])
             }
         }
         return out.toString().replace(Regex(" {2,}"), " ").trim()
-    }
-
-    private fun char(c: Int): Char {
-        val at = NATIONAL_POSITIONS.indexOf(c)
-        if (at >= 0) NATIONAL.getOrNull(charset)?.let { return it[at] }
-        return c.toChar()
     }
 
     companion object {
         /** As posições do G0 latino que mudam com a língua (EN 300 706, tabela 36). */
         private val NATIONAL_POSITIONS = intArrayOf(0x23, 0x24, 0x40, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x7B, 0x7C, 0x7D, 0x7E)
 
-        /** As variantes pelo C12–C14 (tabela 32, grupo da Europa Ocidental). */
-        private val NATIONAL = listOf(
-            "£\$@←½→↑#—¼‖¾÷", // inglês
-            "#\$§ÄÖÜ^_°äöüß", // alemão
-            "#¤ÉÄÖÅÜ_éäöåü", // sueco, finlandês, húngaro
-            "£\$é°ç→↑#ùàòèì", // italiano
-            "éïàëêùî#èâôûç", // francês
-            "ç\$¡áéíóú¿üñèà", // português, espanhol
-            "#ůčťžýířéáěúš", // checo, eslovaco
+        private const val ASCII = " !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ "
+
+        /** O G0 latino com as 13 posições da variante. */
+        private fun latin(national: String): CharArray {
+            val t = ASCII.toCharArray()
+            NATIONAL_POSITIONS.forEachIndexed { i, at -> t[at - 0x20] = national[i] }
+            return t
+        }
+
+        /** Um G0 de 0x20 a 0x7F: o ASCII até 0x3F (com [low] por cima, posição → letra) e [high] de 0x40 a 0x7F. */
+        private fun table(high: String, low: Map<Int, Char> = emptyMap()): CharArray {
+            val t = (ASCII.substring(0, 0x20) + high).toCharArray()
+            for ((at, c) in low) t[at - 0x20] = c
+            return t
+        }
+
+        private val ENGLISH = latin("£\$@←½→↑#―¼‖¾÷")
+        private val GERMAN = latin("#\$§ÄÖÜ^_°äöüß")
+        private val SWEDISH = latin("#¤ÉÄÖÅÜ_éäöåü")
+        private val ITALIAN = latin("£\$é°ç→↑#ùàòèì")
+        private val FRENCH = latin("éïàëêùî#èâôûç")
+        private val SPANISH = latin("ç\$¡áéíóú¿üñèà")
+        private val CZECH = latin("#ůčťžýířéáěúš")
+        private val POLISH = latin("#ńąŻŚŁćóężśłź")
+        private val TURKISH = latin("₺ğİŞÖÇÜĞışöçü")
+        private val SERBIAN = latin("#ËČĆŽĐŠëčćžđš")
+        private val ROMANIAN = latin("#¤ŢÂŞĂÎıţâşăî")
+        private val ESTONIAN = latin("#õŠÄÖŽÜÕšäöžü")
+        private val LITHUANIAN = latin("#\$ŠėęŽčūšąųžį")
+
+        private val CYRILLIC_1 = table("ЧАБЦДЕФГХИЈКЛМНОПЌРСТУВЃЉЊЗЋЖЂШЏчабцдефгхијклмнопќрстувѓљњзћжђшџ")
+        private val CYRILLIC_2 = table("ЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЪЗШЭЩЧЫюабцдефгхийклмнопярстужвьъзшэщчы", mapOf(0x26 to 'ы'))
+        private val CYRILLIC_3 = table("ЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЇЗШЄЩЧІюабцдефгхийклмнопярстужвьїзшєщчі", mapOf(0x26 to 'ї'))
+        private val GREEK = table(
+            CharArray(0x40) { if (it == 0x12) 'ʹ' else if (it == 0x3F) ' ' else (0x0390 + it).toChar() }.concatToString(),
+            mapOf(0x3C to '«', 0x3E to '»'),
         )
+        private val HEBREW = latin("£\$@←½→↑#―₪‖¾÷").also { t ->
+            for (c in 0x60..0x7A) t[c - 0x20] = (0x05D0 + c - 0x60).toChar()
+        }
+
+        /** Os alfabetos pelo código de 7 bits da tabela 32 (grupo × 8 + variante). O árabe ainda não (precisa de formas). */
+        internal val G0: Map<Int, CharArray> = mapOf(
+            0 to ENGLISH, 1 to GERMAN, 2 to SWEDISH, 3 to ITALIAN, 4 to FRENCH, 5 to SPANISH, 6 to CZECH,
+            8 to POLISH, 9 to GERMAN, 10 to SWEDISH, 11 to ITALIAN, 12 to FRENCH, 14 to CZECH,
+            16 to ENGLISH, 17 to GERMAN, 18 to SWEDISH, 19 to ITALIAN, 20 to FRENCH, 21 to SPANISH, 22 to TURKISH,
+            29 to SERBIAN, 31 to ROMANIAN,
+            32 to CYRILLIC_1, 33 to GERMAN, 34 to ESTONIAN, 35 to LITHUANIAN, 36 to CYRILLIC_2, 37 to CYRILLIC_3, 38 to CZECH,
+            54 to TURKISH, 55 to GREEK,
+            64 to ENGLISH, 68 to FRENCH,
+            85 to HEBREW,
+        )
+
+        /** O grupo da tabela 32 a usar quando o canal não manda X/28 nem M/29: o da língua da página no PMT. */
+        internal fun languageGroup(language: String?): Int = when (language) {
+            "pol" -> 1
+            "tur" -> 2
+            "slv", "hrv", "scr", "ron", "rum", "bos" -> 3
+            "rus", "bul", "ukr", "srp", "scc", "mkd", "mac", "bel", "est", "lav", "lit" -> 4
+            "ell", "gre" -> 6
+            "heb" -> 10
+            else -> 0
+        }
+
+        /**
+         * Hamming 24/18 (3 bytes a partir de [at]): os 18 bits de dados, com um bit errado corrigido; -1 se houver mais.
+         * Os bits contam-se de 1 (o menos significativo do 1.º byte) a 24; os de proteção estão em 1, 2, 4, 8, 16 e 24.
+         */
+        internal fun hamming24(d: ByteArray, at: Int): Int {
+            var word = (d[at].toInt() and 0xFF) or ((d[at + 1].toInt() and 0xFF) shl 8) or ((d[at + 2].toInt() and 0xFF) shl 16)
+            var syndrome = 0
+            for (k in 0 until 5) {
+                var parity = 0
+                for (bit in 1..23) if ((bit shr k) and 1 == 1) parity = parity xor ((word shr (bit - 1)) and 1)
+                if (parity == 0) syndrome = syndrome or (1 shl k)
+            }
+            val overallOk = word.countOneBits() % 2 == 1
+            if (syndrome != 0) {
+                // Um bit errado mexe na paridade total; dois não, e esses não se corrigem.
+                if (overallOk || syndrome > 23) return -1
+                word = word xor (1 shl (syndrome - 1))
+            } else if (!overallOk) {
+                word = word xor (1 shl 23)
+            }
+            return ((word shr 2) and 1) or (((word shr 4) and 7) shl 1) or (((word shr 8) and 0x7F) shl 4) or (((word shr 16) and 0x7F) shl 11)
+        }
+
+        /** Para os testes: [v] (18 bits) em Hamming 24/18, com paridade ímpar em cada teste. */
+        internal fun hamming24Encode(v: Int): ByteArray {
+            var word = ((v and 1) shl 2) or (((v shr 1) and 7) shl 4) or (((v shr 4) and 0x7F) shl 8) or (((v shr 11) and 0x7F) shl 16)
+            for (k in 0 until 5) {
+                var parity = 0
+                for (bit in 1..23) if ((bit shr k) and 1 == 1) parity = parity xor ((word shr (bit - 1)) and 1)
+                if (parity == 0) word = word or (1 shl ((1 shl k) - 1))
+            }
+            if (word.countOneBits() % 2 == 0) word = word or (1 shl 23)
+            return byteArrayOf(word.toByte(), (word shr 8).toByte(), (word shr 16).toByte())
+        }
 
         private val HAMMING = IntArray(256) { -1 }.also { t ->
             // Hamming 8/4: os dados nos bits 1, 3, 5 e 7; os de proteção nos pares. Um bit errado corrige-se.

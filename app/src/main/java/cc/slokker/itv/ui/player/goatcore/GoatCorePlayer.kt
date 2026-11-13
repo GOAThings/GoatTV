@@ -20,6 +20,7 @@ import cc.slokker.itv.media.StreamDemuxer
 import cc.slokker.itv.media.ClosedCaptions
 import cc.slokker.itv.media.Cea608Decoder
 import cc.slokker.itv.media.TeletextDecoder
+import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
@@ -508,7 +509,11 @@ class GoatCorePlayer(
         if (pid > MAX_PID) {
             val track = allTracks.firstOrNull { it.pid == pid / 0x1000 && it.codec == Codec.TELETEXT }
             textPid = track?.pid ?: -1
-            teletext = track?.let { TeletextDecoder(pid % 0x1000) }
+            teletext = track?.let { t ->
+                val page = pid % 0x1000
+                // A língua da página escolhe o alfabeto quando o canal não o diz (cirílico, grego…).
+                TeletextDecoder(page, TeletextPage.of(t.config).firstOrNull { it.page == page }?.language ?: t.language)
+            }
             dvb = null
             listener.onCues(Long.MIN_VALUE, emptyList(), 0)
             replayText()

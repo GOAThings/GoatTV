@@ -139,7 +139,7 @@ public final class MediaPipeline {
         }
         guard let key, let t = textTracks.first(where: { $0.key == key }) else { return }
         if t.isTeletext {
-            teletext = TeletextDecoder(page: Int32(t.page))
+            teletext = TeletextDecoder(page: Int32(t.page), language: t.language)
         } else {
             guard let raw = rawTracks.first(where: { Int($0.pid) == t.pid }) else { return }
             dvb = AppleMedia.shared.dvbDecoder(track: raw)

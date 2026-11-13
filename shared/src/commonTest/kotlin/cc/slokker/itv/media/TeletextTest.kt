@@ -86,6 +86,61 @@ class TeletextTest {
         assertEquals(listOf("Grüße"), de.feed(pes(header(0x7FF))))
     }
 
+    /** O pacote 28 (página) ou 29 (magazine) com o alfabeto [code] (7 bits da tabela 32) no 1.º tripleto. */
+    private fun designation(mag: Int, packet: Int, code: Int): Triple<Int, Int, ByteArray> {
+        val d = ByteArray(40) { TeletextDecoder.hammingEncode(0) }
+        TeletextDecoder.hamming24Encode(code shl 7).copyInto(d, 1)
+        return Triple(mag, packet, d)
+    }
+
+    @Test
+    fun everyAlphabetCoversTheWholeTable() {
+        for ((code, t) in TeletextDecoder.G0) assertEquals(96, t.size, "alfabeto $code")
+    }
+
+    @Test
+    fun theLanguageOfThePageChoosesCyrillicWhenTheChannelSaysNothing() {
+        val d = TeletextDecoder(0x888, "rus")
+        // Russo/búlgaro é a variante 4 do grupo cirílico.
+        d.feed(pes(header(0x888, national = 4), row(0, 22, "Priwet")))
+        assertEquals(listOf("Привет"), d.feed(pes(header(0x8FF))))
+    }
+
+    @Test
+    fun x28ChoosesTheAlphabetOfThePage() {
+        // Polaco: grupo 1 (código 8), variante 0 no cabeçalho.
+        val d = TeletextDecoder(0x888)
+        d.feed(pes(header(0x888, national = 0), designation(0, 28, 8), row(0, 22, "]_d~")))
+        assertEquals(listOf("Łódź"), d.feed(pes(header(0x8FF))))
+        // A página seguinte sem X/28 volta ao inglês.
+        d.feed(pes(header(0x888, national = 0), row(0, 22, "#1")))
+        assertEquals(listOf("£1"), d.feed(pes(header(0x8FF))))
+    }
+
+    @Test
+    fun m29ChoosesTheAlphabetOfTheMagazine() {
+        // Grego: código 55 (grupo 6, variante 7).
+        val d = TeletextDecoder(0x888)
+        d.feed(pes(designation(0, 29, 55), header(0x888, national = 7), row(0, 22, "Ceia")))
+        assertEquals(listOf("Γεια"), d.feed(pes(header(0x8FF))))
+        d.feed(pes(header(0x888, national = 7), row(0, 22, "Ceia")))
+        assertNull(d.feed(pes(header(0x8FF))))
+    }
+
+    @Test
+    fun hamming24CorrectsOneBitAndRefusesTwo() {
+        for (v in listOf(0, 1, 0x3FFFF, 55 shl 7, 0x2A5A5)) {
+            val code = TeletextDecoder.hamming24Encode(v)
+            assertEquals(v, TeletextDecoder.hamming24(code, 0))
+            for (bit in 0 until 24) {
+                val one = code.copyOf().also { it[bit / 8] = (it[bit / 8].toInt() xor (1 shl (bit % 8))).toByte() }
+                assertEquals(v, TeletextDecoder.hamming24(one, 0), "bit $bit")
+            }
+            val two = code.copyOf().also { it[0] = (it[0].toInt() xor 0x24).toByte() }
+            assertEquals(-1, TeletextDecoder.hamming24(two, 0))
+        }
+    }
+
     @Test
     fun hammingCorrectsOneBit() {
         for (v in 0 until 16) {
