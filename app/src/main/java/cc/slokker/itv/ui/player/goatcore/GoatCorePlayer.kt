@@ -197,6 +197,9 @@ class GoatCorePlayer(
     /** Há quanto tempo não sai imagem (ou som, sem vídeo): parado à espera de dados se for muito. 0 antes de começar. */
     val starvedMs: Long get() = lastOutputAt.takeIf { it > 0 }?.let { SystemClock.elapsedRealtime() - it } ?: 0
 
+    /** Já saiu a primeira imagem (ou o primeiro som, sem vídeo). */
+    val started: Boolean get() = lastOutputAt > 0
+
     /** O tempo do relógio agora (µs), ou Long.MIN_VALUE antes de começar: as legendas acertam-se por ele. */
     val nowUs: Long get() = nowPtsUs()
 

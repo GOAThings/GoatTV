@@ -225,7 +225,9 @@ internal class GoatCoreMediaPlayer(
     private val starvation = object : Runnable {
         override fun run() {
             val c = core ?: return
-            if (playWhenReady && (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)) {
+            // Antes da primeira imagem fica "a carregar": um canal que nunca deu não pode parecer que deu (senão uma
+            // falha ao abrir era tratada como uma queda e voltava a ligar, em vez de ir ao failover).
+            if (c.started && playWhenReady && (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)) {
                 val next = if (c.starvedMs > STARVED_MS) Player.STATE_BUFFERING else Player.STATE_READY
                 if (next != playbackState && (next == Player.STATE_BUFFERING || c.starvedMs < STARVED_MS)) {
                     playbackState = next
