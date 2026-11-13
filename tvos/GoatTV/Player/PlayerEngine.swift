@@ -1288,8 +1288,12 @@ final class PlayerEngine: NSObject {
             let track = item.tracks.first { $0.assetTrack?.mediaType == .video }
             let fps = Double(track?.currentVideoFrameRate ?? 0)
             return fps > 1 ? FrameRate.snap(fps) : nil
-        case .aether, .goatcore:
+        case .aether:
             return nil
+        case .goatcore:
+            // A que o SPS diz (como no Android).
+            guard let fps = goatCorePlayback?.videoDetails?.fps, fps > 1 else { return nil }
+            return FrameRate.snap(fps)
         case .vlc:
             // A que o stream diz (como no Android, a do formato ganha); sem ela, conta-se as imagens que o VLC mostra.
             if let info = vlcVideoInfo, info.fps > 1 {
@@ -1321,7 +1325,15 @@ final class PlayerEngine: NSObject {
             // O VLC desenha sempre em SDR: só a frame rate.
             let size = vlcVideoInfo
             manager.preferredDisplayCriteria = Self.criteria(fps: target, width: size?.width ?? 1920, height: size?.height ?? 1080)
-        case .aether, .goatcore:
+        case .goatcore:
+            // A descrição do formato leva a cor do VUI: a TV muda também para HDR10/HLG (salvo "Converter para SDR").
+            guard let details = goatCorePlayback?.videoDetails else { return }
+            if hdr == "sdr" || !(details.hdr10 || details.hlg) {
+                manager.preferredDisplayCriteria = Self.criteria(fps: target, width: details.width, height: details.height)
+            } else {
+                manager.preferredDisplayCriteria = AVDisplayCriteria(refreshRate: Float(target), formatDescription: details.format)
+            }
+        case .aether:
             break
         }
     }
@@ -1635,8 +1647,16 @@ extension PlayerEngine {
         case .aether:
             rows = aetherPlayback?.details ?? []
         case .goatcore:
+            let details = goatCorePlayback?.videoDetails
             for t in goatCorePlayback?.tracks ?? [] where t.kind == .video || t.kind == .audio {
-                rows.append((t.kind == .video ? "video" : "audio", t.codec + (t.language.map { " (\($0))" } ?? "")))
+                var parts = [t.codec + (t.language.map { " (\($0))" } ?? "")]
+                // O vídeo pelo SPS: o tamanho, a cadência e o HDR.
+                if t.kind == .video, let d = details {
+                    parts.append("\(d.width)×\(d.height)")
+                    if d.fps > 0 { parts.append(String(format: "%.2f fps", d.fps)) }
+                    if d.hdr10 { parts.append("HDR10") } else if d.hlg { parts.append("HLG") }
+                }
+                rows.append((t.kind == .video ? "video" : "audio", parts.joined(separator: " · ")))
             }
         }
         return rows

@@ -39,6 +39,13 @@ object AppleMedia {
         return demuxer.unsupported
     }
 
+    /** O que o SPS dos conjuntos [sets] (os do NalReader) diz do vídeo: tamanho, cadência e cor/HDR. */
+    fun videoInfo(sets: List<ByteArray>, hevc: Boolean): VideoInfo? = if (hevc) {
+        sets.firstOrNull { it.isNotEmpty() && ((it[0].toInt() shr 1) and 0x3F) == 33 }?.let { VideoInfo.hevc(it) }
+    } else {
+        sets.firstOrNull { it.isNotEmpty() && (it[0].toInt() and 0x1F) == 7 }?.let { VideoInfo.h264(it) }
+    }
+
     /** O IV de [key] (16 bytes) para o CommonCrypto. */
     fun iv(key: HlsKey): NSData = data(key.iv)
 

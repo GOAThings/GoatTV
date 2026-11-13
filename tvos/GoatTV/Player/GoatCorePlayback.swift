@@ -147,6 +147,8 @@ final class GoatCorePlayback: NSObject {
     private(set) var tracks: [MediaTrack] = []
     /// As legendas do teletexto do canal.
     private(set) var textTracks: [TextTrack] = []
+    /// O vídeo pelo SPS (a cadência e o HDR para a TV mudar de modo); nil até se saber.
+    private(set) var videoDetails: VideoDetails?
     /// As legendas escolhidas ([TextTrack.key]); nil = nenhumas.
     private(set) var selectedText: Int?
     /// O que mostrar nas legendas: texto (teletexto; "" limpa) ou imagens (DVB).
@@ -192,6 +194,7 @@ final class GoatCorePlayback: NSObject {
         videoHeight = 0
         tracks = []
         textTracks = []
+        videoDetails = nil
         startTime = nil
         firstPts = nil
         offsetMs = 0
@@ -246,6 +249,8 @@ final class GoatCorePlayback: NSObject {
             offsetMs = ms
         case .textTracks(let list):
             textTracks = list
+        case .videoDetails(let details):
+            videoDetails = details
         case .text(let time, let text):
             pendingText.append((time, .text(text)))
             showDueSubtitles()
@@ -444,6 +449,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         case offset(Int64)
         /// As legendas do teletexto do canal.
         case textTracks([TextTrack])
+        /// O vídeo pelo SPS (cadência, HDR, a descrição do formato).
+        case videoDetails(VideoDetails)
         /// As legendas escolhidas mudam a este tempo ("" limpa).
         case text(CMTime, String)
         /// As imagens das legendas DVB escolhidas mudam a este tempo.
@@ -510,6 +517,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         pipeline.onAudio = { [weak self] b in self?.audioSample(b) }
         pipeline.onUnsupported = { [weak self] what in self?.fail("unsupported \(what)") }
         pipeline.onTextTracks = { [weak self] list in self?.onEvent?(.textTracks(list)) }
+        pipeline.onVideoDetails = { [weak self] details in self?.onEvent?(.videoDetails(details)) }
         pipeline.onText = { [weak self] pts, text in
             guard let self, !self.closed else { return }
             self.onEvent?(.text(CMTime(value: pts, timescale: 90_000), text))

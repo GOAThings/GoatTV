@@ -31,6 +31,17 @@ public struct TextTrack: Equatable, Sendable {
     public var isTeletext: Bool { page != 0 }
 }
 
+/// O vídeo do canal pelo SPS: o tamanho, a cadência (0 se não disser), o HDR e a descrição do formato (que leva a cor
+/// do VUI: é com ela que a TV muda para HDR).
+public struct VideoDetails: @unchecked Sendable {
+    public let width: Int
+    public let height: Int
+    public let fps: Double
+    public let hdr10: Bool
+    public let hlg: Bool
+    public let format: CMVideoFormatDescription
+}
+
 /// Uma imagem das legendas DVB: onde fica no ecrã do emissor e os pixels (RGBA pré-multiplicado).
 public struct SubtitleImage: Sendable {
     public let x: Int
@@ -69,6 +80,8 @@ public final class MediaPipeline {
     public var onText: ((Int64, String) -> Void)?
     /// As imagens das legendas DVB escolhidas quando mudam, com o tempo (90 kHz, no relógio do vídeo).
     public var onImages: ((Int64, SubtitleImages) -> Void)?
+    /// O vídeo (tamanho, cadência, HDR): a primeira vez e quando os parâmetros mudam.
+    public var onVideoDetails: ((VideoDetails) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -261,7 +274,15 @@ public final class MediaPipeline {
         guard let unit = nal.next(annexB: sample.data, pts: samplePts, dts: sampleDts) else { return }
         if !unit.parameterSets.isEmpty {
             let sets = unit.parameterSets.map { AppleMedia.shared.data(bytes: $0) as Data }
-            if let f = Self.videoFormat(sets, hevc: videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC") { videoFormat = f }
+            let hevc = videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC"
+            if let f = Self.videoFormat(sets, hevc: hevc) {
+                let changed = videoFormat.map { !CMFormatDescriptionEqual($0, otherFormatDescription: f) } ?? true
+                videoFormat = f
+                if changed, let info = AppleMedia.shared.videoInfo(sets: unit.parameterSets, hevc: hevc) {
+                    onVideoDetails?(VideoDetails(width: Int(info.width), height: Int(info.height), fps: Double(info.fps),
+                                                 hdr10: info.isHdr10, hlg: info.isHlg, format: f))
+                }
+            }
         }
         // Até à primeira imagem-chave com os parâmetros não há nada que se possa mostrar.
         guard let format = videoFormat else { return }
