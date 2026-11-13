@@ -121,21 +121,11 @@ class HlsPlaylistTest {
     }
 
     @Test
-    fun audioInASeparatePlaylistIsLeftToAnotherEngine() {
+    fun audioInASeparatePlaylist() {
         val separate = HlsPlaylist.parse(
             """
             #EXTM3U
-            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",DEFAULT=YES,URI="audio/en.m3u8"
-            #EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="a"
-            v/720.m3u8
-            """.trimIndent(),
-            "http://h/master.m3u8",
-        )
-        assertEquals("audio in a separate playlist", separate.unsupported)
-        // Com uma qualidade que traz o áudio dentro, fica só essa.
-        val mixed = HlsPlaylist.parse(
-            """
-            #EXTM3U
+            #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="pt",URI="audio/pt.m3u8"
             #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="a",NAME="en",DEFAULT=YES,URI="audio/en.m3u8"
             #EXT-X-STREAM-INF:BANDWIDTH=2000000,AUDIO="a"
             v/720.m3u8
@@ -144,8 +134,8 @@ class HlsPlaylistTest {
             """.trimIndent(),
             "http://h/master.m3u8",
         )
-        assertNull(mixed.unsupported)
-        assertEquals(listOf("http://h/v/360.m3u8"), mixed.variants.map { it.uri })
+        assertNull(separate.unsupported)
+        assertEquals(listOf("http://h/audio/en.m3u8", null), separate.variants.map { it.audioUri })
         // Um grupo com uma faixa sem URI tem o áudio principal dentro; as outras línguas à parte não contam.
         val inside = HlsPlaylist.parse(
             """
@@ -157,7 +147,6 @@ class HlsPlaylistTest {
             """.trimIndent(),
             "http://h/master.m3u8",
         )
-        assertNull(inside.unsupported)
-        assertEquals(1, inside.variants.size)
+        assertNull(inside.variants.single().audioUri)
     }
 }

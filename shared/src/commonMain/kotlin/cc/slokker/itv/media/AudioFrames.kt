@@ -6,6 +6,9 @@ package cc.slokker.itv.media
  */
 class AudioFrame(val data: ByteArray, val pts: Long, val samples: Int)
 
+/** Um bloco de áudio dentro de um pedaço ([AudioFrameReader.rawFrames]). */
+internal class RawAudioFrame(val offset: Int, val size: Int, val samples: Int, val sampleRate: Int)
+
 /**
  * O formato de uma faixa de áudio, tirado dos próprios blocos (o PMT não diz a frequência nem os canais).
  * [config] é o AudioSpecificConfig do AAC (o que o AudioToolbox e o MediaCodec pedem), vazio nos outros.
@@ -64,6 +67,26 @@ class AudioFrameReader(private val codec: Codec) {
         }
         rest = buf.copyOfRange(i, buf.size)
         restPts = clock
+        return out
+    }
+
+    /**
+     * Os blocos inteiros de [data] como vêm (com o cabeçalho), sem os tirar: onde começa cada um, o tamanho, as
+     * amostras e a frequência. É o que o áudio "empacotado" do HLS precisa para voltar a ser PES (um por bloco).
+     */
+    internal fun rawFrames(data: ByteArray): List<RawAudioFrame> {
+        val out = ArrayList<RawAudioFrame>()
+        var i = 0
+        while (i + MAX_HEADER <= data.size) {
+            val h = header(data, i)
+            if (h == null) {
+                i++
+                continue
+            }
+            if (i + h.size > data.size) break
+            h.format?.let { out += RawAudioFrame(i, h.size, h.samples, it.sampleRate) }
+            i += h.size
+        }
         return out
     }
 
