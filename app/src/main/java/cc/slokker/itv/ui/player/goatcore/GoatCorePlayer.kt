@@ -262,8 +262,11 @@ class GoatCorePlayer(
             if (hevc) {
                 format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd.fold(ByteArray(0)) { a, b -> a + b }))
             } else {
-                format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd[0]))
-                format.setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(csd[1]))
+                // Todos os SPS no csd-0 e todos os PPS no csd-1 (as emissões mandam vários).
+                val sps = csd.filter { (it[4].toInt() and 0x1F) == 7 }.fold(ByteArray(0)) { a, b -> a + b }
+                val pps = csd.filter { (it[4].toInt() and 0x1F) == 8 }.fold(ByteArray(0)) { a, b -> a + b }
+                format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(sps))
+                format.setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(pps))
             }
             val c = decoderFor(mime, softwareVideo)
             codec = c

@@ -21,9 +21,12 @@ class VideoUnit(
  * últimos.
  */
 class NalReader(private val hevc: Boolean) {
-    private var vps: ByteArray? = null
-    private var sps: ByteArray? = null
-    private var pps: ByteArray? = null
+    /**
+     * Os conjuntos de parâmetros (VPS, SPS, PPS): todos os que a última imagem que os trouxe mandou. As emissões de TV
+     * mandam vários PPS na mesma imagem-chave (as fatias usam um ou outro): guardar só um deixava o descodificador sem
+     * conseguir descodificar nada.
+     */
+    private val sets = arrayOf(emptyList<ByteArray>(), emptyList(), emptyList())
 
     /** O SPS lido (H.264), para os cabeçalhos das fatias. */
     private var spsInfo: H264Sps? = null
@@ -61,26 +64,30 @@ class NalReader(private val hevc: Boolean) {
     /** Os conjuntos de parâmetros já vistos, ou vazio se ainda falta algum (antes disso não se pode descodificar). */
     val parameterSets: List<ByteArray>
         get() {
-            val s = sps ?: return emptyList()
-            val p = pps ?: return emptyList()
-            if (hevc) return listOf(vps ?: return emptyList(), s, p)
-            return listOf(s, p)
+            val (v, s, p) = sets
+            if (s.isEmpty() || p.isEmpty() || (hevc && v.isEmpty())) return emptyList()
+            return if (hevc) v + s + p else s + p
         }
 
     fun unit(annexB: ByteArray): VideoUnit {
         val nals = split(annexB)
         var keyframe = false
-        var changed = false
         var sawSlice = false
         lastSlice = null
+        val found = Array(3) { ArrayList<ByteArray>() }
         var size = 0
         val keep = ArrayList<IntArray>(nals.size)
         for (n in nals) {
             val type = type(annexB, n[0])
             when (role(type)) {
-                Role.VPS -> changed = remember(annexB, n, 0) or changed
-                Role.SPS -> changed = remember(annexB, n, 1) or changed
-                Role.PPS -> changed = remember(annexB, n, 2) or changed
+                Role.VPS -> found[0] += annexB.copyOfRange(n[0], n[1])
+                Role.SPS -> {
+                    val bytes = annexB.copyOfRange(n[0], n[1])
+                    // O primeiro SPS diz como ler as fatias que vêm a seguir nesta imagem.
+                    if (!hevc && found[1].isEmpty()) spsInfo = H264Headers.sps(bytes, 0, bytes.size)
+                    found[1] += bytes
+                }
+                Role.PPS -> found[2] += annexB.copyOfRange(n[0], n[1])
                 // O delimitador e o enchimento não vão para o descodificador.
                 Role.SKIP -> {}
                 Role.KEY -> {
@@ -104,6 +111,17 @@ class NalReader(private val hevc: Boolean) {
                 }
             }
         }
+        // Os conjuntos que esta imagem trouxe passam a ser os em uso (de cada tipo, todos os que vieram).
+        var changed = false
+        for (slot in 0..2) {
+            val list = found[slot]
+            if (list.isEmpty()) continue
+            val old = sets[slot]
+            if (old.size != list.size || old.indices.any { !old[it].contentEquals(list[it]) }) {
+                sets[slot] = list
+                changed = true
+            }
+        }
         val out = ByteArray(size)
         var at = 0
         for (n in keep) {
@@ -119,9 +137,7 @@ class NalReader(private val hevc: Boolean) {
     }
 
     fun reset() {
-        vps = null
-        sps = null
-        pps = null
+        for (slot in 0..2) sets[slot] = emptyList()
         spsInfo = null
         lastSlice = null
         held = null
@@ -204,25 +220,6 @@ class NalReader(private val hevc: Boolean) {
     }
 
     /** Guarda o conjunto [slot]; true se for diferente do que havia. */
-    private fun remember(d: ByteArray, n: IntArray, slot: Int): Boolean {
-        val bytes = d.copyOfRange(n[0], n[1])
-        val old = when (slot) {
-            0 -> vps
-            1 -> sps
-            else -> pps
-        }
-        if (old != null && old.contentEquals(bytes)) return false
-        when (slot) {
-            0 -> vps = bytes
-            1 -> {
-                sps = bytes
-                if (!hevc) spsInfo = H264Headers.sps(bytes, 0, bytes.size)
-            }
-            else -> pps = bytes
-        }
-        return true
-    }
-
     companion object {
         /** Onde começa e acaba cada NAL de [d] (sem o código de início nem os zeros que sobram no fim). */
         fun split(d: ByteArray): List<IntArray> {
