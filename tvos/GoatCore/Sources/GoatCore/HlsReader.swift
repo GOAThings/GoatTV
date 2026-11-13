@@ -264,3 +264,15 @@ public final class HlsReader: @unchecked Sendable {
         return out.prefix(moved)
     }
 }
+
+/// Os segmentos de um HLS sempre em TS, para o anel da pausa e as gravações: um fMP4 sai remultiplexado (o TsRemuxer
+/// partilhado com o Android); um TS, ou um fMP4 cifrado, sai como vem.
+public final class HlsToTs {
+    private let buffer = GoatShared.TsRemuxBuffer()
+
+    public init() {}
+
+    public func feed(_ data: Data) -> Data {
+        buffer.feed(data: data)
+    }
+}

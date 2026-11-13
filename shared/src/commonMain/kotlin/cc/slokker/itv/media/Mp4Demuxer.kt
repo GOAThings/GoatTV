@@ -320,6 +320,7 @@ class Mp4Demuxer(private val listener: TsListener) {
         val end = dataAt + (to - from)
         val discontinuity = restarted
         restarted = false
+        val ready = ArrayList<Pair<Queued, ByteArray>>()
         val it = queued.iterator()
         while (it.hasNext()) {
             val q = it.next()
@@ -331,6 +332,12 @@ class Mp4Demuxer(private val listener: TsListener) {
                 q.track.adts != null -> adts(q.track.adts, at, q.size)
                 else -> pending.copyOfRange(at, at + q.size)
             } ?: continue
+            ready += q to data
+        }
+        // As faixas vêm em blocos (o vídeo do segmento todo, depois o áudio): saem intercaladas pelo DTS, como num TS.
+        val origin = ready.firstOrNull()?.first?.dts ?: return
+        ready.sortBy { ((it.first.dts - origin + HALF_33) and MASK_33) }
+        ready.forEach { (q, data) ->
             listener.onSample(q.track.ts, TsSample(q.pts, q.dts, data, q.key, discontinuity))
         }
     }
@@ -410,6 +417,7 @@ class Mp4Demuxer(private val listener: TsListener) {
         private val START = byteArrayOf(0, 0, 0, 1)
         private const val MAX_BOX = 64L * 1024 * 1024
         private const val MASK_33 = 0x1FFFFFFFFL
+        private const val HALF_33 = 1L shl 32
 
         /** Parece um MP4 (a primeira caixa é uma das que abrem um fMP4)? */
         fun looksLike(d: ByteArray, len: Int): Boolean =

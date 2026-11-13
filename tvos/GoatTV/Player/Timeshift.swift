@@ -332,6 +332,8 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
     /// Um canal HLS: lido pelo HlsReader (os segmentos seguidos) em vez de uma ligação só.
     private let hls: Bool
     private var hlsReader: HlsReader?
+    /// Os segmentos fMP4 passam a TS antes do anel (só na fila da ligação; um novo em cada ligação).
+    private var remux: HlsToTs?
     /// A fila da ligação: os avisos da URLSession e as tentativas, um de cada vez.
     private let queue: OperationQueue
     private var urlSession: URLSession?
@@ -442,9 +444,15 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         refused = nil
         if hls, let url = request.url {
             let reader = HlsReader(url: url, headers: request.allHTTPHeaderFields ?? [:])
+            let remux = HlsToTs()
+            self.remux = remux
             reader.onData = { [weak self] data in
                 guard let self else { return }
-                self.queue.addOperation { self.received(data) }
+                self.queue.addOperation {
+                    guard self.remux === remux else { return }
+                    let ts = remux.feed(data)
+                    if !ts.isEmpty { self.received(ts) }
+                }
             }
             reader.onEnd = { [weak self] error in
                 guard let self else { return }
@@ -538,7 +546,7 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
             stopHls()
             return false
         }
-        // Não é TS (um MP4 num link sem extensão, um HLS em fMP4…): o anel não serve, o leitor liga-se ele próprio.
+        // Não é TS (um MP4 num link sem extensão, um HLS em fMP4 cifrado…): o anel não serve, o leitor liga-se ele próprio.
         if ring.isTs == false {
             locked { notTsFlag = true }
             stopHls()

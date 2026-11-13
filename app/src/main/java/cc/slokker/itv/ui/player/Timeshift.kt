@@ -134,8 +134,8 @@ internal class Timeshift(context: Context) {
             hls = true
             return null
         }
-        // Um HLS para o GoatCore: os segmentos seguidos. Se forem fMP4 o anel não serve (não é TS) e o player lê esta
-        // mesma ligação diretamente (RingDataSource), sem pausa.
+        // Um HLS para o GoatCore: os segmentos seguidos, sempre em TS (os fMP4 passam a TS pelo caminho). Só um fMP4
+        // cifrado chega como vem: aí o anel não serve e o player lê esta mesma ligação diretamente, sem pausa.
         val source = if (candidate.isHls) cc.slokker.itv.ui.player.goatcore.HlsDataSource.Factory(direct) else direct
         val reused = ChannelFeed.find(candidate.url)?.takeIf { it.hold(ChannelFeed.Holder.PLAYER) }
         val feed = reused ?: ChannelFeed.open(dir, candidate.url, source, gate, reconnectMs, ChannelFeed.Holder.PLAYER) ?: return null
