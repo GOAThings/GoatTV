@@ -24,6 +24,8 @@ public struct TextTrack: Equatable, Sendable {
     public let language: String?
     /// Legendas para surdos (o tipo 5 do teletexto).
     public let hearingImpaired: Bool
+    /// Legendas WebVTT de um HLS (cada PES uma fala com a duração).
+    public var isWebVtt = false
 
     /// Um número só para a faixa (DVB: o PID) ou para a faixa e a página (teletexto, como no Android: acima de
     /// qualquer PID).
@@ -115,6 +117,8 @@ public final class MediaPipeline {
     private var audioRunRate: Int32 = 0
     private var reportedUnsupported = false
     private var textTracks: [TextTrack] = []
+    /// A faixa de legendas escolhida é WebVTT.
+    private var webVtt = false
     private var teletext: TeletextDecoder?
     private var dvb: DvbSubtitleDecoder?
     private var rawTracks: [TsTrack] = []
@@ -136,6 +140,7 @@ public final class MediaPipeline {
     public func selectText(_ key: Int?) {
         teletext = nil
         dvb = nil
+        webVtt = false
         textPid = nil
         captionsOn = key == TextTrack.captions
         if captionsOn {
@@ -143,8 +148,11 @@ public final class MediaPipeline {
             return
         }
         guard let key, let t = textTracks.first(where: { $0.key == key }) else { return }
+        webVtt = t.isWebVtt
         if t.isTeletext {
             teletext = TeletextDecoder(page: Int32(t.page), language: t.language)
+        } else if t.isWebVtt {
+            // Lê-se pelo PES (ver text()).
         } else {
             guard let raw = rawTracks.first(where: { Int($0.pid) == t.pid }) else { return }
             dvb = AppleMedia.shared.dvbDecoder(track: raw)
@@ -221,6 +229,9 @@ public final class MediaPipeline {
             if t.codec.name == "DVB_SUBTITLE" {
                 return [TextTrack(pid: Int(t.pid), page: 0, language: t.language, hearingImpaired: false)]
             }
+            if t.codec.name == "WEBVTT" {
+                return [TextTrack(pid: Int(t.pid), page: 0, language: t.language, hearingImpaired: false, isWebVtt: true)]
+            }
             return AppleMedia.shared.teletextPages(track: t).map { p in
                 TextTrack(pid: Int(t.pid), page: Int(p.page), language: p.language ?? t.language, hearingImpaired: p.type == 5)
             }
@@ -291,7 +302,13 @@ public final class MediaPipeline {
     /// do som, sem vídeo).
     private func text(_ sample: TsSample) {
         let clock = videoPid != nil ? videoClock : audioClock
-        if let decoder = teletext {
+        if webVtt {
+            // Uma fala: aparece no início e sai no fim (a fala seguinte, se vier antes, toma o lugar dela).
+            let pts = clock.map(ts: sample.pts)
+            guard pts >= 0 else { return }
+            onText?(pts, GoatShared.WebVtt.shared.text(data: sample.data))
+            onText?(pts + GoatShared.WebVtt.shared.durationMs(data: sample.data) * 90, "")
+        } else if let decoder = teletext {
             guard let text = AppleMedia.shared.teletextText(decoder: decoder, sample: sample) else { return }
             let pts = clock.map(ts: sample.pts)
             if pts >= 0 { onText?(pts, text) }

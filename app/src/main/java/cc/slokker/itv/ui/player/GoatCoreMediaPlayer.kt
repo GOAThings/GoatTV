@@ -318,7 +318,7 @@ internal class GoatCoreMediaPlayer(
     private fun tracksOf(list: List<TsTrack>): Tracks {
         val playing = chosenAudio.takeIf { pid -> list.any { it.pid == pid } } ?: core?.selectedAudio ?: -1
         fun label(language: String?) = language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage }
-        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE }.map { t ->
+        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE || it.codec == Codec.WEBVTT }.map { t ->
             val id = "goatcore:${t.pid}"
             val info = videoInfo.takeIf { t.kind == TrackKind.VIDEO }
             val format = (info?.let { videoFormat(it) } ?: Format.Builder())
@@ -381,6 +381,7 @@ internal class GoatCoreMediaPlayer(
         Codec.EAC3 -> MimeTypes.AUDIO_E_AC3
         Codec.MPEG_AUDIO -> MimeTypes.AUDIO_MPEG_L2
         Codec.DVB_SUBTITLE -> MimeTypes.APPLICATION_DVBSUBS
+        Codec.WEBVTT -> MimeTypes.TEXT_VTT
         else -> MimeTypes.VIDEO_MP2T
     }
 

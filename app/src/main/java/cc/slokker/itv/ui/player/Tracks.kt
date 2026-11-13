@@ -124,6 +124,7 @@ internal fun codecName(mime: String?): String? = when (mime) {
     // As legendas em teletexto do GoatCore (ver GoatCoreMediaPlayer.TELETEXT_MIME).
     "text/x-dvb-teletext" -> "Teletext"
     MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> "Closed captions"
+    MimeTypes.TEXT_VTT -> "WebVTT"
     // O VLC não diz o formato (audio/x-unknown…): sem etiqueta, em vez de "X-UNKNOWN".
     null, MimeTypes.VIDEO_UNKNOWN, MimeTypes.AUDIO_UNKNOWN, MimeTypes.TEXT_UNKNOWN -> null
     else -> mime.substringAfter('/').uppercase()

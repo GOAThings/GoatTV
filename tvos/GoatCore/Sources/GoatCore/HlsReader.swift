@@ -90,17 +90,23 @@ public final class HlsReader: @unchecked Sendable {
             self.language = language
         }
 
-        /// Um VOD lido até ao fim.
-        var isDone: Bool { ended && pending.isEmpty && nextSequence != Int64.min }
+        /// Uma playlist de legendas que deixou de responder.
+        var failed = false
+
+        /// Um VOD lido até ao fim (ou umas legendas que falharam).
+        var isDone: Bool { failed || (ended && pending.isEmpty && nextSequence != Int64.min) }
     }
 
     private lazy var video = Lane(url.absoluteString, main: true)
     /// As faixas de áudio à parte (EXT-X-MEDIA com URI, uma por língua) e quem as junta ao vídeo; vazio quando vem
     /// dentro dos segmentos.
     private var audios: [Lane] = []
+    /// As legendas WebVTT à parte (uma por língua); uma que falhe sai, sem parar o resto.
+    private var subtitles: [Lane] = []
     private var merger: GoatShared.HlsMergeBuffer?
     /// Mais línguas à parte seriam mais pedidos por segmento, na única ligação.
     private static let maxAudio = 4
+    private static let maxSubtitles = 4
     private var keyUri: String?
     private var keyBytes: Data?
     /// As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
@@ -124,7 +130,7 @@ public final class HlsReader: @unchecked Sendable {
 
     /// O pedaço seguinte do stream: um segmento (ou, com o áudio à parte, o que os dois já juntaram); nil no fim.
     private func nextChunk() throws -> Data? {
-        guard let merger, !audios.isEmpty else {
+        guard let merger else {
             guard let data = try next(video) else { return nil }
             // A playlist principal pode ter dito agora que o áudio vem à parte: este já vai pelo junta-dois.
             if let merger = self.merger {
@@ -137,12 +143,20 @@ public final class HlsReader: @unchecked Sendable {
         while !isStopped {
             // O lado que vai mais atrás lê o segmento seguinte (o vídeo primeiro, num empate); um que acabou deixa os
             // outros irem até ao fim.
-            guard let lane = ([video] + audios).filter({ !$0.isDone }).min(by: { $0.seconds < $1.seconds }) else {
+            let open = ([video] + audios + subtitles).filter { !$0.isDone }
+            guard let lane = open.min(by: { $0.seconds < $1.seconds }), !(video.isDone && audios.allSatisfy({ $0.isDone })) else {
                 let out = merger.finish()
                 return out.isEmpty ? nil : out
             }
             var out = Data()
-            if let d = try next(lane) {
+            if let i = subtitles.firstIndex(where: { $0 === lane }) {
+                do {
+                    if let d = try next(lane) { out = merger.subtitles(data: d, lane: Int32(i), language: lane.language) }
+                } catch {
+                    os_log("GoatCore: HLS subtitles %{public}@: %{public}@", lane.language ?? "?", "\(error)")
+                    lane.failed = true
+                }
+            } else if let d = try next(lane) {
                 if lane === video {
                     out = merger.video(data: d)
                 } else if let i = audios.firstIndex(where: { $0 === lane }) {
@@ -239,10 +253,11 @@ public final class HlsReader: @unchecked Sendable {
             level = variants.count - 1
             base = variants[level].uri
             // O áudio à parte: as línguas todas (até [maxAudio]), para o menu do áudio as ter como num TS.
-            let list = variants[level].audio.prefix(Self.maxAudio)
-            if !list.isEmpty {
-                audios = list.map { Lane($0.uri, main: false, language: $0.code) }
-                merger = GoatShared.HlsMergeBuffer()
+            let v = variants[level]
+            audios = v.audio.prefix(Self.maxAudio).map { Lane($0.uri, main: false, language: $0.code) }
+            subtitles = v.subtitles.prefix(Self.maxSubtitles).map { Lane($0.uri, main: false, language: $0.code) }
+            if !audios.isEmpty || !subtitles.isEmpty {
+                merger = GoatShared.HlsMergeBuffer(audioInVideo: audios.isEmpty)
             }
             playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         }

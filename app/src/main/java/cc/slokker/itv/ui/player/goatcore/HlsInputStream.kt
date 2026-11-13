@@ -56,6 +56,8 @@ class HlsInputStream(
     private val video = Lane(url, main = true)
     /** As faixas de áudio à parte (EXT-X-MEDIA com URI, uma por língua) e quem as junta ao vídeo; vazio quando vem dentro dos segmentos. */
     private var audios: List<Lane> = emptyList()
+    /** As legendas WebVTT à parte (uma por língua); uma que falhe sai, sem parar o resto. */
+    private var subtitles: List<Lane> = emptyList()
     private var merger: HlsMerger? = null
     private val merged = ByteArrayOutputStream()
 
@@ -107,9 +109,11 @@ class HlsInputStream(
                 level = variants.lastIndex
                 base = variants[level].uri
                 // O áudio à parte: as línguas todas (até [MAX_AUDIO]), para o menu do áudio as ter como num TS.
-                variants[level].audio.take(MAX_AUDIO).takeIf { it.isNotEmpty() }?.let { list ->
-                    audios = list.map { Lane(it.uri, main = false, language = it.code) }
-                    merger = HlsMerger { merged.write(it) }
+                val v = variants[level]
+                audios = v.audio.take(MAX_AUDIO).map { Lane(it.uri, main = false, language = it.code) }
+                subtitles = v.subtitles.take(MAX_SUBTITLES).map { Lane(it.uri, main = false, language = it.code) }
+                if (audios.isNotEmpty() || subtitles.isNotEmpty()) {
+                    merger = HlsMerger(audioInVideo = audios.isEmpty()) { merged.write(it) }
                 }
                 playlist = HlsPlaylist.parse(fetch(base), base)
             }
@@ -161,8 +165,11 @@ class HlsInputStream(
             return 0
         }
 
-        /** Um VOD lido até ao fim. */
-        val done: Boolean get() = ended && pending.isEmpty() && nextSequence != Long.MIN_VALUE
+        /** Uma playlist de legendas que deixou de responder. */
+        var failed = false
+
+        /** Um VOD lido até ao fim (ou umas legendas que falharam). */
+        val done: Boolean get() = failed || (ended && pending.isEmpty() && nextSequence != Long.MIN_VALUE)
 
         /** O segmento seguinte (com o init segment à frente, se mudou), decifrado; null no fim de um VOD. */
         fun next(): ByteArray? {
@@ -234,7 +241,7 @@ class HlsInputStream(
     /** O pedaço seguinte do stream: um segmento (ou, com o áudio à parte, o que os dois já juntaram); null no fim. */
     private fun nextChunk(): ByteArray? {
         val m = merger
-        if (m == null || audios.isEmpty()) {
+        if (m == null) {
             val data = video.next() ?: return null
             // A playlist principal pode ter dito agora que o áudio vem à parte: este já vai pelo junta-dois.
             merger?.let { mm ->
@@ -246,14 +253,24 @@ class HlsInputStream(
         while (true) {
             // O lado que vai mais atrás lê o segmento seguinte (o vídeo primeiro, num empate); um que acabou deixa os
             // outros irem até ao fim.
-            val lane = (listOf(video) + audios).filter { !it.done }.minByOrNull { it.seconds }
-            if (lane == null) {
+            val lane = (listOf(video) + audios + subtitles).filter { !it.done }.minByOrNull { it.seconds }
+            if (lane == null || (video.done && audios.all { it.done })) {
                 m.flush()
                 return takeMerged()
             }
-            val data = lane.next()
-            if (data != null) {
-                if (lane === video) m.video(data) else m.audio(data, audios.indexOf(lane), lane.language)
+            if (lane in subtitles) {
+                val i = subtitles.indexOf(lane)
+                try {
+                    lane.next()?.let { m.subtitles(it, i, lane.language) }
+                } catch (e: IOException) {
+                    Log.w("GoatCore", "HLS subtitles ${lane.language}: ${e.message}")
+                    lane.failed = true
+                }
+            } else {
+                val data = lane.next()
+                if (data != null) {
+                    if (lane === video) m.video(data) else m.audio(data, audios.indexOf(lane), lane.language)
+                }
             }
             m.unsupported?.let { throw UnsupportedStream(it) }
             takeMerged()?.let { return it }
@@ -290,5 +307,6 @@ class HlsInputStream(
     private companion object {
         /** Mais línguas à parte seriam mais pedidos por segmento, na única ligação. */
         const val MAX_AUDIO = 4
+        const val MAX_SUBTITLES = 4
     }
 }

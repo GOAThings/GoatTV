@@ -154,6 +154,27 @@ class HlsMergerTest {
         for (t in audioTracks) assertEquals(blocks, perPid[t.pid])
     }
 
+    @Test
+    fun subtitlesNextToVideoWithItsOwnAudio() {
+        val ts = javaClass.getResourceAsStream("/mp4/h264_aac.ts")!!.readBytes()
+        val o = original()
+        val first = o.samples.getValue(Codec.H264).first().pts
+        val vtt = "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:$first,LOCAL:00:00:00.000\n\n00:00:01.000 --> 00:00:02.000\nHello\n"
+        val out = ByteArrayOutputStream()
+        val merger = HlsMerger(audioInVideo = true) { out.write(it) }
+        merger.subtitles(vtt.encodeToByteArray(), 0, "eng")
+        merger.video(ts)
+        merger.flush()
+        val merged = Collect()
+        out.toByteArray().let { TsDemuxer(merged).apply { feed(it, 0, it.size); flush() } }
+        assertEquals(setOf(Codec.H264, Codec.AAC_ADTS, Codec.WEBVTT), merged.tracks.map { it.codec }.toSet())
+        assertEquals(o.samples.getValue(Codec.AAC_ADTS).size, merged.samples.getValue(Codec.AAC_ADTS).size)
+        val cue = merged.samples.getValue(Codec.WEBVTT).single()
+        assertEquals(first + 90_000, cue.pts)
+        assertEquals("Hello", WebVtt.text(cue.data))
+        assertEquals("eng", merged.tracks.first { it.codec == Codec.WEBVTT }.language)
+    }
+
     /** Os blocos ADTS de um PES. */
     private fun adtsFrames(d: ByteArray): Int {
         var n = 0

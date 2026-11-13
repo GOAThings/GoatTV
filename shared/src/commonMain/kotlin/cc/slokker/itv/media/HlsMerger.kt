@@ -110,8 +110,10 @@ class PackedAudioDemuxer(private val listener: TsListener) {
  * amostras saem pelo [TsMuxer] intercaladas pelo DTS, só até onde todos os lados já chegaram (o que falta de um espera
  * pelos outros). Do vídeo fica só o que não é áudio; as faixas do áudio ganham outro número para não se confundirem
  * com as do vídeo (num fMP4 todos têm o track_ID 1) e a língua da playlist, se os segmentos não a disserem.
+ * As legendas WebVTT à parte ([subtitles]) entram como faixas também, sem fazer esperar os outros lados.
+ * [audioInVideo]: o áudio vem nos segmentos do vídeo (só as legendas estão à parte) e fica.
  */
-class HlsMerger(out: (ByteArray) -> Unit) {
+class HlsMerger(private val audioInVideo: Boolean = false, out: (ByteArray) -> Unit) {
     private val muxer = TsMuxer(out)
     private var videoTracks: List<TsTrack> = emptyList()
     private val queued = ArrayList<Pair<TsTrack, TsSample>>()
@@ -122,15 +124,33 @@ class HlsMerger(out: (ByteArray) -> Unit) {
 
     private val videoDemuxer = StreamDemuxer(object : TsListener {
         override fun onTracks(tracks: List<TsTrack>) {
-            videoTracks = tracks.filter { it.kind != TrackKind.AUDIO }
+            videoTracks = tracks.filter { audioInVideo || it.kind != TrackKind.AUDIO }
             publishTracks()
         }
 
         override fun onSample(track: TsTrack, sample: TsSample) {
-            if (track.kind == TrackKind.AUDIO) return
+            if (!audioInVideo && track.kind == TrackKind.AUDIO) return
             videoAt = maxOf(videoAt, queue(track, sample))
         }
     })
+
+    /** Uma faixa de legendas WebVTT à parte. */
+    private inner class SubtitleSide(index: Int, language: String?) : TsListener {
+        var tracks: List<TsTrack> = emptyList()
+        private val pid = SUBTITLE_PIDS + index
+        val demuxer = WebVttDemuxer(this, language)
+
+        override fun onTracks(tracks: List<TsTrack>) {
+            this.tracks = tracks.map { it.copy(pid = pid) }
+            publishTracks()
+        }
+
+        override fun onSample(track: TsTrack, sample: TsSample) {
+            queue(track.copy(pid = pid), sample)
+        }
+    }
+
+    private val subtitleSides = ArrayList<SubtitleSide>()
 
     /** Uma faixa de áudio à parte: o demuxer dela (escolhido pelo primeiro segmento) e até onde já chegou. */
     private inner class AudioSide(val index: Int, val language: String?) : TsListener {
@@ -154,7 +174,14 @@ class HlsMerger(out: (ByteArray) -> Unit) {
 
     private val sides = ArrayList<AudioSide>()
 
-    private fun publishTracks() = muxer.onTracks(videoTracks + sides.flatMap { it.tracks })
+    private fun publishTracks() = muxer.onTracks(videoTracks + sides.flatMap { it.tracks } + subtitleSides.flatMap { it.tracks })
+
+    /** Um segmento .vtt da faixa de legendas [lane], com a [language] da playlist (ISO 639-2) ou null. */
+    fun subtitles(data: ByteArray, lane: Int, language: String?) {
+        while (subtitleSides.size <= lane) subtitleSides += SubtitleSide(subtitleSides.size, if (subtitleSides.size == lane) language else null)
+        subtitleSides[lane].demuxer.feed(data)
+        release()
+    }
 
     /** Um segmento do vídeo (com o init segment à frente, num fMP4, quando muda). */
     fun video(data: ByteArray) {
@@ -208,7 +235,7 @@ class HlsMerger(out: (ByteArray) -> Unit) {
         val slowest = (sides.map { it.at } + videoAt).minOrNull() ?: return
         val limit = when {
             queued.size > MAX_QUEUED -> Long.MAX_VALUE
-            sides.isEmpty() || slowest == Long.MIN_VALUE -> return
+            (sides.isEmpty() && !audioInVideo) || slowest == Long.MIN_VALUE -> return
             else -> slowest
         }
         val order = queued.indices.sortedBy { times[it] }
@@ -228,6 +255,7 @@ class HlsMerger(out: (ByteArray) -> Unit) {
 
     private companion object {
         const val AUDIO_PIDS = 0x10000
+        const val SUBTITLE_PIDS = 0x100000
         const val MASK_33 = (1L shl 33) - 1
         const val HALF_33 = 1L shl 32
         /** Uns 20 s de 25 fps com áudio: se um lado não vem, os outros saem na mesma. */

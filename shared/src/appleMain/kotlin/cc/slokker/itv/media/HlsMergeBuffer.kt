@@ -6,10 +6,10 @@ import platform.Foundation.NSData
  * O [HlsMerger] para o Swift: entram os segmentos do vídeo e do áudio à parte, sai o TS que os dois já juntaram (às
  * vezes nada, à espera do outro lado), numa chamada só pela ponte.
  */
-class HlsMergeBuffer {
+class HlsMergeBuffer(audioInVideo: Boolean) {
     private var out = ByteArray(256 * 1024)
     private var size = 0
-    private val merger = HlsMerger { b ->
+    private val merger = HlsMerger(audioInVideo) { b ->
         if (size + b.size > out.size) out = out.copyOf(maxOf(out.size * 2, size + b.size))
         b.copyInto(out, size)
         size += b.size
@@ -26,6 +26,12 @@ class HlsMergeBuffer {
     /** Um segmento da faixa de áudio [lane] (0 = a principal), com a [language] da playlist (ISO 639-2) ou null. */
     fun audio(data: NSData, lane: Int, language: String?): NSData {
         merger.audio(AppleMedia.bytes(data), lane, language)
+        return take()
+    }
+
+    /** Um segmento .vtt da faixa de legendas [lane], com a [language] da playlist (ISO 639-2) ou null. */
+    fun subtitles(data: NSData, lane: Int, language: String?): NSData {
+        merger.subtitles(AppleMedia.bytes(data), lane, language)
         return take()
     }
 

@@ -252,11 +252,9 @@ final class GoatCorePlayback: NSObject {
         case .videoDetails(let details):
             videoDetails = details
         case .text(let time, let text):
-            pendingText.append((time, .text(text)))
-            showDueSubtitles()
+            addSubtitle(time, .text(text))
         case .images(let time, let page):
-            pendingText.append((time, .images(page)))
-            showDueSubtitles()
+            addSubtitle(time, .images(page))
         case .failed(let why):
             guard !reportedEnd else { return }
             reportedEnd = true
@@ -363,6 +361,14 @@ final class GoatCorePlayback: NSObject {
     }
 
     /// Põe as legendas cuja hora já chegou (a última ganha) e volta quando for a hora da seguinte.
+    /// Uma legenda (ou o fim de uma) na fila, pela ordem do tempo: as WebVTT trazem o fim logo a seguir ao início, e a
+    /// fala seguinte pode começar antes desse fim.
+    private func addSubtitle(_ time: CMTime, _ subtitle: Subtitle) {
+        let at = pendingText.firstIndex { $0.time > time } ?? pendingText.count
+        pendingText.insert((time, subtitle), at: at)
+        showDueSubtitles()
+    }
+
     private func showDueSubtitles() {
         subtitleTimer?.invalidate()
         subtitleTimer = nil

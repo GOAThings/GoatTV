@@ -26,9 +26,10 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
         if (same) return
         outs = usable.mapIndexed { i, t ->
             val type = STREAM_TYPES.getValue(t.codec)
-            val id = when (t.kind) {
-                TrackKind.VIDEO -> 0xE0
-                else -> if (t.codec == Codec.AC3 || t.codec == Codec.EAC3) 0xBD else 0xC0
+            val id = when {
+                t.kind == TrackKind.VIDEO -> 0xE0
+                t.codec == Codec.AC3 || t.codec == Codec.EAC3 || t.codec == Codec.WEBVTT -> 0xBD
+                else -> 0xC0
             }
             t.pid to Out(FIRST_PID + i, id, type, t)
         }.toMap()
@@ -62,6 +63,8 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
             o.track.language?.takeIf { it.length == 3 }?.let { l ->
                 descriptors += listOf(0x0A, 4, l[0].code.toByte(), l[1].code.toByte(), l[2].code.toByte(), 0).map { it.toByte() }
             }
+            // As legendas WebVTT: dados privados com o registo "WVTT" (o TsDemuxer reconhece-as por aí).
+            if (o.track.codec == Codec.WEBVTT) descriptors += listOf(0x05, 4, 'W'.code, 'V'.code, 'T'.code, 'T'.code).map { it.toByte() }
             body += o.streamType.toByte()
             body += (0xE0 or (o.pid shr 8)).toByte()
             body += o.pid.toByte()
@@ -186,6 +189,7 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
             Codec.MPEG_AUDIO to 0x03,
             Codec.AC3 to 0x81,
             Codec.EAC3 to 0x87,
+            Codec.WEBVTT to 0x06,
         )
     }
 }

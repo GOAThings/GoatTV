@@ -26,6 +26,7 @@ import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
+import cc.slokker.itv.media.WebVtt
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -154,6 +155,8 @@ class GoatCorePlayer(
     private var textPid = -1
     private var dvb: androidx.media3.extractor.text.dvb.DvbParser? = null
     private var teletext: TeletextDecoder? = null
+    /** A faixa de legendas escolhida é WebVTT (de um HLS). */
+    private var webVtt = false
 
     // As legendas fechadas (CEA-608) que vêm dentro do vídeo: descodificam-se sempre (ao escolher, o ecrã de agora já
     // se sabe), pela ordem em que as imagens se mostram (com imagens B, a de descodificação é outra).
@@ -497,6 +500,7 @@ class GoatCorePlayer(
     /** As legendas passam a ser as da faixa [pid] (-1 = nenhumas); as que estavam no ecrã saem. */
     private fun switchText(pid: Int) {
         captionsOn = pid == CAPTIONS
+        webVtt = false
         if (captionsOn) {
             teletext = null
             dvb = null
@@ -520,6 +524,15 @@ class GoatCorePlayer(
             return
         }
         teletext = null
+        // As legendas WebVTT de um HLS: cada PES é uma fala com a duração (ver WebVtt).
+        allTracks.firstOrNull { it.pid == pid && it.codec == Codec.WEBVTT }?.let { t ->
+            textPid = t.pid
+            webVtt = true
+            dvb = null
+            listener.onCues(Long.MIN_VALUE, emptyList(), 0)
+            replayText()
+            return
+        }
         val track = allTracks.firstOrNull { it.pid == pid && it.codec == Codec.DVB_SUBTITLE }
         textPid = track?.pid ?: -1
         // O descodificador do Media3 quer as páginas do PMT (composition e ancillary); sem elas, as do canal todo.
@@ -537,6 +550,13 @@ class GoatCorePlayer(
     /** Um PES de legendas DVB: data_identifier 0x20 e subtitle_stream_id 0x00, e o resto para o descodificador. */
     private fun text(sample: TsSample) {
         teletext?.let { teletext(it, sample); return }
+        if (webVtt) {
+            val clock = if (videoPid >= 0) videoClock else audioTracks[audioPid]?.clock ?: return
+            val pts = clock.map(sample.pts).takeIf { it >= 0 }?.let { it * 100 / 9 } ?: return
+            val cue = androidx.media3.common.text.Cue.Builder().setText(WebVtt.text(sample.data)).build()
+            listener.onCues(pts, listOf(cue), WebVtt.durationMs(sample.data) * 1000)
+            return
+        }
         val parser = dvb ?: return
         val d = sample.data
         if (d.size < 3 || d[0].toInt() != 0x20 || d[1].toInt() != 0x00) return

@@ -1,7 +1,7 @@
 package cc.slokker.itv.media
 
 /** O formato de uma faixa de um TS, pelo stream_type do PMT e pelos descritores. */
-enum class Codec { H264, HEVC, MPEG2_VIDEO, AAC_ADTS, AAC_LATM, MPEG_AUDIO, AC3, EAC3, DVB_SUBTITLE, TELETEXT, ID3, UNKNOWN }
+enum class Codec { H264, HEVC, MPEG2_VIDEO, AAC_ADTS, AAC_LATM, MPEG_AUDIO, AC3, EAC3, DVB_SUBTITLE, TELETEXT, WEBVTT, ID3, UNKNOWN }
 
 enum class TrackKind { VIDEO, AUDIO, SUBTITLE, DATA }
 
@@ -376,6 +376,8 @@ class TsDemuxer(private val listener: TsListener) {
                     "EAC3" -> Codec.EAC3
                     "HEVC" -> Codec.HEVC
                     "ID3 " -> Codec.ID3
+                    // As legendas WebVTT de um HLS que o motor passou a TS (ver WebVtt).
+                    "WVTT" -> Codec.WEBVTT
                     else -> codec
                 }
             }
@@ -384,7 +386,7 @@ class TsDemuxer(private val listener: TsListener) {
         val kind = when (codec) {
             Codec.H264, Codec.HEVC, Codec.MPEG2_VIDEO -> TrackKind.VIDEO
             Codec.AAC_ADTS, Codec.AAC_LATM, Codec.MPEG_AUDIO, Codec.AC3, Codec.EAC3 -> TrackKind.AUDIO
-            Codec.DVB_SUBTITLE, Codec.TELETEXT -> TrackKind.SUBTITLE
+            Codec.DVB_SUBTITLE, Codec.TELETEXT, Codec.WEBVTT -> TrackKind.SUBTITLE
             Codec.ID3, Codec.UNKNOWN -> TrackKind.DATA
         }
         return TsTrack(pid, type, codec, kind, language?.lowercase()?.takeIf { it.isNotBlank() && it.all { c -> c in 'a'..'z' } }, config)
