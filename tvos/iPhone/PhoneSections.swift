@@ -81,6 +81,10 @@ struct NowStrip: View {
                             pill(option.symbol, sleeping.map { "\(Int($0.timeIntervalSinceNow / 60) + 1) min" } ?? s.r(option.key),
                                  tint: sleeping != nil ? Theme.sky : Theme.text) { onOption(option) }
                         }
+                        // O Picture in Picture (no motor GoatCore): o canal continua num canto fora da app.
+                        if let pip = model.player.pictureInPicture {
+                            pill("pip.enter", s.r("picture_in_picture")) { pip.startPictureInPicture() }
+                        }
                     }
                     .padding(.leading, 14).padding(.trailing, 8)
                 }

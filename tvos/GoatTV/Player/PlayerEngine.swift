@@ -275,9 +275,15 @@ final class PlayerEngine: NSObject {
         g.view.isHidden = true
         view.insertSubview(g.view, belowSubview: freezeView)
         g.onEvent = { [weak self] event in self?.goatCoreEvent(event) }
+        g.onPipEnded = { [weak self] in self?.onPipEnded?() }
         goatCorePlayback = g
         return g
     }
+
+    /// O canal está no Picture in Picture (o iPhone deixa-o a dar fora da app).
+    var inPictureInPicture: Bool { goatCorePlayback?.pipActive ?? false }
+    /// O Picture in Picture fechou.
+    @ObservationIgnored var onPipEnded: (() -> Void)?
 
     @ObservationIgnored private var muted = false
     /// As escolhas à mão já repostas nesta abertura.

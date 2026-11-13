@@ -2162,11 +2162,22 @@ final class AppModel {
         updateTopShelf()
         flushWatched()
         closeSecond()
-        player.stop()
+        // No Picture in Picture o canal continua a dar fora da app; para (e liberta a ligação) quando ele fechar.
+        keptForPip = player.inPictureInPicture
+        if keptForPip {
+            player.onPipEnded = { [weak self] in
+                guard let self, self.backgrounded else { return }
+                self.player.stop()
+            }
+        } else {
+            player.stop()
+        }
         backgrounded = true
     }
 
     @ObservationIgnored private var backgrounded = false
+    /// Ao ir para segundo plano o canal estava no Picture in Picture e continuou a dar.
+    @ObservationIgnored private var keptForPip = false
 
     /// De volta à app: o canal (ou o catch-up) volta a dar.
     func didBecomeActive() {
@@ -2174,6 +2185,12 @@ final class AppModel {
         checkForUpdate()
         guard backgrounded else { return }
         backgrounded = false
+        // Voltou do Picture in Picture: o canal nunca parou.
+        if keptForPip, player.state != .idle {
+            keptForPip = false
+            return
+        }
+        keptForPip = false
         guard screen == .player, let current else { return }
         if let cu = catchup {
             var resume = cu

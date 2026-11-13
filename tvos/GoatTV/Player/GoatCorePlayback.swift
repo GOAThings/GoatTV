@@ -173,6 +173,10 @@ final class GoatCorePlayback: NSObject {
     private var reportedEnd = false
     private var userRate: Float = 1
     private var pip: AVPictureInPictureController?
+    /// O canal está (ou vai ficar) no Picture in Picture: ao sair da app, o vídeo continua.
+    private(set) var pipActive = false
+    /// O Picture in Picture fechou (com a app em segundo plano, quem usa o leitor pára-o e liberta a ligação).
+    var onPipEnded: (() -> Void)?
     /// O Picture in Picture pergunta de outra thread se está em pausa.
     nonisolated(unsafe) private var pausedForPip = false
 
@@ -414,8 +418,26 @@ final class GoatCorePlayback: NSObject {
         #if os(iOS)
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         #endif
+        controller.delegate = self
         pip = controller
         return controller
+    }
+}
+
+extension GoatCorePlayback: AVPictureInPictureControllerDelegate {
+    nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor in self.pipActive = true }
+    }
+
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+        Task { @MainActor in self.pipActive = false }
+    }
+
+    nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor in
+            self.pipActive = false
+            self.onPipEnded?()
+        }
     }
 }
 
