@@ -54,8 +54,8 @@ class HlsInputStream(
     private var fast = 0
 
     private val video = Lane(url, main = true)
-    /** O áudio à parte (EXT-X-MEDIA com URI) e quem o junta ao vídeo; null quando vem dentro dos segmentos. */
-    private var audio: Lane? = null
+    /** As faixas de áudio à parte (EXT-X-MEDIA com URI, uma por língua) e quem as junta ao vídeo; vazio quando vem dentro dos segmentos. */
+    private var audios: List<Lane> = emptyList()
     private var merger: HlsMerger? = null
     private val merged = ByteArrayOutputStream()
 
@@ -83,7 +83,7 @@ class HlsInputStream(
      * Uma playlist de segmentos lida em sequência: a do vídeo ([main], que pode ser a principal e muda de qualidade)
      * ou a do áudio à parte. [seconds]: quanto já se leu (é por aí que se escolhe o lado a ler a seguir).
      */
-    private inner class Lane(var mediaUrl: String, val main: Boolean) {
+    private inner class Lane(var mediaUrl: String, val main: Boolean, val language: String? = null) {
         var nextSequence = Long.MIN_VALUE
         val pending = ArrayDeque<HlsSegment>()
         var ended = false
@@ -106,8 +106,9 @@ class HlsInputStream(
                 variants = playlist.variants.sortedBy { it.bandwidth }
                 level = variants.lastIndex
                 base = variants[level].uri
-                variants[level].audioUri?.let { a ->
-                    audio = Lane(a, main = false)
+                // O áudio à parte: as línguas todas (até [MAX_AUDIO]), para o menu do áudio as ter como num TS.
+                variants[level].audio.take(MAX_AUDIO).takeIf { it.isNotEmpty() }?.let { list ->
+                    audios = list.map { Lane(it.uri, main = false, language = it.code) }
                     merger = HlsMerger { merged.write(it) }
                 }
                 playlist = HlsPlaylist.parse(fetch(base), base)
@@ -159,6 +160,9 @@ class HlsInputStream(
             }
             return 0
         }
+
+        /** Um VOD lido até ao fim. */
+        val done: Boolean get() = ended && pending.isEmpty() && nextSequence != Long.MIN_VALUE
 
         /** O segmento seguinte (com o init segment à frente, se mudou), decifrado; null no fim de um VOD. */
         fun next(): ByteArray? {
@@ -230,8 +234,7 @@ class HlsInputStream(
     /** O pedaço seguinte do stream: um segmento (ou, com o áudio à parte, o que os dois já juntaram); null no fim. */
     private fun nextChunk(): ByteArray? {
         val m = merger
-        val a = audio
-        if (m == null || a == null) {
+        if (m == null || audios.isEmpty()) {
             val data = video.next() ?: return null
             // A playlist principal pode ter dito agora que o áudio vem à parte: este já vai pelo junta-dois.
             merger?.let { mm ->
@@ -241,15 +244,17 @@ class HlsInputStream(
             return data
         }
         while (true) {
-            // O lado que vai mais atrás lê o segmento seguinte; um que acabou deixa o outro ir até ao fim.
-            val videoDone = video.ended && video.pending.isEmpty() && video.nextSequence != Long.MIN_VALUE
-            val audioDone = a.ended && a.pending.isEmpty() && a.nextSequence != Long.MIN_VALUE
-            if (videoDone && audioDone) {
+            // O lado que vai mais atrás lê o segmento seguinte (o vídeo primeiro, num empate); um que acabou deixa os
+            // outros irem até ao fim.
+            val lane = (listOf(video) + audios).filter { !it.done }.minByOrNull { it.seconds }
+            if (lane == null) {
                 m.flush()
                 return takeMerged()
             }
-            val readAudio = !audioDone && (videoDone || a.seconds < video.seconds)
-            if (readAudio) a.next()?.let(m::audio) else video.next()?.let(m::video)
+            val data = lane.next()
+            if (data != null) {
+                if (lane === video) m.video(data) else m.audio(data, audios.indexOf(lane), lane.language)
+            }
             m.unsupported?.let { throw UnsupportedStream(it) }
             takeMerged()?.let { return it }
         }
@@ -280,5 +285,10 @@ class HlsInputStream(
     override fun close() {
         runCatching { current?.close() }
         current = null
+    }
+
+    private companion object {
+        /** Mais línguas à parte seriam mais pedidos por segmento, na única ligação. */
+        const val MAX_AUDIO = 4
     }
 }

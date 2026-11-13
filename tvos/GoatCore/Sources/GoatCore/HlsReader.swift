@@ -69,6 +69,8 @@ public final class HlsReader: @unchecked Sendable {
     private final class Lane {
         var mediaUrl: String
         let main: Bool
+        /// A língua da playlist (ISO 639-2), numa faixa de áudio à parte.
+        let language: String?
         var nextSequence = Int64.min
         var pending: [HlsSegment] = []
         var ended = false
@@ -82,9 +84,10 @@ public final class HlsReader: @unchecked Sendable {
         /// Num direto: quanto antes do fim se começou (ms), para o áudio começar no mesmo ponto que o vídeo.
         var liveOffsetMs: Int64 = -1
 
-        init(_ url: String, main: Bool) {
+        init(_ url: String, main: Bool, language: String? = nil) {
             mediaUrl = url
             self.main = main
+            self.language = language
         }
 
         /// Um VOD lido até ao fim.
@@ -92,9 +95,12 @@ public final class HlsReader: @unchecked Sendable {
     }
 
     private lazy var video = Lane(url.absoluteString, main: true)
-    /// O áudio à parte (EXT-X-MEDIA com URI) e quem o junta ao vídeo; nil quando vem dentro dos segmentos.
-    private var audio: Lane?
+    /// As faixas de áudio à parte (EXT-X-MEDIA com URI, uma por língua) e quem as junta ao vídeo; vazio quando vem
+    /// dentro dos segmentos.
+    private var audios: [Lane] = []
     private var merger: GoatShared.HlsMergeBuffer?
+    /// Mais línguas à parte seriam mais pedidos por segmento, na única ligação.
+    private static let maxAudio = 4
     private var keyUri: String?
     private var keyBytes: Data?
     /// As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
@@ -118,7 +124,7 @@ public final class HlsReader: @unchecked Sendable {
 
     /// O pedaço seguinte do stream: um segmento (ou, com o áudio à parte, o que os dois já juntaram); nil no fim.
     private func nextChunk() throws -> Data? {
-        guard let merger, let audio else {
+        guard let merger, !audios.isEmpty else {
             guard let data = try next(video) else { return nil }
             // A playlist principal pode ter dito agora que o áudio vem à parte: este já vai pelo junta-dois.
             if let merger = self.merger {
@@ -129,17 +135,19 @@ public final class HlsReader: @unchecked Sendable {
             return data
         }
         while !isStopped {
-            // O lado que vai mais atrás lê o segmento seguinte; um que acabou deixa o outro ir até ao fim.
-            let videoDone = video.isDone, audioDone = audio.isDone
-            if videoDone, audioDone {
+            // O lado que vai mais atrás lê o segmento seguinte (o vídeo primeiro, num empate); um que acabou deixa os
+            // outros irem até ao fim.
+            guard let lane = ([video] + audios).filter({ !$0.isDone }).min(by: { $0.seconds < $1.seconds }) else {
                 let out = merger.finish()
                 return out.isEmpty ? nil : out
             }
             var out = Data()
-            if !audioDone, videoDone || audio.seconds < video.seconds {
-                if let d = try next(audio) { out = merger.audio(data: d) }
-            } else if let d = try next(video) {
-                out = merger.video(data: d)
+            if let d = try next(lane) {
+                if lane === video {
+                    out = merger.video(data: d)
+                } else if let i = audios.firstIndex(where: { $0 === lane }) {
+                    out = merger.audio(data: d, lane: Int32(i), language: lane.language)
+                }
             }
             if let why = merger.unsupported { throw Failure.unsupported(why) }
             if !out.isEmpty { return out }
@@ -230,8 +238,10 @@ public final class HlsReader: @unchecked Sendable {
             guard !variants.isEmpty else { throw Failure.unsupported("empty master") }
             level = variants.count - 1
             base = variants[level].uri
-            if let a = variants[level].audioUri {
-                audio = Lane(a, main: false)
+            // O áudio à parte: as línguas todas (até [maxAudio]), para o menu do áudio as ter como num TS.
+            let list = variants[level].audio.prefix(Self.maxAudio)
+            if !list.isEmpty {
+                audios = list.map { Lane($0.uri, main: false, language: $0.code) }
                 merger = GoatShared.HlsMergeBuffer()
             }
             playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)

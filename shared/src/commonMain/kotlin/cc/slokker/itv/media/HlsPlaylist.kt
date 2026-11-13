@@ -1,9 +1,15 @@
 package cc.slokker.itv.media
 
+/** Uma faixa de áudio numa playlist à parte (EXT-X-MEDIA com URI): a playlist e a língua (LANGUAGE, ou o NAME). */
+class HlsAudio(val uri: String, val language: String?) {
+    /** A língua em ISO 639-2 (a que o PMT leva), ou null se não disser. */
+    val code: String? get() = cc.slokker.itv.data.Languages.threeLetter(language)
+}
+
 /**
  * Uma qualidade de uma playlist HLS principal: a playlist dela, o débito, (se o disser) a altura da imagem, o grupo de
- * áudio ([audioGroup], o atributo AUDIO) e, quando o áudio vem numa playlist à parte (EXT-X-MEDIA com URI), a dela
- * ([audioUri]: a faixa DEFAULT do grupo, ou a primeira). null em [audioUri]: o áudio vem dentro dos segmentos.
+ * áudio ([audioGroup], o atributo AUDIO) e, quando o áudio vem em playlists à parte, as do grupo ([audio], a DEFAULT
+ * primeiro). Vazio em [audio]: o áudio vem dentro dos segmentos.
  */
 class HlsVariant(
     val uri: String,
@@ -11,8 +17,11 @@ class HlsVariant(
     val height: Int,
     val codecs: String?,
     val audioGroup: String? = null,
-    val audioUri: String? = null,
-)
+    val audio: List<HlsAudio> = emptyList(),
+) {
+    /** A playlist do áudio principal, quando vem à parte. */
+    val audioUri: String? get() = audio.firstOrNull()?.uri
+}
 
 /** A chave AES-128 de um segmento: o endereço dela e o vetor inicial (16 bytes; sem `IV`, o número de sequência). */
 class HlsKey(val uri: String, val iv: ByteArray)
@@ -61,8 +70,8 @@ class HlsPlaylist(
             var ended = false
             var unsupported: String? = null
             var pendingVariant: Map<String, String>? = null
-            // As faixas de áudio de cada grupo (EXT-X-MEDIA): o URI (null = dentro dos segmentos) e se é a DEFAULT.
-            val audio = LinkedHashMap<String, MutableList<Pair<String?, Boolean>>>()
+            // As faixas de áudio de cada grupo (EXT-X-MEDIA): o URI (null = dentro dos segmentos), a língua e se é a DEFAULT.
+            val audio = LinkedHashMap<String, MutableList<Triple<String?, String?, Boolean>>>()
             var pendingDuration = -1.0
             var discontinuity = false
             // A chave em vigor: o endereço e o IV dito (null = o número de sequência).
@@ -82,7 +91,7 @@ class HlsPlaylist(
                         val a = attributes(line.substringAfter(':'))
                         val group = a["GROUP-ID"]
                         if (a["TYPE"] == "AUDIO" && group != null) {
-                            audio.getOrPut(group) { ArrayList() } += a["URI"]?.let { resolve(base, it) } to (a["DEFAULT"] == "YES")
+                            audio.getOrPut(group) { ArrayList() } += Triple(a["URI"]?.let { resolve(base, it) }, a["LANGUAGE"] ?: a["NAME"], a["DEFAULT"] == "YES")
                         }
                     }
                     line.startsWith("#EXT-X-TARGETDURATION:") -> target = line.substringAfter(':').toDoubleOrNull() ?: target
@@ -134,11 +143,12 @@ class HlsPlaylist(
                 }
             }
             // O áudio à parte de cada qualidade: um grupo com alguma faixa sem URI tem o áudio principal dentro dos
-            // segmentos (as outras línguas à parte ficam por agora); senão, a DEFAULT (ou a primeira).
+            // segmentos (as outras línguas à parte ficam por agora); senão, todas, a DEFAULT primeiro.
             val withAudio = variants.map { v ->
-                val renditions = v.audioGroup?.let { audio[it] }
-                val separate = renditions?.takeIf { r -> r.none { it.first == null } }?.let { r -> (r.firstOrNull { it.second } ?: r.first()).first }
-                if (separate == null) v else HlsVariant(v.uri, v.bandwidth, v.height, v.codecs, v.audioGroup, separate)
+                val renditions = v.audioGroup?.let { audio[it] }?.takeIf { r -> r.isNotEmpty() && r.none { it.first == null } }
+                    ?: return@map v
+                val ordered = renditions.sortedByDescending { it.third }.map { HlsAudio(it.first!!, it.second) }
+                HlsVariant(v.uri, v.bandwidth, v.height, v.codecs, v.audioGroup, ordered)
             }
             return HlsPlaylist(withAudio, segments, target, ended, unsupported)
         }

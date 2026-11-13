@@ -23,8 +23,9 @@ class HlsMergeBuffer {
         return take()
     }
 
-    fun audio(data: NSData): NSData {
-        merger.audio(AppleMedia.bytes(data))
+    /** Um segmento da faixa de áudio [lane] (0 = a principal), com a [language] da playlist (ISO 639-2) ou null. */
+    fun audio(data: NSData, lane: Int, language: String?): NSData {
+        merger.audio(AppleMedia.bytes(data), lane, language)
         return take()
     }
 

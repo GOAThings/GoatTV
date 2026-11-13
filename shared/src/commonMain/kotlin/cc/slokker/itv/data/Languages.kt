@@ -39,6 +39,12 @@ object Languages {
         return null
     }
 
+    /** O código ISO 639-2 de [raw] (o que o PMT de um TS leva: "por", "eng"), ou null se não disser a língua. */
+    fun threeLetter(raw: String?): String? {
+        val two = code(raw) ?: return null
+        return pairs.firstOrNull { canonical(it.first) == two }?.second
+    }
+
     /** [raw] diz a língua [wanted] (um código ISO 639-1)? */
     fun matches(raw: String?, wanted: String): Boolean = code(raw) == wanted
 

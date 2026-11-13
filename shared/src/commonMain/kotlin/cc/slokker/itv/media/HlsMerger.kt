@@ -105,27 +105,25 @@ class PackedAudioDemuxer(private val listener: TsListener) {
 }
 
 /**
- * Um HLS com o áudio numa playlist à parte, junto num só MPEG-TS: os segmentos do vídeo ([video]) e os do áudio
- * ([audio], em TS, fMP4 ou empacotado) entram inteiros, cada lado pela ordem dele, e as amostras saem pelo [TsMuxer]
- * intercaladas pelo DTS, só até onde os dois lados já chegaram (o que falta de um espera pelo outro). Do vídeo fica
- * só o que não é áudio; as faixas do áudio ganham outro número para não se confundirem com as do vídeo (num fMP4
- * os dois têm o track_ID 1).
+ * Um HLS com o áudio em playlists à parte, junto num só MPEG-TS: os segmentos do vídeo ([video]) e os de cada faixa
+ * de áudio ([audio], uma por língua, em TS, fMP4 ou empacotado) entram inteiros, cada lado pela ordem dele, e as
+ * amostras saem pelo [TsMuxer] intercaladas pelo DTS, só até onde todos os lados já chegaram (o que falta de um espera
+ * pelos outros). Do vídeo fica só o que não é áudio; as faixas do áudio ganham outro número para não se confundirem
+ * com as do vídeo (num fMP4 todos têm o track_ID 1) e a língua da playlist, se os segmentos não a disserem.
  */
 class HlsMerger(out: (ByteArray) -> Unit) {
     private val muxer = TsMuxer(out)
     private var videoTracks: List<TsTrack> = emptyList()
-    private var audioTracks: List<TsTrack> = emptyList()
     private val queued = ArrayList<Pair<TsTrack, TsSample>>()
     /** O tempo de cada uma das [queued] (ver [queue]). */
     private val times = ArrayList<Long>()
     private var origin = -1L
     private var videoAt = Long.MIN_VALUE
-    private var audioAt = Long.MIN_VALUE
 
     private val videoDemuxer = StreamDemuxer(object : TsListener {
         override fun onTracks(tracks: List<TsTrack>) {
             videoTracks = tracks.filter { it.kind != TrackKind.AUDIO }
-            muxer.onTracks(videoTracks + audioTracks)
+            publishTracks()
         }
 
         override fun onSample(track: TsTrack, sample: TsSample) {
@@ -134,19 +132,29 @@ class HlsMerger(out: (ByteArray) -> Unit) {
         }
     })
 
-    private val audioListener = object : TsListener {
+    /** Uma faixa de áudio à parte: o demuxer dela (escolhido pelo primeiro segmento) e até onde já chegou. */
+    private inner class AudioSide(val index: Int, val language: String?) : TsListener {
+        var tracks: List<TsTrack> = emptyList()
+        var at = Long.MIN_VALUE
+        var stream: StreamDemuxer? = null
+        var packed: PackedAudioDemuxer? = null
+
+        private fun mapped(t: TsTrack) = t.copy(pid = t.pid + AUDIO_PIDS * (index + 1), language = t.language ?: language)
+
         override fun onTracks(tracks: List<TsTrack>) {
-            audioTracks = tracks.filter { it.kind == TrackKind.AUDIO }.map { it.copy(pid = it.pid + AUDIO_PIDS) }
-            muxer.onTracks(videoTracks + audioTracks)
+            this.tracks = tracks.filter { it.kind == TrackKind.AUDIO }.map(::mapped)
+            publishTracks()
         }
 
         override fun onSample(track: TsTrack, sample: TsSample) {
             if (track.kind != TrackKind.AUDIO) return
-            audioAt = maxOf(audioAt, queue(track.copy(pid = track.pid + AUDIO_PIDS), sample))
+            at = maxOf(at, queue(mapped(track), sample))
         }
     }
-    private var audioDemuxer: StreamDemuxer? = null
-    private var packed: PackedAudioDemuxer? = null
+
+    private val sides = ArrayList<AudioSide>()
+
+    private fun publishTracks() = muxer.onTracks(videoTracks + sides.flatMap { it.tracks })
 
     /** Um segmento do vídeo (com o init segment à frente, num fMP4, quando muda). */
     fun video(data: ByteArray) {
@@ -154,27 +162,34 @@ class HlsMerger(out: (ByteArray) -> Unit) {
         release()
     }
 
-    /** Um segmento do áudio (com o init segment à frente, num fMP4, quando muda). */
-    fun audio(data: ByteArray) {
-        if (packed == null && audioDemuxer == null) {
-            if (PackedAudioDemuxer.looksLike(data)) packed = PackedAudioDemuxer(audioListener) else audioDemuxer = StreamDemuxer(audioListener)
+    /**
+     * Um segmento da faixa de áudio [lane] (0 = a principal; com o init segment à frente, num fMP4, quando muda).
+     * [language]: a da playlist (ISO 639-2), para quando os segmentos não a dizem.
+     */
+    fun audio(data: ByteArray, lane: Int = 0, language: String? = null) {
+        while (sides.size <= lane) sides += AudioSide(sides.size, if (sides.size == lane) language else null)
+        val side = sides[lane]
+        if (side.packed == null && side.stream == null) {
+            if (PackedAudioDemuxer.looksLike(data)) side.packed = PackedAudioDemuxer(side) else side.stream = StreamDemuxer(side)
         }
-        packed?.feed(data)
-        audioDemuxer?.feed(data, 0, data.size)
+        side.packed?.feed(data)
+        side.stream?.feed(data, 0, data.size)
         release()
     }
 
     /** Acabou (um VOD): sai o que estava à espera do outro lado. */
     fun flush() {
         videoDemuxer.flush()
-        audioDemuxer?.flush()
+        for (s in sides) {
+            s.stream?.flush()
+            s.at = Long.MAX_VALUE
+        }
         videoAt = Long.MAX_VALUE
-        audioAt = Long.MAX_VALUE
         release()
     }
 
     /** Porque é que um dos lados não se toca (um fMP4 cifrado…), ou null. */
-    val unsupported: String? get() = videoDemuxer.unsupported ?: audioDemuxer?.unsupported
+    val unsupported: String? get() = videoDemuxer.unsupported ?: sides.firstNotNullOfOrNull { it.stream?.unsupported }
 
     /** O tempo da amostra, sempre a crescer (os 33 bits dão a volta ao fim de 26 h). */
     private fun queue(track: TsTrack, sample: TsSample): Long {
@@ -190,10 +205,11 @@ class HlsMerger(out: (ByteArray) -> Unit) {
     private fun release() {
         if (queued.isEmpty()) return
         // Sem um dos lados ainda (ou se um deixou de vir), não se espera para sempre.
+        val slowest = (sides.map { it.at } + videoAt).minOrNull() ?: return
         val limit = when {
-            videoAt == Long.MIN_VALUE || audioAt == Long.MIN_VALUE -> if (queued.size > MAX_QUEUED) Long.MAX_VALUE else return
             queued.size > MAX_QUEUED -> Long.MAX_VALUE
-            else -> minOf(videoAt, audioAt)
+            sides.isEmpty() || slowest == Long.MIN_VALUE -> return
+            else -> slowest
         }
         val order = queued.indices.sortedBy { times[it] }
         val keep = ArrayList<Pair<TsTrack, TsSample>>()
@@ -214,7 +230,7 @@ class HlsMerger(out: (ByteArray) -> Unit) {
         const val AUDIO_PIDS = 0x10000
         const val MASK_33 = (1L shl 33) - 1
         const val HALF_33 = 1L shl 32
-        /** Uns 20 s de 25 fps com áudio: se um lado não vem, o outro sai na mesma. */
+        /** Uns 20 s de 25 fps com áudio: se um lado não vem, os outros saem na mesma. */
         const val MAX_QUEUED = 2_000
     }
 }

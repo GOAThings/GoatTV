@@ -136,6 +136,8 @@ class HlsPlaylistTest {
         )
         assertNull(separate.unsupported)
         assertEquals(listOf("http://h/audio/en.m3u8", null), separate.variants.map { it.audioUri })
+        // Todas as línguas à parte, a DEFAULT primeiro, com o código que o PMT leva.
+        assertEquals(listOf("eng", "por"), separate.variants[0].audio.map { it.code })
         // Um grupo com uma faixa sem URI tem o áudio principal dentro; as outras línguas à parte não contam.
         val inside = HlsPlaylist.parse(
             """

@@ -40,13 +40,12 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
     override fun onSample(track: TsTrack, sample: TsSample) {
         val o = outs[track.pid] ?: return
         val time = if (sample.dts >= 0) sample.dts else sample.pts
-        if (o.pid == pcrPid && (sample.randomAccess && o.track.kind == TrackKind.VIDEO || tablesAt == Long.MIN_VALUE ||
+        // As tabelas à frente de tudo (o áudio pode vir antes da primeira imagem) e depois pelo PID do relógio.
+        if (tablesAt == Long.MIN_VALUE || o.pid == pcrPid && (sample.randomAccess && o.track.kind == TrackKind.VIDEO ||
                 ((time - tablesAt) and MASK_33) > TABLES_EVERY)
         ) {
             tables()
             tablesAt = time
-        } else if (tablesAt == Long.MIN_VALUE) {
-            return // sem as tabelas, ninguém percebe o resto: espera pelo PID do relógio
         }
         pes(o, sample, time)
     }

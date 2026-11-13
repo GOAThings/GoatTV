@@ -118,4 +118,56 @@ class HlsMergerTest {
         val firstOfSecond = got.first { it.pts >= audio[half].pts - 90 }
         assertTrue(kotlin.math.abs(firstOfSecond.pts - audio[half].pts) <= 90, "${firstOfSecond.pts} vs ${audio[half].pts}")
     }
+
+    @Test
+    fun twoAudioLanguagesBecomeTwoTracks() {
+        val o = original()
+        val video = o.samples.getValue(Codec.H264)
+        val audio = o.samples.getValue(Codec.AAC_ADTS)
+        val v = videoSegments(video, o.tracks.first { it.codec == Codec.H264 })
+        val a = audioSegments(audio)
+        val ts = ByteArrayOutputStream()
+        val merger = HlsMerger { ts.write(it) }
+        for (n in 0 until maxOf(v.size, a.size)) {
+            v.getOrNull(n)?.let(merger::video)
+            a.getOrNull(n)?.let { merger.audio(it, 0, "eng") }
+            a.getOrNull(n)?.let { merger.audio(it, 1, "por") }
+        }
+        merger.flush()
+        var tracks: List<TsTrack> = emptyList()
+        val perPid = HashMap<Int, Int>()
+        ts.toByteArray().let {
+            TsDemuxer(object : TsListener {
+                override fun onTracks(list: List<TsTrack>) {
+                    tracks = list
+                }
+
+                override fun onSample(track: TsTrack, sample: TsSample) {
+                    perPid[track.pid] = (perPid[track.pid] ?: 0) + 1
+                }
+            }).apply { feed(it, 0, it.size); flush() }
+        }
+        val audioTracks = tracks.filter { it.kind == TrackKind.AUDIO }
+        assertEquals(listOf("eng", "por"), audioTracks.map { it.language })
+        // As duas faixas com todos os blocos (um PES por bloco).
+        val blocks = audio.sumOf { adtsFrames(it.data) }
+        for (t in audioTracks) assertEquals(blocks, perPid[t.pid])
+    }
+
+    /** Os blocos ADTS de um PES. */
+    private fun adtsFrames(d: ByteArray): Int {
+        var n = 0
+        var i = 0
+        while (i + 7 <= d.size) {
+            if ((d[i].toInt() and 0xFF) == 0xFF && (d[i + 1].toInt() and 0xF6) == 0xF0) {
+                val len = ((d[i + 3].toInt() and 3) shl 11) or ((d[i + 4].toInt() and 0xFF) shl 3) or ((d[i + 5].toInt() and 0xFF) shr 5)
+                if (len < 7) break
+                n++
+                i += len
+            } else {
+                i++
+            }
+        }
+        return n
+    }
 }
