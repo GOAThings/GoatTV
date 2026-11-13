@@ -20,6 +20,7 @@ import cc.slokker.itv.data.recording.Schedule
 import cc.slokker.itv.data.recording.ScheduledRecording
 import cc.slokker.itv.data.recording.SeriesRule
 import cc.slokker.itv.ui.player.ChannelFeed
+import cc.slokker.itv.ui.player.goatcore.HlsDataSource
 import cc.slokker.itv.ui.player.engine.StreamGate
 import cc.slokker.itv.ui.player.engine.providerHttp
 import java.io.File
@@ -95,6 +96,7 @@ class RecordingManager(context: Context) {
     private val _ringFor = MutableStateFlow<RecordingPlan.Busy?>(null)
     val ringFor: StateFlow<RecordingPlan.Busy?> = _ringFor.asStateFlow()
     private var ringForUrl: String? = null
+    private var ringForHls = false
 
     sealed interface Event {
         data class Finished(val info: RecordingInfo) : Event
@@ -450,9 +452,12 @@ class RecordingManager(context: Context) {
         if (!RecordingSpace.canStart(freeBytes(), null)) return skip(r, RecordingPlan.SKIP_SPACE)
         // O serviço primeiro: com a app em segundo plano, é ele que deixa a gravação continuar.
         RecordingService.update(app, listOf(placeholder(r, now)))
+        val http = providerHttp(r.userAgent, r.referrer)
+        // Um HLS lê-se como um stream seguido (os segmentos um atrás do outro, os fMP4 passados a TS).
+        val source = if (r.urlIsHls) HlsDataSource.Factory(http) else http
         val feed = ChannelFeed.open(
-            ChannelFeed.dir(app), url, providerHttp(r.userAgent, r.referrer), StreamGate.MAIN,
-            reconnectMs = RECONNECT_MS, holder = ChannelFeed.Holder.RECORDING, maxBytes = BACKGROUND_RING_BYTES,
+            ChannelFeed.dir(app), url, source, StreamGate.MAIN,
+            reconnectMs = RECONNECT_MS, holder = ChannelFeed.Holder.RECORDING, maxBytes = BACKGROUND_RING_BYTES, hls = r.urlIsHls,
         ) ?: return skip(r, RecordingPlan.SKIP_SPACE)
         // Anel novo: o vídeo começa a contar agora (quando chegar o primeiro byte); grava tudo até ao fim da janela.
         start(feed, meta, w.fromMs, w.toMs, 0L, 0L, (w.toMs - now).coerceAtLeast(0), now)
@@ -483,12 +488,16 @@ class RecordingManager(context: Context) {
             else -> null
         }
         ringForUrl = activeOne?.feed?.url ?: soon?.url
+        ringForHls = activeOne?.feed?.hls ?: soon?.urlIsHls ?: false
         if (_ringFor.value != next) _ringFor.value = next
     }
 
     /** O URL que o player deve abrir pelo anel para o canal [playlistId]/[channelKey] (ver [ringFor]), ou null. */
     fun ringUrl(playlistId: String?, channelKey: String): String? =
         ringForUrl?.takeIf { _ringFor.value?.let { it.playlistId == playlistId && it.channelKey == channelKey } == true }
+
+    /** O anel de [ringFor] é de um HLS (só o GoatCore o lê). */
+    fun ringIsHls(): Boolean = ringForHls
 
     companion object {
         private const val TAG = "Recordings"

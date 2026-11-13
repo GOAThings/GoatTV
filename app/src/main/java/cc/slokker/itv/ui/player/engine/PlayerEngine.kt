@@ -162,9 +162,10 @@ internal fun rememberChannelPlayback(
     net: NetMonitor? = null,
     /**
      * Uma gravação usa a ligação deste canal: um player que leia o anel dela (o ExoPlayer ou o GoatCore); o VLC não
-     * lê, e passa para o ExoPlayer.
+     * lê, e passa para o ExoPlayer. [ringHls]: o anel é de um HLS, que só o GoatCore lê.
      */
     ringOnly: Boolean = false,
+    ringHls: Boolean = false,
     captureFreeze: suspend () -> ImageBitmap? = { null },
 ): ChannelPlayback {
     val context = LocalContext.current
@@ -180,7 +181,13 @@ internal fun rememberChannelPlayback(
         ).also { it.freezeCapture = { latestCapture() } }
     }
     val chosen = playback.engineFor(channelKey, DebugEngine.override ?: prefs.engine)
-    val build = PlayerBuild.of(prefs, if (ringOnly && chosen == Prefs.Engine.VLC) Prefs.Engine.EXO else chosen, policy.passthrough)
+    val engineName = when {
+        !ringOnly -> chosen
+        ringHls -> Prefs.Engine.GOATCORE
+        chosen == Prefs.Engine.VLC -> Prefs.Engine.EXO
+        else -> chosen
+    }
+    val build = PlayerBuild.of(prefs, engineName, policy.passthrough)
     // Criado (e ligado ao controlador) já aqui, para o ecrã ter o player na mesma composição.
     val engine = remember(build, enabled) {
         if (!enabled) return@remember null

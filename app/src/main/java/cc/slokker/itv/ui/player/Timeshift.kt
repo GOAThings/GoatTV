@@ -138,7 +138,7 @@ internal class Timeshift(context: Context) {
         // cifrado chega como vem: aí o anel não serve e o player lê esta mesma ligação diretamente, sem pausa.
         val source = if (candidate.isHls) cc.slokker.itv.ui.player.goatcore.HlsDataSource.Factory(direct) else direct
         val reused = ChannelFeed.find(candidate.url)?.takeIf { it.hold(ChannelFeed.Holder.PLAYER) }
-        val feed = reused ?: ChannelFeed.open(dir, candidate.url, source, gate, reconnectMs, ChannelFeed.Holder.PLAYER) ?: return null
+        val feed = reused ?: ChannelFeed.open(dir, candidate.url, source, gate, reconnectMs, ChannelFeed.Holder.PLAYER, hls = candidate.isHls) ?: return null
         feed.onReconnect = { n, at, waitMs -> onReconnect?.invoke(n, at, waitMs) }
         feed.onConnected = { onConnected?.invoke() }
         val s = Session(feed, extractors)

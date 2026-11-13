@@ -442,7 +442,8 @@ final class RecordingManager {
         guard RecordingSpace.canStart(free: freeBytes(), bytesPerSecond: nil) else { return skip(r, RecordingPlan.skipSpace) }
         beforeOwnFeed?()
         guard let feed = ChannelFeed.open(target, userAgent: r.userAgent.isEmpty ? iptvUserAgent : r.userAgent, referrer: r.referrer,
-                                          reconnectSeconds: Self.reconnectSeconds, holder: .recording, maxBytes: Self.ownRingBytes) else {
+                                          reconnectSeconds: Self.reconnectSeconds, holder: .recording, maxBytes: Self.ownRingBytes,
+                                          hls: r.urlIsHLS) else {
             afterOwnFeed?()
             return skip(r, RecordingPlan.skipSpace)
         }

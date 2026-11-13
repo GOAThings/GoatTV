@@ -140,12 +140,19 @@ extension CoreTests {
         try expect(decide(w.fromMs - 30_000, busy: busy), D.wait)
         try expect(decide(w.fromMs, busy: busy), D.skip(RecordingPlan.skipBusy))
         try expect(decide(w.fromMs, RecordingPlan.Watching("p1", "999"), busy: [RecordingPlan.Busy("p1", "101")]), D.start)
-        // Só HLS não se grava.
+        // O TS primeiro; o HLS quando não há outro; sem tentativas nenhumas não há o que gravar.
         let hls = planRec(candidates: [StreamCandidate(url: "http://x/1.m3u8", format: "m3u8")])
-        try expect(hls.url, nil)
-        try expect(decide(w.fromMs - 30_000, r: hls), D.wait)
-        try expect(decide(w.fromMs, r: hls), D.skip(RecordingPlan.skipHls))
+        try expect(hls.url, "http://x/1.m3u8")
+        try expect(hls.urlIsHLS, true)
+        try expect(decide(w.fromMs, r: hls), D.start)
+        let both = planRec(candidates: [StreamCandidate(url: "http://x/1.m3u8", format: "m3u8"), StreamCandidate(url: "http://x/1.ts", format: "ts")])
+        try expect(both.url, "http://x/1.ts")
+        try expect(both.urlIsHLS, false)
         try expect(planRec().url, "http://x/101.ts")
+        let none = planRec(candidates: [])
+        try expect(none.url, nil)
+        try expect(decide(w.fromMs - 30_000, r: none), D.wait)
+        try expect(decide(w.fromMs, r: none), D.skip(RecordingPlan.skipHls))
     }
 
     static func recordingPlanConflictsWakeSeriesAndPrune() throws {

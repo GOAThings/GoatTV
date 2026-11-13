@@ -87,8 +87,16 @@ data class ScheduledRecording(
     /** O programa (lista, canal e início): é assim que se reconhece no guia e nas séries. */
     val instanceKey: String get() = instanceKey(playlistId, channelKey, startMs)
 
-    /** O endereço que se grava (o primeiro TS: o HLS não se grava, ver RecordingPlan). */
-    val url: String? get() = candidates.firstOrNull { !it.isHls }?.url
+    /**
+     * O endereço que se grava: o primeiro TS ou, sem nenhum, o primeiro HLS (lido como um stream seguido, com os
+     * fMP4 passados a TS). null sem tentativas (ver RecordingPlan).
+     */
+    val url: String? get() = recordable?.url
+
+    /** O [url] é HLS. */
+    val urlIsHls: Boolean get() = recordable?.isHls == true
+
+    private val recordable: StreamCandidate? get() = candidates.firstOrNull { !it.isHls } ?: candidates.firstOrNull()
 
     fun sameChannel(playlistId: String, channelKey: String) = this.playlistId == playlistId && this.channelKey == channelKey
 

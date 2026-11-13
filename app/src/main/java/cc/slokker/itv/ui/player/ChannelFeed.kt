@@ -43,6 +43,8 @@ internal class ChannelFeed private constructor(
     val ring: TimeshiftRing,
     /** O endereço do canal (é por ele que o player e as gravações sabem que é o mesmo). */
     val url: String,
+    /** Um HLS lido como um stream seguido: só o GoatCore o lê do anel (o ExoPlayer abriria outra ligação). */
+    val hls: Boolean,
     private val direct: DataSource.Factory,
     private val gate: StreamGate,
     private val reconnectMs: Long,
@@ -290,6 +292,7 @@ internal class ChannelFeed private constructor(
             reconnectMs: Long,
             holder: Holder,
             maxBytes: Long = MAX_BYTES,
+            hls: Boolean = false,
         ): ChannelFeed? {
             val previous = current
             previous?.close()
@@ -303,7 +306,7 @@ internal class ChannelFeed private constructor(
                 Log.w(TAG, "Sem anel", e)
                 return null
             }
-            val feed = ChannelFeed(ring, url, direct, gate, reconnectMs, generation, previous)
+            val feed = ChannelFeed(ring, url, hls, direct, gate, reconnectMs, generation, previous)
             feed.hold(holder)
             synchronized(CURRENT_LOCK) { current = feed }
             feed.start()

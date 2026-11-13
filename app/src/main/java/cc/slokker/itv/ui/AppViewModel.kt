@@ -1430,6 +1430,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** O endereço de [channel] que uma gravação usa (o player abre-o pelo anel dela), ou null. */
     fun recordingRingUrl(channel: Channel): String? = recordings.ringUrl(content.value?.playlist?.id, channel.key)
 
+    /** O anel da gravação ([recordingRing]) é de um HLS: o player tem de ser o GoatCore. */
+    fun recordingRingIsHls(): Boolean = recordings.ringIsHls()
+
     /**
      * [action] precisa da ligação ao fornecedor para outra coisa ([channel] em direto, ou null: outro canal, um
      * catch-up do servidor, outra lista). Com uma gravação a decorrer de outra coisa, pergunta primeiro.

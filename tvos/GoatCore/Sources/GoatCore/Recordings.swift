@@ -164,8 +164,14 @@ public struct ScheduledRecording: Equatable, Sendable {
     /// O programa (lista, canal e início): é assim que se reconhece no guia e nas séries.
     public var instanceKey: String { Self.instanceKey(playlistId, channelKey, startMs) }
 
-    /// O endereço que se grava (o primeiro TS: o HLS não se grava).
-    public var url: String? { candidates.first { !$0.isHLS }?.url }
+    /// O endereço que se grava: o primeiro TS ou, sem nenhum, o primeiro HLS (lido como um stream seguido, com os fMP4
+    /// passados a TS). nil sem tentativas.
+    public var url: String? { recordable?.url }
+
+    /// O [url] é HLS.
+    public var urlIsHLS: Bool { recordable?.isHLS == true }
+
+    private var recordable: StreamCandidate? { candidates.first { !$0.isHLS } ?? candidates.first }
 
     public func sameChannel(_ playlistId: String, _ channelKey: String) -> Bool {
         self.playlistId == playlistId && self.channelKey == channelKey

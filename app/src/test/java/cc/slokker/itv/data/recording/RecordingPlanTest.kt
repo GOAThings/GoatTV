@@ -86,12 +86,20 @@ class RecordingPlanTest {
     }
 
     @Test
-    fun soHlsNaoSeGrava() {
+    fun oTsPrimeiroEOHlsQuandoNaoHaOutro() {
         val hls = rec(candidates = listOf(StreamCandidate("http://x/1.m3u8", "m3u8")))
-        assertNull(hls.url)
-        assertEquals(Decision.Wait, decide(w.fromMs - 30_000, r = hls))
-        assertEquals(Decision.Skip(RecordingPlan.SKIP_HLS), decide(w.fromMs, r = hls))
+        assertEquals("http://x/1.m3u8", hls.url)
+        assertTrue(hls.urlIsHls)
+        assertEquals(Decision.Start, decide(w.fromMs, r = hls))
+        val both = rec(candidates = listOf(StreamCandidate("http://x/1.m3u8", "m3u8"), StreamCandidate("http://x/1.ts", "ts")))
+        assertEquals("http://x/1.ts", both.url)
+        assertFalse(both.urlIsHls)
         assertEquals("http://x/101.ts", rec().url)
+        // Sem tentativas nenhumas não há o que gravar.
+        val none = rec(candidates = emptyList())
+        assertNull(none.url)
+        assertEquals(Decision.Wait, decide(w.fromMs - 30_000, r = none))
+        assertEquals(Decision.Skip(RecordingPlan.SKIP_HLS), decide(w.fromMs, r = none))
     }
 
     @Test

@@ -74,7 +74,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     // Uma gravação usa a ligação deste canal: o player lê o anel dela (ver o efeito mais abaixo).
     val recordingRing by vm.recordingRing.collectAsStateWithLifecycle()
     val ringRecording = recordingRing?.let { it.playlistId == data.playlist.id && it.channelKey == channel.key } == true
-    val core = rememberChannelPlayback(PlaybackPolicy.PHONE, host, prefs, channel.key, ringOnly = ringRecording) {
+    val core = rememberChannelPlayback(PlaybackPolicy.PHONE, host, prefs, channel.key, ringOnly = ringRecording, ringHls = ringRecording && vm.recordingRingIsHls()) {
         if (latestPrefs.freezeFrame) viewState.value?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val playback = remember(core) { MobilePlayback(core, viewState) }

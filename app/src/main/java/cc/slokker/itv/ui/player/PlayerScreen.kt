@@ -140,7 +140,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val recordingRing by vm.recordingRing.collectAsStateWithLifecycle()
     val recordingSchedule by vm.recordingSchedule.collectAsStateWithLifecycle()
     val ringRecording = recordingRing?.let { it.playlistId == data.playlist.id && it.channelKey == current.key } == true
-    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net, ringOnly = ringRecording) {
+    val playback = rememberChannelPlayback(PlaybackPolicy.TV, host, prefs, current.key, net = vm.net, ringOnly = ringRecording, ringHls = ringRecording && vm.recordingRingIsHls()) {
         if (latestPrefs.freezeFrame) videoView?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val player = checkNotNull(playback.player)
