@@ -151,6 +151,8 @@ class TimeshiftRing(
     private var lastPcr = -1L
     private var lastTick = 0L
     private var lastPcrAt = 0L
+    /** O tempo só pelo PCR: o tempo real contado sem PCR é provisório e [media] espera que o PCR o alcance. */
+    private var pcrMedia = 0L
     private var newSegment = false
     private val scanner = TsScanner(::onPcr)
 
@@ -180,6 +182,29 @@ class TimeshiftRing(
 
     /** Tempo do vídeo no direto (o último byte que chegou). */
     val liveMediaMs: Long get() = synchronized(lock) { media }
+
+    /**
+     * Onde vai o direto, para dizer quanto se está atrás dele: há servidores que mandam às rajadas (vários segundos de
+     * vídeo de cada vez, e depois nada), e pelo último byte o "atrás do direto" andava aos saltos. Daqui sai o ponto
+     * mais adiantado que as rajadas mostraram, a andar com o tempo real (e a esquecer-se devagar). Nunca antes de
+     * [liveMediaMs]; para onde começar a ler, esse.
+     */
+    val liveEdgeMs: Long get() = synchronized(lock) {
+        if (peakOffset == Long.MIN_VALUE) media else maxOf(media, clock() + decayedPeak(clock()))
+    }
+
+    private var peakOffset = Long.MIN_VALUE
+    private var peakAt = 0L
+
+    private fun decayedPeak(now: Long) = peakOffset - (now - peakAt) / PEAK_DECAY
+
+    private fun notePeak(now: Long) {
+        val offset = media - now
+        if (peakOffset == Long.MIN_VALUE || offset >= decayedPeak(now)) {
+            peakOffset = offset
+            peakAt = now
+        }
+    }
 
     /** O ponto mais antigo para onde se pode recuar. */
     val oldest: RingEntry? get() = synchronized(lock) { entries.firstOrNull() }
@@ -233,6 +258,7 @@ class TimeshiftRing(
                 lastTick = now
                 addEntry(if (newSegment) segments.last() else scanner.lastPacket)
             }
+            notePeak(now)
             trim()
             fitToAge()
             lock.notifyAll()
@@ -253,10 +279,19 @@ class TimeshiftRing(
         if (lastPcr >= 0) {
             var d = pcrMs - lastPcr
             if (d < -PCR_WRAP_MS / 2) d += PCR_WRAP_MS
-            // Um salto (canal trocado no servidor, relógio reposto): conta o tempo real que passou.
-            media += if (d in 0..MAX_PCR_STEP_MS) d else arrival(now)
+            // O tempo do PCR desde o anterior, e não somado ao tempo real que entretanto se contou sem PCR (num
+            // servidor que manda às rajadas contava-se duas vezes). Um salto (canal trocado no servidor, relógio
+            // reposto): conta o tempo real que passou.
+            if (d in 0..MAX_PCR_STEP_MS) {
+                pcrMedia += d
+                media = maxOf(media, pcrMedia)
+            } else {
+                media += arrival(now)
+                pcrMedia = media
+            }
         } else {
             media += arrival(now)
+            pcrMedia = media
         }
         lastPcr = pcrMs
         lastTick = now
@@ -412,6 +447,9 @@ class TimeshiftRing(
 
         /** Entre dois PCR seguidos nunca há mais do que isto (o normal é 40–100 ms). */
         private const val MAX_PCR_STEP_MS = 5_000L
+
+        /** O direto estimado ([liveEdgeMs]) esquece-se 1 ms por cada tantos ms (2 %). */
+        private const val PEAK_DECAY = 50L
 
         /** O PCR tem 33 bits a 90 kHz: dá a volta a cada ~26,5 h. */
         private const val PCR_WRAP_MS = (1L shl 33) / 90

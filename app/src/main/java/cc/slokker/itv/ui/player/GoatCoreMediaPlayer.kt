@@ -126,8 +126,6 @@ internal class GoatCoreMediaPlayer(
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
-                main.removeCallbacks(starvation)
-                main.postDelayed(starvation, 250)
             }
 
             override fun onTracks(tracks: List<TsTrack>) = post(g) {
@@ -155,6 +153,8 @@ internal class GoatCoreMediaPlayer(
             override fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) = showCues(g, atUs, cues, durationUs)
         })
         core = player
+        main.removeCallbacks(starvation)
+        main.postDelayed(starvation, 250)
         player.setVolume(effectiveVolume())
         player.setPaused(!playWhenReady)
         // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.

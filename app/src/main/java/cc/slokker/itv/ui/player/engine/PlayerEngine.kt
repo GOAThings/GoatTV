@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VlcPlayer
@@ -62,7 +63,7 @@ internal class PlayerEngine(
     }
 
     override val isVlc: Boolean get() = player is VlcPlayer
-    override val supportsRing: Boolean get() = player is ExoPlayer
+    override val supportsRing: Boolean get() = player is ExoPlayer || player is GoatCoreMediaPlayer
     override val idle: Boolean get() = player.playbackState == Player.STATE_IDLE
     override val positionMs: Long get() = player.currentPosition
 

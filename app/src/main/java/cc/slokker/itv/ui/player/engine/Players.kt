@@ -287,14 +287,14 @@ internal fun Player.loadStream(
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is GoatCoreMediaPlayer -> {
-            // Uma gravação no disco lê-se do ficheiro; o resto pela mesma ligação do ExoPlayer, uma de cada vez.
-            val source: DataSource.Factory = if (candidate.isLocal) {
-                FileDataSource.Factory()
-            } else {
-                val direct = httpFactory(channel, userAgent, transfer)
-                gate?.factory(direct, exclusive = true) ?: direct
+            if (candidate.isLocal) return setStream(candidate.url, FileDataSource.Factory(), hls = false)
+            val direct = httpFactory(channel, userAgent, transfer)
+            // A pausa do direto: a ligação é do gravador e o motor lê o anel (como o ExoPlayer, ver Timeshift).
+            timeshift?.openRing(candidate, direct, gate ?: StreamGate(), reconnectMs)?.let { (url, source) ->
+                return setStream(url, source, hls = false)
             }
-            setStream(candidate.url, source, candidate.isHls)
+            // O resto pela mesma ligação do ExoPlayer, uma de cada vez.
+            setStream(candidate.url, gate?.factory(direct, exclusive = true) ?: direct, candidate.isHls)
         }
         is ExoPlayer -> {
             // Uma gravação no disco (ver Recordings): lê-se o ficheiro, sem ligação ao fornecedor.

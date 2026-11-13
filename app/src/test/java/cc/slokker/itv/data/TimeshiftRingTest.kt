@@ -218,6 +218,33 @@ class TimeshiftRingTest {
     }
 
     @Test
+    fun burstsWithoutPcrAtTheStartAreNotCountedTwice() {
+        val r = ring()
+        r.beginSegment()
+        r.writeAll(stream(0, 4))
+        // A rajada seguinte, 4 s depois, começa com pacotes sem PCR: o tempo real conta até chegar o PCR, que o acerta.
+        now += 4_000
+        r.write(ByteArray(188 * 10).also { b -> repeat(10) { packet().copyInto(b, it * 188) } }, 0, 188 * 10)
+        r.writeAll(stream(4_000, 4))
+        assertEquals(7_900L, r.liveMediaMs)
+    }
+
+    @Test
+    fun liveEdgeMovesWithTheClockBetweenBursts() {
+        val r = ring()
+        r.beginSegment()
+        r.writeAll(stream(0, 4))
+        assertEquals(3_900L, r.liveEdgeMs)
+        // Nada chega durante 3 s: o direto continua a andar (menos 2 % que se esquece).
+        now += 3_000
+        assertEquals(3_900L, r.liveMediaMs)
+        assertEquals(3_900L + 3_000 - 60, r.liveEdgeMs)
+        // A rajada seguinte traz 4 s de uma vez: o direto vai para onde ela acaba.
+        r.writeAll(stream(4_000, 4))
+        assertEquals(7_900L, r.liveEdgeMs)
+    }
+
+    @Test
     fun segmentsDoNotMixAndReportBoundary() {
         val r = ring()
         r.beginSegment()

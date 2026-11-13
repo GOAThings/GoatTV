@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ExtractorsFactory
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.TimeshiftRing
@@ -109,6 +110,17 @@ internal class Timeshift(context: Context) {
      * esse anel (perto do direto), sem abrir outra ligação.
      */
     fun open(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, extractors: ExtractorsFactory, reconnectMs: Long): MediaSource? {
+        val (s, offset) = openSession(candidate, direct, gate, extractors, reconnectMs) ?: return null
+        return s.sourceAt(offset)
+    }
+
+    /** Como [open], para o motor GoatCore: o endereço no anel e a fonte que o lê (ver [GoatCoreMediaPlayer.setStream]). */
+    fun openRing(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, reconnectMs: Long): Pair<String, DataSource.Factory>? {
+        val (s, offset) = openSession(candidate, direct, gate, DefaultExtractorsFactory(), reconnectMs) ?: return null
+        return s.dataAt(offset)
+    }
+
+    private fun openSession(candidate: StreamCandidate, direct: DataSource.Factory, gate: StreamGate, extractors: ExtractorsFactory, reconnectMs: Long): Pair<Session, Long>? {
         clear()
         if (candidate.isHls) {
             hls = true
@@ -124,10 +136,10 @@ internal class Timeshift(context: Context) {
             val ring = reused.ring
             ring.entryAtOrBefore(ring.liveMediaMs - LIVE_START_MS)?.let { entry ->
                 s.startMediaMs = entry.mediaMs
-                return s.sourceAt(entry.offset)
+                return s to entry.offset
             }
         }
-        return s.sourceAt(0)
+        return s to 0L
     }
 
     /**
@@ -165,15 +177,15 @@ internal class Timeshift(context: Context) {
         val s = session
         if (s != null) {
             val ring = s.ring
-            if (ring.isTs != true || s.notTs || player !is ExoPlayer) return unavailable()
-            var live = ring.liveMediaMs
+            if (ring.isTs != true || s.notTs || !(player is ExoPlayer || player is GoatCoreMediaPlayer)) return unavailable()
+            var live = ring.liveEdgeMs
             // O programa no ponto que se vê (não no direto: em pausa no fim do jogo, o jogo fica até se passar dele).
             // Folga de um minuto antes do início, que as horas do guia raramente são certas.
             val wall = System.currentTimeMillis()
             val start = programmeStart(wall - (live - (s.startMediaMs + player.currentPosition)))
             ring.setMaxAge(if (start == null) NO_EPG_AGE_MS else ChannelFeed.MAX_AGE_MS)
             if (start != null) ring.dropBefore(live - (wall - start) - PROGRAMME_MARGIN_MS)
-            live = ring.liveMediaMs
+            live = ring.liveEdgeMs
             val oldest = ring.oldest?.mediaMs ?: live
             val span = (live - oldest).coerceAtLeast(0)
             val behind = (live - (s.startMediaMs + player.currentPosition)).coerceIn(0, span)
@@ -219,7 +231,7 @@ internal class Timeshift(context: Context) {
         if (behind <= LIVE_SNAP_MS) return goLive(player)
         val s = session
         if (s != null) {
-            s.ring.entryAtOrBefore(s.ring.liveMediaMs - baselineMs - behind)?.let { prepareAt(player, s, it) }
+            s.ring.entryAtOrBefore(s.ring.liveEdgeMs - baselineMs - behind)?.let { prepareAt(player, s, it) }
             return
         }
         if (hls) {
@@ -276,14 +288,19 @@ internal class Timeshift(context: Context) {
     }
 
     private fun prepareAt(player: Player, s: Session, entry: RingEntry, live: Boolean = false) {
-        val exo = player as? ExoPlayer ?: return
+        if (player !is ExoPlayer && player !is GoatCoreMediaPlayer) return
         s.end = 0
         s.startMediaMs = entry.mediaMs
         seeking = true
         following = live
-        exo.setMediaSource(s.sourceAt(entry.offset))
-        exo.prepare()
-        exo.play()
+        if (player is ExoPlayer) {
+            player.setMediaSource(s.sourceAt(entry.offset))
+        } else if (player is GoatCoreMediaPlayer) {
+            val (url, source) = s.dataAt(entry.offset)
+            player.setStream(url, source, hls = false)
+        }
+        player.prepare()
+        player.play()
         update(player)
     }
 
@@ -298,6 +315,10 @@ internal class Timeshift(context: Context) {
         /** Porque acabou a última leitura (BOUNDARY, OVERRUN, END) e onde. */
         @Volatile var end = 0
         @Volatile var endAt = 0L
+
+        /** O anel a partir de [offset] para o motor GoatCore: o endereço e a fonte (a mesma que o ExoPlayer lê). */
+        fun dataAt(offset: Long): Pair<String, DataSource.Factory> =
+            "timeshift://ring/${feed.id}?at=$offset" to DataSource.Factory { RingDataSource(this) }
 
         fun sourceAt(offset: Long): MediaSource =
             ProgressiveMediaSource.Factory({ RingDataSource(this) }, extractors)
