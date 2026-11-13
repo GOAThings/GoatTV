@@ -28,6 +28,7 @@ import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.ui.player.goatcore.GoatCorePlayer
+import cc.slokker.itv.ui.player.goatcore.TsSeek
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.IOException
@@ -78,6 +79,12 @@ internal class GoatCoreMediaPlayer(
     private var chosenText = -1
     private var startPositionMs = -1L
 
+    /** Onde começar dentro do ficheiro (as gravações e o catch-up do Stalker; ver [TsSeek]); 0 = do início. */
+    private var startMs = 0L
+
+    /** Com [startMs]: o PTS do início do ficheiro, para a posição contar desde lá (como no ExoPlayer). */
+    @Volatile private var firstPts = -1L
+
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             if (pendingStart) start()
@@ -92,12 +99,17 @@ internal class GoatCoreMediaPlayer(
         }
     }
 
-    /** A stream a tocar: [source] é a ligação (a do ExoPlayer, com o portão); começa com [prepare]. */
-    fun setStream(url: String, source: DataSource.Factory, hls: Boolean) {
+    /**
+     * A stream a tocar: [source] é a ligação (a do ExoPlayer, com o portão); começa com [prepare]. [startMs]: num TS
+     * gravado, o ponto onde começar.
+     */
+    fun setStream(url: String, source: DataSource.Factory, hls: Boolean, startMs: Long = 0L) {
         stopCore()
         this.source = source
         this.uri = Uri.parse(url)
         this.hls = hls
+        this.startMs = if (hls) 0L else startMs
+        firstPts = -1L
         mediaItem = MediaItem.fromUri(url)
         chosenAudio = -1
         chosenText = -1
@@ -158,9 +170,13 @@ internal class GoatCoreMediaPlayer(
         player.setVolume(effectiveVolume())
         player.setPaused(!playWhenReady)
         // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.
+        val from = startMs
         player.open {
-            if (hls) cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString())
-            else DataSourceInputStream(factory.createDataSource(), DataSpec(uri)).also { it.open() }
+            if (hls) return@open cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString())
+            // Num ficheiro com ponto de partida: o byte onde ele fica (sem dar, do início).
+            val plan = if (from > 0) runCatching { TsSeek.plan(factory, uri, from) }.onFailure { android.util.Log.w("GoatCore", "seek: ${it.message}") }.getOrNull() else null
+            plan?.let { firstPts = it.firstPts }
+            DataSourceInputStream(factory.createDataSource(), DataSpec.Builder().setUri(uri).setPosition(plan?.position ?: 0).build()).also { it.open() }
         }
         playbackState = Player.STATE_BUFFERING
     }
@@ -264,6 +280,7 @@ internal class GoatCoreMediaPlayer(
     private fun position(c: GoatCorePlayer): Long {
         val p = c.positionMs
         if (p < 0) return lastPositionMs
+        firstPts.takeIf { it >= 0 }?.let { return TsSeek.positionMs(p, it) }
         if (startPositionMs < 0) startPositionMs = p
         return p - startPositionMs
     }
