@@ -43,6 +43,8 @@ internal class GoatCoreMediaPlayer(
     private val softwareVideo: Boolean,
     /** Só no debug (ver DebugEngine.capture). */
     private val capture: java.io.File? = null,
+    /** AC-3/E-AC-3 em bruto para a TV ou o recetor (ver [GoatCorePlayer.passthrough]). */
+    private val passthrough: Boolean = false,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -117,7 +119,7 @@ internal class GoatCoreMediaPlayer(
         if (hls) return fail(PlaybackException("GoatCore: HLS not yet", null, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
         val g = ++generation
         startPositionMs = -1
-        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, listener = object : GoatCorePlayer.Listener {
+        val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY

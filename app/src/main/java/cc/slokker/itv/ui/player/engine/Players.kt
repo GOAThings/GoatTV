@@ -82,7 +82,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
     }
     if (prefs.engine == Prefs.Engine.GOATCORE) {
         val capture = if (DebugEngine.capture) java.io.File(context.cacheDir, "goatcore.ts") else null
-        return GoatCoreMediaPlayer(softwareVideo, capture).apply { playWhenReady = true }
+        return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough).apply { playWhenReady = true }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
     val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio, audioDelayMs = prefs.audioDelayMs)

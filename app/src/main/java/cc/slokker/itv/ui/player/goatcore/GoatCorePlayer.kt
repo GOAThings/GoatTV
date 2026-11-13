@@ -43,6 +43,8 @@ class GoatCorePlayer(
      * são poucos; criados antes de o anterior os largar, o sistema tira um a meio).
      */
     private val previous: Thread? = null,
+    /** O AC-3/E-AC-3 vai tal como vem para a TV ou o recetor (Definições → Passthrough), se eles o aceitarem. */
+    private val passthrough: Boolean = false,
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -132,6 +134,7 @@ class GoatCorePlayer(
     /** Pausa: o som pára (e com ele o relógio) e a imagem espera. A rede continua até as filas encherem. */
     fun setPaused(paused: Boolean) {
         if (paused == this.paused) return
+        bitstreamTrack?.let { b -> runCatching { if (paused) b.pause() else b.play() } }
         val t = audioTrack
         if (t != null) {
             runCatching { if (paused) t.pause() else t.play() }
@@ -150,6 +153,7 @@ class GoatCorePlayer(
     fun setVolume(volume: Float) {
         this.volume = volume
         audioTrack?.setVolume(volume)
+        bitstreamTrack?.setVolume(volume)
     }
 
     /** O tempo do vídeo a mostrar agora (ms, no tempo seguido do canal), ou -1 antes de começar. */
@@ -228,9 +232,13 @@ class GoatCorePlayer(
         for (t in audios) if (t.pid !in audioTracks) audioTracks[t.pid] = AudioTrackState(t)
         // A primeira faixa de áudio que este aparelho descodifica (um canal com MP2 e AC-3 toca o que puder).
         if (audioPid !in audioTracks) {
-            audioPid = (audios.firstOrNull { hasDecoder(mimeOf(it.codec)!!) } ?: audios.firstOrNull())?.pid ?: -1
+            audioPid = (audios.firstOrNull { playable(it.codec) } ?: audios.firstOrNull())?.pid ?: -1
         }
     }
+
+    /** Este som toca aqui: há descodificador, ou vai em bruto para a TV (passthrough). */
+    private fun playable(codec: Codec): Boolean =
+        mimeOf(codec)?.let(::hasDecoder) == true || (passthrough && encodingOf(codec)?.let { directSupported(it, 48000) } == true)
 
     /** Passa a tocar a faixa de áudio [pid] (o menu, ou a língua preferida). */
     fun selectAudio(pid: Int) {
@@ -240,7 +248,7 @@ class GoatCorePlayer(
     /** Na thread da rede: a faixa pedida passa a ser a que toca, a começar no som de agora (o que está guardado dela). */
     private fun switchAudio(pid: Int) {
         val state = audioTracks[pid] ?: return
-        if (!hasDecoder(mimeOf(state.track.codec) ?: return)) {
+        if (!playable(state.track.codec)) {
             Log.w(TAG, "no decoder for audio ${state.track.codec}, keeping the current track")
             return
         }
@@ -451,9 +459,17 @@ class GoatCorePlayer(
     /** O tempo do vídeo agora, pelo som se houver; Long.MIN_VALUE antes de haver relógio. */
     private fun nowPtsUs(): Long {
         val track = audioTrack
-        if (track != null && audioBasePtsUs != Long.MIN_VALUE) {
+        val base = audioBasePtsUs
+        if (track != null && base != Long.MIN_VALUE) {
+            // O carimbo do AudioTrack (a amostra que está a sair agora, com a hora) é o mais certo, também em
+            // passthrough pelo HDMI; antes de o haver, a posição da cabeça.
+            val ts = android.media.AudioTimestamp()
+            if (runCatching { track.getTimestamp(ts) }.getOrDefault(false) && ts.framePosition > 0) {
+                val sinceUs = (System.nanoTime() - ts.nanoTime) / 1000
+                return base + ts.framePosition * 1_000_000 / audioRate + sinceUs
+            }
             val played = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
-            return audioBasePtsUs + played * 1_000_000 / audioRate
+            return base + played * 1_000_000 / audioRate
         }
         if (clockBasePtsUs == Long.MIN_VALUE) return Long.MIN_VALUE
         return clockBasePtsUs + SystemClock.elapsedRealtimeNanos() / 1000 - clockBaseRealtimeUs
@@ -485,6 +501,7 @@ class GoatCorePlayer(
      * [initial]: a primeira faixa do canal (sem descodificador, outro motor talvez o tenha).
      */
     private fun session(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, initial: Boolean): Boolean {
+        if (passthrough) encodingOf(f.codec)?.takeIf { directSupported(it, f.sampleRate) }?.let { return bitstream(firstUnit, f, it) }
         val mime = mimeOf(f.codec) ?: return true
         val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
         if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
@@ -569,6 +586,52 @@ class GoatCorePlayer(
         }
     }
 
+    /** Passthrough: os blocos AC-3/E-AC-3 vão tal como vêm para o AudioTrack (a TV ou o recetor descodificam). */
+    private fun bitstream(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, encoding: Int): Boolean {
+        val mask = if (f.channels > 2) AudioFormat.CHANNEL_OUT_5POINT1 else AudioFormat.CHANNEL_OUT_STEREO
+        val t = AudioTrack.Builder()
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build())
+            .setAudioFormat(AudioFormat.Builder().setSampleRate(f.sampleRate).setChannelMask(mask).setEncoding(encoding).build())
+            .setBufferSizeInBytes(64 * 1024)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+        audioRate = f.sampleRate
+        Log.i(TAG, "audio passthrough ${f.codec} ${f.channels} ch")
+        try {
+            var unit: AudioUnit? = firstUnit
+            var started = false
+            while (running) {
+                val u = unit ?: audioQueue.poll(5, TimeUnit.MILLISECONDS)
+                unit = null
+                if (u == null) continue
+                if (u === MARK) {
+                    handOver()
+                    return true
+                }
+                if (!started) {
+                    if (!startAudioAt(u.ptsUs)) continue
+                    started = true
+                    // Em passthrough a posição que o AudioTrack dá não é de confiança (no AC-3 mono da SHIELD andava a
+                    // metade): o relógio é o do sistema a partir daqui, e o som, escrito ao ritmo dele, acompanha.
+                    if (clockBasePtsUs == Long.MIN_VALUE || nowPtsUs() < u.ptsUs - 40_000) startWallClock(u.ptsUs)
+                    bitstreamTrack = t
+                    t.setVolume(volume)
+                    if (!paused) t.play()
+                }
+                t.write(u.data, 0, u.data.size)
+                stats.audioFrames++
+            }
+            return false
+        } finally {
+            if (bitstreamTrack === t) bitstreamTrack = null
+            runCatching { t.stop() }
+            runCatching { t.release() }
+        }
+    }
+
+    /** O AudioTrack em passthrough (não é o relógio, ver [bitstream]). */
+    @Volatile private var bitstreamTrack: AudioTrack? = null
+
     /**
      * O som desta faixa pode começar em [ptsUs]? Sem relógio ainda (o início do canal), começa já. Com relógio (a
      * imagem já está a dar, ou mudou-se de faixa), espera pela hora dele; se já passou, não.
@@ -587,8 +650,9 @@ class GoatCorePlayer(
     /** Muda-se de faixa: até o som novo começar, a imagem segue pelo relógio do sistema a partir de agora. */
     private fun handOver() {
         val now = nowPtsUs()
-        val t = audioTrack
+        val t = audioTrack ?: bitstreamTrack
         audioTrack = null
+        bitstreamTrack = null
         audioBasePtsUs = Long.MIN_VALUE
         runCatching { t?.pause() }
         runCatching { t?.flush() }
@@ -620,6 +684,22 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+
+        /** A codificação do AudioTrack para mandar [codec] em bruto (passthrough), ou null. */
+        fun encodingOf(codec: Codec): Int? = when (codec) {
+            Codec.AC3 -> AudioFormat.ENCODING_AC3
+            Codec.EAC3 -> AudioFormat.ENCODING_E_AC3
+            else -> null
+        }
+
+        /** A saída de som (HDMI) aceita [encoding] em bruto? */
+        fun directSupported(encoding: Int, rate: Int): Boolean = runCatching {
+            if (android.os.Build.VERSION.SDK_INT < 29) return@runCatching false
+            AudioTrack.isDirectPlaybackSupported(
+                AudioFormat.Builder().setEncoding(encoding).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_5POINT1).build(),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build(),
+            )
+        }.getOrDefault(false)
 
         /** O tipo do MediaCodec para o som em [codec], ou null se não houver. */
         fun mimeOf(codec: Codec): String? = when (codec) {
