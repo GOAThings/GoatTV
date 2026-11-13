@@ -185,24 +185,52 @@ internal class GoatCoreMediaPlayer(
         }
     }
 
+    /** Legendas à espera da hora delas no relógio do motor: o motor lê adiantado (até ~20 s) e chegam antes. */
+    private class PendingCues(val atUs: Long, val group: androidx.media3.common.text.CueGroup, val durationUs: Long)
+
+    private val pendingCues = ArrayDeque<PendingCues>()
+
+    /** Quando tirar as legendas no ecrã (relógio do motor), ou Long.MAX_VALUE se ficam até às seguintes. */
+    private var cuesEndUs = Long.MAX_VALUE
+
     /** Mostra [list] quando o relógio do motor chegar a [atUs] (Long.MIN_VALUE = já), e tira-as ao fim de [durationUs]. */
     private fun showCues(g: Int, atUs: Long, list: List<androidx.media3.common.text.Cue>, durationUs: Long) {
-        val now = core?.nowUs ?: Long.MIN_VALUE
-        val delayMs = if (atUs == Long.MIN_VALUE || now == Long.MIN_VALUE) 0 else ((atUs - now) / 1000).coerceIn(0, 10_000)
         val group = androidx.media3.common.text.CueGroup(list, atUs.coerceAtLeast(0))
-        main.postDelayed({
-            if (g != generation) return@postDelayed
-            cues = group
-            invalidateState()
-            if (list.isNotEmpty() && durationUs > 0 && durationUs != C.TIME_UNSET) {
-                main.postDelayed({
-                    if (g == generation && cues === group) {
-                        cues = androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO
-                        invalidateState()
-                    }
-                }, durationUs / 1000)
+        main.post {
+            if (g != generation) return@post
+            if (atUs == Long.MIN_VALUE) {
+                pendingCues.clear()
+                setCues(group, durationUs, Long.MIN_VALUE)
+            } else {
+                pendingCues.addLast(PendingCues(atUs, group, durationUs))
             }
-        }, delayMs)
+            main.removeCallbacks(cueTicker)
+            cueTicker.run()
+        }
+    }
+
+    private fun setCues(group: androidx.media3.common.text.CueGroup, durationUs: Long, atUs: Long) {
+        cues = group
+        cuesEndUs = if (group.cues.isNotEmpty() && durationUs > 0 && durationUs != C.TIME_UNSET && atUs != Long.MIN_VALUE) atUs + durationUs else Long.MAX_VALUE
+        invalidateState()
+    }
+
+    /** Põe e tira as legendas pelo relógio do motor (em pausa, ele pára e elas também). */
+    private val cueTicker = object : Runnable {
+        override fun run() {
+            val now = core?.nowUs ?: return
+            if (now == Long.MIN_VALUE) {
+                if (pendingCues.isNotEmpty()) main.postDelayed(this, 100)
+                return
+            }
+            while (pendingCues.isNotEmpty() && pendingCues.first().atUs <= now) {
+                val p = pendingCues.removeFirst()
+                setCues(p.group, p.durationUs, p.atUs)
+            }
+            if (now >= cuesEndUs) setCues(androidx.media3.common.text.CueGroup.EMPTY_TIME_ZERO, 0, Long.MIN_VALUE)
+            val next = minOf(pendingCues.firstOrNull()?.atUs ?: Long.MAX_VALUE, cuesEndUs)
+            if (next != Long.MAX_VALUE) main.postDelayed(this, ((next - now) / 1000).coerceIn(10, 250))
+        }
     }
 
     private fun post(g: Int, change: () -> Unit) {
@@ -223,6 +251,9 @@ internal class GoatCoreMediaPlayer(
     private fun stopCore() {
         generation++
         main.removeCallbacks(starvation)
+        main.removeCallbacks(cueTicker)
+        pendingCues.clear()
+        cuesEndUs = Long.MAX_VALUE
         val c = core ?: return
         core = null
         lastPositionMs = position(c)

@@ -39,4 +39,21 @@ class TsClockTest {
         assertTrue(c.jumped)
         assertEquals(-1, c.unwrap(-1))
     }
+
+    @Test
+    fun mapFollowsWithoutJumping() {
+        val c = TsClock()
+        assertEquals(-1L, c.map(1_000))
+        c.unwrap(900_000)
+        // Um minuto depois (legendas esparsas): não é um salto, e o relógio não mexe.
+        assertEquals(900_000L + 5_400_000, c.map(900_000L + 5_400_000))
+        assertEquals(900_000L + 3_600, c.unwrap(900_000L + 3_600))
+        // Depois de um salto do vídeo, segue o mesmo desvio.
+        val out = c.unwrap(50_000_000)
+        assertEquals(out + 7_200, c.map(50_007_200))
+        // A volta dos 33 bits.
+        val w = TsClock()
+        w.unwrap(TsClock.WRAP - 9_000)
+        assertEquals(TsClock.WRAP + 9_000, w.map(9_000))
+    }
 }

@@ -137,7 +137,6 @@ class GoatCorePlayer(
     @Volatile private var requestedText = NO_CHANGE
     private var textPid = -1
     private var dvb: androidx.media3.extractor.text.dvb.DvbParser? = null
-    private val textClock = TsClock()
     private var allTracks: List<TsTrack> = emptyList()
 
     /** Mostra as legendas da faixa [pid] (DVB), ou nenhuma com -1. */
@@ -388,7 +387,6 @@ class GoatCorePlayer(
     private fun switchText(pid: Int) {
         val track = allTracks.firstOrNull { it.pid == pid && it.codec == Codec.DVB_SUBTITLE }
         textPid = track?.pid ?: -1
-        textClock.reset()
         // O descodificador do Media3 quer as páginas do PMT (composition e ancillary); sem elas, as do canal todo.
         dvb = track?.let { androidx.media3.extractor.text.dvb.DvbParser(listOf(it.config ?: byteArrayOf(0, 1, 0, 1))) }
         listener.onCues(Long.MIN_VALUE, emptyList(), 0)
@@ -399,9 +397,13 @@ class GoatCorePlayer(
         val parser = dvb ?: return
         val d = sample.data
         if (d.size < 3 || d[0].toInt() != 0x20 || d[1].toInt() != 0x00) return
-        val pts = textClock.unwrap(sample.pts).takeIf { it >= 0 }?.let { it * 100 / 9 } ?: return
+        // No relógio do vídeo (o das legendas sozinho tomava um minuto sem legendas por um salto); sem vídeo, no do som.
+        val clock = if (videoPid >= 0) videoClock else audioTracks[audioPid]?.clock ?: return
+        val pts = clock.map(sample.pts).takeIf { it >= 0 }?.let { it * 100 / 9 } ?: return
         runCatching {
-            parser.parse(d, 2, d.size - 2, androidx.media3.extractor.text.SubtitleParser.OutputOptions.allCues()) { c ->
+            // Sem os dois primeiros bytes e com offset 0: o DvbParser toma o offset por bits (ParsableBitArray.setPosition).
+            val segments = d.copyOfRange(2, d.size)
+            parser.parse(segments, 0, segments.size, androidx.media3.extractor.text.SubtitleParser.OutputOptions.allCues()) { c ->
                 val at = pts + (c.startTimeUs.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0)
                 listener.onCues(at, c.cues, c.durationUs)
             }

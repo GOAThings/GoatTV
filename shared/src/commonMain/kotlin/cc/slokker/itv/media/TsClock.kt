@@ -44,6 +44,18 @@ class TsClock {
         return out
     }
 
+    /**
+     * [ts] (33 bits) no tempo seguido deste relógio, sem lhe mexer: para uma faixa esparsa (legendas, que podem
+     * passar um minuto sem nada) que segue o relógio de outra, sem tomar os intervalos por saltos. -1 antes do
+     * primeiro [unwrap] (ou com [ts] -1).
+     */
+    fun map(ts: Long): Long {
+        if (ts < 0 || last < 0) return -1
+        var delta = ts - last
+        if (delta < -WRAP / 2) delta += WRAP else if (delta > WRAP / 2) delta -= WRAP
+        return last + delta + offset
+    }
+
     /** O que somar ao offset quando o relógio do TS deu a volta entre [last] e o atual. */
     private fun wrapAdjust(raw: Long): Long = when {
         raw < -WRAP / 2 -> WRAP
