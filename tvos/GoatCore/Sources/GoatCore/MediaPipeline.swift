@@ -129,7 +129,7 @@ public final class MediaPipeline {
 
     // As legendas fechadas: descodificam-se sempre, pela ordem em que as imagens se mostram (com imagens B, a de
     // descodificação é outra); ao escolher, o ecrã de agora já se sabe.
-    private var captions = Cea608Decoder()
+    private var captions = GoatShared.CaptionDecoder()
     private var captionQueue: [(pts: Int64, pairs: KotlinByteArray)] = []
     private var captionsOn = false
     private var captionText = ""
@@ -193,7 +193,7 @@ public final class MediaPipeline {
         textTracks = []
         rawTracks = []
         recentText = [:]
-        captions = Cea608Decoder()
+        captions = GoatShared.CaptionDecoder()
         captionQueue = []
         captionsOn = false
         captionText = ""
@@ -279,20 +279,22 @@ public final class MediaPipeline {
 
     // MARK: Legendas
 
-    /// Os pares 608 desta imagem, por ordem de apresentação (umas imagens de folga chegam para as B), ao descodificador.
+    /// O cc_data desta imagem (608 e 708), por ordem de apresentação (umas imagens de folga chegam para as B), ao
+    /// descodificador, que escolhe o 608 ou o 708.
     private func readCaptions(_ data: KotlinByteArray, pts: Int64) {
         let hevc = videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC"
-        let pairs = ClosedCaptions.shared.field1(annexB: data, hevc: hevc)
-        guard pairs.size > 0 || !captionQueue.isEmpty else { return }
-        if pairs.size > 0, !textTracks.contains(where: { $0.isCaptions }) {
-            textTracks.append(TextTrack(pid: TextTrack.captions, page: 0, language: nil, hearingImpaired: true))
-            onTextTracks?(textTracks)
-        }
-        captionQueue.append((pts, pairs))
+        let cc = ClosedCaptions.shared.ccData(data: data, hevc: hevc, mpeg2: false)
+        guard cc.size > 0 || !captionQueue.isEmpty else { return }
+        captionQueue.append((pts, cc))
         guard captionQueue.count > Self.captionReorder,
               let i = captionQueue.indices.min(by: { captionQueue[$0].pts < captionQueue[$1].pts }) else { return }
         let next = captionQueue.remove(at: i)
-        guard let lines = captions.feed(pairs: next.pairs) else { return }
+        let lines = captions.feed(triples: next.pairs)
+        if captions.found, !textTracks.contains(where: { $0.isCaptions }) {
+            textTracks.append(TextTrack(pid: TextTrack.captions, page: 0, language: nil, hearingImpaired: true))
+            onTextTracks?(textTracks)
+        }
+        guard let lines else { return }
         captionText = lines.joined(separator: "\n")
         captionAt = next.pts
         if captionsOn { onText?(next.pts, captionText) }

@@ -2,22 +2,59 @@ package cc.slokker.itv.media
 
 /**
  * As legendas fechadas que vêm dentro do vídeo (ATSC A/53: SEI "GA94" no H.264 e no HEVC, comuns nos canais
- * americanos e canadianos): os pares de bytes CEA-608 de cada imagem. [types]: 0 = campo 1 (CC1/CC2), 1 = campo 2
- * (CC3/CC4); o CEA-708 (2 e 3) fica de fora, que os emissores mandam o 608 também.
+ * americanos e canadianos). [field1] dá os pares CEA-608 do campo 1 (CC1/CC2); [ccData] dá tudo, 608 e 708, para o
+ * [CaptionDecoder].
  */
 object ClosedCaptions {
+    /**
+     * Todo o cc_data de uma imagem (Annex B): três bytes por entrada válida, [cc_type, b1, b2] (0/1 = 608 campo 1/2,
+     * 2/3 = DTVCC do CEA-708, 3 a abrir um pacote). [mpeg2]: o vídeo é MPEG-2 (user_data em vez de SEI).
+     */
+    fun ccData(data: ByteArray, hevc: Boolean, mpeg2: Boolean): ByteArray = if (mpeg2) {
+        mpeg2UserData(data) { b, from, to -> triples(b, from, to) }
+    } else {
+        var out = ByteArray(0)
+        for (n in NalReader.split(data)) {
+            val type = if (hevc) (data[n[0]].toInt() shr 1) and 0x3F else data[n[0]].toInt() and 0x1F
+            if ((hevc && type == 39) || (!hevc && type == 6)) out += sei(data, n[0] + if (hevc) 2 else 1, n[1], ::triples)
+        }
+        out
+    }
+
+    /** As entradas válidas de um cc_data() (a partir do byte com o cc_count), em três bytes cada. */
+    private fun triples(b: ByteArray, from: Int, to: Int): ByteArray {
+        fun u(i: Int) = b[i].toInt() and 0xFF
+        if (to - from < 2) return ByteArray(0)
+        val count = u(from) and 0x1F
+        val out = ArrayList<Byte>()
+        var i = from + 2
+        repeat(count) {
+            if (i + 3 > to) return@repeat
+            val flags = u(i)
+            if ((flags and 0x04) != 0) {
+                out += (flags and 0x03).toByte()
+                out += b[i + 1]
+                out += b[i + 2]
+            }
+            i += 3
+        }
+        return out.toByteArray()
+    }
+
     /** Os pares 608 do campo 1 numa imagem (Annex B, como vem no PES): [b1, b2, b1, b2…], já sem a paridade. */
     fun field1(annexB: ByteArray, hevc: Boolean): ByteArray {
         var out = ByteArray(0)
         for (n in NalReader.split(annexB)) {
             val type = if (hevc) (annexB[n[0]].toInt() shr 1) and 0x3F else annexB[n[0]].toInt() and 0x1F
-            if ((hevc && type == 39) || (!hevc && type == 6)) out += sei(annexB, n[0] + if (hevc) 2 else 1, n[1])
+            if ((hevc && type == 39) || (!hevc && type == 6)) out += sei(annexB, n[0] + if (hevc) 2 else 1, n[1], ::ccData)
         }
         return out
     }
 
     /** O mesmo no MPEG-2 (o cabo americano): nos user_data (0x000001B2) da imagem, "GA94" e cc_data (0x03). */
-    fun field1Mpeg2(d: ByteArray): ByteArray {
+    fun field1Mpeg2(d: ByteArray): ByteArray = mpeg2UserData(d, ::ccData)
+
+    private fun mpeg2UserData(d: ByteArray, read: (ByteArray, Int, Int) -> ByteArray): ByteArray {
         var out = ByteArray(0)
         var i = 0
         while (i + 9 < d.size) {
@@ -28,7 +65,7 @@ object ClosedCaptions {
                 // Acaba no código de início seguinte.
                 var end = i + 9
                 while (end + 2 < d.size && !(d[end].toInt() == 0 && d[end + 1].toInt() == 0 && d[end + 2].toInt() == 1)) end++
-                out += ccData(d, i + 9, if (end + 2 < d.size) end else d.size)
+                out += read(d, i + 9, if (end + 2 < d.size) end else d.size)
                 i = end
             } else {
                 i++
@@ -37,7 +74,7 @@ object ClosedCaptions {
         return out
     }
 
-    private fun sei(d: ByteArray, from: Int, to: Int): ByteArray {
+    private fun sei(d: ByteArray, from: Int, to: Int, read: (ByteArray, Int, Int) -> ByteArray): ByteArray {
         val b = SpsBits.rbsp(d, from, to)
         var out = ByteArray(0)
         var i = 0
@@ -51,19 +88,19 @@ object ClosedCaptions {
             if (i >= b.size) break
             size += b[i++].toInt() and 0xFF
             if (i + size > b.size) break
-            if (type == 4) out += t35(b, i, i + size)
+            if (type == 4) out += t35(b, i, i + size, read)
             i += size
         }
         return out
     }
 
     /** user_data_registered_itu_t_t35: os EUA (0xB5), o ATSC (0x0031), "GA94", cc_data (0x03). */
-    private fun t35(b: ByteArray, from: Int, to: Int): ByteArray {
+    private fun t35(b: ByteArray, from: Int, to: Int, read: (ByteArray, Int, Int) -> ByteArray): ByteArray {
         if (to - from < 10) return ByteArray(0)
         fun u(i: Int) = b[i].toInt() and 0xFF
         if (u(from) != 0xB5 || u(from + 1) != 0x00 || u(from + 2) != 0x31) return ByteArray(0)
         if (u(from + 3) != 'G'.code || u(from + 4) != 'A'.code || u(from + 5) != '9'.code || u(from + 6) != '4'.code || u(from + 7) != 0x03) return ByteArray(0)
-        return ccData(b, from + 8, to)
+        return read(b, from + 8, to)
     }
 
     /** cc_data() a partir do byte com o cc_count: os pares do campo 1. */

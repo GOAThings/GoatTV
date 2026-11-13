@@ -18,7 +18,7 @@ import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TsClock
 import cc.slokker.itv.media.StreamDemuxer
 import cc.slokker.itv.media.ClosedCaptions
-import cc.slokker.itv.media.Cea608Decoder
+import cc.slokker.itv.media.CaptionDecoder
 import cc.slokker.itv.media.TeletextDecoder
 import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.TsListener
@@ -160,7 +160,7 @@ class GoatCorePlayer(
 
     // As legendas fechadas (CEA-608) que vêm dentro do vídeo: descodificam-se sempre (ao escolher, o ecrã de agora já
     // se sabe), pela ordem em que as imagens se mostram (com imagens B, a de descodificação é outra).
-    private val captions = Cea608Decoder()
+    private val captions = CaptionDecoder()
     private val captionQueue = ArrayList<Pair<Long, ByteArray>>()
     private var captionsFound = false
     private var captionsOn = false
@@ -461,15 +461,14 @@ class GoatCorePlayer(
         queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe))
     }
 
-    /** Os pares 608 desta imagem: por ordem de apresentação (umas imagens de folga chegam para as B) ao descodificador. */
+    /**
+     * O cc_data desta imagem (608 e 708): por ordem de apresentação (umas imagens de folga chegam para as B) ao
+     * descodificador, que escolhe o 608 ou o 708.
+     */
     private fun captions(data: ByteArray, pts: Long, mpeg2: Boolean = false) {
-        val pairs = if (mpeg2) ClosedCaptions.field1Mpeg2(data) else ClosedCaptions.field1(data, hevc)
-        if (pairs.isEmpty() && captionQueue.isEmpty()) return
-        if (pairs.isNotEmpty() && !captionsFound) {
-            captionsFound = true
-            listener.onCaptionsFound()
-        }
-        captionQueue += pts to pairs
+        val cc = ClosedCaptions.ccData(data, hevc, mpeg2)
+        if (cc.isEmpty() && captionQueue.isEmpty()) return
+        captionQueue += pts to cc
         if (captionQueue.size <= CAPTION_REORDER) return
         val next = captionQueue.minBy { it.first }
         captionQueue.remove(next)
@@ -477,6 +476,10 @@ class GoatCorePlayer(
             captionLines = lines
             captionLinesAt = next.first
             if (captionsOn) showCaptions(next.first, lines)
+        }
+        if (captions.found && !captionsFound) {
+            captionsFound = true
+            listener.onCaptionsFound()
         }
     }
 
