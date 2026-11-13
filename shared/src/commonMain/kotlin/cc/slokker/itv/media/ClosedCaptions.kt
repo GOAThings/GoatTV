@@ -16,6 +16,27 @@ object ClosedCaptions {
         return out
     }
 
+    /** O mesmo no MPEG-2 (o cabo americano): nos user_data (0x000001B2) da imagem, "GA94" e cc_data (0x03). */
+    fun field1Mpeg2(d: ByteArray): ByteArray {
+        var out = ByteArray(0)
+        var i = 0
+        while (i + 9 < d.size) {
+            if (d[i].toInt() == 0 && d[i + 1].toInt() == 0 && d[i + 2].toInt() == 1 && (d[i + 3].toInt() and 0xFF) == 0xB2 &&
+                d[i + 4].toInt() == 'G'.code && d[i + 5].toInt() == 'A'.code && d[i + 6].toInt() == '9'.code && d[i + 7].toInt() == '4'.code &&
+                d[i + 8].toInt() == 0x03
+            ) {
+                // Acaba no código de início seguinte.
+                var end = i + 9
+                while (end + 2 < d.size && !(d[end].toInt() == 0 && d[end + 1].toInt() == 0 && d[end + 2].toInt() == 1)) end++
+                out += ccData(d, i + 9, if (end + 2 < d.size) end else d.size)
+                i = end
+            } else {
+                i++
+            }
+        }
+        return out
+    }
+
     private fun sei(d: ByteArray, from: Int, to: Int): ByteArray {
         val b = SpsBits.rbsp(d, from, to)
         var out = ByteArray(0)
@@ -42,9 +63,16 @@ object ClosedCaptions {
         fun u(i: Int) = b[i].toInt() and 0xFF
         if (u(from) != 0xB5 || u(from + 1) != 0x00 || u(from + 2) != 0x31) return ByteArray(0)
         if (u(from + 3) != 'G'.code || u(from + 4) != 'A'.code || u(from + 5) != '9'.code || u(from + 6) != '4'.code || u(from + 7) != 0x03) return ByteArray(0)
-        val count = u(from + 8) and 0x1F
+        return ccData(b, from + 8, to)
+    }
+
+    /** cc_data() a partir do byte com o cc_count: os pares do campo 1. */
+    private fun ccData(b: ByteArray, from: Int, to: Int): ByteArray {
+        fun u(i: Int) = b[i].toInt() and 0xFF
+        if (to - from < 2) return ByteArray(0)
+        val count = u(from) and 0x1F
         val out = ArrayList<Byte>()
-        var i = from + 10
+        var i = from + 2
         repeat(count) {
             if (i + 3 > to) return@repeat
             val flags = u(i)

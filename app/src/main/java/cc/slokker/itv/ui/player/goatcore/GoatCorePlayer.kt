@@ -428,6 +428,7 @@ class GoatCorePlayer(
         if (sample.discontinuity) videoStart.restart()
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com o tempo do primeiro).
         if (mpeg2 != null) {
+            captions(sample.data, samplePts, mpeg2 = true)
             // MPEG-2: a imagem vai como vem; o cabeçalho da sequência é o csd-0.
             val unit = mpeg2.next(sample.data, samplePts, samplePts)
             if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
@@ -457,8 +458,8 @@ class GoatCorePlayer(
     }
 
     /** Os pares 608 desta imagem: por ordem de apresentação (umas imagens de folga chegam para as B) ao descodificador. */
-    private fun captions(data: ByteArray, pts: Long) {
-        val pairs = ClosedCaptions.field1(data, hevc)
+    private fun captions(data: ByteArray, pts: Long, mpeg2: Boolean = false) {
+        val pairs = if (mpeg2) ClosedCaptions.field1Mpeg2(data) else ClosedCaptions.field1(data, hevc)
         if (pairs.isEmpty() && captionQueue.isEmpty()) return
         if (pairs.isNotEmpty() && !captionsFound) {
             captionsFound = true
