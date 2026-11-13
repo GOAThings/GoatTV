@@ -70,7 +70,15 @@ class GoatCorePlayer(
     val stats = Stats()
 
     private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean)
-    private class AudioUnit(val data: ByteArray, val ptsUs: Long)
+    /** Um bloco de som para o descodificador, com o formato da faixa; [MARK] diz "mudou a faixa". */
+    private class AudioUnit(val data: ByteArray, val ptsUs: Long, val format: cc.slokker.itv.media.AudioFormat?)
+
+    /** O que cada faixa de áudio tem dos últimos segundos (para mudar de faixa sem esperar pelo som que vem à frente). */
+    private class AudioTrackState(val track: TsTrack) {
+        val reader = AudioFrameReader(track.codec)
+        val clock = TsClock()
+        val recent = ArrayDeque<AudioUnit>()
+    }
 
     private val videoQueue = LinkedBlockingQueue<VideoUnit>(600)
     private val audioQueue = LinkedBlockingQueue<AudioUnit>(2000)
@@ -88,9 +96,14 @@ class GoatCorePlayer(
     @Volatile private var videoMime = MediaFormat.MIMETYPE_VIDEO_AVC
     private var videoPid = -1
     private var audioPid = -1
-    private var audioReader: AudioFrameReader? = null
+    private val audioTracks = HashMap<Int, AudioTrackState>()
+
+    /** A faixa de áudio pedida (o menu ou a língua das Definições); -1 = a escolhida ao abrir. */
+    @Volatile private var requestedAudio = -1
+
+    /** A faixa de áudio a tocar (o PID), ou -1. */
+    val selectedAudio: Int get() = audioPid
     private val videoClock = TsClock()
-    private val audioClock = TsClock()
     private val videoStart = VideoStart()
 
     /** Os conjuntos de parâmetros da última imagem-chave (Annex B), para configurar o descodificador. */
@@ -209,23 +222,46 @@ class GoatCorePlayer(
                 else -> fail("unsupported video ${video.codec}", unsupported = true)
             }
         }
+        // Lê-se o som de todas as faixas que se sabem ler (para poder mudar de uma para outra a meio).
+        val audios = tracks.filter { it.kind == TrackKind.AUDIO && mimeOf(it.codec) != null }
+        audioTracks.keys.retainAll(audios.map { it.pid }.toSet())
+        for (t in audios) if (t.pid !in audioTracks) audioTracks[t.pid] = AudioTrackState(t)
         // A primeira faixa de áudio que este aparelho descodifica (um canal com MP2 e AC-3 toca o que puder).
-        val audios = tracks.filter { it.kind == TrackKind.AUDIO }
-        val audio = audios.firstOrNull { mimeOf(it.codec)?.let(::hasDecoder) == true } ?: audios.firstOrNull()
-        if (audio != null && audio.pid != audioPid) {
-            audioPid = audio.pid
-            audioReader = when (audio.codec) {
-                Codec.AAC_ADTS, Codec.AC3, Codec.EAC3, Codec.MPEG_AUDIO -> AudioFrameReader(audio.codec)
-                else -> null
-            }
+        if (audioPid !in audioTracks) {
+            audioPid = (audios.firstOrNull { hasDecoder(mimeOf(it.codec)!!) } ?: audios.firstOrNull())?.pid ?: -1
         }
+    }
+
+    /** Passa a tocar a faixa de áudio [pid] (o menu, ou a língua preferida). */
+    fun selectAudio(pid: Int) {
+        requestedAudio = pid
+    }
+
+    /** Na thread da rede: a faixa pedida passa a ser a que toca, a começar no som de agora (o que está guardado dela). */
+    private fun switchAudio(pid: Int) {
+        val state = audioTracks[pid] ?: return
+        if (!hasDecoder(mimeOf(state.track.codec) ?: return)) {
+            Log.w(TAG, "no decoder for audio ${state.track.codec}, keeping the current track")
+            return
+        }
+        Log.i(TAG, "audio track -> ${state.track.codec}${state.track.language?.let { "/$it" } ?: ""}")
+        audioPid = pid
+        val now = nowPtsUs()
+        audioQueue.clear()
+        audioQueue.put(MARK)
+        for (u in state.recent) if (now == Long.MIN_VALUE || u.ptsUs >= now - 100_000) audioQueue.put(u)
     }
 
     private fun sample(track: TsTrack, sample: TsSample) {
         if (!running) return
+        val requested = requestedAudio
+        if (requested >= 0 && requested != audioPid) {
+            requestedAudio = -1
+            switchAudio(requested)
+        }
         when (track.pid) {
             videoPid -> video(sample)
-            audioPid -> audio(sample)
+            in audioTracks -> audio(track.pid, sample)
         }
     }
 
@@ -258,13 +294,20 @@ class GoatCorePlayer(
         videoQueue.put(VideoUnit(avccToAnnexB(unit.data), pts * 100 / 9, unit.keyframe))
     }
 
-    private fun audio(sample: TsSample) {
-        val reader = audioReader ?: return
+    private fun audio(pid: Int, sample: TsSample) {
+        val state = audioTracks[pid] ?: return
+        val reader = state.reader
         for (frame in reader.frames(sample.data, sample.pts, sample.discontinuity)) {
-            if (audioFormat != reader.format) reader.format?.let { Log.i(TAG, "audio ${it.codec} ${it.sampleRate} Hz ${it.channels} ch") }
-            audioFormat = reader.format
-            val pts = audioClock.unwrap(frame.pts)
-            audioQueue.put(AudioUnit(frame.data, pts * 100 / 9))
+            val pts = state.clock.unwrap(frame.pts)
+            val unit = AudioUnit(frame.data, pts * 100 / 9, reader.format)
+            // Os últimos segundos de cada faixa ficam guardados; a que toca vai também para o descodificador.
+            state.recent.addLast(unit)
+            while (state.recent.size > 1 && unit.ptsUs - state.recent.first().ptsUs > RECENT_AUDIO_US) state.recent.removeFirst()
+            if (pid == audioPid) {
+                if (audioFormat != reader.format) reader.format?.let { Log.i(TAG, "audio ${it.codec} ${it.sampleRate} Hz ${it.channels} ch") }
+                audioFormat = reader.format
+                audioQueue.put(unit)
+            }
         }
     }
 
@@ -419,31 +462,56 @@ class GoatCorePlayer(
     // ---- Som ---------------------------------------------------------------------------------
 
     private fun audioLoop() {
-        var codec: MediaCodec? = null
-        var track: AudioTrack? = null
+        previous?.join(2_000)
+        var first = true
         try {
-            val first = audioQueue.take()
-            val f = audioFormat ?: return
-            val mime = mimeOf(f.codec) ?: return
-            previous?.join(2_000)
-            val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
-            if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
-            val c = try {
-                MediaCodec.createDecoderByType(mime)
-            } catch (e: Exception) {
-                // Sem descodificador para este som no aparelho (o AC-3 em muitos): o vídeo segue com o relógio do sistema.
+            while (running) {
+                // Uma sessão por faixa: muda-se de faixa com uma marca na fila (ver switchAudio).
+                val unit = audioQueue.take()
+                if (unit === MARK) continue
+                val f = unit.format ?: continue
+                if (!session(unit, f, first)) return
+                first = false
+            }
+        } catch (e: InterruptedException) {
+            // stop()
+        } finally {
+            audioTrack = null
+        }
+    }
+
+    /**
+     * Toca a faixa de [f] a começar em [firstUnit], até à marca de mudar de faixa (true) ou ao fim (false).
+     * [initial]: a primeira faixa do canal (sem descodificador, outro motor talvez o tenha).
+     */
+    private fun session(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, initial: Boolean): Boolean {
+        val mime = mimeOf(f.codec) ?: return true
+        val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)
+        if (f.codec == Codec.AAC_ADTS) format.setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(f.config))
+        val c = try {
+            MediaCodec.createDecoderByType(mime)
+        } catch (e: Exception) {
+            if (initial) {
                 // Sem descodificador para este som no aparelho: outro motor (o VLC) talvez o tenha.
                 audioFailed = true
                 fail("no audio decoder for $mime", unsupported = true)
-                return
+                return false
             }
-            codec = c
+            Log.w(TAG, "no audio decoder for $mime")
+            return true
+        }
+        var track: AudioTrack? = null
+        try {
             c.configure(format, null, null, 0)
             c.start()
             val info = MediaCodec.BufferInfo()
-            var pending: AudioUnit? = first
+            var pending: AudioUnit? = firstUnit
             while (running) {
                 val unit = pending ?: audioQueue.poll(5, TimeUnit.MILLISECONDS)
+                if (unit === MARK) {
+                    handOver()
+                    return true
+                }
                 if (unit != null) {
                     val i = c.dequeueInputBuffer(5_000)
                     if (i >= 0) {
@@ -459,17 +527,24 @@ class GoatCorePlayer(
                 val o = c.dequeueOutputBuffer(info, 5_000)
                 if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                     val out = c.outputFormat
+                    if (audioTrack === track) audioTrack = null
                     track?.release()
                     track = newTrack(out.getInteger(MediaFormat.KEY_SAMPLE_RATE), out.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
+                    if (audioBasePtsUs != Long.MIN_VALUE) audioBasePtsUs = Long.MIN_VALUE
                 } else if (o >= 0) {
                     val t = track ?: newTrack(f.sampleRate, f.channels).also { track = it }
-                    val buf = c.getOutputBuffer(o)!!
-                    if (audioBasePtsUs == Long.MIN_VALUE) {
+                    if (audioBasePtsUs == Long.MIN_VALUE && !startAudioAt(info.presentationTimeUs)) {
+                        // Mais antigo do que a imagem que está a dar: salta-se.
+                        c.releaseOutputBuffer(o, false)
+                        continue
+                    }
+                    if (audioTrack !== t) {
                         audioBasePtsUs = info.presentationTimeUs
                         audioTrack = t
                         t.setVolume(volume)
                         if (!paused) t.play()
                     }
+                    val buf = c.getOutputBuffer(o)!!
                     val pcm = ByteArray(info.size)
                     buf.position(info.offset)
                     buf.get(pcm)
@@ -478,18 +553,46 @@ class GoatCorePlayer(
                     stats.audioFrames++
                 }
             }
+            return false
         } catch (e: InterruptedException) {
-            // stop()
+            throw e
         } catch (e: Exception) {
             stats.decoderErrors++
-            fail("audio decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = true, cause = e)
+            fail("audio decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = initial && audioTrack == null, cause = e)
+            return false
         } finally {
-            audioTrack = null
+            if (audioTrack === track) audioTrack = null
             runCatching { track?.stop() }
             runCatching { track?.release() }
-            runCatching { codec?.stop() }
-            runCatching { codec?.release() }
+            runCatching { c.stop() }
+            runCatching { c.release() }
         }
+    }
+
+    /**
+     * O som desta faixa pode começar em [ptsUs]? Sem relógio ainda (o início do canal), começa já. Com relógio (a
+     * imagem já está a dar, ou mudou-se de faixa), espera pela hora dele; se já passou, não.
+     */
+    private fun startAudioAt(ptsUs: Long): Boolean {
+        var now = nowPtsUs()
+        if (now == Long.MIN_VALUE) return true
+        if (ptsUs < now - 40_000) return false
+        while (running && now != Long.MIN_VALUE && ptsUs - now > 10_000) {
+            Thread.sleep(minOf((ptsUs - now) / 1000, 50))
+            now = nowPtsUs()
+        }
+        return true
+    }
+
+    /** Muda-se de faixa: até o som novo começar, a imagem segue pelo relógio do sistema a partir de agora. */
+    private fun handOver() {
+        val now = nowPtsUs()
+        val t = audioTrack
+        audioTrack = null
+        audioBasePtsUs = Long.MIN_VALUE
+        runCatching { t?.pause() }
+        runCatching { t?.flush() }
+        if (now != Long.MIN_VALUE) startWallClock(now)
     }
 
     private fun newTrack(rate: Int, channels: Int): AudioTrack {
@@ -552,6 +655,12 @@ class GoatCorePlayer(
         }
 
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
+
+        /** A marca na fila do som: mudou a faixa. */
+        private val MARK = AudioUnit(ByteArray(0), -1, null)
+
+        /** Quanto som de cada faixa fica guardado. */
+        private const val RECENT_AUDIO_US = 15_000_000L
 
         /** Um descodificador para [mime]: com [software], o do próprio Android (c2.android / OMX.google), se houver. */
         private fun decoderFor(mime: String, software: Boolean): MediaCodec {

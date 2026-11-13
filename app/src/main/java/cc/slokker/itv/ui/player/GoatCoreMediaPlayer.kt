@@ -67,6 +67,10 @@ internal class GoatCoreMediaPlayer(
     private var surfaceView: SurfaceView? = null
     private var pendingStart = false
     private var lastPositionMs = 0L
+    private var tsTracks: List<TsTrack> = emptyList()
+
+    /** A faixa de áudio pedida (o PID); -1 = a que o motor escolheu. */
+    private var chosenAudio = -1
     private var startPositionMs = -1L
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
@@ -90,6 +94,8 @@ internal class GoatCoreMediaPlayer(
         this.uri = Uri.parse(url)
         this.hls = hls
         mediaItem = MediaItem.fromUri(url)
+        chosenAudio = -1
+        tsTracks = emptyList()
         playbackState = Player.STATE_IDLE
         error = null
         tracks = Tracks.EMPTY
@@ -117,7 +123,10 @@ internal class GoatCoreMediaPlayer(
                 playbackState = Player.STATE_READY
             }
 
-            override fun onTracks(tracks: List<TsTrack>) = post(g) { this@GoatCoreMediaPlayer.tracks = tracksOf(tracks) }
+            override fun onTracks(tracks: List<TsTrack>) = post(g) {
+                tsTracks = tracks
+                this@GoatCoreMediaPlayer.tracks = tracksOf(tracks)
+            }
 
             override fun onError(why: String, unsupported: Boolean, cause: Throwable?) = post(g) {
                 val code = when {
@@ -174,18 +183,23 @@ internal class GoatCoreMediaPlayer(
         return p - startPositionMs
     }
 
-    /** As faixas do canal como [Tracks] do Media3 (o menu de áudio é o mesmo dos outros motores). */
+    /**
+     * As faixas do canal como [Tracks] do Media3: o menu de áudio e a escolha pela língua preferida (TrackPick) são os
+     * mesmos dos outros motores. As de áudio sem descodificador no aparelho vêm como não suportadas.
+     */
     private fun tracksOf(list: List<TsTrack>): Tracks {
-        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO }.mapIndexed { i, t ->
+        val playing = chosenAudio.takeIf { pid -> list.any { it.pid == pid } } ?: core?.selectedAudio ?: -1
+        val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO }.map { t ->
             val id = "goatcore:${t.pid}"
             val format = Format.Builder()
                 .setId(id)
                 .setSampleMimeType(mimeOf(t.codec))
                 .setLanguage(t.language)
+                .setLabel(t.language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage })
                 .build()
-            // O áudio que toca é o primeiro (escolher outro vem a seguir).
-            val selected = t.kind == TrackKind.VIDEO || list.firstOrNull { it.kind == TrackKind.AUDIO }?.pid == t.pid
-            Tracks.Group(TrackGroup(id, format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(selected))
+            val supported = t.kind == TrackKind.VIDEO || GoatCorePlayer.mimeOf(t.codec)?.let(GoatCorePlayer::hasDecoder) == true
+            val selected = t.kind == TrackKind.VIDEO || t.pid == playing
+            Tracks.Group(TrackGroup(id, format), false, intArrayOf(if (supported) C.FORMAT_HANDLED else C.FORMAT_UNSUPPORTED_TYPE), booleanArrayOf(selected))
         }
         return Tracks(groups)
     }
@@ -332,6 +346,14 @@ internal class GoatCoreMediaPlayer(
     override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
         params = trackSelectionParameters
         core?.setVolume(effectiveVolume())
+        // A faixa de áudio escolhida (no menu, ou pela língua das Definições).
+        val pid = params.overrides.values.firstOrNull { it.type == C.TRACK_TYPE_AUDIO }?.mediaTrackGroup?.id
+            ?.removePrefix("goatcore:")?.toIntOrNull()
+        if (pid != null && pid != chosenAudio) {
+            chosenAudio = pid
+            core?.selectAudio(pid)
+            tracks = tracksOf(tsTracks)
+        }
         return Futures.immediateVoidFuture()
     }
 }

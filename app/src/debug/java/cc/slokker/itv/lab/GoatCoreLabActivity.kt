@@ -118,6 +118,13 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
 
             override fun onTracks(tracks: List<TsTrack>) {
                 Log.i(TAG, "tracks ch=$current ${tracks.joinToString { "${it.codec}/${it.language ?: "-"}" }}")
+                // "switch" (ms): passado esse tempo, muda para a segunda faixa de áudio (para testar a troca a meio).
+                val after = intent.getLongExtra("switch", 0)
+                val second = tracks.filter { it.kind == cc.slokker.itv.media.TrackKind.AUDIO }.getOrNull(1)
+                if (after > 0 && second != null) main.postDelayed({
+                    Log.i(TAG, "SWITCH to ${second.pid}")
+                    player?.selectAudio(second.pid)
+                }, after)
             }
 
             override fun onError(why: String, unsupported: Boolean, cause: Throwable?) {
