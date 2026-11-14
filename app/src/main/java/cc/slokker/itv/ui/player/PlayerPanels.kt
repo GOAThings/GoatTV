@@ -213,6 +213,10 @@ private fun PanelLayer(visible: () -> Float, shift: () -> Float, active: Boolean
 private const val PANEL_ANIM_MS = 260
 private val LIST_LOGO_SIZE = 34.dp
 
+/** No vidro claro: logótipos mais pequenos (cabem 8 canais ou mais no painel, como no mockup). */
+private val GLASS_LOGO = 26.dp
+private val GLASS_LOGO_FOCUSED = 32.dp
+
 private fun List<EpgEntry>.currentTitle(): String? = current()?.title
 
 private fun List<EpgEntry>.current(): EpgEntry? {
@@ -389,8 +393,8 @@ private fun ChannelList(
                     leading = if (ItvStyle.glass) {
                         if (prefs.showLogos) {
                             {
-                                ChannelLogo(ch, if (LocalRowFocused.current) LIST_LOGO_SIZE + 6.dp else LIST_LOGO_SIZE)
-                                Spacer(Modifier.width(14.dp))
+                                ChannelLogo(ch, if (LocalRowFocused.current) GLASS_LOGO_FOCUSED else GLASS_LOGO)
+                                Spacer(Modifier.width(12.dp))
                             }
                         } else {
                             null

@@ -402,7 +402,7 @@ fun GlassRow(
                 .then(
                     if (glassStyle) {
                         // O texto alinha com o vidro (a linha vai até à borda de fora: a placa sai do painel).
-                        Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, top = if (focused) 13.dp else 8.dp, bottom = if (focused) 13.dp else 8.dp)
+                        Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, top = if (focused) 10.dp else 5.dp, bottom = if (focused) 10.dp else 5.dp)
                     } else {
                         Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                     },
@@ -412,7 +412,7 @@ fun GlassRow(
             if (glassStyle && number != null) {
                 Text(
                     number,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp).tabular,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp).tabular,
                     color = LocalContentColor.current.copy(alpha = 0.7f),
                     modifier = Modifier.width(36.dp),
                 )
@@ -425,8 +425,8 @@ fun GlassRow(
                     Modifier.rowText(),
                     style = when {
                         !glassStyle -> MaterialTheme.typography.titleSmall
-                        focused -> MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold)
-                        else -> MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium)
+                        focused -> MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold)
+                        else -> MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
