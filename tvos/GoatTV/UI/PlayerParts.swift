@@ -5,19 +5,23 @@ import UIKit
 /// Uma linha da lista de canais: número, logótipo, nome e o programa a dar (com a barra de progresso).
 struct ChannelRow: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.isFocused) private var focused
+    @Environment(\.panelLook) private var look
     let channel: Channel
     let now: Int64
     let guideVersion: Int
 
     var body: some View {
         let prefs = model.prefs
+        // Seletor branco: a linha com foco tem a placa branca, e o texto e a barra ficam escuros.
+        let onPlate = focused && look == Prefs.PanelLook.shadowWhite
         let playing = model.current?.key == channel.key
         let programme = prefs.epgInList ? Guide.nowNext(model.programmes(for: channel), now: now).now : nil
         HStack(spacing: 18) {
             if prefs.showNumbers {
                 Text("\(channel.num)")
                     .font(Fonts.rowValue.monospacedDigit())
-                    .foregroundStyle(Theme.textFaint)
+                    .foregroundStyle(onPlate ? Color.black.opacity(0.6) : Theme.textFaint)
                     .frame(width: 64, alignment: .trailing)
             }
             if prefs.showLogos {
@@ -28,15 +32,15 @@ struct ChannelRow: View {
                 if prefs.epgInList {
                     Text(programme?.title ?? (playing ? model.strings.watchingNow : model.strings.noGuideInfo))
                         .font(Fonts.rowSubtitle)
-                        .foregroundStyle(Theme.textDim)
+                        .foregroundStyle(onPlate ? Color.black.opacity(0.65) : Theme.textDim)
                         .lineLimit(1)
-                    ProgressLine(value: programme?.progress(now: now) ?? 0, height: 3)
+                    ProgressLine(value: programme?.progress(now: now) ?? 0, height: 3, tint: onPlate ? .black : .white)
                         .opacity(programme == nil ? 0 : 1)
                 }
             }
             Spacer(minLength: 0)
             if model.isFavorite(channel) {
-                Image(systemName: "star.fill").font(.caption).foregroundStyle(Theme.textFaint)
+                Image(systemName: "star.fill").font(.caption).foregroundStyle(onPlate ? Color.black.opacity(0.6) : Theme.textFaint)
             }
             if playing {
                 Circle().fill(Theme.sky).frame(width: 12, height: 12)

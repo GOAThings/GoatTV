@@ -16,6 +16,8 @@ struct SettingsPanel: View {
         case playback
         case zapping
         case appearance
+        /// O tema dos painéis: Vidro (o original) ou Sombra, e no Sombra o seletor branco.
+        case theme
         case guide
         case settingsGate
         case parentalGate
@@ -152,11 +154,12 @@ struct SettingsPanel: View {
         .padding(.horizontal, 16)
         .frame(width: model.panelPoints(model.prefs.panelWidth + 40))
         .frame(maxHeight: .infinity, alignment: .top)
-        .glass()
+        .panelBackground()
         .focusSection()
         .onAppear {
             guard stack.isEmpty else { return }
-            stack = [start == .root && model.settingsNeedPin ? .settingsGate : start]
+            // O PIN das Definições vem primeiro, também para adicionar uma lista a partir do player.
+            stack = [(start == .root || start == .newPlaylistType) && model.settingsNeedPin ? .settingsGate : start]
         }
         .onExitCommand { back() }
         .onChange(of: focus) { _, now in onActivity(now == "field") }
@@ -610,6 +613,7 @@ struct SettingsPanel: View {
         case .playback: return s.t("Playback", "Reprodução")
         case .zapping: return s.t("Channel switching", "Mudança de canal")
         case .appearance: return s.t("Appearance", "Aspeto")
+        case .theme: return s.r("panel_style")
         case .guide: return s.t("TV guide", "Guia de programação")
         case .parentalGate, .parental: return s.t("Parental controls", "Controlo parental")
         case .signOutGate: return s.t("Sign out of this TV", "Terminar sessão nesta TV")
@@ -789,7 +793,7 @@ struct SettingsPanel: View {
             ]
 
         case .appearance:
-            return [
+            var list: [Item] = [
                 .header("hlang", s.r("section_language_text")),
                 pickItem("language"),
                 pickItem("ui_scale"),
@@ -800,12 +804,32 @@ struct SettingsPanel: View {
                 .nav("logo_source", s.t("Logo source", "Origem dos logótipos"), value: logoSourceLabel(prefs.logoSource), to: .logoSource),
                 pickItem("sort"),
                 .header("hpanels", s.r("section_panels_colour")),
+                .nav("panel_style", s.r("panel_style"), value: s.r(prefs.panelStyle == Prefs.PanelLook.shadow ? "panel_style_shadow" : "panel_style_glass"), to: .theme),
                 pickItem("panel_width"),
                 pickItem("accent"),
-                pickItem("outline_color"),
-                pickItem("glass_opacity"),
-                pickItem("panel_timeout"),
             ]
+            // No tema Sombra não há vidro; e com o foco suave também não há contorno (o seletor branco ainda o usa
+            // nas Definições).
+            if prefs.panelLook != Prefs.PanelLook.shadow { list.append(pickItem("outline_color")) }
+            if prefs.panelStyle != Prefs.PanelLook.shadow { list.append(pickItem("glass_opacity")) }
+            list.append(pickItem("panel_timeout"))
+            return list
+
+        case .theme:
+            var list: [Item] = [
+                .check("theme_glass", s.r("panel_style_glass"), prefs.panelStyle == Prefs.PanelLook.glass, subtitle: s.r("panel_style_glass_sub")) {
+                    model.setPref("panel_style", .string(Prefs.PanelLook.glass))
+                },
+                .check("theme_shadow", s.r("panel_style_shadow"), prefs.panelStyle == Prefs.PanelLook.shadow, subtitle: s.r("panel_style_shadow_sub")) {
+                    model.setPref("panel_style", .string(Prefs.PanelLook.shadow))
+                },
+            ]
+            if prefs.panelStyle == Prefs.PanelLook.shadow {
+                list.append(.toggle("white_selector", s.r("panel_style_shadow_white"), prefs.whiteSelector, subtitle: s.r("white_selector_sub")) {
+                    model.setPref("white_selector", .bool($0))
+                })
+            }
+            return list
 
         case .guide:
             return [

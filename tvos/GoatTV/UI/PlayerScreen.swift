@@ -30,8 +30,13 @@ struct PlayerScreen: View {
         case recordings
         case swap
         case playlist(String)
+        case addPlaylist
         case hud(String)
     }
+
+    /// O tema dos painéis (ver Prefs.PanelLook).
+    @Environment(\.panelLook) private var look
+    private var shadowTheme: Bool { look != Prefs.PanelLook.glass }
 
     @State private var panel: Panel = .none
     @State private var hud = false
@@ -41,7 +46,6 @@ struct PlayerScreen: View {
     @State private var showGuide = false
     @State private var playlistMenu = false
     /// Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (mostrados ao parar nele).
-    @State private var previewGroup: String?
     @State private var activity = 0
     /// A escrever num campo das Definições: o painel não fecha sozinho.
     @State private var typing = false
@@ -257,6 +261,14 @@ struct PlayerScreen: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            // Tema Sombra: sem painel, as listas e as Definições ficam à esquerda por cima de uma sombra.
+            if shadowTheme, panel == .channels || panel == .groups || isPin || isSettings {
+                Theme.panelShadow
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+
             if panel == .channels || panel == .groups || isPin {
                 HStack(alignment: .top, spacing: 20) {
                     sidePanel
@@ -264,18 +276,8 @@ struct PlayerScreen: View {
                         ChannelGuidePanel(channel: channel, now: now)
                             .transition(.opacity)
                     }
-                    if panel == .groups {
-                        channelPreview(previewGroup ?? browseGroup)
-                            .transition(.opacity)
-                    }
+                    // Com os grupos abertos, os canais saem (só os grupos no ecrã), como no Android.
                     Spacer(minLength: 0)
-                }
-                // O grupo com foco só passa para os canais ao lado quando se pára nele (refazer a lista a cada
-                // tecla atrasava o destaque).
-                .task(id: focusedGroupId) {
-                    guard let id = focusedGroupId else { return }
-                    try? await Task.sleep(for: .milliseconds(400))
-                    if !Task.isCancelled { previewGroup = id }
                 }
                 .padding(.leading, 40)
                 .padding(.vertical, 40)
@@ -443,15 +445,17 @@ struct PlayerScreen: View {
             }
 
             if case .settings(let page) = panel {
+                // Tema Sombra: à esquerda, como as listas; no Vidro à direita, como sempre.
                 HStack {
-                    Spacer(minLength: 0)
+                    if !shadowTheme { Spacer(minLength: 0) }
                     SettingsPanel(start: page, onClose: closePanel)
                         .id(page)
+                    if shadowTheme { Spacer(minLength: 0) }
                 }
-                .padding(.trailing, 40)
+                .padding(shadowTheme ? .leading : .trailing, 40)
                 .padding(.vertical, 40)
                 .ignoresSafeArea()
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.move(edge: shadowTheme ? .leading : .trailing).combined(with: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.18), value: panel)
@@ -1031,6 +1035,11 @@ struct PlayerScreen: View {
         return false
     }
 
+    private var isSettings: Bool {
+        if case .settings = panel { return true }
+        return false
+    }
+
     private var focusedChannel: Channel? {
         if case .channel(let uid)? = focus { return model.content?.channels.first { $0.uid == uid } }
         return model.current
@@ -1052,15 +1061,25 @@ struct PlayerScreen: View {
                 }
                 .padding(.top, 40)
             } else {
-                groupHeader
-                groupList
+                // ← nos grupos vai para a coluna de botões à esquerda (listas, gravações, definições); → volta.
+                HStack(alignment: .top, spacing: 20) {
+                    groupRail
+                    VStack(alignment: .leading, spacing: 18) {
+                        if shadowTheme && playlistMenu {
+                            playlistColumn
+                        } else {
+                            groupHeader
+                            groupList
+                        }
+                    }
+                }
             }
         }
         .padding(.vertical, 28)
         .padding(.horizontal, 16)
-        .frame(width: model.panelPoints(model.prefs.panelWidth) * (panel == .groups ? 0.85 : 1))
+        .frame(width: model.panelPoints(model.prefs.panelWidth) * (panel == .groups ? 0.85 : 1) + (panel == .groups ? 92 : 0))
         .frame(maxHeight: .infinity, alignment: .top)
-        .glass()
+        .panelBackground()
         .focusSection()
         .onExitCommand {
             if playlistMenu {
@@ -1087,10 +1106,13 @@ struct PlayerScreen: View {
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(groupName).font(Fonts.panelTitle).lineLimit(1)
-                Text([model.strings.channelCount(count), model.content?.playlist.name].compactMap { $0 }.joined(separator: " · "))
-                    .font(Fonts.panelSubtitle)
-                    .foregroundStyle(Theme.textDim)
-                    .lineLimit(1)
+                // No tema Sombra o cabeçalho é só o nome do grupo.
+                if !shadowTheme {
+                    Text([model.strings.channelCount(count), model.content?.playlist.name].compactMap { $0 }.joined(separator: " · "))
+                        .font(Fonts.panelSubtitle)
+                        .foregroundStyle(Theme.textDim)
+                        .lineLimit(1)
+                }
             }
             Spacer()
             Text("‹ " + model.strings.groups).font(Fonts.rowSubtitle).foregroundStyle(Theme.textFaint)
@@ -1115,13 +1137,20 @@ struct PlayerScreen: View {
                             .padding(30)
                     }
                     ForEach(channels) { channel in
-                        Button {
+                        let row = Button {
                             model.play(channel, from: browseGroup)
                             closePanel()
                         } label: {
                             ChannelRow(channel: channel, now: now, guideVersion: guideVersion)
                         }
-                        .buttonStyle(RowButtonStyle(outline: outline, sliding: true))
+                        Group {
+                            // Seletor branco: cada linha pinta a sua placa (não há destaque a deslizar).
+                            if look == Prefs.PanelLook.shadowWhite {
+                                row.buttonStyle(FillRowStyle())
+                            } else {
+                                row.buttonStyle(RowButtonStyle(outline: outline, sliding: true))
+                            }
+                        }
                         .focused($focus, equals: .channel(channel.uid))
                         .accessibilityIdentifier("channel:\(channel.key)")
                         .contextMenu {
@@ -1160,7 +1189,15 @@ struct PlayerScreen: View {
                 }
             }
             Spacer()
-            // ⇄ troca de lista (só com mais de uma), ⚙ abre as Definições.
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
+    }
+
+    /// A coluna de botões à esquerda dos grupos: ⇄ troca de lista (só com mais de uma), as gravações (com um ponto
+    /// vermelho enquanto grava) e ⚙ as Definições. Assim o título dos grupos não fica cortado.
+    private var groupRail: some View {
+        VStack(spacing: 18) {
             if model.playlists.count > 1 {
                 Button {
                     playlistMenu = true
@@ -1172,7 +1209,6 @@ struct PlayerScreen: View {
                 .focused($focus, equals: .swap)
                 .disabled(playlistMenu)
             }
-            // As gravações (com um ponto vermelho enquanto grava), ao lado das Definições.
             Button {
                 panel = .recordings
             } label: {
@@ -1193,8 +1229,58 @@ struct PlayerScreen: View {
             .accessibilityIdentifier("gear")
             .disabled(playlistMenu)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.top, 4)
+        .focusSection()
+    }
+
+    /// Tema Sombra: as listas no lugar dos grupos (sem caixa por cima), com adicionar uma lista e a dica do site em
+    /// baixo. ← ou Voltar regressam ao ⇄.
+    private var playlistColumn: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.strings.r("playlists"))
+                .font(Fonts.panelTitle)
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            ForEach(model.playlists) { playlist in
+                Button {
+                    playlistMenu = false
+                    if playlist.id != model.content?.playlist.id {
+                        model.switchPlaylist(playlist)
+                        showChannels(of: SpecialCategory.all)
+                    } else {
+                        focusLater(.swap)
+                    }
+                } label: {
+                    RowContent(title: playlist.name, subtitle: playlist.type.label) {
+                        if playlist.id == model.content?.playlist.id { Text("✓").font(Fonts.rowTitle).foregroundStyle(Theme.sky) }
+                    }
+                }
+                .buttonStyle(FillRowStyle())
+                .focused($focus, equals: .playlist(playlist.id))
+            }
+            Button {
+                playlistMenu = false
+                panel = .settings(.newPlaylistType)
+            } label: {
+                RowContent(title: model.strings.r("add_playlist"))
+            }
+            .buttonStyle(FillRowStyle())
+            .focused($focus, equals: .addPlaylist)
+            .padding(.top, 16)
+            Text(model.strings.r("playlists_site_tip"))
+                .font(Fonts.rowSubtitle)
+                .foregroundStyle(Theme.textDim)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+        }
+        .focusSection()
+        .onMoveCommand { direction in
+            if direction == .left {
+                playlistMenu = false
+                focusLater(.swap)
+            }
+        }
     }
 
     /// O menu das listas por baixo do ⇄ (como no Android).
@@ -1259,7 +1345,8 @@ struct PlayerScreen: View {
                 .padding(.horizontal, 6)
             }
             .overlay(alignment: .topTrailing) {
-                if playlistMenu { playlistMenuView }
+                // No tema Sombra as listas abrem na própria coluna (ver playlistColumn).
+                if playlistMenu, !shadowTheme { playlistMenuView }
             }
             .onMoveCommand { direction in
                 if direction == .right, !playlistMenu, case .group? = focus { showChannels(of: browseGroup) }
@@ -1272,52 +1359,7 @@ struct PlayerScreen: View {
         }
     }
 
-    private var focusedGroupId: String? {
-        if case .group(let id)? = focus { return id }
-        return nil
-    }
-
-    /// Os canais de um grupo, esbatidos ao lado dos grupos: só para ver (sem foco); → abre-o.
-    private func channelPreview(_ group: String) -> some View {
-        let channels = model.channels(in: group)
-        let guideVersion = model.guideVersion
-        let playing = channels.firstIndex { $0.key == model.current?.key } ?? 0
-        let shown = channels.dropFirst(max(0, playing - 3)).prefix(14)
-        return VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.groups.first { $0.id == group }?.name ?? model.strings.all).font(Fonts.panelTitle).lineLimit(1)
-                Text(model.strings.channelCount(channels.count))
-                    .font(Fonts.panelSubtitle)
-                    .foregroundStyle(Theme.textDim)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
-            VStack(spacing: 6) {
-                ForEach(shown) { channel in
-                    ChannelRow(channel: channel, now: now, guideVersion: guideVersion)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                }
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 6)
-            Spacer(minLength: 0)
-        }
-        .opacity(0.5)
-        .padding(.vertical, 28)
-        .padding(.horizontal, 16)
-        .frame(width: model.panelPoints(model.prefs.panelWidth))
-        // Com minHeight 0 fica da altura do ecrã (o que não cabe é cortado), em vez de crescer com as linhas.
-        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
-        .clipped()
-        .glass()
-        .allowsHitTesting(false)
-        .animation(.easeOut(duration: 0.15), value: group)
-    }
-
     private func showGroups() {
-        previewGroup = nil
         showGuide = false
         panel = .groups
         activity += 1

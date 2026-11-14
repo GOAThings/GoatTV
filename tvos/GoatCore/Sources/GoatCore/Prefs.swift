@@ -93,6 +93,10 @@ public struct Prefs: Equatable, Sendable {
     /// Como se escolhe o canal da reserva (`backup_mode`: playlistId → "manual"; sem entrada = automático).
     public var backupMode: [String: String] = [:]
     public var outlineColor = "white"
+    /// O tema dos painéis (`panel_style`): "glass" (o vidro original) ou "shadow" (sem painel, sobre uma sombra).
+    public var panelStyle = PanelLook.glass
+    /// No tema Sombra, a linha com foco fica branca com o texto escuro (`white_selector`).
+    public var whiteSelector = false
     public var panelTimeout = 15
     /// Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco).
     public var glassOpacity = 60
@@ -122,6 +126,16 @@ public struct Prefs: Equatable, Sendable {
     public var settingsPin = false
 
     public init() {}
+
+    /// O aspeto dos painéis: o tema e, no Sombra, com ou sem o seletor branco (como Prefs.panelLook no Android).
+    public enum PanelLook {
+        public static let glass = "glass", shadow = "shadow", shadowWhite = "shadow_white"
+    }
+
+    public var panelLook: String {
+        if panelStyle == PanelLook.glass { return PanelLook.glass }
+        return whiteSelector ? PanelLook.shadowWhite : PanelLook.shadow
+    }
 
     public enum Aspect { public static let fit = "fit", zoom = "zoom", fill = "fill" }
     public enum Buffer {
@@ -248,6 +262,8 @@ public struct Prefs: Equatable, Sendable {
         backupChannels = p.backupChannels
         backupMode = p.backupMode
         outlineColor = p.outlineColor
+        panelStyle = p.panelStyle
+        whiteSelector = p.whiteSelector
         panelTimeout = Int(p.panelTimeout)
         glassOpacity = Int(p.glassOpacity)
         panelWidth = Int(p.panelWidth)
