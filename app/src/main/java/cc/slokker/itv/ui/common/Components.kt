@@ -112,7 +112,8 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
     // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: ganham uma placa escura,
     // desenhada por fora do tamanho para não mexer no alinhamento.
     val lightRow = LocalContentColor.current.luminance() < 0.5f
-    val onLight = !showInitials && lightRow
+    // No vidro claro, sem placa (os logótipos ficam como vêm).
+    val onLight = !showInitials && lightRow && !cc.slokker.itv.ui.theme.ItvStyle.glass
     // Só o logo; o fundo arredondado fica para as iniciais (quando não há logo).
     Box(
         modifier = modifier

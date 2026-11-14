@@ -1,5 +1,9 @@
 package cc.slokker.itv.ui.player
 
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.BringIntoViewSpec
 import cc.slokker.itv.ui.glass.LocalRowFocused
 import androidx.compose.ui.text.font.FontWeight
 import cc.slokker.itv.ui.glass.GlassInset
@@ -213,6 +217,12 @@ private fun PanelLayer(visible: () -> Float, shift: () -> Float, active: Boolean
 private const val PANEL_ANIM_MS = 260
 private val LIST_LOGO_SIZE = 34.dp
 
+/** O foco não faz a lista andar sozinha (quem a usa centra a linha, ver ChannelList). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private val NoAutoScroll = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+}
+
 /** No vidro claro: logótipos mais pequenos (cabem 8 canais ou mais no painel, como no mockup). */
 private val GLASS_LOGO = 26.dp
 private val GLASS_LOGO_FOCUSED = 32.dp
@@ -230,6 +240,7 @@ private fun PanelScale(scale: Float, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * scale), content = content)
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelList(
     group: String,
@@ -356,6 +367,19 @@ private fun ChannelList(
             GlassRow(onClick = onOpenGroups, title = LocalStrings.current.seeGroups, modifier = Modifier.focusRequester(initialFocus))
             return@Column
         }
+        // No vidro claro a linha com foco cresce: a lista não se mexe sozinha ao foco (centrava com o tamanho antigo e
+        // depois corrigia, aos saltos); centra-a aqui, já com o tamanho novo, num só movimento.
+        if (ItvStyle.glass) {
+            LaunchedEffect(focusedUid) {
+                val index = indexByUid[focusedUid] ?: return@LaunchedEffect
+                withFrameNanos { }
+                val info = state.layoutInfo
+                val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
+                val center = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                state.animateScrollBy(item.offset + item.size / 2f - center, tween(220, easing = FastOutSlowInEasing))
+            }
+        }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides if (ItvStyle.glass) NoAutoScroll else LocalBringIntoViewSpec.current) {
         LazyColumn(
             state = state,
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -445,6 +469,7 @@ private fun ChannelList(
                         },
                 )
             }
+        }
         }
     }
 }

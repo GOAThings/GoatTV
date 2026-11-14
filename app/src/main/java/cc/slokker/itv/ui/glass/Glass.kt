@@ -331,8 +331,8 @@ fun GlassRow(
     var focused by remember { mutableStateOf(false) }
     // No vidro claro o foco é sempre a placa branca (também nas listas que usavam só o contorno).
     val glassStyle = ItvStyle.glass
-    // No vidro claro a linha com foco cresce devagar (mudar de tamanho de repente empurrava as outras aos saltos).
-    val glassPad by androidx.compose.animation.core.animateDpAsState(if (focused) 9.dp else 5.dp, tween(FOCUS_GROW_MS), label = "pad")
+    // A altura da linha não muda com o foco (só a escala do nome): mudar alturas a meio do scroll fazia a lista aos saltos.
+    val glassPad = 7.dp
     val glassScale by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.16f else 1f, tween(FOCUS_GROW_MS), label = "scale")
     // Onde está esta linha na janela (para a roda; não é estado: só o desenho a lê).
     var bounds by remember { mutableStateOf(Rect.Zero, neverEqualPolicy()) }
@@ -448,11 +448,8 @@ fun GlassRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 val onFocusOnly = glassStyle && detailsOnFocus
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = !onFocusOnly || focused,
-                    enter = androidx.compose.animation.expandVertically(tween(FOCUS_GROW_MS)) + androidx.compose.animation.fadeIn(tween(FOCUS_GROW_MS)),
-                    exit = androidx.compose.animation.shrinkVertically(tween(FOCUS_GROW_MS)) + androidx.compose.animation.fadeOut(tween(FOCUS_GROW_MS / 2)),
-                ) {
+                // O programa e a barra (na lista de canais, só na linha com foco: a lista centra-a depois de crescer).
+                if (!onFocusOnly || focused) {
                 Column {
                 if (subtitle != null) {
                     Text(
