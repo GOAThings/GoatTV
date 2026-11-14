@@ -532,9 +532,6 @@
     <string name="audio_delay">تأخير الصوت (مزامنة الشفاه)</string>
     <string name="audio_delay_sub">الصوت قبل الصورة: أخّره (+). الصوت متأخر: قدّمه (−)</string>
     <string name="accent">لون التمييز</string>
-    <string name="ui_style">المظهر</string>
-    <string name="ui_style_classic">داكن</string>
-    <string name="ui_style_glass">فاتح</string>
     <string name="accent_name">بنفسجي</string>
     <string name="accent_name_2">نعناعي</string>
     <string name="accent_name_3">غروب</string>

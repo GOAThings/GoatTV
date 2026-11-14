@@ -313,13 +313,6 @@ object SettingsCatalog {
         read = { it.prefs.panelWidth },
         tv = Place(TvPage.APPEARANCE, 10, TvSection.PANELS_COLOUR),
     )
-    /** A aparência dos painéis na TV: escura (a de sempre) ou clara (ver ItvStyle). */
-    val UI_STYLE = Setting.Choice(
-        Prefs.Key.UI_STYLE, { it.uiStyle },
-        options = { s -> listOf(Prefs.UiStyle.CLASSIC to s.uiStyleClassic, Prefs.UiStyle.GLASS to s.uiStyleGlass) },
-        read = { it.prefs.uiStyle },
-        tv = Place(TvPage.APPEARANCE, 5, TvSection.PANELS_COLOUR),
-    )
     val ACCENT = Setting.Choice(
         Prefs.Key.ACCENT, { it.accent },
         options = { s -> Accent.ALL.map { it.id to s.accentName(it.id) } },
@@ -418,7 +411,7 @@ object SettingsCatalog {
         STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
-        UI_STYLE, ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
+        ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
     )
 

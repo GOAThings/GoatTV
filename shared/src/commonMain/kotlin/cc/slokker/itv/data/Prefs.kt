@@ -70,8 +70,6 @@ data class Prefs(
     val accent: String = Accents.DEFAULT,
     /** Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco). */
     val glassOpacity: Int = 60,
-    /** A aparência dos painéis (ver [UiStyle]): o vidro escuro de sempre, ou o vidro claro. */
-    val uiStyle: String = UiStyle.CLASSIC,
     /** Mostrar "★ Favoritos" e "Todos" na lista de grupos (para todas as listas). */
     val showFavoritesGroup: Boolean = true,
     val showAllGroup: Boolean = true,
@@ -219,7 +217,6 @@ data class Prefs(
         const val AUTO_START = "auto_start"
         const val EXIT_CONFIRM = "exit_confirm"
         const val GLASS_OPACITY = "glass_opacity"
-        const val UI_STYLE = "ui_style"
         const val ACCENT = "accent"
         const val HIDDEN_GROUPS = "hidden_groups"
         const val SHOW_FAVORITES_GROUP = "show_favorites_group"
@@ -335,13 +332,6 @@ data class Prefs(
     }
 
     /** As cores do contorno do seletor; "accent" segue a cor de destaque (com o gradiente dela). */
-    /** A aparência dos painéis: o vidro escuro de sempre, ou o vidro claro (véu branco por cima do vídeo desfocado). */
-    object UiStyle {
-        const val CLASSIC = "classic"
-        const val GLASS = "glass"
-        val ALL = listOf(CLASSIC, GLASS)
-    }
-
     object OutlineColors {
         const val WHITE = "white"
         const val ACCENT = "accent"
@@ -486,7 +476,6 @@ data class Prefs(
                 exitConfirm = bool(Key.EXIT_CONFIRM, d.exitConfirm),
                 glassOpacity = int(Key.GLASS_OPACITY, d.glassOpacity).coerceIn(0, 100),
                 accent = str(Key.ACCENT, d.accent, Accents.IDS),
-                uiStyle = str(Key.UI_STYLE, d.uiStyle, UiStyle.ALL),
                 showFavoritesGroup = bool(Key.SHOW_FAVORITES_GROUP, d.showFavoritesGroup),
                 showAllGroup = bool(Key.SHOW_ALL_GROUP, d.showAllGroup),
                 showRecentGroup = bool(Key.SHOW_RECENT_GROUP, d.showRecentGroup),

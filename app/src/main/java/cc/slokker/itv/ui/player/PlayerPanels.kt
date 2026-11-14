@@ -132,7 +132,7 @@ internal fun SidePanel(
     )
     val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
     val groupsWidth = (prefs.panelWidth * 0.85f).dp
-    // Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (→ abre-o).
+    // Com os grupos abertos, a lista de canais (escondida) acompanha o grupo com foco (→ abre-o já pronto).
     var preview by remember(group) { mutableStateOf(group) }
     val shownGroup = if (mode == Panel.Groups) preview else group
     Row(Modifier.padding(start = 32.dp, top = 27.dp, bottom = 27.dp)) {
@@ -159,7 +159,8 @@ internal fun SidePanel(
         Modifier
             .width(prefs.panelWidth.dp)
             .fillMaxHeight()
-            .graphicsLayer { alpha = 1f - 0.45f * toGroups.value }
+            // Com os grupos abertos, os canais saem (só os grupos no ecrã).
+            .graphicsLayer { alpha = 1f - toGroups.value }
             .glass(shape)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
             // e as margens ficam por dentro para o brilho do foco ter espaço.

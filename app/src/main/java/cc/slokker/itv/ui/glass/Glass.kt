@@ -1,7 +1,5 @@
 package cc.slokker.itv.ui.glass
 
-import androidx.compose.ui.graphics.SolidColor
-import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import android.graphics.Bitmap
@@ -128,15 +126,10 @@ fun Modifier.glass(
 ): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val light = ItvStyle.light
     this
         .onGloballyPositioned { origin = it.positionInWindow() }
         .drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
-            // A aparência clara: vidro leitoso, um véu branco por cima do vídeo desfocado (não segue a "Opacidade do vidro",
-            // que é a do escuro), com uma sombra por baixo para o texto branco se ler mesmo num vídeo claro (sem ela os
-            // avisos ficavam branco sobre branco), e o contorno marcado.
-            val lightVeil = Color.White.copy(alpha = 0.2f)
             val path = Path().apply { addOutline(outline) }
             val highlight = Brush.verticalGradient(
                 0f to Color.White.copy(alpha = 0.16f),
@@ -166,21 +159,13 @@ fun Modifier.glass(
                             filterQuality = FilterQuality.Low,
                             colorFilter = Vibrancy,
                         )
-                        if (light && tint == null) {
-                            drawRect(GlassTint.copy(alpha = 0.34f))
-                            drawRect(lightVeil)
-                        } else {
-                            drawRect(tint ?: GlassTint.copy(alpha = backdrop.opacity))
-                        }
-                    } else if (light) {
-                        drawRect(Color(0x66161A26))
-                        drawRect(lightVeil)
+                        drawRect(tint ?: GlassTint.copy(alpha = backdrop.opacity))
                     } else {
                         drawRect(fallbackTint)
                     }
                     drawRect(highlight)
                 }
-                drawOutline(outline, if (light) SolidColor(Color.White.copy(alpha = 0.5f)) else rim, style = stroke)
+                drawOutline(outline, rim, style = stroke)
             }
         }
         // O conteúdo vai para uma camada própria: quando o fundo desfocado muda (várias vezes por segundo)

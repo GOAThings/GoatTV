@@ -532,9 +532,6 @@
     <string name="audio_delay">Décalage audio (synchro labiale)</string>
     <string name="audio_delay_sub">Son avant l\'image : retardez-le (+). Son en retard : avancez-le (−)</string>
     <string name="accent">Couleur d\'accent</string>
-    <string name="ui_style">Apparence</string>
-    <string name="ui_style_classic">Sombre</string>
-    <string name="ui_style_glass">Claire</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Menthe</string>
     <string name="accent_name_3">Coucher de soleil</string>

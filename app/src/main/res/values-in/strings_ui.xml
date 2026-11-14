@@ -532,9 +532,6 @@
     <string name="audio_delay">Tunda audio (sinkron bibir)</string>
     <string name="audio_delay_sub">Suara sebelum gambar: tunda (+). Suara terlambat: majukan (−)</string>
     <string name="accent">Warna aksen</string>
-    <string name="ui_style">Tampilan</string>
-    <string name="ui_style_classic">Gelap</string>
-    <string name="ui_style_glass">Terang</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Mint</string>
     <string name="accent_name_3">Senja</string>

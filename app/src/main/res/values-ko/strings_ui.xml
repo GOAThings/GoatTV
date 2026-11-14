@@ -532,9 +532,6 @@
     <string name="audio_delay">오디오 지연 (립싱크)</string>
     <string name="audio_delay_sub">소리가 화면보다 빠르면 늦추고(+), 늦으면 앞당기세요(−)</string>
     <string name="accent">강조 색상</string>
-    <string name="ui_style">모양</string>
-    <string name="ui_style_classic">어둡게</string>
-    <string name="ui_style_glass">밝게</string>
     <string name="accent_name">바이올렛</string>
     <string name="accent_name_2">민트</string>
     <string name="accent_name_3">노을</string>

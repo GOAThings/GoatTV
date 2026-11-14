@@ -1,10 +1,5 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package cc.slokker.itv
 
-import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.ui.theme.ItvStyle
-import androidx.compose.runtime.SideEffect
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
@@ -90,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         }
         // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
         if (BuildConfig.DEBUG && savedInstanceState == null) {
-            // Uma definição de texto para testar (ex.: --es demo_pref ui_style=glass).
+            // Uma definição de texto para testar (ex.: --es demo_pref buffer=large).
             // Grava-se depois de o perfil carregar (senão o que vem do disco apagava-a).
             intent.getStringExtra("demo_pref")?.split("=", limit = 2)?.takeIf { it.size == 2 }?.let { (k, v) ->
                 lifecycleScope.launch {
@@ -210,9 +205,6 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val scaled = remember(baseDensity, prefs.uiScale) {
         Density(baseDensity.density * (if (phone) 100 else prefs.uiScale) / 100f, baseDensity.fontScale)
     }
-    // O estilo dos painéis (só na TV): as formas e o vidro leem-no (ver ItvStyle).
-    // A aparência dos painéis (só na TV): escura (a de sempre) ou clara. As listas são as mesmas nas duas.
-    SideEffect { ItvStyle.light = !phone && prefs.uiStyle == Prefs.UiStyle.GLASS }
     CompositionLocalProvider(
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
