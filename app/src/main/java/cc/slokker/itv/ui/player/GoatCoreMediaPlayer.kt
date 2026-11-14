@@ -6,7 +6,10 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.SurfaceHolder
+import android.graphics.SurfaceTexture
+import android.view.Surface
 import android.view.SurfaceView
+import android.view.TextureView
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -81,6 +84,10 @@ internal class GoatCoreMediaPlayer(
     private var params = TrackSelectionParameters.DEFAULT
     private var firstFrame = false
     private var surfaceView: SurfaceView? = null
+
+    /** Em vez da [surfaceView]: uma TextureView (as imagens pequenas, que levam cantos arredondados) e a sua Surface. */
+    private var textureView: TextureView? = null
+    private var textureSurface: Surface? = null
     private var pendingStart = false
     private var lastPositionMs = 0L
     private var tsTracks: List<TsTrack> = emptyList()
@@ -122,6 +129,38 @@ internal class GoatCoreMediaPlayer(
         }
     }
 
+    private val textureListener = object : TextureView.SurfaceTextureListener {
+        override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+            textureSurface = Surface(texture)
+            if (pendingStart) start()
+        }
+
+        override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {}
+
+        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+            stopCore()
+            if (playbackState != Player.STATE_IDLE) pendingStart = true
+            releaseTextureSurface()
+            return true
+        }
+
+        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {}
+    }
+
+    private fun releaseTextureSurface() {
+        textureSurface?.release()
+        textureSurface = null
+    }
+
+    /** Larga a imagem atual (SurfaceView ou TextureView). */
+    private fun detachOutput() {
+        surfaceView?.holder?.removeCallback(surfaceCallback)
+        surfaceView = null
+        textureView?.let { if (it.surfaceTextureListener === textureListener) it.surfaceTextureListener = null }
+        textureView = null
+        releaseTextureSurface()
+    }
+
     /**
      * A stream a tocar: [source] é a ligação (a do ExoPlayer, com o portão); começa com [prepare]. [startMs]: num TS
      * gravado, o ponto onde começar.
@@ -148,8 +187,7 @@ internal class GoatCoreMediaPlayer(
     }
 
     private fun start() {
-        val holder = surfaceView?.holder
-        val surface = holder?.surface?.takeIf { it.isValid }
+        val surface = (textureSurface ?: surfaceView?.holder?.surface)?.takeIf { it.isValid }
         if (surface == null) {
             pendingStart = true
             return
@@ -488,36 +526,42 @@ internal class GoatCoreMediaPlayer(
     override fun handleRelease(): ListenableFuture<*> {
         stopCore()
         pendingStart = false
-        surfaceView?.holder?.removeCallback(surfaceCallback)
-        surfaceView = null
+        detachOutput()
         main.removeCallbacksAndMessages(null)
         return Futures.immediateVoidFuture()
     }
 
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> {
-        if (videoOutput is SurfaceView && videoOutput != surfaceView) {
-            surfaceView?.holder?.removeCallback(surfaceCallback)
-            surfaceView = videoOutput
-            videoOutput.holder.addCallback(surfaceCallback)
-            // O ecrã trocou de vista (acontece logo ao abrir): o descodificador da superfície antiga fica parado (os do
-            // Android só descodificam para uma superfície que alguém mostra), por isso recomeça-se na nova.
+        if (videoOutput != surfaceView && videoOutput != textureView && (videoOutput is SurfaceView || videoOutput is TextureView)) {
+            // Parar antes de largar a Surface antiga (o descodificador ainda desenha nela).
             if (core != null) {
                 stopCore()
                 pendingStart = true
             }
+            detachOutput()
+            if (videoOutput is SurfaceView) {
+                surfaceView = videoOutput
+                videoOutput.holder.addCallback(surfaceCallback)
+            } else if (videoOutput is TextureView) {
+                textureView = videoOutput
+                videoOutput.surfaceTextureListener = textureListener
+                videoOutput.surfaceTexture?.let { textureSurface = Surface(it) }
+            }
+            // O ecrã trocou de vista (acontece logo ao abrir): o descodificador da superfície antiga ficava parado (os do
+            // Android só descodificam para uma superfície que alguém mostra), por isso recomeça-se na nova.
             if (pendingStart) start()
         }
         return Futures.immediateVoidFuture()
     }
 
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> {
-        if (videoOutput == null || videoOutput == surfaceView) {
-            surfaceView?.holder?.removeCallback(surfaceCallback)
-            surfaceView = null
+        if (videoOutput == null || videoOutput == surfaceView || videoOutput == textureView) {
+            // Parar antes de largar a Surface da TextureView (o descodificador ainda desenha nela).
             if (core != null) {
                 stopCore()
                 pendingStart = true
             }
+            detachOutput()
         }
         return Futures.immediateVoidFuture()
     }

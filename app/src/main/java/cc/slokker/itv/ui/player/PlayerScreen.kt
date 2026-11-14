@@ -63,6 +63,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -431,7 +434,7 @@ fun PlayerScreen(vm: AppViewModel) {
         players.forEachIndexed { tile, p ->
             if (p == null || tile >= tileCount) return@forEachIndexed
             viewOf(tile)?.let { v ->
-                p.setVideoSurfaceView(v.surfaceView)
+                v.attach(p)
                 p.videoSize.aspectOrNull()?.let { v.setAspectRatio(it) }
             }
         }
@@ -984,11 +987,14 @@ fun PlayerScreen(vm: AppViewModel) {
                 // Os canais extra: as imagens pequenas (por cima da grande) ou os outros lugares do dividido.
                 if (multi) {
                     for (position in 1 until tileCount) {
-                        key(position) {
-                            Box(tileModifiers[position].background(Color.Black)) {
+                        // Mudar entre dividido e imagem na imagem troca a vista (SurfaceView ⇄ TextureView com cantos).
+                        key(position, split) {
+                            Box(tileModifiers[position].background(Color.Black, if (split) RectangleShape else RoundedCornerShape(PipCorner))) {
+                                val pipCorner = with(LocalDensity.current) { if (split) 0f else PipCorner.toPx() }
                                 AndroidView(
-                                    factory = { ctx -> VideoView(ctx, overlay = true).also { smallViews[position - 1] = it } },
-                                    onRelease = { smallViews[position - 1] = null },
+                                    factory = { ctx -> VideoView(ctx, overlay = true, rounded = !split).also { smallViews[position - 1] = it } },
+                                    update = { it.cornerRadius = pipCorner },
+                                    onRelease = { if (smallViews[position - 1] === it) smallViews[position - 1] = null },
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }

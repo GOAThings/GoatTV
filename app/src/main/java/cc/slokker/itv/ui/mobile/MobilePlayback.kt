@@ -103,7 +103,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
     LaunchedEffect(player, playback.view) {
         val view = playback.view ?: return@LaunchedEffect
-        player.setVideoSurfaceView(view.surfaceView)
+        view.attach(player)
         player.videoSize.aspectOrNull()?.let { view.setAspectRatio(it) }
     }
 

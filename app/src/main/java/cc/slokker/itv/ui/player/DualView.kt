@@ -116,6 +116,9 @@ private const val SPLIT_GAP = 0.008f
 /** O arredondado dos canais no dividido. */
 internal val SplitCorner = 15.dp
 
+/** O arredondado das imagens pequenas na imagem na imagem. */
+internal val PipCorner = 12.dp
+
 /** A imagem pequena: um quarto da largura (e da altura: fica 16:9 num ecrã 16:9), afastada das margens. */
 private const val PIP_FRACTION = 0.25f
 private const val PIP_MARGIN_X = 0.017f
@@ -342,7 +345,7 @@ internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, s
     val accent = LocalAccent.current
     tiles.forEachIndexed { position, tile ->
         val small = !split && position > 0
-        val shape = RoundedCornerShape(if (split) SplitCorner else 4.dp)
+        val shape = RoundedCornerShape(if (split) SplitCorner else PipCorner)
         val border = when {
             tile.audible && (split || small) -> Modifier.border(3.dp, accent.brush, shape)
             small -> Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), shape)

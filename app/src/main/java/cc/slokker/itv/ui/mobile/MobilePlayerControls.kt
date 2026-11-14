@@ -218,7 +218,7 @@ internal fun VideoArea(
     val secondPlayer = secondPlayback?.player
     LaunchedEffect(secondPlayer, secondView) {
         val v = secondView ?: return@LaunchedEffect
-        secondPlayer?.setVideoSurfaceView(v.surfaceView)
+        secondPlayer?.let { v.attach(it) }
         secondPlayer?.videoSize?.aspectOrNull()?.let { v.setAspectRatio(it) }
     }
     LaunchedEffect(playback.player, secondPlayer, focusSecond, second == null) {

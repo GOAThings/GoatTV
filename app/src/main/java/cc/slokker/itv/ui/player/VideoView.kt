@@ -4,16 +4,21 @@ package cc.slokker.itv.ui.player
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Outline
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Gravity
 import android.view.PixelCopy
 import android.view.SurfaceView
+import android.view.TextureView
+import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.ui.geometry.Rect
 import androidx.core.graphics.createBitmap
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.SubtitleView
@@ -24,18 +29,30 @@ import kotlin.coroutines.resume
 /**
  * SurfaceView centrada e com a proporção do vídeo. Permite copiar o frame atual
  * (PixelCopy, Android 7+) para o vidro desfocado e para manter a imagem ao mudar de canal.
+ * Com [rounded] usa uma TextureView: desenha-se com o resto da janela, por isso dá para lhe arredondar os cantos
+ * ([cornerRadius]) por cima de outro vídeo (as imagens pequenas da imagem na imagem).
  */
-class VideoView(context: Context, overlay: Boolean = false) : FrameLayout(context) {
+class VideoView(context: Context, overlay: Boolean = false, rounded: Boolean = false) : FrameLayout(context) {
 
     /** Com [overlay], a imagem fica por cima da do outro VideoView (o segundo canal em imagem na imagem). */
-    val surfaceView = SurfaceView(context).apply { if (overlay) setZOrderMediaOverlay(true) }
+    val surfaceView: SurfaceView? = if (rounded) null else SurfaceView(context).apply { if (overlay) setZOrderMediaOverlay(true) }
+
+    private val textureView: TextureView? = if (rounded) TextureView(context) else null
+
+    /** A vista onde o vídeo se desenha. */
+    private val video: View = surfaceView ?: textureView!!
+
+    /** Liga [player] a esta imagem. */
+    fun attach(player: Player) {
+        surfaceView?.let { player.setVideoSurfaceView(it) } ?: player.setVideoTextureView(textureView)
+    }
 
     /** Legendas (DVB, teletexto, CEA-608), por cima do vídeo e com a mesma proporção. */
     val subtitleView = SubtitleView(context)
 
     private val frame = AspectRatioFrameLayout(context).apply {
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-        addView(surfaceView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(video, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(subtitleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
     private val copyThread = HandlerThread("itv-pixelcopy").apply { start() }
@@ -49,7 +66,7 @@ class VideoView(context: Context, overlay: Boolean = false) : FrameLayout(contex
         isFocusable = false
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
         addView(frame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        surfaceView.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+        video.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             v.getLocationInWindow(location)
             onBoundsChanged?.invoke(
                 Rect(location[0].toFloat(), location[1].toFloat(), (location[0] + v.width).toFloat(), (location[1] + v.height).toFloat()),
@@ -58,6 +75,22 @@ class VideoView(context: Context, overlay: Boolean = false) : FrameLayout(contex
     }
 
     fun setAspectRatio(ratio: Float) = frame.setAspectRatio(ratio)
+
+    /** Cantos arredondados (px; 0 = retos): corta a própria imagem, também por cima de outro vídeo. */
+    var cornerRadius: Float = 0f
+        set(value) {
+            if (field == value) return
+            field = value
+            clipToOutline = value > 0f
+            outlineProvider = if (value > 0f) {
+                object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, field)
+                }
+            } else {
+                ViewOutlineProvider.BACKGROUND
+            }
+            invalidateOutline()
+        }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
@@ -74,6 +107,8 @@ class VideoView(context: Context, overlay: Boolean = false) : FrameLayout(contex
      * null se não houver imagem ou se demorar demasiado.
      */
     suspend fun capture(width: Int, height: Int, into: Bitmap? = null): Bitmap? {
+        textureView?.let { tv -> return if (tv.isAvailable) tv.getBitmap(into?.takeIf { it.width == width && it.height == height } ?: createBitmap(width, height)) else null }
+        val surfaceView = surfaceView ?: return null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
         if (surfaceView.width == 0 || !surfaceView.holder.surface.isValid) return null
         return withTimeoutOrNull(250) {
