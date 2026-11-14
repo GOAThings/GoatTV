@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
+import cc.slokker.itv.ui.theme.LocalPanelStyle
+import cc.slokker.itv.data.Prefs
 import kotlinx.coroutines.launch
 
 /**
@@ -49,6 +51,8 @@ fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, fill: Co
     val height = remember { Animatable(0f) }
     var focused by remember { mutableStateOf(false) }
     val brush = LocalOutlineBrush.current
+    // Estilo Sombra suave: as listas que não escolhem (ex.: Definições) também levam o fundo claro em vez do contorno.
+    val fill = fill ?: ShadowFocusFill.takeIf { !plate && LocalPanelStyle.current == Prefs.PanelStyles.SHADOW }
     LaunchedEffect(state) {
         var shown = false
         snapshotFlow {

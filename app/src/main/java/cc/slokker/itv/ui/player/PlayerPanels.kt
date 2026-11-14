@@ -197,7 +197,7 @@ internal fun SidePanel(
 }
 
 /** O fundo da linha com foco no estilo Sombra. */
-private val ShadowFocus = Color.White.copy(alpha = 0.22f)
+private val ShadowFocus = cc.slokker.itv.ui.glass.ShadowFocusFill
 
 /** No estilo Sombra o texto fica por cima do vídeo: uma sombra leve por baixo das letras mantém-no legível. */
 @Composable
@@ -796,16 +796,20 @@ internal fun SettingsSheet(
     onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
+    // Estilo Sombra: sem painel, por cima da sombra do lado direito (ver PlayerScreen).
+    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
     PanelScale(prefs.textScale) {
+    ShadowText(shadow) {
     Box(
         Modifier
             .padding(end = 32.dp, top = 27.dp, bottom = 27.dp)
             .width((prefs.panelWidth + 40).dp)
             .fillMaxHeight()
-            .glass(ItvShapes.Panel)
+            .then(if (shadow) Modifier else Modifier.glass(ItvShapes.Panel))
             .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
         SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, startAtNewPlaylist = startAtNewPlaylist, onManualTrack = onManualTrack)
+    }
     }
     }
 }

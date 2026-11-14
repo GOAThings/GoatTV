@@ -1384,6 +1384,15 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
+            // Estilo Sombra: as Definições ficam por cima de uma sombra do lado direito.
+            AnimatedVisibility(
+                visible = showSettings && prefs.panelStyle != Prefs.PanelStyles.GLASS,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Box(Modifier.fillMaxSize().background(SettingsShadow))
+            }
             AnimatedVisibility(
                 visible = showSettings,
                 modifier = Modifier.align(Alignment.CenterEnd),
@@ -1418,6 +1427,14 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 }
 
+
+/** A mesma sombra, do lado direito (Definições). */
+private val SettingsShadow = Brush.horizontalGradient(
+    0.38f to Color.Transparent,
+    0.56f to Color.Black.copy(alpha = 0.55f),
+    0.72f to Color.Black.copy(alpha = 0.85f),
+    1f to Color.Black.copy(alpha = 0.92f),
+)
 
 /** A sombra do estilo Sombra: quase preta à esquerda, onde estão as listas, e some antes do meio do ecrã. */
 private val PanelShadow = Brush.horizontalGradient(
