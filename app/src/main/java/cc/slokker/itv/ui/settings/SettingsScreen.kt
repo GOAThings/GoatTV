@@ -612,6 +612,14 @@ private fun prefPageItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                 }
                 else -> null
             }
+        }.filterNot { item ->
+            // No tema Sombra não há vidro; e com o foco suave também não há contorno (o seletor branco ainda o usa
+            // nas Definições).
+            when (item.key) {
+                Prefs.Key.GLASS_OPACITY -> prefs.panelStyle == Prefs.PanelStyles.SHADOW
+                Prefs.Key.OUTLINE_COLOR -> prefs.panelLook == Prefs.PanelStyles.SHADOW
+                else -> false
+            }
         }
 
         // O tema: Vidro (o original) ou Sombra; só no Sombra aparece o seletor branco.
