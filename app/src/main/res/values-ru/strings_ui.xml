@@ -380,6 +380,10 @@
     <string name="channel_numbers">Номера каналов</string>
     <string name="channel_logos">Логотипы каналов</string>
     <string name="outline_color">Цвет выделения</string>
+    <string name="panel_style">Стиль панелей</string>
+    <string name="panel_style_shadow">Тень</string>
+    <string name="panel_style_shadow_white">Тень, белый выбор</string>
+    <string name="panel_style_glass">Стекло</string>
     <string name="outline_accent">Акцентный цвет</string>
     <string name="color_white">Белый</string>
     <string name="color_blue">Синий</string>

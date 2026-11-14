@@ -758,6 +758,14 @@ class Strings(context: Context) {
     val languageAuto get() = s(R.string.language_auto)
     val channelNumbers get() = s(R.string.channel_numbers)
     val channelLogos get() = s(R.string.channel_logos)
+    val panelStyle get() = s(R.string.panel_style)
+    fun panelStyleName(id: String) = s(
+        when (id) {
+            "shadow_white" -> R.string.panel_style_shadow_white
+            "glass" -> R.string.panel_style_glass
+            else -> R.string.panel_style_shadow
+        },
+    )
     val outlineColor get() = s(R.string.outline_color)
     fun outlineColorName(id: String) = s(
         when (id) {

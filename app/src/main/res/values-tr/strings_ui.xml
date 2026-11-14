@@ -380,6 +380,10 @@
     <string name="channel_numbers">Kanal numaraları</string>
     <string name="channel_logos">Kanal logoları</string>
     <string name="outline_color">Seçici rengi</string>
+    <string name="panel_style">Panel stili</string>
+    <string name="panel_style_shadow">Gölge</string>
+    <string name="panel_style_shadow_white">Gölge, beyaz seçici</string>
+    <string name="panel_style_glass">Cam</string>
     <string name="outline_accent">Vurgu rengi</string>
     <string name="color_white">Beyaz</string>
     <string name="color_blue">Mavi</string>

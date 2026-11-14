@@ -138,6 +138,8 @@ data class Prefs(
     val backupMode: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
+    /** Como se mostram os painéis laterais da TV (canais e grupos): ver [PanelStyles]. */
+    val panelStyle: String = PanelStyles.SHADOW,
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -249,6 +251,7 @@ data class Prefs(
         const val BACKUP_CHANNELS = "backup_channels"
         const val BACKUP_MODE = "backup_mode"
         const val OUTLINE_COLOR = "outline_color"
+        const val PANEL_STYLE = "panel_style"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -336,6 +339,17 @@ data class Prefs(
         const val WHITE = "white"
         const val ACCENT = "accent"
         val IDS = listOf(WHITE, ACCENT, "blue", "violet", "pink", "red", "orange", "yellow", "green")
+    }
+
+    /**
+     * O estilo dos painéis laterais: sem painel, sobre uma sombra à esquerda do ecrã, com o foco num fundo claro
+     * translúcido ([SHADOW]) ou numa placa branca ([SHADOW_WHITE]); ou o painel de vidro de antes ([GLASS]).
+     */
+    object PanelStyles {
+        const val SHADOW = "shadow"
+        const val SHADOW_WHITE = "shadow_white"
+        const val GLASS = "glass"
+        val IDS = listOf(SHADOW, SHADOW_WHITE, GLASS)
     }
 
     /** Origem dos logótipos; fora estes dois valores, é o código de um país do guia (ex.: "pt"). */
@@ -501,6 +515,7 @@ data class Prefs(
                     ?.takeIf { it == LogoSource.PLAYLIST || it == LogoSource.GUIDE || COUNTRY_CODE.matches(it) } ?: d.logoSource,
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS),
+                panelStyle = str(Key.PANEL_STYLE, d.panelStyle, PanelStyles.IDS),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 mergeVariants = (s[Key.MERGE_VARIANTS] as? JsonObject)
                     ?.filter { (_, v) -> v is JsonPrimitive && !v.isString && v.booleanOrNull == true }?.keys.orEmpty(),

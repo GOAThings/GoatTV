@@ -380,6 +380,10 @@
     <string name="channel_numbers">Nomor saluran</string>
     <string name="channel_logos">Logo saluran</string>
     <string name="outline_color">Warna pemilih</string>
+    <string name="panel_style">Gaya panel</string>
+    <string name="panel_style_shadow">Bayangan</string>
+    <string name="panel_style_shadow_white">Bayangan, pemilih putih</string>
+    <string name="panel_style_glass">Kaca</string>
     <string name="outline_accent">Warna aksen</string>
     <string name="color_white">Putih</string>
     <string name="color_blue">Biru</string>

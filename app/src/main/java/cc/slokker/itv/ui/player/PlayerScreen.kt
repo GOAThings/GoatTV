@@ -1314,6 +1314,15 @@ fun PlayerScreen(vm: AppViewModel) {
                 lastNotice?.let { UpdateCard(it, update, hold, updateHidesIn) }
             }
 
+            // Estilo Sombra: sem painel, uma sombra à esquerda do ecrã por baixo das listas (só aparece e desaparece).
+            AnimatedVisibility(
+                visible = panel != Panel.None && prefs.panelStyle != Prefs.PanelStyles.GLASS,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Box(Modifier.fillMaxSize().background(PanelShadow))
+            }
             AnimatedVisibility(
                 visible = panel != Panel.None,
                 modifier = Modifier.align(Alignment.CenterStart),
@@ -1402,6 +1411,14 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 }
 
+
+/** A sombra do estilo Sombra: quase preta à esquerda, onde estão as listas, e some antes do meio do ecrã. */
+private val PanelShadow = Brush.horizontalGradient(
+    0f to Color.Black.copy(alpha = 0.92f),
+    0.28f to Color.Black.copy(alpha = 0.85f),
+    0.44f to Color.Black.copy(alpha = 0.55f),
+    0.62f to Color.Transparent,
+)
 private const val HUD_TIMEOUT_MS = 8_000L
 /** O aviso de paragens sai sozinho ao fim deste tempo. */
 private const val NET_HINT_MS = 30_000L

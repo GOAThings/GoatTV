@@ -98,6 +98,9 @@ import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 import cc.slokker.itv.data.at
+import cc.slokker.itv.data.Prefs
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 
 /** Painel de vidro encostado à esquerda; canais e grupos trocam no mesmo sítio. */
 @Composable
@@ -122,7 +125,11 @@ internal fun SidePanel(
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
+    // Estilo Sombra: as listas ficam sem painel por cima da sombra do ecrã (ver PlayerScreen), com o texto sombreado.
+    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    ShadowText(shadow) {
     val shape = ItvShapes.Panel
+    val panel = if (shadow) Modifier else Modifier.glass(shape)
     // Os grupos abrem num painel próprio, ao lado dos canais, que ficam atrás esbatidos. Os dois ficam montados:
     // abrir é só animar largura e opacidade (lidas no desenho), sem reconstruir as listas.
     val toGroups = animateFloatAsState(
@@ -147,7 +154,7 @@ internal fun SidePanel(
                 layout(w, placeable.height) { if (w > 0) placeable.placeRelative(w - full, 0) }
             }
             .padding(end = 12.dp)
-            .glass(shape)
+            .then(panel)
             .clip(shape)
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
@@ -161,7 +168,7 @@ internal fun SidePanel(
             .fillMaxHeight()
             // Com os grupos abertos, os canais saem (só os grupos no ecrã).
             .graphicsLayer { alpha = 1f - toGroups.value }
-            .glass(shape)
+            .then(panel)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
             // e as margens ficam por dentro para o brilho do foco ter espaço.
             .clip(shape)
@@ -184,6 +191,30 @@ internal fun SidePanel(
     }
     }
     }
+    }
+}
+
+/** O fundo da linha com foco no estilo Sombra. */
+private val ShadowFocus = Color.White.copy(alpha = 0.22f)
+
+/** No estilo Sombra o texto fica por cima do vídeo: uma sombra leve por baixo das letras mantém-no legível. */
+@Composable
+private fun ShadowText(on: Boolean, content: @Composable () -> Unit) {
+    if (!on) {
+        content()
+        return
+    }
+    val t = MaterialTheme.typography
+    val typography = remember(t) {
+        val s = Shadow(Color.Black.copy(alpha = 0.5f), Offset(0f, 1.5f), 4f)
+        t.copy(
+            titleLarge = t.titleLarge.copy(shadow = s),
+            titleSmall = t.titleSmall.copy(shadow = s),
+            bodySmall = t.bodySmall.copy(shadow = s),
+            labelMedium = t.labelMedium.copy(shadow = s),
+        )
+    }
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography, content = content)
 }
 
 /**
@@ -239,6 +270,9 @@ private fun ChannelList(
     val channels = remember(data, group, favorites, prefs.sort, prefs.hiddenChannels, prefs.channelOrder) { vm.channelsOf(group) }
     val favoriteKeys = remember(favorites, data) { favorites[data.playlist.id].orEmpty().toSet() }
 
+    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    // Seletor branco: cada linha pinta a sua placa branca com o texto escuro (não há destaque a deslizar).
+    val white = prefs.panelStyle == Prefs.PanelStyles.SHADOW_WHITE
     val startIndex = remember(channels) { channels.indexOfFirst { it.uid == playing.uid }.coerceAtLeast(0) }
     val state = remember(channels) { panelListState((startIndex - 3).coerceAtLeast(0)) }
     val initialFocus = remember { FocusRequester() }
@@ -335,7 +369,8 @@ private fun ChannelList(
     ) {
         PanelHeader(
             title = data.categoryName(group),
-            subtitle = LocalStrings.current.channelsCount(channels.size, data.playlist.name),
+            // No estilo Sombra o cabeçalho é só o nome do grupo.
+            subtitle = if (shadow) null else LocalStrings.current.channelsCount(channels.size, data.playlist.name),
             hint = LocalStrings.current.groupsHint,
         )
         if (channels.isEmpty()) {
@@ -351,7 +386,7 @@ private fun ChannelList(
             state = state,
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
-            modifier = Modifier.slidingFocus(state) { focusedUid },
+            modifier = if (white) Modifier else Modifier.slidingFocus(state, fill = ShadowFocus.takeIf { shadow }) { focusedUid },
         ) {
             items(channels, key = { it.uid }) { ch ->
                 val isPlaying = ch.uid == playing.uid
@@ -359,10 +394,11 @@ private fun ChannelList(
                 GlassRow(
                     onClick = { onPlay(ch) },
                     onLongClick = { vm.toggleFavorite(ch) },
-                    selected = isPlaying,
+                    selected = isPlaying && !white,
                     // Só contorno no foco: os logótipos (muitos brancos sobre transparente) não precisam de placa.
-                    outlineFocus = true,
-                    slidingFocus = true,
+                    outlineFocus = !white,
+                    slidingFocus = !white,
+                    growOnFocus = false,
                     title = ch.name,
                     // Todas as linhas com a mesma altura: o programa numa linha (anda para o lado na que tem foco),
                     // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
@@ -457,6 +493,8 @@ private fun GroupList(
             onFocusGroup(id)
         }
     }
+    // Estilo Sombra: o foco é o mesmo fundo claro dos canais e o grupo atual não leva fundo (pareceria um segundo foco).
+    val soft = prefs.panelStyle == Prefs.PanelStyles.SHADOW
     val selectedIndex = groups.indexOfFirst { it.id == selected }.coerceAtLeast(0)
     val state = remember { panelListState((selectedIndex - 3).coerceAtLeast(0)) }
     val pillFocus = remember { FocusRequester() }
@@ -551,7 +589,7 @@ private fun GroupList(
         }
         LazyColumn(
             state = state,
-            modifier = Modifier.slidingFocus(state, plate = true) { focusedGroup?.let { "g:$it" } },
+            modifier = Modifier.slidingFocus(state, plate = !soft, fill = ShadowFocus.takeIf { soft }) { focusedGroup?.let { "g:$it" } },
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
         ) {
@@ -565,7 +603,7 @@ private fun GroupList(
                 val locked = prefs.isLocked(data.playlist.id, g.id)
                 GlassRow(
                     onClick = { onSelectGroup(g.id) },
-                    selected = g.id == selected,
+                    selected = g.id == selected && !soft,
                     enabled = !playlistMenu,
                     slidingFocus = true,
                     title = g.name,
@@ -626,11 +664,11 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
 
 /** Cabeçalho do painel; à direita, uma dica ([hint]) ou uma ação ([action]). */
 @Composable
-private fun PanelHeader(title: String, subtitle: String, hint: String? = null, action: (@Composable () -> Unit)? = null) {
+private fun PanelHeader(title: String, subtitle: String?, hint: String? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ItvColors.TextDim, maxLines = 1)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ItvColors.TextDim, maxLines = 1)
         }
         if (hint != null) Text(hint, style = MaterialTheme.typography.labelMedium, color = ItvColors.TextFaint)
         action?.invoke()

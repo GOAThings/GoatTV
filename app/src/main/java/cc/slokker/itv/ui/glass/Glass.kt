@@ -283,6 +283,8 @@ fun GlassRow(
     progress: Float? = null,
     /** Guarda o lugar da barra mesmo sem [progress] (linhas com a mesma altura numa lista). */
     reserveProgress: Boolean = false,
+    /** Com foco, a linha cresce um pouco (como sempre foi); sem isto fica do mesmo tamanho e só muda de cor. */
+    growOnFocus: Boolean = true,
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -316,7 +318,7 @@ fun GlassRow(
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus) 1f else 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus || !growOnFocus) 1f else 1.02f),
     ) {
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
