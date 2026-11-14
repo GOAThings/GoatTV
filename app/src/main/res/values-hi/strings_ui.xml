@@ -532,6 +532,9 @@
     <string name="audio_delay">ऑडियो देरी (लिप सिंक)</string>
     <string name="audio_delay_sub">आवाज़ तस्वीर से पहले: देर करें (+)। आवाज़ देर से: आगे करें (−)</string>
     <string name="accent">एक्सेंट रंग</string>
+    <string name="ui_style">शैली</string>
+    <string name="ui_style_classic">क्लासिक</string>
+    <string name="ui_style_glass">काँच</string>
     <string name="accent_name">बैंगनी</string>
     <string name="accent_name_2">मिंट</string>
     <string name="accent_name_3">सूर्यास्त</string>

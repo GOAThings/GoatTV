@@ -1,5 +1,11 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package cc.slokker.itv
 
+import cc.slokker.itv.ui.theme.CenteredScroll
+import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.ui.theme.ItvStyle
+import androidx.compose.runtime.SideEffect
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
@@ -85,6 +91,14 @@ class MainActivity : AppCompatActivity() {
         }
         // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
         if (BuildConfig.DEBUG && savedInstanceState == null) {
+            // Uma definição de texto para testar (ex.: --es demo_pref ui_style=glass).
+            // Grava-se depois de o perfil carregar (senão o que vem do disco apagava-a).
+            intent.getStringExtra("demo_pref")?.split("=", limit = 2)?.takeIf { it.size == 2 }?.let { (k, v) ->
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(4_000)
+                    vm.setPref(k, v)
+                }
+            }
             intent.getStringExtra("demo_m3u")?.let { url ->
                 lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = intent.getStringExtra("demo_name") ?: "Demo", url = url)) }
             }
@@ -197,12 +211,16 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val scaled = remember(baseDensity, prefs.uiScale) {
         Density(baseDensity.density * (if (phone) 100 else prefs.uiScale) / 100f, baseDensity.fontScale)
     }
+    // O estilo dos painéis (só na TV): as formas e o vidro leem-no (ver ItvStyle).
+    SideEffect { ItvStyle.glass = !phone && prefs.uiStyle == Prefs.UiStyle.GLASS }
     CompositionLocalProvider(
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
         LocalOutlineBrush provides outlineBrush(prefs.outlineColor, Accent.byId(prefs.accent)),
         LocalDensity provides scaled,
         LocalChannelLogos provides channelLogos,
+        androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides
+            if (!phone && prefs.uiStyle == Prefs.UiStyle.GLASS) CenteredScroll else androidx.compose.foundation.gestures.LocalBringIntoViewSpec.current,
     ) {
     // A abertura passa uma vez por arranque (sobrevive a rodar/recriar a atividade); qualquer tecla salta-a.
     var introDone by rememberSaveable { mutableStateOf(vm.noVideo) }

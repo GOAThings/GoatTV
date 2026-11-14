@@ -240,6 +240,7 @@ class PersistedFormatTest {
         "exitConfirm" to (Prefs.Key.EXIT_CONFIRM to false),
         "accent" to (Prefs.Key.ACCENT to "sunset"),
         "glassOpacity" to (Prefs.Key.GLASS_OPACITY to 35),
+        "uiStyle" to (Prefs.Key.UI_STYLE to "glass"),
         "showFavoritesGroup" to (Prefs.Key.SHOW_FAVORITES_GROUP to false),
         "showAllGroup" to (Prefs.Key.SHOW_ALL_GROUP to false),
         "showRecentGroup" to (Prefs.Key.SHOW_RECENT_GROUP to false),

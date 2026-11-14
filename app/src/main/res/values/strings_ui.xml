@@ -533,6 +533,9 @@
     <string name="audio_delay">Audio delay (lip sync)</string>
     <string name="audio_delay_sub">Sound before the picture: delay it (+). Sound late: bring it forward (−)</string>
     <string name="accent">Accent colour</string>
+    <string name="ui_style">Style</string>
+    <string name="ui_style_classic">Classic</string>
+    <string name="ui_style_glass">Glass</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Mint</string>
     <string name="accent_name_3">Sunset</string>

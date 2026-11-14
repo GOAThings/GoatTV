@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player
 
+import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -159,7 +160,8 @@ internal fun SidePanel(
         Modifier
             .width(prefs.panelWidth.dp)
             .fillMaxHeight()
-            .graphicsLayer { alpha = 1f - 0.45f * toGroups.value }
+            // Com os grupos abertos, os canais ficam esbatidos ao lado; no vidro claro desaparecem (só os grupos).
+            .graphicsLayer { alpha = 1f - (if (ItvStyle.glass) 1f else 0.45f) * toGroups.value }
             .glass(shape)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
             // e as margens ficam por dentro para o brilho do foco ter espaço.

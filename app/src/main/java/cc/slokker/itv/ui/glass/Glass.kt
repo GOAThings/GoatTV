@@ -1,5 +1,10 @@
 package cc.slokker.itv.ui.glass
 
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.neverEqualPolicy
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.graphics.SolidColor
+import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import android.graphics.Bitmap
@@ -126,10 +131,14 @@ fun Modifier.glass(
 ): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
+    val light = ItvStyle.glass
     this
         .onGloballyPositioned { origin = it.positionInWindow() }
         .drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
+            // O vidro claro: um véu branco por cima do vídeo desfocado (um pouco escurecido, para o texto branco se
+            // ler mesmo num vídeo claro) e o contorno mais marcado.
+            val lightVeil = Color.White.copy(alpha = 0.16f)
             val path = Path().apply { addOutline(outline) }
             val highlight = Brush.verticalGradient(
                 0f to Color.White.copy(alpha = 0.16f),
@@ -159,13 +168,21 @@ fun Modifier.glass(
                             filterQuality = FilterQuality.Low,
                             colorFilter = Vibrancy,
                         )
-                        drawRect(tint ?: GlassTint.copy(alpha = backdrop.opacity))
+                        if (light && tint == null) {
+                            drawRect(GlassTint.copy(alpha = backdrop.opacity * 0.45f))
+                            drawRect(lightVeil)
+                        } else {
+                            drawRect(tint ?: GlassTint.copy(alpha = backdrop.opacity))
+                        }
+                    } else if (light) {
+                        drawRect(Color(0x99161A26))
+                        drawRect(lightVeil)
                     } else {
                         drawRect(fallbackTint)
                     }
                     drawRect(highlight)
                 }
-                drawOutline(outline, rim, style = stroke)
+                drawOutline(outline, if (light) SolidColor(Color.White.copy(alpha = 0.32f)) else rim, style = stroke)
             }
         }
         // O conteúdo vai para uma camada própria: quando o fundo desfocado muda (várias vezes por segundo)
@@ -247,6 +264,12 @@ private val OUTLINE_WIDTH = 2.dp
 fun ContentDrawScope.drawSlidingFocus(top: Float, height: Float, brush: Brush, alpha: Float = 1f) {
     if (height <= 0f || alpha <= 0f) { drawContent(); return }
     val outline = ItvShapes.Row.createOutline(Size(size.width, height), layoutDirection, this)
+    // No vidro claro o destaque é a placa branca (o texto da linha com foco fica escuro, ver GlassRow).
+    if (ItvStyle.glass) {
+        translate(top = top) { drawOutline(outline, Color.White.copy(alpha = alpha)) }
+        drawContent()
+        return
+    }
     translate(top = top) { drawOutline(outline, Color.White.copy(alpha = OUTLINE_VEIL * alpha)) }
     drawContent()
     translate(top = top) { drawOutline(outline, brush, alpha = alpha, style = Stroke(OUTLINE_WIDTH.toPx() * 2)) }
@@ -286,13 +309,21 @@ fun GlassRow(
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // No vidro claro o foco é sempre a placa branca (também nas listas que usavam só o contorno).
+    val glassStyle = ItvStyle.glass
+    // Onde está esta linha na janela (para a roda; não é estado: só o desenho a lê).
+    var bounds by remember { mutableStateOf(Rect.Zero, neverEqualPolicy()) }
+    @Suppress("NAME_SHADOWING")
+    val outlineFocus = outlineFocus && !glassStyle
     // Como o menu do GoatLauncher: a linha com foco fica branca com texto escuro; a selecionada
     // (ex.: o canal a ver) fica com um fundo claro translúcido.
     // O tv-material só anima o tamanho: a placa branca aparece aqui com uma transição curta, para o
     // destaque não saltar de linha em linha enquanto a lista desliza. Pinta-se só no desenho (sem
     // recompor a linha a cada frame) e o texto troca de cor uma vez, a meio.
     val fade = animateFloatAsState(if (focused && enabled) 1f else 0f, tween(FOCUS_FADE_MS), label = "row")
-    val dark by remember(outlineFocus, slidingFocus) { derivedStateOf { !outlineFocus && !slidingFocus && fade.value > 0.5f } }
+    val dark by remember(outlineFocus, slidingFocus, glassStyle) {
+        derivedStateOf { !outlineFocus && (!slidingFocus || glassStyle) && fade.value > 0.5f }
+    }
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
     // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
@@ -304,7 +335,25 @@ fun GlassRow(
         onClick = onClick,
         onLongClick = onLongClick,
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.hasFocus },
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged {
+                focused = it.hasFocus
+                if (it.hasFocus && glassStyle && !bounds.isEmpty) ItvStyle.focusBand = bounds
+            }
+            .then(
+                if (glassStyle) {
+                    // A roda: a linha com foco diz onde está; as outras apagam-se com a distância a ela.
+                    Modifier
+                        .onGloballyPositioned { c ->
+                            bounds = c.boundsInWindow()
+                            if (focused) ItvStyle.focusBand = bounds
+                        }
+                        .graphicsLayer { alpha = if (focused) 1f else ItvStyle.wheelAlpha(bounds) }
+                } else {
+                    Modifier
+                },
+            ),
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = rest,
@@ -316,7 +365,8 @@ fun GlassRow(
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus) 1f else 1.02f),
+        // No vidro claro a placa com foco sai um pouco para fora do painel (como uma roda que passa por ela).
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus) 1f else if (ItvStyle.glass) 1.06f else 1.02f),
     ) {
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
@@ -332,12 +382,19 @@ fun GlassRow(
                         drawRect(Color.White.copy(alpha = a))
                     }
                 }
-                .padding(horizontal = 12.dp, vertical = 7.dp),
+                .padding(horizontal = if (glassStyle) 18.dp else 12.dp, vertical = if (glassStyle) 13.dp else 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             leading?.invoke(this)
             Column(Modifier.weight(1f)) {
-                Text(title, Modifier.rowText(), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // No vidro claro, letra maior e mais cheia (como no mockup).
+                Text(
+                    title,
+                    Modifier.rowText(),
+                    style = if (glassStyle) MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 if (subtitle != null) {
                     Text(
                         subtitle,

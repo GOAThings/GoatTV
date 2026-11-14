@@ -532,6 +532,9 @@
     <string name="audio_delay">Ses gecikmesi (dudak senkronu)</string>
     <string name="audio_delay_sub">Ses görüntüden önce: geciktirin (+). Ses geç: öne alın (−)</string>
     <string name="accent">Vurgu rengi</string>
+    <string name="ui_style">Stil</string>
+    <string name="ui_style_classic">Klasik</string>
+    <string name="ui_style_glass">Cam</string>
     <string name="accent_name">Mor</string>
     <string name="accent_name_2">Nane</string>
     <string name="accent_name_3">Gün batımı</string>

@@ -111,7 +111,8 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
     var showInitials by remember(logo) { mutableStateOf(logo == null) }
     // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: ganham uma placa escura,
     // desenhada por fora do tamanho para não mexer no alinhamento.
-    val onLight = !showInitials && LocalContentColor.current.luminance() < 0.5f
+    val lightRow = LocalContentColor.current.luminance() < 0.5f
+    val onLight = !showInitials && lightRow
     // Só o logo; o fundo arredondado fica para as iniciais (quando não há logo).
     Box(
         modifier = modifier
@@ -131,13 +132,14 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
                     Modifier
                 },
             )
-            .then(if (showInitials) Modifier.clip(RoundedCornerShape(size / 7)).background(Color.White.copy(alpha = 0.10f)) else Modifier),
+            // Na placa branca as iniciais ficam escuras sobre um fundo escuro leve (brancas não se viam).
+            .then(if (showInitials) Modifier.clip(RoundedCornerShape(size / 7)).background(if (lightRow) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.10f)) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (showInitials) {
             Text(
                 text = name.take(2).uppercase(),
-                color = ItvColors.TextDim,
+                color = if (lightRow) Color(0xFF4A5260) else ItvColors.TextDim,
                 fontSize = (size.value / 3).sp,
                 fontWeight = FontWeight.Bold,
             )

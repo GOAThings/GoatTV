@@ -1,5 +1,14 @@
 package cc.slokker.itv.ui.player
 
+import androidx.tv.material3.LocalContentColor
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.Canvas
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -99,6 +108,9 @@ private const val PIP_FRACTION = 0.25f
 private const val PIP_MARGIN_X = 0.017f
 private const val PIP_MARGIN_Y = 0.03f
 private const val PIP_GAP = 0.015f
+
+/** Os cantos dos canais no dividido do vidro claro. */
+private val TileCorner = RoundedCornerShape(20.dp)
 
 /** Liga/desliga o som de um player (sem som não chega a abrir o áudio: dá para ter passthrough num e PCM no outro). */
 internal fun setAudible(player: Player, audible: Boolean) {
@@ -316,14 +328,29 @@ internal fun extraStatus(playback: ChannelPlayback?, s: cc.slokker.itv.ui.i18n.S
  * imagem na imagem, o canal em ecrã inteiro não leva etiqueta (para esse há a informação normal).
  */
 @Composable
-internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, split: Boolean) {
+internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, split: Boolean, rounded: Boolean = false) {
     val accent = LocalAccent.current
     tiles.forEachIndexed { position, tile ->
         val small = !split && position > 0
         val border = when {
+            rounded && tile.audible -> Modifier.border(3.dp, Color.White, TileCorner)
+            rounded -> Modifier
             tile.audible && (split || small) -> Modifier.border(3.dp, accent.brush, RoundedCornerShape(4.dp))
             small -> Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
             else -> Modifier
+        }
+        // Cantos redondos: o vídeo (uma SurfaceView) não se deixa recortar em todas as boxes, por isso pintam-se os
+        // cantos de preto por cima (no dividido, à volta de cada canal só há preto).
+        if (rounded) {
+            Canvas(modifiers[position]) {
+                val r = TileCorner.topStart.toPx(size, this)
+                val outside = Path().apply {
+                    fillType = PathFillType.EvenOdd
+                    addRect(Rect(Offset.Zero, size))
+                    addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(r)))
+                }
+                drawPath(outside, Color.Black)
+            }
         }
         Box(modifiers[position].then(border)) {
             if (split || small) {
@@ -331,17 +358,18 @@ internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, s
                     Modifier
                         .align(Alignment.BottomStart)
                         .padding(10.dp)
-                        .clip(ItvShapes.Control)
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clip(if (rounded) CircleShape else ItvShapes.Control)
+                        .background(if (rounded && tile.audible) Color.White else Color.Black.copy(alpha = 0.6f))
                         .padding(horizontal = 12.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (tile.audible) {
-                        Icon(ItvIcons.Audio, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Icon(ItvIcons.Audio, contentDescription = null, tint = if (rounded) Color(0xFF12161A) else LocalContentColor.current, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                     }
                     Text(
                         listOfNotNull(tile.name, tile.status).joinToString(" · "),
+                        color = if (rounded && tile.audible) Color(0xFF12161A) else Color.Unspecified,
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

@@ -1010,6 +1010,9 @@ class Strings(context: Context) {
 
     // ---- Aspeto: vidro e grupos ----
     val accent get() = s(R.string.accent)
+    val uiStyle get() = s(R.string.ui_style)
+    val uiStyleClassic get() = s(R.string.ui_style_classic)
+    val uiStyleGlass get() = s(R.string.ui_style_glass)
     fun accentName(id: String) = when (id) {
         "violet" -> s(R.string.accent_name)
         "mint" -> s(R.string.accent_name_2)

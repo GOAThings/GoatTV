@@ -2,6 +2,7 @@
 
 package cc.slokker.itv.ui.player
 
+import cc.slokker.itv.ui.theme.ItvStyle
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
@@ -963,7 +964,9 @@ fun PlayerScreen(vm: AppViewModel) {
             val split = multi && dualLayout == DualLayout.SPLIT
             val rects = if (multi) tileRects(tileCount, dualLayout) else listOf(TileRect(0f, 0f, 1f, 1f))
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val tileModifiers = rects.map { r -> Modifier.offset(maxWidth * r.x, maxHeight * r.y).size(maxWidth * r.w, maxHeight * r.h) }
+                // No vidro claro, o dividido leva espaço entre os canais (e os cantos redondos, em TileDecorations).
+                val gap = if (split && ItvStyle.glass) 6.dp else 0.dp
+                val tileModifiers = rects.map { r -> Modifier.offset(maxWidth * r.x, maxHeight * r.y).size(maxWidth * r.w, maxHeight * r.h).padding(gap) }
                 Box(tileModifiers[0]) {
                     AndroidView(
                         factory = { ctx ->
@@ -1004,6 +1007,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         },
                         modifiers = tileModifiers,
                         split = split,
+                        rounded = split && ItvStyle.glass,
                     )
                 }
             }
