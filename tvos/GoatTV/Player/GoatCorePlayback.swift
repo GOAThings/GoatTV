@@ -175,6 +175,8 @@ final class GoatCorePlayback: NSObject {
     private var pip: AVPictureInPictureController?
     /// O canal está (ou vai ficar) no Picture in Picture: ao sair da app, o vídeo continua.
     private(set) var pipActive = false
+    /// O PiP está a fechar porque se voltou à app (ver [onPipEnded]).
+    private var restoring = false
     /// O Picture in Picture fechou (com a app em segundo plano, quem usa o leitor pára-o e liberta a ligação).
     var onPipEnded: (() -> Void)?
     /// O Picture in Picture pergunta de outra thread se está em pausa.
@@ -425,18 +427,30 @@ final class GoatCorePlayback: NSObject {
 }
 
 extension GoatCorePlayback: AVPictureInPictureControllerDelegate {
+    // O sistema chama-as na thread principal: o estado muda já (ir para segundo plano logo a seguir tem de o ver).
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor in self.pipActive = true }
+        MainActor.assumeIsolated { self.pipActive = true }
     }
 
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         Task { @MainActor in self.pipActive = false }
     }
 
+    /// Tocar em "voltar à app": o canal continua, não é o PiP a fechar.
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                                restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            self.restoring = true
+            completionHandler(true)
+        }
+    }
+
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor in
             self.pipActive = false
-            self.onPipEnded?()
+            let restored = self.restoring
+            self.restoring = false
+            if !restored { self.onPipEnded?() }
         }
     }
 }
@@ -803,11 +817,26 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         for b in software?.decode(v) ?? [] { video(b) }
     }
 
+    /// O ecrã foi interrompido (a passagem do Picture in Picture para a app, ou ao contrário): esvazia-se e retoma na
+    /// imagem-chave seguinte, sem voltar a ligar. Muitas vezes seguidas, é avaria a sério.
+    private var waitSync = false
+    private var recoveries = 0
+
     private func video(_ b: CMSampleBuffer) {
         guard !closed else { return }
-        if display.status == .failed {
-            fail("video renderer: \(display.error?.localizedDescription ?? "?")")
-            return
+        if display.status == .failed || display.requiresFlushToResumeDecoding {
+            recoveries += 1
+            guard recoveries <= 20 else {
+                fail("video renderer: \(display.error?.localizedDescription ?? "?")")
+                return
+            }
+            DebugLog.add("GoatCore: video renderer interrupted, resuming at the next keyframe")
+            display.flush()
+            waitSync = true
+        }
+        if waitSync {
+            guard Self.isSync(b) else { return }
+            waitSync = false
         }
         if !reportedSize, let f = CMSampleBufferGetFormatDescription(b) {
             reportedSize = true
@@ -820,11 +849,22 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         if startTime == nil, pts.isValid { begin(at: pts) }
     }
 
+    private static func isSync(_ b: CMSampleBuffer) -> Bool {
+        guard let a = CMSampleBufferGetSampleAttachmentsArray(b, createIfNecessary: false) as? [[CFString: Any]], let first = a.first else { return true }
+        return (first[kCMSampleAttachmentKey_NotSync] as? Bool) != true
+    }
+
     private func audioSample(_ b: CMSampleBuffer) {
         guard !closed else { return }
         if audio.status == .failed {
-            fail("audio renderer: \(audio.error?.localizedDescription ?? "?")")
-            return
+            // Interrompido (a passagem do PiP, uma chamada): esvazia-se e continua; muitas vezes seguidas, é avaria.
+            recoveries += 1
+            guard recoveries <= 20 else {
+                fail("audio renderer: \(audio.error?.localizedDescription ?? "?")")
+                return
+            }
+            DebugLog.add("GoatCore: audio renderer interrupted, resuming")
+            audio.flush()
         }
         audio.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
