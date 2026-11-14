@@ -305,7 +305,8 @@ class GoatCorePlayer(
             Log.i(TAG, "stop after ${SystemClock.elapsedRealtime() - openedAt} ms: units=${stats.videoUnits} shown=${stats.framesRendered} " +
                 "late=${stats.framesLate} audio=${stats.audioFrames} jumps=${stats.jumps} decoderErrors=${stats.decoderErrors} " +
                 "configured=${stats.configured} in=${stats.codecInputs} out=${stats.codecOutputs} formats=${stats.codecFormatChanges} " +
-                "video=${threads.getOrNull(1)?.state}")
+                "video=${threads.getOrNull(1)?.state}" +
+                nal?.let { " interlaced=${it.interlaced} frames=${it.frames} fieldPairs=${it.fieldPairs} loneFields=${it.loneFields}" }.orEmpty())
         }
         running = false
         previous = null

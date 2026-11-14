@@ -38,6 +38,17 @@ class NalReader(private val hevc: Boolean) {
     private class Held(val unit: VideoUnit, val frameNum: Int, val bottom: Boolean)
     private var held: Held? = null
 
+    /** Para o registo: imagens inteiras, pares de campos juntos e campos que foram sem par. */
+    var frames = 0
+        private set
+    var fieldPairs = 0
+        private set
+    var loneFields = 0
+        private set
+
+    /** O SPS diz que as imagens podem vir entrelaçadas (H.264 sem frame_mbs_only). */
+    val interlaced: Boolean get() = spsInfo?.frameMbsOnly == false
+
     /**
      * A imagem seguinte para o descodificador, com os tempos dela ([pts], [dts] do PES). Numa imagem entrelaçada enviada
      * por campos (cada campo num PES), os dois campos saem juntos, com os tempos do primeiro: até chegar o segundo,
@@ -49,15 +60,19 @@ class NalReader(private val hevc: Boolean) {
         val h = held
         if (hevc || slice == null || !slice.field) {
             // Uma imagem inteira: um campo que ficou sem par já não serve.
+            if (h != null) loneFields++
             held = null
+            frames++
             return u
         }
         if (h != null && h.frameNum == slice.frameNum && h.bottom != slice.bottom) {
             held = null
+            fieldPairs++
             return VideoUnit(h.unit.data + u.data, h.unit.keyframe || u.keyframe, h.unit.parameterSets.ifEmpty { u.parameterSets }, h.unit.pts, h.unit.dts)
         }
         held = Held(u, slice.frameNum, slice.bottom)
         // O campo anterior não teve par: vai sozinho (melhor do que perdê-lo).
+        if (h != null) loneFields++
         return h?.unit
     }
 
