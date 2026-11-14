@@ -393,7 +393,18 @@ private fun ChannelList(
                     leading = if (ItvStyle.glass) {
                         if (prefs.showLogos) {
                             {
-                                ChannelLogo(ch, if (LocalRowFocused.current) GLASS_LOGO_FOCUSED else GLASS_LOGO)
+                                // Sempre do mesmo tamanho (a imagem não volta a carregar); com foco cresce por escala.
+                                val grow by androidx.compose.animation.core.animateFloatAsState(
+                                    if (LocalRowFocused.current) GLASS_LOGO_FOCUSED / GLASS_LOGO else 1f, label = "logo",
+                                )
+                                ChannelLogo(
+                                    ch,
+                                    GLASS_LOGO,
+                                    Modifier.graphicsLayer {
+                                        scaleX = grow
+                                        scaleY = grow
+                                    },
+                                )
                                 Spacer(Modifier.width(12.dp))
                             }
                         } else {

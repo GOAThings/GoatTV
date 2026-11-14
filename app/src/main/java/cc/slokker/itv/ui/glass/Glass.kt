@@ -289,6 +289,9 @@ fun ContentDrawScope.drawSlidingFocus(top: Float, height: Float, brush: Brush, a
 }
 private const val OUTLINE_VEIL = 0.12f
 
+/** No vidro claro, quanto a linha com foco leva a crescer. */
+private const val FOCUS_GROW_MS = 160
+
 /** Transição do destaque de foco nas linhas. */
 private const val FOCUS_FADE_MS = 150
 
@@ -328,6 +331,9 @@ fun GlassRow(
     var focused by remember { mutableStateOf(false) }
     // No vidro claro o foco é sempre a placa branca (também nas listas que usavam só o contorno).
     val glassStyle = ItvStyle.glass
+    // No vidro claro a linha com foco cresce devagar (mudar de tamanho de repente empurrava as outras aos saltos).
+    val glassPad by androidx.compose.animation.core.animateDpAsState(if (focused) 9.dp else 5.dp, tween(FOCUS_GROW_MS), label = "pad")
+    val glassScale by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.16f else 1f, tween(FOCUS_GROW_MS), label = "scale")
     // Onde está esta linha na janela (para a roda; não é estado: só o desenho a lê).
     var bounds by remember { mutableStateOf(Rect.Zero, neverEqualPolicy()) }
     @Suppress("NAME_SHADOWING")
@@ -402,7 +408,7 @@ fun GlassRow(
                 .then(
                     if (glassStyle) {
                         // O texto alinha com o vidro (a linha vai até à borda de fora: a placa sai do painel).
-                        Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, top = if (focused) 10.dp else 5.dp, bottom = if (focused) 10.dp else 5.dp)
+                        Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, top = glassPad, bottom = glassPad)
                     } else {
                         Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                     },
@@ -422,17 +428,33 @@ fun GlassRow(
                 // No vidro claro, letra grande; a da linha com foco maior e mais cheia (como no mockup).
                 Text(
                     title,
-                    Modifier.rowText(),
-                    style = when {
-                        !glassStyle -> MaterialTheme.typography.titleSmall
-                        focused -> MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold)
-                        else -> MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+                    if (glassStyle) {
+                        Modifier
+                            .graphicsLayer {
+                                scaleX = glassScale
+                                scaleY = glassScale
+                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                            }
+                            .rowText()
+                    } else {
+                        Modifier.rowText()
+                    },
+                    style = if (glassStyle) {
+                        MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+                    } else {
+                        MaterialTheme.typography.titleSmall
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val details = !(glassStyle && detailsOnFocus && !focused)
-                if (subtitle != null && details) {
+                val onFocusOnly = glassStyle && detailsOnFocus
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !onFocusOnly || focused,
+                    enter = androidx.compose.animation.expandVertically(tween(FOCUS_GROW_MS)) + androidx.compose.animation.fadeIn(tween(FOCUS_GROW_MS)),
+                    exit = androidx.compose.animation.shrinkVertically(tween(FOCUS_GROW_MS)) + androidx.compose.animation.fadeOut(tween(FOCUS_GROW_MS / 2)),
+                ) {
+                Column {
+                if (subtitle != null) {
                     Text(
                         subtitle,
                         if (subtitleLines == 1) Modifier.rowText() else Modifier,
@@ -442,7 +464,7 @@ fun GlassRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if ((progress != null || reserveProgress) && details && !(glassStyle && progress == null)) {
+                if ((progress != null || reserveProgress) && !(glassStyle && progress == null)) {
                     val ink = LocalContentColor.current
                     Spacer(
                         Modifier
@@ -456,6 +478,8 @@ fun GlassRow(
                                 drawRoundRect(ink.copy(alpha = 0.85f), size = size.copy(width = size.width * p), cornerRadius = r)
                             },
                     )
+                }
+                }
                 }
             }
             if (trailing != null) {
