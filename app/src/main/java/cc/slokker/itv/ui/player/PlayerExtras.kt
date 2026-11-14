@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.luminance
 import androidx.tv.material3.LocalContentColor
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -392,7 +393,22 @@ internal fun TrackPicker(title: String, options: List<TrackOption>, onPicked: ()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }
     val focusIndex = options.indexOfFirst { it.selected }.coerceAtLeast(0)
-    if (ItvStyle.glass && options.isNotEmpty()) {
+    if (ItvStyle.glass && options.isEmpty()) {
+        // Sem faixas: o mesmo painel, com o aviso e o foco num botão para fechar.
+        GlassPicker(title, modifier) {
+            item {
+                Text(
+                    s.noTracks,
+                    color = ItvColors.TextDim,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, bottom = 10.dp),
+                )
+            }
+            item { GlassRow(onClick = onPicked, modifier = Modifier.focusRequester(focus), title = s.close) }
+        }
+        return
+    }
+    if (ItvStyle.glass) {
         GlassPicker(title, modifier) {
             itemsIndexed(options, key = { _, o -> o.key }) { i, o ->
                 GlassRow(
@@ -456,14 +472,14 @@ private fun GlassPicker(title: String, modifier: Modifier, items: androidx.compo
         modifier
             .padding(start = 40.dp)
             .width(360.dp)
-            .fillMaxHeight(0.74f)
+            .heightIn(max = 560.dp)
             .glass(ItvShapes.Panel, inset = GlassInset)
             .padding(top = 26.dp, bottom = 10.dp),
     ) {
         Text(
             title,
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.padding(start = GlassInset + 22.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = GlassInset + 18.dp, bottom = 8.dp),
         )
         LazyColumn(contentPadding = PaddingValues(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = items)
     }

@@ -668,11 +668,18 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
 private fun PanelHeader(title: String, subtitle: String, hint: String? = null, action: (@Composable () -> Unit)? = null) {
     // No vidro claro: só o título, grande, e a dica à direita (como no mockup).
     if (ItvStyle.glass) {
+        // Com botões (os grupos, num painel mais estreito), o título fica um pouco menor para caber.
         Row(
-            Modifier.fillMaxWidth().padding(start = GlassInset + 22.dp, end = GlassInset + 18.dp, top = 6.dp, bottom = 14.dp),
+            Modifier.fillMaxWidth().padding(start = GlassInset + 18.dp, end = GlassInset + if (action != null) 6.dp else 18.dp, top = 6.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(
+                title,
+                style = (if (action != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall).copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             if (hint != null) Text(hint, style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.75f))
             action?.invoke()
         }
