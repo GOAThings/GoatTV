@@ -1,13 +1,5 @@
 package cc.slokker.itv.ui.player
 
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.foundation.gestures.BringIntoViewSpec
-import cc.slokker.itv.ui.glass.LocalRowFocused
-import androidx.compose.ui.text.font.FontWeight
-import cc.slokker.itv.ui.glass.GlassInset
-import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -138,10 +130,7 @@ internal fun SidePanel(
         animationSpec = tween(PANEL_ANIM_MS, easing = FastOutSlowInEasing),
         label = "panel",
     )
-    // No vidro claro as linhas vão até à borda de fora (a placa de foco sai do vidro, que fica recuado).
-    val glassStyle = ItvStyle.glass
-    val content = Modifier.fillMaxSize().padding(horizontal = if (glassStyle) 0.dp else 8.dp, vertical = if (glassStyle) 22.dp else 12.dp)
-    val panelGlass = if (glassStyle) Modifier.glass(shape, inset = GlassInset) else Modifier.glass(shape).clip(shape)
+    val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
     val groupsWidth = (prefs.panelWidth * 0.85f).dp
     // Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (→ abre-o).
     var preview by remember(group) { mutableStateOf(group) }
@@ -158,7 +147,8 @@ internal fun SidePanel(
                 layout(w, placeable.height) { if (w > 0) placeable.placeRelative(w - full, 0) }
             }
             .padding(end = 12.dp)
-            .then(panelGlass)
+            .glass(shape)
+            .clip(shape)
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
@@ -169,11 +159,11 @@ internal fun SidePanel(
         Modifier
             .width(prefs.panelWidth.dp)
             .fillMaxHeight()
-            // Com os grupos abertos, os canais ficam esbatidos ao lado; no vidro claro desaparecem (só os grupos).
-            .graphicsLayer { alpha = 1f - (if (ItvStyle.glass) 1f else 0.45f) * toGroups.value }
+            .graphicsLayer { alpha = 1f - 0.45f * toGroups.value }
+            .glass(shape)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
-            // e as margens ficam por dentro para o brilho do foco ter espaço (no vidro claro a placa sai dele).
-            .then(panelGlass)
+            // e as margens ficam por dentro para o brilho do foco ter espaço.
+            .clip(shape)
             .focusProperties { canFocus = mode == Panel.Channels },
     ) {
         Box(content) {
@@ -217,10 +207,6 @@ private fun PanelLayer(visible: () -> Float, shift: () -> Float, active: Boolean
 private const val PANEL_ANIM_MS = 260
 private val LIST_LOGO_SIZE = 34.dp
 
-/** No vidro claro: logótipos mais pequenos (cabem 8 canais ou mais no painel, como no mockup). */
-private val GLASS_LOGO = 26.dp
-private val GLASS_LOGO_FOCUSED = 32.dp
-
 private fun List<EpgEntry>.currentTitle(): String? = current()?.title
 
 private fun List<EpgEntry>.current(): EpgEntry? {
@@ -234,7 +220,6 @@ private fun PanelScale(scale: Float, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalDensity provides Density(density.density, density.fontScale * scale), content = content)
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelList(
     group: String,
@@ -382,40 +367,15 @@ private fun ChannelList(
                     // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
                     subtitle = when {
                         programme != null -> programme.title
-                        ItvStyle.glass -> null
                         isPlaying -> LocalStrings.current.watchingNow
                         prefs.epgInList -> LocalStrings.current.noGuideInfo
                         else -> null
                     },
-                    number = if (prefs.showNumbers) ch.num.toString() else null,
-                    detailsOnFocus = true,
                     subtitleLines = 1,
                     // Barra do programa (o espaço fica reservado sem guia, para as linhas terem todas a mesma altura).
                     progress = programme?.let { e -> ((minute * 60_000 - e.startMs).toFloat() / (e.endMs - e.startMs)).coerceIn(0f, 1f) },
-                    reserveProgress = prefs.epgInList && !ItvStyle.glass,
-                    // No vidro claro (o mockup "logos ao lado"): o número vai à parte e o logótipo cresce um pouco
-                    // na linha com foco.
-                    leading = if (ItvStyle.glass) {
-                        if (prefs.showLogos) {
-                            {
-                                // Sempre do mesmo tamanho (a imagem não volta a carregar); com foco cresce por escala.
-                                val grow by androidx.compose.animation.core.animateFloatAsState(
-                                    if (LocalRowFocused.current) GLASS_LOGO_FOCUSED / GLASS_LOGO else 1f, label = "logo",
-                                )
-                                ChannelLogo(
-                                    ch,
-                                    GLASS_LOGO,
-                                    Modifier.graphicsLayer {
-                                        scaleX = grow
-                                        scaleY = grow
-                                    },
-                                )
-                                Spacer(Modifier.width(12.dp))
-                            }
-                        } else {
-                            null
-                        }
-                    } else if (prefs.showNumbers || prefs.showLogos) {
+                    reserveProgress = prefs.epgInList,
+                    leading = if (prefs.showNumbers || prefs.showLogos) {
                         {
                             if (prefs.showNumbers) {
                                 Text(
@@ -666,25 +626,6 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
 /** Cabeçalho do painel; à direita, uma dica ([hint]) ou uma ação ([action]). */
 @Composable
 private fun PanelHeader(title: String, subtitle: String, hint: String? = null, action: (@Composable () -> Unit)? = null) {
-    // No vidro claro: só o título, grande, e a dica à direita (como no mockup).
-    if (ItvStyle.glass) {
-        // Com botões (os grupos, num painel mais estreito), o título fica um pouco menor para caber.
-        Row(
-            Modifier.fillMaxWidth().padding(start = GlassInset + 18.dp, end = GlassInset + if (action != null) 6.dp else 18.dp, top = 6.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                title,
-                style = (if (action != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall).copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (hint != null) Text(hint, style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.75f))
-            action?.invoke()
-        }
-        return
-    }
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)

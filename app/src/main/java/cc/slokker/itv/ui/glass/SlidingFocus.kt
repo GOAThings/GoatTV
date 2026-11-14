@@ -68,8 +68,7 @@ fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, focusedK
             }
         }
     }
-    // No vidro claro as linhas escurecem o texto sozinhas: a placa vai por baixo, como nas outras listas.
-    if (plate && !cc.slokker.itv.ui.theme.ItvStyle.glass) {
+    if (plate) {
         // [plate]: a placa branca de sempre, mas a deslizar. Pinta-se por cima em "diferença" numa camada à parte:
         // o texto branco fica escuro onde a placa está (mesmo a meio do caminho) e o resto fica branco.
         return onFocusChanged { focused = it.hasFocus }

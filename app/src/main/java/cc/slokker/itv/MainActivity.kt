@@ -211,10 +211,8 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         Density(baseDensity.density * (if (phone) 100 else prefs.uiScale) / 100f, baseDensity.fontScale)
     }
     // O estilo dos painéis (só na TV): as formas e o vidro leem-no (ver ItvStyle).
-    SideEffect {
-        ItvStyle.glass = !phone && prefs.uiStyle != Prefs.UiStyle.CLASSIC
-        ItvStyle.light = !phone && prefs.uiStyle == Prefs.UiStyle.GLASS
-    }
+    // A aparência dos painéis (só na TV): escura (a de sempre) ou clara. As listas são as mesmas nas duas.
+    SideEffect { ItvStyle.light = !phone && prefs.uiStyle == Prefs.UiStyle.GLASS }
     CompositionLocalProvider(
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),

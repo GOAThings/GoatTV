@@ -532,10 +532,9 @@
     <string name="audio_delay">Retraso del audio (sincronía labial)</string>
     <string name="audio_delay_sub">Sonido antes que la imagen: retrásalo (+). Sonido tarde: adelántalo (−)</string>
     <string name="accent">Color de acento</string>
-    <string name="ui_style">Estilo</string>
-    <string name="ui_style_classic">Clásico</string>
-    <string name="ui_style_glass">Cristal claro</string>
-    <string name="ui_style_glass_dark">Cristal oscuro</string>
+    <string name="ui_style">Apariencia</string>
+    <string name="ui_style_classic">Oscura</string>
+    <string name="ui_style_glass">Clara</string>
     <string name="accent_name">Violeta</string>
     <string name="accent_name_2">Menta</string>
     <string name="accent_name_3">Atardecer</string>

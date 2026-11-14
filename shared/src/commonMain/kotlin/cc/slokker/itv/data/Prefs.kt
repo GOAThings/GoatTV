@@ -70,7 +70,7 @@ data class Prefs(
     val accent: String = Accents.DEFAULT,
     /** Opacidade do vidro, em % (0 = só o vídeo desfocado, 100 = opaco). */
     val glassOpacity: Int = 60,
-    /** O aspeto dos painéis (ver [UiStyle]): o vidro escuro de sempre, ou o vidro claro com cantos redondos. */
+    /** A aparência dos painéis (ver [UiStyle]): o vidro escuro de sempre, ou o vidro claro. */
     val uiStyle: String = UiStyle.CLASSIC,
     /** Mostrar "★ Favoritos" e "Todos" na lista de grupos (para todas as listas). */
     val showFavoritesGroup: Boolean = true,
@@ -335,13 +335,11 @@ data class Prefs(
     }
 
     /** As cores do contorno do seletor; "accent" segue a cor de destaque (com o gradiente dela). */
-    /** O aspeto dos painéis: o vidro escuro de sempre, ou o vidro claro (véu branco, cantos redondos, foco em placa branca). */
+    /** A aparência dos painéis: o vidro escuro de sempre, ou o vidro claro (véu branco por cima do vídeo desfocado). */
     object UiStyle {
         const val CLASSIC = "classic"
         const val GLASS = "glass"
-        /** O vidro novo, escuro (a base do clássico com as linhas limpas). */
-        const val GLASS_DARK = "glass_dark"
-        val ALL = listOf(CLASSIC, GLASS_DARK, GLASS)
+        val ALL = listOf(CLASSIC, GLASS)
     }
 
     object OutlineColors {

@@ -532,10 +532,9 @@
     <string name="audio_delay">Ritardo audio (sincronia labiale)</string>
     <string name="audio_delay_sub">Audio prima dell\'immagine: ritardalo (+). Audio in ritardo: anticipalo (−)</string>
     <string name="accent">Colore principale</string>
-    <string name="ui_style">Stile</string>
-    <string name="ui_style_classic">Classico</string>
-    <string name="ui_style_glass">Vetro chiaro</string>
-    <string name="ui_style_glass_dark">Vetro scuro</string>
+    <string name="ui_style">Aspetto</string>
+    <string name="ui_style_classic">Scuro</string>
+    <string name="ui_style_glass">Chiaro</string>
     <string name="accent_name">Viola</string>
     <string name="accent_name_2">Menta</string>
     <string name="accent_name_3">Tramonto</string>

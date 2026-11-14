@@ -532,10 +532,9 @@
     <string name="audio_delay">Tonverzögerung (Lippensynchronität)</string>
     <string name="audio_delay_sub">Ton vor dem Bild: verzögern (+). Ton zu spät: vorziehen (−)</string>
     <string name="accent">Akzentfarbe</string>
-    <string name="ui_style">Stil</string>
-    <string name="ui_style_classic">Klassisch</string>
-    <string name="ui_style_glass">Helles Glas</string>
-    <string name="ui_style_glass_dark">Dunkles Glas</string>
+    <string name="ui_style">Darstellung</string>
+    <string name="ui_style_classic">Dunkel</string>
+    <string name="ui_style_glass">Hell</string>
     <string name="accent_name">Violett</string>
     <string name="accent_name_2">Minze</string>
     <string name="accent_name_3">Sonnenuntergang</string>

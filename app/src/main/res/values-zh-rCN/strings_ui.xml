@@ -532,10 +532,9 @@
     <string name="audio_delay">音频延迟（口型同步）</string>
     <string name="audio_delay_sub">声音早于画面：延后（+）。声音晚：提前（−）</string>
     <string name="accent">强调色</string>
-    <string name="ui_style">风格</string>
-    <string name="ui_style_classic">经典</string>
-    <string name="ui_style_glass">浅色玻璃</string>
-    <string name="ui_style_glass_dark">深色玻璃</string>
+    <string name="ui_style">外观</string>
+    <string name="ui_style_classic">深色</string>
+    <string name="ui_style_glass">浅色</string>
     <string name="accent_name">紫罗兰</string>
     <string name="accent_name_2">薄荷</string>
     <string name="accent_name_3">日落</string>

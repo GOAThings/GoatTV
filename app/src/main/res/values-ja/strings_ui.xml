@@ -532,10 +532,9 @@
     <string name="audio_delay">音声の遅延（リップシンク）</string>
     <string name="audio_delay_sub">音が映像より早い：遅らせる（+）。音が遅い：早める（−）</string>
     <string name="accent">アクセントカラー</string>
-    <string name="ui_style">スタイル</string>
-    <string name="ui_style_classic">クラシック</string>
-    <string name="ui_style_glass">ライトガラス</string>
-    <string name="ui_style_glass_dark">ダークガラス</string>
+    <string name="ui_style">外観</string>
+    <string name="ui_style_classic">ダーク</string>
+    <string name="ui_style_glass">ライト</string>
     <string name="accent_name">バイオレット</string>
     <string name="accent_name_2">ミント</string>
     <string name="accent_name_3">夕焼け</string>
