@@ -80,8 +80,10 @@ import cc.slokker.itv.ui.glass.rowText
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextOverflow
 import cc.slokker.itv.ui.i18n.LocalStrings
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
+import cc.slokker.itv.ui.theme.LocalPanelStyle
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 
@@ -152,6 +154,9 @@ internal fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
         }
     }
 
+    // No tema Sombra não há blocos: as linhas ficam soltas sobre a sombra, como a lista de canais.
+    val cards = LocalPanelStyle.current == Prefs.PanelStyles.GLASS
+
     LazyColumn(
         state = state,
         contentPadding = PaddingValues(vertical = 4.dp),
@@ -167,7 +172,7 @@ internal fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
             }
             val mod = (if (item === target) Modifier.focusRequester(focus) else Modifier)
                 .onFocusChanged { if (it.isFocused) focusedKey = item.key }
-                .cardSegment(first, last, inset)
+                .then(if (cards) Modifier.cardSegment(first, last, inset) else Modifier)
             val dim = LocalContentColor.current.copy(alpha = 0.82f)
             when (item) {
                 is Item.Header -> SectionLabel(item.text, if (index > 0) Modifier.padding(top = 8.dp) else Modifier)
@@ -263,17 +268,27 @@ internal fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
     }
 }
 
-/** Ícone de uma página, num quadrado arredondado; [brand] no gradiente da marca (ex.: a atualização). */
+/**
+ * Ícone de uma página, num quadrado arredondado; [brand] no gradiente da marca (ex.: a atualização). No tema Sombra
+ * só o ícone (sem quadrado), menos o da marca.
+ */
 @Composable
 private fun IconTile(icon: ImageVector, brand: Boolean = false) {
+    val tile = LocalPanelStyle.current == Prefs.PanelStyles.GLASS
     Box(
         Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(10.dp))
-            .then(if (brand) Modifier.background(LocalAccent.current.brush) else Modifier.background(Color.White.copy(alpha = 0.08f))),
+            .then(
+                when {
+                    brand -> Modifier.background(LocalAccent.current.brush)
+                    tile -> Modifier.background(Color.White.copy(alpha = 0.08f))
+                    else -> Modifier
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = if (brand) Color.White else ItvColors.Text.copy(alpha = 0.85f))
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = if (brand) Color.White else LocalContentColor.current.copy(alpha = 0.85f))
     }
     Spacer(Modifier.width(14.dp))
 }

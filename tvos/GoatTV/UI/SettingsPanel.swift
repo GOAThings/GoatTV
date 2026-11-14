@@ -102,6 +102,7 @@ struct SettingsPanel: View {
     let start: Page
     let onClose: () -> Void
     @Environment(\.panelActivity) private var onActivity
+    @Environment(\.panelLook) private var panelLook
 
     init(start: Page, onClose: @escaping () -> Void) {
         self.start = start
@@ -359,7 +360,7 @@ struct SettingsPanel: View {
                                 row(item)
                                     .accessibilityIdentifier(item.id)
                                     .overlay(alignment: .top) {
-                                        if index > 0 {
+                                        if index > 0, cards {
                                             Rectangle()
                                                 .fill(Color.white.opacity(0.07))
                                                 .frame(height: 1)
@@ -369,7 +370,8 @@ struct SettingsPanel: View {
                                     }
                             }
                         }
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.04)))
+                        // No tema Sombra não há blocos: as linhas ficam soltas sobre a sombra, como a lista de canais.
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(cards ? 0.04 : 0)))
                     }
                 }
                 .slidingHighlight(outline: outline, radius: 16)
@@ -438,16 +440,20 @@ struct SettingsPanel: View {
         if page == .root, id == "current", let channel = model.current {
             ChannelLogo(url: model.logo(for: channel), name: channel.name, size: CGSize(width: 80, height: 50))
         } else if let icon = icon(id) {
+            // No tema Sombra só o ícone (sem quadrado), na cor da linha (escura na linha branca do seletor branco).
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(id == "update" ? Color.white : Theme.text.opacity(0.85))
+                .foregroundStyle(id == "update" ? AnyShapeStyle(Color.white) : cards ? AnyShapeStyle(Theme.text.opacity(0.85)) : AnyShapeStyle(.primary))
                 .frame(width: 60, height: 60)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(id == "update" ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(0.08)))
+                        .fill(id == "update" ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(cards ? 0.08 : 0)))
                 )
         }
     }
+
+    /// As secções em blocos (só no tema Vidro).
+    private var cards: Bool { panelLook == Prefs.PanelLook.glass }
 
     private func leadingInset(_ item: Item) -> CGFloat {
         if page == .root, item.id == "current" { return 126 }

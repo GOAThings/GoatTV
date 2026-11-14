@@ -53,6 +53,12 @@ import cc.slokker.itv.ui.glass.glass
 import cc.slokker.itv.ui.theme.ItvColors
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.SingletonImageLoader
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
@@ -109,9 +115,21 @@ fun ChannelLogo(channel: Channel, size: Dp, modifier: Modifier = Modifier, initi
 fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifier) {
     // As iniciais só aparecem sem logo ou se falhar: muitos logos têm fundo transparente.
     var showInitials by remember(logo) { mutableStateOf(logo == null) }
-    // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: ganham uma placa escura,
-    // desenhada por fora do tamanho para não mexer no alinhamento.
-    val onLight = !showInitials && LocalContentColor.current.luminance() < 0.5f
+    // Numa linha com foco (fundo branco, texto escuro) os logos brancos desapareciam: esses (só esses, medidos uma vez)
+    // ganham uma placa escura, desenhada por fora do tamanho para não mexer no alinhamento.
+    val onWhite = !showInitials && LocalContentColor.current.luminance() < 0.5f
+    val context = LocalContext.current
+    var light by remember(logo) { mutableStateOf(logo?.let { LightLogos[it] }) }
+    if (onWhite && logo != null && light == null) {
+        LaunchedEffect(logo) {
+            val request = ImageRequest.Builder(context).data(logo).size(LIGHT_SAMPLE).allowHardware(false).build()
+            val image = (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image ?: return@LaunchedEffect
+            val measured = withContext(Dispatchers.Default) { runCatching { isLightLogo(image.toBitmap()) }.getOrNull() } ?: return@LaunchedEffect
+            LightLogos[logo] = measured
+            light = measured
+        }
+    }
+    val onLight = onWhite && light == true
     // Só o logo; o fundo arredondado fica para as iniciais (quando não há logo).
     Box(
         modifier = modifier
@@ -145,7 +163,6 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
         if (logo != null) {
             // Pedido com o tamanho fixo (o mesmo das listas que pré-carregam os logos): assim o Coil encontra-o na cache
             // de memória logo ao compor, e a linha nova aparece num só frame em vez de se compor duas vezes.
-            val context = LocalContext.current
             val px = with(LocalDensity.current) { size.roundToPx() }
             val request = remember(logo, px) { ImageRequest.Builder(context).data(logo).size(px).build() }
             AsyncImage(
@@ -160,6 +177,26 @@ fun LogoImage(logo: String?, name: String, size: Dp, modifier: Modifier = Modifi
 }
 
 private val LOGO_PLATE = Color(0xFF1A1D24)
+
+/** Já medidos: url do logótipo → é quase todo claro (sumia numa linha branca). */
+private val LightLogos = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+/** O tamanho da amostra para medir um logótipo. */
+private const val LIGHT_SAMPLE = 32
+
+/** Quase todos os píxeis que se veem (opacos) são claros: o logótipo desaparecia num fundo branco. */
+private fun isLightLogo(bitmap: android.graphics.Bitmap): Boolean {
+    var visible = 0
+    var bright = 0
+    for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+        val c = bitmap.getPixel(x, y)
+        if (android.graphics.Color.alpha(c) < 128) continue
+        visible++
+        val r = android.graphics.Color.red(c); val g = android.graphics.Color.green(c); val b = android.graphics.Color.blue(c)
+        if (0.2126 * r + 0.7152 * g + 0.0722 * b > 200) bright++
+    }
+    return visible > 0 && bright > visible * 0.7
+}
 
 /** Logótipos que substituem os da lista aberta, por channelKey (ver AppViewModel.channelLogos). */
 val LocalChannelLogos = staticCompositionLocalOf<Map<String, String>> { emptyMap() }
