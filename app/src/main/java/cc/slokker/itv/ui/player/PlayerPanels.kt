@@ -217,10 +217,20 @@ private fun PanelLayer(visible: () -> Float, shift: () -> Float, active: Boolean
 private const val PANEL_ANIM_MS = 260
 private val LIST_LOGO_SIZE = 34.dp
 
-/** O foco não faz a lista andar sozinha (quem a usa centra a linha, ver ChannelList). */
+/**
+ * O foco só faz a lista andar quando a linha chega perto da borda (a um quarto dela), o mínimo para a ver; quem a usa
+ * centra-a depois (ver ChannelList). Assim, a carregar depressa, a lista acompanha sem saltos.
+ */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private val NoAutoScroll = object : BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val margin = containerSize / 4f
+        return when {
+            offset < margin -> offset - margin
+            offset + size > containerSize - margin -> offset + size - (containerSize - margin)
+            else -> 0f
+        }
+    }
 }
 
 /** No vidro claro: logótipos mais pequenos (cabem 8 canais ou mais no painel, como no mockup). */
@@ -372,6 +382,8 @@ private fun ChannelList(
         if (ItvStyle.glass) {
             LaunchedEffect(focusedUid) {
                 val index = indexByUid[focusedUid] ?: return@LaunchedEffect
+                // A carregar depressa, espera-se pelo fim (a lista vai acompanhando pela borda).
+                delay(90)
                 withFrameNanos { }
                 val info = state.layoutInfo
                 val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
