@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player
 
+import cc.slokker.itv.ui.glass.LocalRowFocused
 import androidx.compose.ui.text.font.FontWeight
 import cc.slokker.itv.ui.glass.GlassInset
 import cc.slokker.itv.ui.theme.ItvStyle
@@ -383,8 +384,17 @@ private fun ChannelList(
                     // Barra do programa (o espaço fica reservado sem guia, para as linhas terem todas a mesma altura).
                     progress = programme?.let { e -> ((minute * 60_000 - e.startMs).toFloat() / (e.endMs - e.startMs)).coerceIn(0f, 1f) },
                     reserveProgress = prefs.epgInList && !ItvStyle.glass,
+                    // No vidro claro (o mockup "logos ao lado"): o número vai à parte e o logótipo cresce um pouco
+                    // na linha com foco.
                     leading = if (ItvStyle.glass) {
-                        null
+                        if (prefs.showLogos) {
+                            {
+                                ChannelLogo(ch, if (LocalRowFocused.current) LIST_LOGO_SIZE + 6.dp else LIST_LOGO_SIZE)
+                                Spacer(Modifier.width(14.dp))
+                            }
+                        } else {
+                            null
+                        }
                     } else if (prefs.showNumbers || prefs.showLogos) {
                         {
                             if (prefs.showNumbers) {
