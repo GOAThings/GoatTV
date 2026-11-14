@@ -665,15 +665,15 @@ internal fun SettingsSheet(
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
-    Box(
-        Modifier
-            .padding(end = 32.dp, top = 27.dp, bottom = 27.dp)
-            .width((prefs.panelWidth + 40).dp)
-            .fillMaxHeight()
-            .glass(ItvShapes.Panel)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
-    ) {
-        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, onManualTrack = onManualTrack)
+    // Cada página abre num painel ao lado da anterior (cada painel com o seu vidro, ver SettingsContent).
+    Box(Modifier.padding(end = 32.dp, top = 27.dp, bottom = 27.dp).fillMaxHeight()) {
+        SettingsContent(
+            vm, player, playing, onClose,
+            startAtEpgFor = playing.takeIf { startAtEpg },
+            startAtConnection = startAtConnection,
+            onManualTrack = onManualTrack,
+            sideBySide = true,
+        )
     }
     }
 }

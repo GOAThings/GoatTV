@@ -1,5 +1,13 @@
 package cc.slokker.itv.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.ui.player.NetVerdictCard
@@ -182,7 +190,7 @@ internal sealed interface Route {
 
 internal enum class TextKind { PLAIN, URL, PASSWORD }
 
-private class Entry(val route: Route, var returnKey: String? = null)
+internal class Entry(val route: Route, var returnKey: String? = null)
 
 /**
  * Definições com navegação em páginas. Voltar recua uma página; na primeira chama [onClose].
@@ -202,6 +210,8 @@ fun SettingsContent(
     startAtConnection: Boolean = false,
     /** Uma faixa escolhida à mão (Canal atual → Áudio/Legendas): ganha à língua preferida até mudar de canal. */
     onManualTrack: (Int) -> Unit = {},
+    /** Cada página abre num painel ao lado da anterior (no player), em vez de a substituir. */
+    sideBySide: Boolean = false,
 ) {
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {
@@ -220,8 +230,16 @@ fun SettingsContent(
         stack = stack + Entry(route)
     }
 
+    // Lado a lado: a página que fecha fica a encolher até sair (ver SidePanels).
+    var closing by remember { mutableStateOf<Entry?>(null) }
+
     fun pop() {
-        if (stack.size > 1) stack = stack.dropLast(1) else onClose()
+        if (stack.size > 1) {
+            if (sideBySide) closing = stack.last()
+            stack = stack.dropLast(1)
+        } else {
+            onClose()
+        }
     }
 
     fun replace(route: Route) {
@@ -241,23 +259,9 @@ fun SettingsContent(
 
     BackHandler { pop() }
 
-    AnimatedContent(
-        targetState = stack,
-        modifier = Modifier.onBackKey {
-            pop()
-            true
-        },
-        transitionSpec = {
-            val forward = targetState.size >= initialState.size
-            (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
-                (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
-        },
-        contentKey = { stack -> stack.size.toString() + stack.last().route.javaClass.name },
-        label = "settings",
-    ) { s ->
+    // A página (título e conteúdo) de [s].last(); [leaving]: está a sair (ou, lado a lado, não é a da frente).
+    val page: @Composable (List<Entry>, Boolean) -> Unit = { s, leaving ->
         val entry = s.last()
-        // A página que está a sair não pode ficar com o foco (senão ele salta ao terminar a animação).
-        val leaving = transition.targetState == EnterExitState.PostExit
         Column(Modifier.fillMaxSize().focusProperties { canFocus = !leaving }) {
             // A página de uma lista mostra o nome atual (pode ter mudado aqui, no site ou noutra TV).
             val playlistsNow by vm.playlists.collectAsStateWithLifecycle()
@@ -354,4 +358,82 @@ fun SettingsContent(
             )
         }
     }
+
+    if (sideBySide) {
+        val prefs by vm.prefs.collectAsStateWithLifecycle()
+        SidePanels(stack, closing, (prefs.panelWidth + 40).dp, onClosed = { closing = null }, page = page)
+        return
+    }
+
+    AnimatedContent(
+        targetState = stack,
+        modifier = Modifier.onBackKey {
+            pop()
+            true
+        },
+        transitionSpec = {
+            val forward = targetState.size >= initialState.size
+            (slideInHorizontally { if (forward) it / 4 else -it / 4 } + fadeIn()) togetherWith
+                (slideOutHorizontally { if (forward) -it / 4 else it / 4 } + fadeOut())
+        },
+        contentKey = { stack -> stack.size.toString() + stack.last().route.javaClass.name },
+        label = "settings",
+    ) { s ->
+        // A página que está a sair não pode ficar com o foco (senão ele salta ao terminar a animação).
+        page(s, transition.targetState == EnterExitState.PostExit)
+    }
 }
+
+
+/**
+ * As Definições lado a lado: a página de trás e a aberta, cada uma no seu painel, encostadas à direita. Uma página
+ * nova entra a crescer (o conteúdo já medido à largura toda, só se vai mostrando: nada se reorganiza a meio) e empurra
+ * a anterior para a esquerda; ao voltar, a que fecha encolhe e a de trás dela volta a crescer. Só a da frente tem foco.
+ */
+@Composable
+private fun SidePanels(stack: List<Entry>, closing: Entry?, width: androidx.compose.ui.unit.Dp, onClosed: () -> Unit, page: @Composable (List<Entry>, Boolean) -> Unit) {
+    val shown = if (closing != null) stack.takeLast(1) + closing else stack.takeLast(2)
+    Row(Modifier.fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        for (entry in shown) {
+            key(entry) {
+                val index = stack.indexOf(entry)
+                val front = closing == null && index == stack.lastIndex
+                val leavingPanel = entry === closing
+                // A primeira página já está lá quando as Definições abrem (o painel todo entra de lado, ver o player).
+                val grow = remember { Animatable(if (stack.size == 1 && index == 0) 1f else 0f) }
+                LaunchedEffect(leavingPanel) {
+                    grow.animateTo(if (leavingPanel) 0f else 1f, tween(PANEL_SLIDE_MS, easing = FastOutSlowInEasing))
+                    if (leavingPanel) onClosed()
+                }
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .layout { measurable, constraints ->
+                            val full = width.roundToPx()
+                            val placeable = measurable.measure(constraints.copy(minWidth = full, maxWidth = full))
+                            val w = (full * grow.value).toInt()
+                            layout(w, placeable.height) { placeable.placeRelative(0, 0) }
+                        }
+                        .clipToBounds()
+                        .graphicsLayer { alpha = if (front || leavingPanel) 1f else 0.62f },
+                ) {
+                    Box(
+                        Modifier
+                            .width(width)
+                            .fillMaxHeight()
+                            .glass(ItvShapes.Panel)
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            .focusProperties { canFocus = front },
+                    ) {
+                        // A página de trás volta a ser criada quando passa para a frente: o foco vai para a linha de
+                        // onde se abriu a seguinte (o returnKey).
+                        key(front) { page(stack.take(index + 1).ifEmpty { listOf(entry) }, !front) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Quanto leva um painel das Definições a abrir ou a fechar. */
+private const val PANEL_SLIDE_MS = 230
