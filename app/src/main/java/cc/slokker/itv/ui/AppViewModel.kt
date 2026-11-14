@@ -1928,6 +1928,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val appVersion: String get() = c.updater.currentVersion
     val updatesEnabled: Boolean get() = c.updater.enabled
 
+    /** Só para testes (build debug, extra demo_update): mostra o aviso de versão nova sem a ir procurar. */
+    fun showDemoUpdate(release: AppRelease) {
+        _update.value = UpdateState.Available(release)
+        _updateNotice.value = release
+    }
+
     /** Vê se há versão nova. Automático: só avisa se houver; [manual]: diz também "está atualizada" ou o erro. */
     fun checkForUpdate(manual: Boolean) {
         if (!c.updater.enabled) {

@@ -93,6 +93,20 @@ class MainActivity : AppCompatActivity() {
                     vm.setPref(k, v)
                 }
             }
+            // O aviso de versão nova (ex.: --es demo_update 0.16.0), para ver o cartão sem publicar nada.
+            intent.getStringExtra("demo_update")?.let { version ->
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(8_000)
+                    vm.showDemoUpdate(
+                        cc.slokker.itv.data.AppRelease(
+                            version,
+                            "- New Shadow panel style, with a white selector option\n- Settings open on the left\n- Playlists switch from the groups column",
+                            apkUrl = "",
+                            size = 0,
+                        ),
+                    )
+                }
+            }
             intent.getStringExtra("demo_m3u")?.let { url ->
                 lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = intent.getStringExtra("demo_name") ?: "Demo", url = url)) }
             }
