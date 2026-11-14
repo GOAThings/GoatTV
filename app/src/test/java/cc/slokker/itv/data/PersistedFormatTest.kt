@@ -266,6 +266,8 @@ class PersistedFormatTest {
         "backupChannels" to (Prefs.Key.BACKUP_CHANNELS to mapOf("p1:101" to "2001", "p1:102" to "off", "p1:103" to listOf("2001", "main:104"))),
         "backupMode" to (Prefs.Key.BACKUP_MODE to mapOf("p1" to "manual")),
         "outlineColor" to (Prefs.Key.OUTLINE_COLOR to "pink"),
+        "panelStyle" to (Prefs.Key.PANEL_STYLE to "shadow"),
+        "whiteSelector" to (Prefs.Key.WHITE_SELECTOR to true),
         "panelTimeout" to (Prefs.Key.PANEL_TIMEOUT to 30),
         "sort" to (Prefs.Key.SORT to Prefs.Sort.NAME),
         "uiScale" to (Prefs.Key.UI_SCALE to 110),

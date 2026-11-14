@@ -68,7 +68,7 @@ class SettingsCatalogTest {
             listOf(
                 TvSection.LANGUAGE_TEXT to listOf(k.LANGUAGE, k.UI_SCALE, k.TEXT_SIZE),
                 TvSection.CHANNEL_LIST to listOf(k.SHOW_NUMBERS, k.SHOW_LOGOS, k.LOGO_SOURCE, k.SORT),
-                TvSection.PANELS_COLOUR to listOf(k.PANEL_WIDTH, k.ACCENT, k.OUTLINE_COLOR, k.GLASS_OPACITY, k.PANEL_TIMEOUT),
+                TvSection.PANELS_COLOUR to listOf(k.PANEL_STYLE, k.PANEL_WIDTH, k.ACCENT, k.OUTLINE_COLOR, k.GLASS_OPACITY, k.PANEL_TIMEOUT),
             ),
             tv(TvPage.APPEARANCE),
         )
