@@ -236,7 +236,9 @@ class AudioFrameReader(private val codec: Codec) {
     private fun adts(d: ByteArray, at: Int): Header? {
         if (at + 7 > d.size || u(d, at) != 0xFF || u(d, at + 1) and 0xF6 != 0xF0) return null
         val crc = u(d, at + 1) and 0x01 == 0
-        val profile = (u(d, at + 2) shr 6) + 1
+        // O perfil do cabeçalho não conta: há emissões que dizem AAC Main (ou outro) e são LC, e os descodificadores
+        // (o do Android não tem Main) recusam a configuração. Como o ExoPlayer, toca-se sempre como AAC LC.
+        val profile = AAC_LC
         val rateIndex = (u(d, at + 2) shr 2) and 0x0F
         val channels = ((u(d, at + 2) and 0x01) shl 2) or (u(d, at + 3) shr 6)
         val size = ((u(d, at + 3) and 0x03) shl 11) or (u(d, at + 4) shl 3) or (u(d, at + 5) shr 5)
@@ -351,6 +353,8 @@ class AudioFrameReader(private val codec: Codec) {
     companion object {
         /** O que é preciso ter à frente para ler qualquer cabeçalho (o AC-3 lê os canais no byte 7). */
         private const val MAX_HEADER = 10
+        /** O tipo de objeto do AAC LC (na configuração do descodificador). */
+        private const val AAC_LC = 2
         private val AAC_RATES = intArrayOf(96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350)
         private val ACMOD_CHANNELS = intArrayOf(2, 1, 2, 3, 3, 4, 4, 5)
 
