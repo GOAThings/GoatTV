@@ -380,10 +380,13 @@
     <string name="channel_numbers">Numéros des chaînes</string>
     <string name="channel_logos">Logos des chaînes</string>
     <string name="outline_color">Couleur du sélecteur</string>
-    <string name="panel_style">Style des panneaux</string>
+    <string name="panel_style">Thème</string>
     <string name="panel_style_shadow">Ombre</string>
-    <string name="panel_style_shadow_white">Ombre, sélecteur blanc</string>
+    <string name="panel_style_shadow_white">Sélecteur blanc</string>
     <string name="panel_style_glass">Verre</string>
+    <string name="panel_style_glass_sub">L\'original</string>
+    <string name="panel_style_shadow_sub">Sans panneau, sur une ombre à gauche</string>
+    <string name="white_selector_sub">La ligne sélectionnée devient blanche, texte foncé</string>
     <string name="outline_accent">Couleur d\'accent</string>
     <string name="color_white">Blanc</string>
     <string name="color_blue">Bleu</string>

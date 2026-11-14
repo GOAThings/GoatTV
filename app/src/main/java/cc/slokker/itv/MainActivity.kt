@@ -223,7 +223,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
         LocalOutlineBrush provides outlineBrush(prefs.outlineColor, Accent.byId(prefs.accent)),
-        cc.slokker.itv.ui.theme.LocalPanelStyle provides prefs.panelStyle,
+        cc.slokker.itv.ui.theme.LocalPanelStyle provides prefs.panelLook,
         LocalDensity provides scaled,
         LocalChannelLogos provides channelLogos,
     ) {

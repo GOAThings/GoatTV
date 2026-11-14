@@ -1317,7 +1317,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
             // Estilo Sombra: sem painel, uma sombra à esquerda do ecrã por baixo das listas (só aparece e desaparece).
             AnimatedVisibility(
-                visible = panel != Panel.None && prefs.panelStyle != Prefs.PanelStyles.GLASS,
+                visible = panel != Panel.None && prefs.panelLook != Prefs.PanelStyles.GLASS,
                 modifier = Modifier.fillMaxSize(),
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -1385,7 +1385,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             // Estilo Sombra: as Definições abrem à esquerda, como as listas, por cima da mesma sombra.
-            val settingsLeft = prefs.panelStyle != Prefs.PanelStyles.GLASS
+            val settingsLeft = prefs.panelLook != Prefs.PanelStyles.GLASS
             AnimatedVisibility(
                 visible = showSettings && settingsLeft,
                 modifier = Modifier.fillMaxSize(),

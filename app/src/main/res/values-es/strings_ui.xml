@@ -380,10 +380,13 @@
     <string name="channel_numbers">Números de canal</string>
     <string name="channel_logos">Logos de los canales</string>
     <string name="outline_color">Color del selector</string>
-    <string name="panel_style">Estilo de los paneles</string>
+    <string name="panel_style">Tema</string>
     <string name="panel_style_shadow">Sombra</string>
-    <string name="panel_style_shadow_white">Sombra, selector blanco</string>
+    <string name="panel_style_shadow_white">Selector blanco</string>
     <string name="panel_style_glass">Cristal</string>
+    <string name="panel_style_glass_sub">El original</string>
+    <string name="panel_style_shadow_sub">Sin panel, sobre una sombra a la izquierda</string>
+    <string name="white_selector_sub">La fila con foco se vuelve blanca con texto oscuro</string>
     <string name="outline_accent">Color de acento</string>
     <string name="color_white">Blanco</string>
     <string name="color_blue">Azul</string>

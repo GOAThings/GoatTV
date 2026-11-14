@@ -381,10 +381,13 @@
     <string name="channel_numbers">Channel numbers</string>
     <string name="channel_logos">Channel logos</string>
     <string name="outline_color">Selector colour</string>
-    <string name="panel_style">Panel style</string>
+    <string name="panel_style">Theme</string>
     <string name="panel_style_shadow">Shadow</string>
-    <string name="panel_style_shadow_white">Shadow, white selector</string>
+    <string name="panel_style_shadow_white">White selector</string>
     <string name="panel_style_glass">Glass</string>
+    <string name="panel_style_glass_sub">The original</string>
+    <string name="panel_style_shadow_sub">No panel, over a shadow on the left</string>
+    <string name="white_selector_sub">The focused row turns white with dark text</string>
     <string name="outline_accent">Accent colour</string>
     <string name="color_white">White</string>
     <string name="color_blue">Blue</string>

@@ -138,8 +138,10 @@ data class Prefs(
     val backupMode: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
-    /** Como se mostram os painéis laterais da TV (canais e grupos): ver [PanelStyles]. */
-    val panelStyle: String = PanelStyles.SHADOW,
+    /** O tema dos painéis da TV (Definições → Aspeto → Tema): Vidro (o original) ou Sombra; ver [PanelStyles]. */
+    val panelStyle: String = PanelStyles.GLASS,
+    /** No tema Sombra, a linha com foco fica branca com o texto escuro (em vez do fundo claro translúcido). */
+    val whiteSelector: Boolean = false,
     val panelTimeout: Int = 15,
     val sort: String = Sort.NUMBER,
     /** Escala de toda a interface, em % (100 = normal). */
@@ -177,6 +179,14 @@ data class Prefs(
     /** As Definições também pedem o PIN. */
     val settingsPin: Boolean = false,
 ) {
+    /** O aspeto dos painéis: o tema, e no Sombra com ou sem o seletor branco (um dos [PanelStyles]). */
+    val panelLook: String
+        get() = when {
+            panelStyle == PanelStyles.GLASS -> PanelStyles.GLASS
+            whiteSelector -> PanelStyles.SHADOW_WHITE
+            else -> PanelStyles.SHADOW
+        }
+
     fun isLocked(playlistId: String, groupId: String) = pinHash != null && "$playlistId:$groupId" in lockedGroups
 
     fun isHidden(playlistId: String, groupId: String) = "$playlistId:$groupId" in hiddenGroups
@@ -252,6 +262,7 @@ data class Prefs(
         const val BACKUP_MODE = "backup_mode"
         const val OUTLINE_COLOR = "outline_color"
         const val PANEL_STYLE = "panel_style"
+        const val WHITE_SELECTOR = "white_selector"
         const val PANEL_TIMEOUT = "panel_timeout"
         const val SORT = "sort"
         const val PANEL_WIDTH = "panel_width"
@@ -342,14 +353,14 @@ data class Prefs(
     }
 
     /**
-     * O estilo dos painéis laterais: sem painel, sobre uma sombra à esquerda do ecrã, com o foco num fundo claro
-     * translúcido ([SHADOW]) ou numa placa branca ([SHADOW_WHITE]); ou o painel de vidro de antes ([GLASS]).
+     * Os temas dos painéis: o vidro original ([GLASS]) ou, sem painel, sobre uma sombra à esquerda do ecrã ([SHADOW]).
+     * [SHADOW_WHITE] não se grava: é o aspeto do Sombra com o seletor branco (ver [panelLook]).
      */
     object PanelStyles {
+        const val GLASS = "glass"
         const val SHADOW = "shadow"
         const val SHADOW_WHITE = "shadow_white"
-        const val GLASS = "glass"
-        val IDS = listOf(SHADOW, SHADOW_WHITE, GLASS)
+        val IDS = listOf(GLASS, SHADOW)
     }
 
     /** Origem dos logótipos; fora estes dois valores, é o código de um país do guia (ex.: "pt"). */
@@ -516,6 +527,7 @@ data class Prefs(
                 channelLogos = stringMap(s, Key.CHANNEL_LOGOS),
                 outlineColor = str(Key.OUTLINE_COLOR, d.outlineColor, OutlineColors.IDS),
                 panelStyle = str(Key.PANEL_STYLE, d.panelStyle, PanelStyles.IDS),
+                whiteSelector = bool(Key.WHITE_SELECTOR, d.whiteSelector),
                 extraEpg = stringMap(s, Key.EXTRA_EPG).filterValues { it.startsWith("http://") || it.startsWith("https://") },
                 mergeVariants = (s[Key.MERGE_VARIANTS] as? JsonObject)
                     ?.filter { (_, v) -> v is JsonPrimitive && !v.isString && v.booleanOrNull == true }?.keys.orEmpty(),

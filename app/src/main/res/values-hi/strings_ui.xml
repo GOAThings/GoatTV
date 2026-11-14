@@ -380,10 +380,13 @@
     <string name="channel_numbers">चैनल नंबर</string>
     <string name="channel_logos">चैनल लोगो</string>
     <string name="outline_color">चयनकर्ता का रंग</string>
-    <string name="panel_style">पैनल शैली</string>
+    <string name="panel_style">थीम</string>
     <string name="panel_style_shadow">छाया</string>
-    <string name="panel_style_shadow_white">छाया, सफ़ेद चयनकर्ता</string>
+    <string name="panel_style_shadow_white">सफ़ेद चयनकर्ता</string>
     <string name="panel_style_glass">कांच</string>
+    <string name="panel_style_glass_sub">मूल</string>
+    <string name="panel_style_shadow_sub">बिना पैनल, बाईं ओर छाया पर</string>
+    <string name="white_selector_sub">फ़ोकस वाली पंक्ति गहरे टेक्स्ट के साथ सफ़ेद हो जाती है</string>
     <string name="outline_accent">एक्सेंट रंग</string>
     <string name="color_white">सफ़ेद</string>
     <string name="color_blue">नीला</string>

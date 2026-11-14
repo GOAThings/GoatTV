@@ -127,7 +127,7 @@ internal fun SidePanel(
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
     // Estilo Sombra: as listas ficam sem painel por cima da sombra do ecrã (ver PlayerScreen), com o texto sombreado.
-    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
     ShadowText(shadow) {
     val shape = ItvShapes.Panel
     val panel = if (shadow) Modifier else Modifier.glass(shape)
@@ -272,9 +272,9 @@ private fun ChannelList(
     val channels = remember(data, group, favorites, prefs.sort, prefs.hiddenChannels, prefs.channelOrder) { vm.channelsOf(group) }
     val favoriteKeys = remember(favorites, data) { favorites[data.playlist.id].orEmpty().toSet() }
 
-    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
     // Seletor branco: cada linha pinta a sua placa branca com o texto escuro (não há destaque a deslizar).
-    val white = prefs.panelStyle == Prefs.PanelStyles.SHADOW_WHITE
+    val white = prefs.panelLook == Prefs.PanelStyles.SHADOW_WHITE
     val startIndex = remember(channels) { channels.indexOfFirst { it.uid == playing.uid }.coerceAtLeast(0) }
     val state = remember(channels) { panelListState((startIndex - 3).coerceAtLeast(0)) }
     val initialFocus = remember { FocusRequester() }
@@ -497,9 +497,9 @@ private fun GroupList(
         }
     }
     // Estilo Sombra: o foco é o mesmo fundo claro dos canais e o grupo atual não leva fundo (pareceria um segundo foco).
-    val soft = prefs.panelStyle == Prefs.PanelStyles.SHADOW
+    val soft = prefs.panelLook == Prefs.PanelStyles.SHADOW
     // No estilo Sombra as listas abrem no lugar dos grupos, na mesma coluna (sem caixa por cima).
-    val inline = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    val inline = prefs.panelLook != Prefs.PanelStyles.GLASS
     val selectedIndex = groups.indexOfFirst { it.id == selected }.coerceAtLeast(0)
     val state = remember { panelListState((selectedIndex - 3).coerceAtLeast(0)) }
     val pillFocus = remember { FocusRequester() }
@@ -797,7 +797,7 @@ internal fun SettingsSheet(
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     // Estilo Sombra: sem painel, à esquerda por cima da sombra das listas (ver PlayerScreen).
-    val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
     PanelScale(prefs.textScale) {
     ShadowText(shadow) {
     Box(

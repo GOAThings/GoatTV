@@ -380,10 +380,13 @@
     <string name="channel_numbers">Sendernummern</string>
     <string name="channel_logos">Senderlogos</string>
     <string name="outline_color">Farbe der Auswahl</string>
-    <string name="panel_style">Panel-Stil</string>
+    <string name="panel_style">Design</string>
     <string name="panel_style_shadow">Schatten</string>
-    <string name="panel_style_shadow_white">Schatten, weiße Auswahl</string>
+    <string name="panel_style_shadow_white">Weiße Auswahl</string>
     <string name="panel_style_glass">Glas</string>
+    <string name="panel_style_glass_sub">Das Original</string>
+    <string name="panel_style_shadow_sub">Ohne Panel, über einem Schatten links</string>
+    <string name="white_selector_sub">Die fokussierte Zeile wird weiß mit dunklem Text</string>
     <string name="outline_accent">Akzentfarbe</string>
     <string name="color_white">Weiß</string>
     <string name="color_blue">Blau</string>

@@ -160,7 +160,7 @@ internal fun settingItems(
             streamInfo(player, format)
         }
         Route.Connection -> connectionItems(vm, player, nav)
-        Route.Playback, Route.General, Route.Zapping, Route.Appearance, Route.Guide -> prefPageItems(route, vm, nav)
+        Route.Playback, Route.General, Route.Zapping, Route.Appearance, Route.Theme, Route.Guide -> prefPageItems(route, vm, nav)
         Route.Parental, Route.LockedGroups -> parentalItems(route, vm, nav)
         Route.GroupsManage, Route.ChannelGroups, is Route.ChannelsManage -> organizeItems(route, vm, nav)
         Route.Lists, is Route.PlaylistDetail, Route.NewPlaylistType, is Route.PlaylistEdit -> playlistItems(route, vm, nav)
@@ -607,7 +607,23 @@ private fun prefPageItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                 SettingsCatalog.LOGO_SOURCE -> Item.Nav(Prefs.Key.LOGO_SOURCE, s.logoSource, value = logoSourceLabel(prefs.logoSource, s)) {
                     push(Route.LogoSource, Prefs.Key.LOGO_SOURCE)
                 }
+                SettingsCatalog.PANEL_STYLE -> Item.Nav(Prefs.Key.PANEL_STYLE, s.panelStyle, value = s.panelStyleName(prefs.panelStyle)) {
+                    push(Route.Theme, Prefs.Key.PANEL_STYLE)
+                }
                 else -> null
+            }
+        }
+
+        // O tema: Vidro (o original) ou Sombra; só no Sombra aparece o seletor branco.
+        Route.Theme -> buildList {
+            add(Item.Check("theme_glass", s.panelStyleName(Prefs.PanelStyles.GLASS), prefs.panelStyle == Prefs.PanelStyles.GLASS, s.panelStyleGlassSub) {
+                vm.setPref(Prefs.Key.PANEL_STYLE, Prefs.PanelStyles.GLASS)
+            })
+            add(Item.Check("theme_shadow", s.panelStyleName(Prefs.PanelStyles.SHADOW), prefs.panelStyle == Prefs.PanelStyles.SHADOW, s.panelStyleShadowSub) {
+                vm.setPref(Prefs.Key.PANEL_STYLE, Prefs.PanelStyles.SHADOW)
+            })
+            if (prefs.panelStyle == Prefs.PanelStyles.SHADOW) {
+                add(Item.Toggle(Prefs.Key.WHITE_SELECTOR, s.whiteSelector, prefs.whiteSelector, s.whiteSelectorSub) { vm.setPref(Prefs.Key.WHITE_SELECTOR, it) })
             }
         }
 

@@ -307,12 +307,8 @@ object SettingsCatalog {
     )
     /** Telemóvel: abre os grupos à vista (na TV é em Listas → a lista → Grupos). */
     val VISIBLE_GROUPS = Setting.Custom("visible_groups", phone = Place(PhonePage.CHANNELS, 70))
-    val PANEL_STYLE = Setting.Choice(
-        Prefs.Key.PANEL_STYLE, { it.panelStyle },
-        options = { s -> Prefs.PanelStyles.IDS.map { it to s.panelStyleName(it) } },
-        read = { it.prefs.panelStyle },
-        tv = Place(TvPage.APPEARANCE, 5, TvSection.PANELS_COLOUR),
-    )
+    /** Abre a página Tema (Vidro ou Sombra, e no Sombra o seletor branco). */
+    val PANEL_STYLE = Setting.Custom(Prefs.Key.PANEL_STYLE, tv = Place(TvPage.APPEARANCE, 5, TvSection.PANELS_COLOUR))
     val PANEL_WIDTH = Setting.Choice(
         Prefs.Key.PANEL_WIDTH, { it.panelWidth },
         options = { s -> listOf(300 to s.widthNarrow, 340 to s.widthNormal, 400 to s.widthWide, 460 to s.widthExtraWide) },
