@@ -783,7 +783,7 @@ private fun LiveDot() {
     )
 }
 
-/** Painel de definições à direita, por cima do vídeo. */
+/** Painel de definições à direita, por cima do vídeo (à esquerda e sem painel no estilo Sombra). */
 @Composable
 internal fun SettingsSheet(
     vm: AppViewModel,
@@ -796,13 +796,13 @@ internal fun SettingsSheet(
     onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    // Estilo Sombra: sem painel, por cima da sombra do lado direito (ver PlayerScreen).
+    // Estilo Sombra: sem painel, à esquerda por cima da sombra das listas (ver PlayerScreen).
     val shadow = prefs.panelStyle != Prefs.PanelStyles.GLASS
     PanelScale(prefs.textScale) {
     ShadowText(shadow) {
     Box(
         Modifier
-            .padding(end = 32.dp, top = 27.dp, bottom = 27.dp)
+            .padding(start = if (shadow) 32.dp else 0.dp, end = if (shadow) 0.dp else 32.dp, top = 27.dp, bottom = 27.dp)
             .width((prefs.panelWidth + 40).dp)
             .fillMaxHeight()
             .then(if (shadow) Modifier else Modifier.glass(ItvShapes.Panel))

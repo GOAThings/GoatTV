@@ -1384,20 +1384,21 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
-            // Estilo Sombra: as Definições ficam por cima de uma sombra do lado direito.
+            // Estilo Sombra: as Definições abrem à esquerda, como as listas, por cima da mesma sombra.
+            val settingsLeft = prefs.panelStyle != Prefs.PanelStyles.GLASS
             AnimatedVisibility(
-                visible = showSettings && prefs.panelStyle != Prefs.PanelStyles.GLASS,
+                visible = showSettings && settingsLeft,
                 modifier = Modifier.fillMaxSize(),
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
-                Box(Modifier.fillMaxSize().background(SettingsShadow))
+                Box(Modifier.fillMaxSize().background(PanelShadow))
             }
             AnimatedVisibility(
                 visible = showSettings,
-                modifier = Modifier.align(Alignment.CenterEnd),
-                enter = fadeIn() + slideInHorizontally { it / 4 },
-                exit = fadeOut() + slideOutHorizontally { it / 4 },
+                modifier = Modifier.align(if (settingsLeft) Alignment.CenterStart else Alignment.CenterEnd),
+                enter = fadeIn() + slideInHorizontally { if (settingsLeft) -it / 4 else it / 4 },
+                exit = fadeOut() + slideOutHorizontally { if (settingsLeft) -it / 4 else it / 4 },
             ) {
                 SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, startAtNewPlaylist = settingsAtNewPlaylist, onManualTrack = playback::onManualTrack, onClose = {
                     showSettings = false
@@ -1427,14 +1428,6 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 }
 
-
-/** A mesma sombra, do lado direito (Definições). */
-private val SettingsShadow = Brush.horizontalGradient(
-    0.38f to Color.Transparent,
-    0.56f to Color.Black.copy(alpha = 0.55f),
-    0.72f to Color.Black.copy(alpha = 0.85f),
-    1f to Color.Black.copy(alpha = 0.92f),
-)
 
 /** A sombra do estilo Sombra: quase preta à esquerda, onde estão as listas, e some antes do meio do ecrã. */
 private val PanelShadow = Brush.horizontalGradient(
