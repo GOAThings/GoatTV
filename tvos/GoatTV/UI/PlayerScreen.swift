@@ -1567,10 +1567,10 @@ struct ProgressButtonStyle: ButtonStyle {
     let value: Double?
 
     func makeBody(configuration: Configuration) -> some View {
-        Body(value: value)
+        Bar(value: value)
     }
 
-    private struct Body: View {
+    private struct Bar: View {
         let value: Double?
         @Environment(\.isFocused) private var focused
 
