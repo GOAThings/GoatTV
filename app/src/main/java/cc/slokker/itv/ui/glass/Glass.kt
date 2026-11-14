@@ -285,6 +285,8 @@ fun GlassRow(
     reserveProgress: Boolean = false,
     /** Com foco, a linha cresce um pouco (como sempre foi); sem isto fica do mesmo tamanho e só muda de cor. */
     growOnFocus: Boolean = true,
+    /** Com foco, um fundo desta cor em vez da placa branca, e o texto fica claro (estilo Sombra). */
+    focusFill: Color? = null,
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -294,7 +296,7 @@ fun GlassRow(
     // destaque não saltar de linha em linha enquanto a lista desliza. Pinta-se só no desenho (sem
     // recompor a linha a cada frame) e o texto troca de cor uma vez, a meio.
     val fade = animateFloatAsState(if (focused && enabled) 1f else 0f, tween(FOCUS_FADE_MS), label = "row")
-    val dark by remember(outlineFocus, slidingFocus) { derivedStateOf { !outlineFocus && !slidingFocus && fade.value > 0.5f } }
+    val dark by remember(outlineFocus, slidingFocus, focusFill) { derivedStateOf { !outlineFocus && !slidingFocus && focusFill == null && fade.value > 0.5f } }
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
     // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
@@ -331,7 +333,7 @@ fun GlassRow(
                         drawOutline(outline, Color.White.copy(alpha = OUTLINE_VEIL * a))
                         drawOutline(outline, outlineBrush, alpha = a, style = Stroke(OUTLINE_WIDTH.toPx() * 2))
                     } else {
-                        drawRect(Color.White.copy(alpha = a))
+                        drawRect(focusFill ?: Color.White, alpha = a)
                     }
                 }
                 .padding(horizontal = 12.dp, vertical = 7.dp),

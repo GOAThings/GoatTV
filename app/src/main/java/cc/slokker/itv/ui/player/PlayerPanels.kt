@@ -114,6 +114,7 @@ internal fun SidePanel(
     onSelectGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onAddPlaylist: () -> Unit,
     onClose: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
@@ -160,7 +161,7 @@ internal fun SidePanel(
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
-            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, onAddPlaylist, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
         }
     }
     Box(
@@ -460,6 +461,7 @@ private fun GroupList(
     onFocusGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onAddPlaylist: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
     active: Boolean,
@@ -496,6 +498,8 @@ private fun GroupList(
     }
     // Estilo Sombra: o foco é o mesmo fundo claro dos canais e o grupo atual não leva fundo (pareceria um segundo foco).
     val soft = prefs.panelStyle == Prefs.PanelStyles.SHADOW
+    // No estilo Sombra as listas abrem no lugar dos grupos, na mesma coluna (sem caixa por cima).
+    val inline = prefs.panelStyle != Prefs.PanelStyles.GLASS
     val selectedIndex = groups.indexOfFirst { it.id == selected }.coerceAtLeast(0)
     val state = remember { panelListState((selectedIndex - 3).coerceAtLeast(0)) }
     val pillFocus = remember { FocusRequester() }
@@ -597,6 +601,23 @@ private fun GroupList(
                 modifier = Modifier.onFocusChanged { if (it.isFocused) inRail = true },
             )
         }
+    if (inline && playlistMenu) {
+        PlaylistColumn(
+            playlists = playlists,
+            current = data.playlist.id,
+            white = !soft,
+            onPick = { p ->
+                onPlaylistMenu(false)
+                if (p.id != data.playlist.id) vm.switchPlaylist(p)
+            },
+            onAdd = {
+                onPlaylistMenu(false)
+                onAddPlaylist()
+            },
+            onClose = { onPlaylistMenu(false) },
+            modifier = Modifier.weight(1f),
+        )
+    } else {
     Column(Modifier.weight(1f)) {
         PanelHeader(title = s.groups, subtitle = data.playlist.name)
         LazyColumn(
@@ -642,7 +663,8 @@ private fun GroupList(
         }
     }
     }
-        if (playlistMenu) {
+    }
+        if (playlistMenu && !inline) {
             PlaylistMenu(
                 playlists = playlists,
                 current = data.playlist.id,
@@ -656,7 +678,60 @@ private fun GroupList(
     }
 }
 
-/** Menu de playlists ao lado do botão ⇄ da coluna de botões dos grupos. */
+/**
+ * Estilo Sombra: as listas da conta no lugar dos grupos, com o mesmo foco das outras listas ([white] = placa branca).
+ * Em baixo, adicionar uma lista (abre as Definições) e a dica do site. ← volta aos botões.
+ */
+@Composable
+private fun PlaylistColumn(
+    playlists: List<Playlist>,
+    current: String,
+    white: Boolean,
+    onPick: (Playlist) -> Unit,
+    onAdd: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val s = LocalStrings.current
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusWithRetry(focus) }
+    val fill = if (white) null else ShadowFocus
+    Column(
+        modifier.onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (e.key.nativeKeyCode) {
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { onClose(); true }
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                else -> false
+            }
+        },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        PanelHeader(title = s.playlists, subtitle = null)
+        playlists.forEach { p ->
+            GlassRow(
+                onClick = { onPick(p) },
+                title = p.name,
+                subtitle = p.type.kind.label,
+                subtitleLines = 1,
+                growOnFocus = false,
+                focusFill = fill,
+                trailing = if (p.id == current) { { Text("✓", color = if (LocalContentColor.current == Color.Black) Color.Black else LocalAccent.current.start) } } else null,
+                modifier = if (p.id == current) Modifier.focusRequester(focus) else Modifier,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        GlassRow(onClick = onAdd, title = s.addPlaylist, growOnFocus = false, focusFill = fill)
+        Text(
+            s.playlistsSiteTip,
+            style = MaterialTheme.typography.bodySmall,
+            color = ItvColors.TextDim,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+/** Menu de playlists ao lado do botão ⇄ da coluna de botões dos grupos (estilo Vidro). */
 @Composable
 private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Playlist) -> Unit, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
@@ -717,6 +792,7 @@ internal fun SettingsSheet(
     onClose: () -> Unit,
     startAtEpg: Boolean = false,
     startAtConnection: Boolean = false,
+    startAtNewPlaylist: Boolean = false,
     onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
@@ -729,7 +805,7 @@ internal fun SettingsSheet(
             .glass(ItvShapes.Panel)
             .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
-        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, onManualTrack = onManualTrack)
+        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, startAtNewPlaylist = startAtNewPlaylist, onManualTrack = onManualTrack)
     }
     }
 }

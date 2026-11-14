@@ -206,8 +206,9 @@ fun SettingsContent(
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {
         val first = when {
-            startAtNewPlaylist -> Route.NewPlaylistType
+            // O PIN das Definições vem primeiro, também para adicionar uma lista a partir do player.
             vm.settingsNeedPin() -> Route.SettingsGate
+            startAtNewPlaylist -> Route.NewPlaylistType
             startAtEpgFor != null -> Route.EpgPick(startAtEpgFor)
             startAtConnection -> Route.Connection
             else -> Route.Root
