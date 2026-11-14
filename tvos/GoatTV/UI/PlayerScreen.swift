@@ -870,7 +870,8 @@ struct PlayerScreen: View {
         activity += 1
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(60))
-            focus = .hud("audio")
+            // Com pausa do direto abre na barra (OK pausa, ↓ vai aos botões), como no Android.
+            focus = .hud(tsActive ? "bar" : "audio")
         }
     }
 
@@ -891,7 +892,21 @@ struct PlayerScreen: View {
         case Prefs.Aspect.fill: aspectLabel = s.t("Stretch", "Esticar")
         default: aspectLabel = s.t("Fit", "Ajustar")
         }
-        return Hud(channel: channel, now: now) {
+        return Hud(channel: channel, now: now, bar: { value in
+            if tsActive {
+                Button(action: {
+                    activity += 1
+                    tsToggle()
+                }) {
+                    EmptyView()
+                }
+                .buttonStyle(ProgressButtonStyle(value: value))
+                .focused($focus, equals: .hud("bar"))
+                .accessibilityIdentifier("hud:bar")
+            } else {
+                WideProgress(value: value)
+            }
+        }) {
             // Os botões passam para os lados quando não cabem (o foco faz deslizar).
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
@@ -906,10 +921,7 @@ struct PlayerScreen: View {
                     }
                     model.setPref("aspect", .string(next))
                 }
-                // Pausar o direto (também com Play/Pausa no comando).
-                if tsActive {
-                    chip("pauselive", "pause.fill", s.r("pause_live")) { tsToggle() }
-                }
+                // Pausar o direto é na barra de progresso, por cima (OK nela), ou com Play/Pausa no comando.
                 // Gravar o programa a dar (do anel da pausa do direto), ou parar a gravação deste canal.
                 if model.recordingOf(channel) != nil {
                     chip("record", "stop.circle.fill", s.r("stop_recording")) { model.stopRecording(channel) }
@@ -1401,15 +1413,18 @@ struct ZapCard: View {
 
 /// O HUD (OK): sem painel de vidro, o fundo escurece em baixo; logótipo, canal, programa com as horas e o que falta,
 /// a qualidade, a seguir, a barra larga do programa e os botões por baixo.
-struct Hud<Buttons: View>: View {
+struct Hud<Bar: View, Buttons: View>: View {
     @Environment(AppModel.self) private var model
     let channel: Channel
     let now: Int64
+    /// A barra larga do programa (com o progresso, ou nil sem guia): focável quando pausa o direto.
+    let bar: (Double?) -> Bar
     let buttons: () -> Buttons
 
-    init(channel: Channel, now: Int64, @ViewBuilder buttons: @escaping () -> Buttons) {
+    init(channel: Channel, now: Int64, @ViewBuilder bar: @escaping (Double?) -> Bar, @ViewBuilder buttons: @escaping () -> Buttons) {
         self.channel = channel
         self.now = now
+        self.bar = bar
         self.buttons = buttons
     }
 
@@ -1454,7 +1469,7 @@ struct Hud<Buttons: View>: View {
                     .hudShadow()
                 }
             }
-            WideProgress(value: pair.now?.progress(now: now))
+            bar(pair.now?.progress(now: now))
                 .padding(.top, 30)
                 .padding(.bottom, 14)
             buttons()
@@ -1525,21 +1540,44 @@ struct ProgrammeTimes: View {
 struct WideProgress: View {
     @Environment(AppModel.self) private var model
     let value: Double?
+    /// Com o foco (OK pausa): a barra mais grossa e o botão maior, com aro.
+    var focused = false
 
     var body: some View {
         GeometryReader { geo in
             let x = geo.size.width * min(max(value ?? 0, 0), 1)
+            let line: CGFloat = focused ? 9 : 6
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.22)).frame(height: 6)
-                if value != nil {
-                    Capsule().fill(Theme.accent(model.prefs.accent)).frame(width: x, height: 6)
-                    Circle().fill(Color.white.opacity(0.25)).frame(width: 30, height: 30).offset(x: x - 15)
-                    Circle().fill(Color.white).frame(width: 18, height: 18).offset(x: x - 9)
+                Capsule().fill(Color.white.opacity(focused ? 0.32 : 0.22)).frame(height: line)
+                if value != nil || focused {
+                    if value != nil { Capsule().fill(Theme.accent(model.prefs.accent)).frame(width: x, height: line) }
+                    let ring: CGFloat = focused ? 46 : 30, dot: CGFloat = focused ? 28 : 18
+                    Circle().fill(Color.white.opacity(focused ? 0.3 : 0.25)).frame(width: ring, height: ring).offset(x: x - ring / 2)
+                    Circle().fill(Color.white).frame(width: dot, height: dot).offset(x: x - dot / 2)
                 }
             }
             .frame(height: geo.size.height)
         }
         .frame(height: 30)
+    }
+}
+
+/// A barra larga como botão (OK pausa o direto): só a barra, que cresce com o foco.
+struct ProgressButtonStyle: ButtonStyle {
+    let value: Double?
+
+    func makeBody(configuration: Configuration) -> some View {
+        Body(value: value)
+    }
+
+    private struct Body: View {
+        let value: Double?
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
+            WideProgress(value: value, focused: focused)
+                .animation(.easeOut(duration: 0.15), value: focused)
+        }
     }
 }
 

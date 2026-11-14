@@ -21,6 +21,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.view.KeyEvent as AndroidKeyEvent
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import coil3.toBitmap
 import coil3.compose.AsyncImage
@@ -111,6 +121,9 @@ internal fun NowPlayingBar(
     data: PlaylistContent,
     vm: AppViewModel,
     badges: List<String> = emptyList(),
+    /** A barra de progresso recebe o foco e OK chama isto (pausar o direto); null = só para ver. */
+    onBarClick: (() -> Unit)? = null,
+    barFocus: FocusRequester? = null,
     actions: (@Composable RowScope.(current: EpgEntry?) -> Unit)? = null,
 ) {
     val now = rememberNow()
@@ -161,7 +174,7 @@ internal fun NowPlayingBar(
             }
         }
         Spacer(Modifier.height(14.dp))
-        WideProgress(current?.progress(now))
+        WideProgress(current?.progress(now), onBarClick, barFocus)
         if (actions != null) {
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -201,24 +214,54 @@ internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = M
     }
 }
 
-/** A barra de progresso larga do HUD, com um ponto no sítio onde o programa vai. Sem guia fica só o traço. */
+/**
+ * A barra de progresso larga do HUD, com um ponto no sítio onde o programa vai. Sem guia fica só o traço. Com [onClick]
+ * recebe o foco (o ponto cresce e ganha um aro) e OK pausa; ← → não fazem nada aqui (não mudam de canal).
+ */
 @Composable
-private fun WideProgress(progress: Float?) {
+private fun WideProgress(progress: Float?, onClick: (() -> Unit)?, focus: FocusRequester?) {
     val brush = LocalAccent.current.brush
+    var focused by remember { mutableStateOf(false) }
     Spacer(
         Modifier
             .fillMaxWidth()
-            .height(14.dp)
+            .height(18.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
+                        .onFocusChanged { focused = it.isFocused }
+                        .onKeyEvent { e ->
+                            when (e.key.nativeKeyCode) {
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                                AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                    if (e.type == KeyEventType.KeyUp) onClick()
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        .focusable()
+                } else {
+                    Modifier
+                },
+            )
             .drawBehind {
-                val h = 4.dp.toPx()
+                val h = (if (focused) 6.dp else 4.dp).toPx()
                 val y = (size.height - h) / 2
                 val r = CornerRadius(h / 2)
-                drawRoundRect(Color.White.copy(alpha = 0.22f), Offset(0f, y), Size(size.width, h), r)
-                val p = progress ?: return@drawBehind
+                drawRoundRect(Color.White.copy(alpha = if (focused) 0.32f else 0.22f), Offset(0f, y), Size(size.width, h), r)
+                val p = progress ?: if (focused) 0f else return@drawBehind
                 val x = size.width * p.coerceIn(0f, 1f)
-                drawRoundRect(brush, Offset(0f, y), Size(x, h), r)
-                drawCircle(Color.White.copy(alpha = 0.25f), radius = 7.dp.toPx(), center = Offset(x, size.height / 2))
-                drawCircle(Color.White, radius = 5.dp.toPx(), center = Offset(x, size.height / 2))
+                if (progress != null) drawRoundRect(brush, Offset(0f, y), Size(x, h), r)
+                val c = Offset(x, size.height / 2)
+                if (focused) {
+                    drawCircle(Color.White.copy(alpha = 0.3f), radius = 12.dp.toPx(), center = c)
+                    drawCircle(Color.White, radius = 8.dp.toPx(), center = c)
+                } else {
+                    drawCircle(Color.White.copy(alpha = 0.25f), radius = 7.dp.toPx(), center = c)
+                    drawCircle(Color.White, radius = 5.dp.toPx(), center = c)
+                }
             },
     )
 }

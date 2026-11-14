@@ -1081,18 +1081,23 @@ fun PlayerScreen(vm: AppViewModel) {
                 val favorites by vm.favorites.collectAsStateWithLifecycle()
                 val isFavorite = current.key in favorites[data.playlist.id].orEmpty()
                 val container = playback.currentCandidate?.format
-                NowPlayingBar(current, data, vm, badges = qualityBadges(stream, container)) { live ->
+                // Com pausa do direto, o HUD abre na barra de progresso: OK pausa, ↓ vai aos botões.
+                val pausable = tsActive()
+                NowPlayingBar(
+                    current, data, vm, badges = qualityBadges(stream, container),
+                    onBarClick = if (pausable) ::tsToggle else null,
+                    barFocus = if (pausable) hudFocus else null,
+                ) { live ->
                     HudButtons(
                         vm, current, live, prefs.aspect, isFavorite, sleepAt,
-                        pauseLive = tsActive(), recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
+                        pauseLive = pausable, recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
                         second = extras.isNotEmpty(), canAddChannel = extras.size < PlaybackState.MAX_EXTRAS,
                         backup = catchup == null && vm.backupOf(data.playlist.id) != null,
-                        dualLayout = dualLayout, firstFocus = hudFocus,
+                        dualLayout = dualLayout, firstFocus = if (pausable) null else hudFocus,
                     ) { action ->
                         when (action) {
                             HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
                             HudAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
-                            HudAction.PAUSE_LIVE -> tsToggle()
                             HudAction.RECORD -> {
                                 if (vm.recordingOf(current) != null) vm.stopRecording(current) else vm.recordNow(current, timeshift.feed)
                             }

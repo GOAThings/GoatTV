@@ -32,7 +32,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 
 /** Os botões da barra completa que mexem no ecrã do player (abrir um painel, trocar os canais...). */
-internal enum class HudAction { AUDIO, SUBTITLES, PAUSE_LIVE, RECORD, SECOND_CHANNEL, ADD_CHANNEL, CLOSE_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
+internal enum class HudAction { AUDIO, SUBTITLES, RECORD, SECOND_CHANNEL, ADD_CHANNEL, CLOSE_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
 
 /**
  * Os botões da barra completa (OK no vídeo). O que é só pedir ao ViewModel (imagem, favorito, ver do início,
@@ -56,7 +56,8 @@ internal fun HudButtons(
     /** A lista tem reserva e é direto: o botão "Canal de reserva". */
     backup: Boolean,
     dualLayout: DualLayout,
-    firstFocus: FocusRequester,
+    /** O foco ao abrir, quando não vai para a barra de progresso (sem pausa do direto). */
+    firstFocus: FocusRequester?,
     onAction: (HudAction) -> Unit,
 ) {
     val s = LocalStrings.current
@@ -79,7 +80,7 @@ internal fun HudButtons(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         // Como num player: faixas e imagem primeiro, depois o resto.
-        GlassChipButton(ItvIcons.Audio, s.audio, { onAction(HudAction.AUDIO) }, Modifier.focusRequester(firstFocus))
+        GlassChipButton(ItvIcons.Audio, s.audio, { onAction(HudAction.AUDIO) }, if (firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
         GlassChipButton(ItvIcons.Subtitles, s.subtitles, { onAction(HudAction.SUBTITLES) })
         GlassChipButton(
             ItvIcons.Aspect,
@@ -97,8 +98,7 @@ internal fun HudButtons(
                 vm.setPref(Prefs.Key.ASPECT, next)
             },
         )
-        // Pausar o direto (também com Play/Pausa no comando, para quem o tem).
-        if (pauseLive) GlassChipButton(ItvIcons.Pause, s.pauseLive, { onAction(HudAction.PAUSE_LIVE) })
+        // Pausar o direto é na barra de progresso, por cima (OK nela), ou com Play/Pausa no comando.
         // Um só botão (gravar ⇄ parar), para o foco ficar nele quando muda.
         if (recording || pauseLive && !second) {
             GlassChipButton(if (recording) ItvIcons.Stop else ItvIcons.Record, if (recording) s.stopRecording else s.record, { onAction(HudAction.RECORD) })
