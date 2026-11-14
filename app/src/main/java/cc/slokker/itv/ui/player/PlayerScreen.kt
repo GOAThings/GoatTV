@@ -1443,10 +1443,11 @@ fun PlayerScreen(vm: AppViewModel) {
 
 /** A sombra do estilo Sombra: quase preta à esquerda, onde estão as listas, e some antes do meio do ecrã. */
 private val PanelShadow = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.92f),
-    0.28f to Color.Black.copy(alpha = 0.85f),
-    0.44f to Color.Black.copy(alpha = 0.55f),
-    0.62f to Color.Transparent,
+    0f to Color.Black.copy(alpha = 0.8f),
+    0.24f to Color.Black.copy(alpha = 0.66f),
+    0.4f to Color.Black.copy(alpha = 0.36f),
+    0.54f to Color.Black.copy(alpha = 0.12f),
+    0.66f to Color.Transparent,
 )
 private const val HUD_TIMEOUT_MS = 8_000L
 /** O aviso de paragens sai sozinho ao fim deste tempo. */

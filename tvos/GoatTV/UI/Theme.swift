@@ -22,10 +22,11 @@ enum Theme {
     /// Tema Sombra: a sombra à esquerda do ecrã por baixo das listas e das Definições (some antes do meio).
     static let panelShadow = LinearGradient(
         stops: [
-            .init(color: .black.opacity(0.92), location: 0),
-            .init(color: .black.opacity(0.85), location: 0.28),
-            .init(color: .black.opacity(0.55), location: 0.44),
-            .init(color: .clear, location: 0.62),
+            .init(color: .black.opacity(0.8), location: 0),
+            .init(color: .black.opacity(0.66), location: 0.24),
+            .init(color: .black.opacity(0.36), location: 0.4),
+            .init(color: .black.opacity(0.12), location: 0.54),
+            .init(color: .clear, location: 0.66),
         ],
         startPoint: .leading, endPoint: .trailing
     )
