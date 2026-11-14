@@ -534,7 +534,8 @@
     <string name="accent">アクセントカラー</string>
     <string name="ui_style">スタイル</string>
     <string name="ui_style_classic">クラシック</string>
-    <string name="ui_style_glass">ガラス</string>
+    <string name="ui_style_glass">ライトガラス</string>
+    <string name="ui_style_glass_dark">ダークガラス</string>
     <string name="accent_name">バイオレット</string>
     <string name="accent_name_2">ミント</string>
     <string name="accent_name_3">夕焼け</string>

@@ -138,7 +138,7 @@ fun Modifier.glass(
 ): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val light = ItvStyle.glass
+    val light = ItvStyle.light
     this
         .onGloballyPositioned { origin = it.positionInWindow() }
         .drawWithCache {
@@ -334,8 +334,6 @@ fun GlassRow(
     // A altura da linha não muda com o foco (só a escala do nome): mudar alturas a meio do scroll fazia a lista aos saltos.
     val glassPad = 7.dp
     val glassScale by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.16f else 1f, tween(FOCUS_GROW_MS), label = "scale")
-    // Onde está esta linha na janela (para a roda; não é estado: só o desenho a lê).
-    var bounds by remember { mutableStateOf(Rect.Zero, neverEqualPolicy()) }
     @Suppress("NAME_SHADOWING")
     val outlineFocus = outlineFocus && !glassStyle
     // Como o menu do GoatLauncher: a linha com foco fica branca com texto escuro; a selecionada
@@ -360,23 +358,7 @@ fun GlassRow(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged {
-                focused = it.hasFocus
-                if (it.hasFocus && glassStyle && !bounds.isEmpty) ItvStyle.focusBand = bounds
-            }
-            .then(
-                if (glassStyle) {
-                    // A roda: a linha com foco diz onde está; as outras apagam-se com a distância a ela.
-                    Modifier
-                        .onGloballyPositioned { c ->
-                            bounds = c.boundsInWindow()
-                            if (focused) ItvStyle.focusBand = bounds
-                        }
-                        .graphicsLayer { alpha = if (focused) 1f else ItvStyle.wheelAlpha(bounds) }
-                } else {
-                    Modifier
-                },
-            ),
+            .onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = rest,

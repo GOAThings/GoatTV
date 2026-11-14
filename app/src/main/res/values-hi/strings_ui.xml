@@ -534,7 +534,8 @@
     <string name="accent">एक्सेंट रंग</string>
     <string name="ui_style">शैली</string>
     <string name="ui_style_classic">क्लासिक</string>
-    <string name="ui_style_glass">काँच</string>
+    <string name="ui_style_glass">हल्का काँच</string>
+    <string name="ui_style_glass_dark">गहरा काँच</string>
     <string name="accent_name">बैंगनी</string>
     <string name="accent_name_2">मिंट</string>
     <string name="accent_name_3">सूर्यास्त</string>

@@ -535,7 +535,8 @@
     <string name="accent">Accent colour</string>
     <string name="ui_style">Style</string>
     <string name="ui_style_classic">Classic</string>
-    <string name="ui_style_glass">Glass</string>
+    <string name="ui_style_glass">Light glass</string>
+    <string name="ui_style_glass_dark">Dark glass</string>
     <string name="accent_name">Violet</string>
     <string name="accent_name_2">Mint</string>
     <string name="accent_name_3">Sunset</string>

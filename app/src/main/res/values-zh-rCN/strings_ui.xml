@@ -534,7 +534,8 @@
     <string name="accent">强调色</string>
     <string name="ui_style">风格</string>
     <string name="ui_style_classic">经典</string>
-    <string name="ui_style_glass">玻璃</string>
+    <string name="ui_style_glass">浅色玻璃</string>
+    <string name="ui_style_glass_dark">深色玻璃</string>
     <string name="accent_name">紫罗兰</string>
     <string name="accent_name_2">薄荷</string>
     <string name="accent_name_3">日落</string>

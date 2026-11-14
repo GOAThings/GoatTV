@@ -534,7 +534,8 @@
     <string name="accent">Vurgu rengi</string>
     <string name="ui_style">Stil</string>
     <string name="ui_style_classic">Klasik</string>
-    <string name="ui_style_glass">Cam</string>
+    <string name="ui_style_glass">Açık cam</string>
+    <string name="ui_style_glass_dark">Koyu cam</string>
     <string name="accent_name">Mor</string>
     <string name="accent_name_2">Nane</string>
     <string name="accent_name_3">Gün batımı</string>

@@ -534,7 +534,8 @@
     <string name="accent">لون التمييز</string>
     <string name="ui_style">النمط</string>
     <string name="ui_style_classic">كلاسيكي</string>
-    <string name="ui_style_glass">زجاج</string>
+    <string name="ui_style_glass">زجاج فاتح</string>
+    <string name="ui_style_glass_dark">زجاج داكن</string>
     <string name="accent_name">بنفسجي</string>
     <string name="accent_name_2">نعناعي</string>
     <string name="accent_name_3">غروب</string>

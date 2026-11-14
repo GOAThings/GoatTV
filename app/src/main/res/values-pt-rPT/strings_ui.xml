@@ -534,7 +534,8 @@
     <string name="accent">Cor de destaque</string>
     <string name="ui_style">Estilo</string>
     <string name="ui_style_classic">Clássico</string>
-    <string name="ui_style_glass">Vidro</string>
+    <string name="ui_style_glass">Vidro claro</string>
+    <string name="ui_style_glass_dark">Vidro escuro</string>
     <string name="accent_name">Violeta</string>
     <string name="accent_name_2">Menta</string>
     <string name="accent_name_3">Pôr do sol</string>

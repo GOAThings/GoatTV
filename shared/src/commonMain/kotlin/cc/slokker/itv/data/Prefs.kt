@@ -339,7 +339,9 @@ data class Prefs(
     object UiStyle {
         const val CLASSIC = "classic"
         const val GLASS = "glass"
-        val ALL = listOf(CLASSIC, GLASS)
+        /** O vidro novo, escuro (a base do clássico com as linhas limpas). */
+        const val GLASS_DARK = "glass_dark"
+        val ALL = listOf(CLASSIC, GLASS_DARK, GLASS)
     }
 
     object OutlineColors {

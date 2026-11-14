@@ -534,7 +534,8 @@
     <string name="accent">Colore principale</string>
     <string name="ui_style">Stile</string>
     <string name="ui_style_classic">Classico</string>
-    <string name="ui_style_glass">Vetro</string>
+    <string name="ui_style_glass">Vetro chiaro</string>
+    <string name="ui_style_glass_dark">Vetro scuro</string>
     <string name="accent_name">Viola</string>
     <string name="accent_name_2">Menta</string>
     <string name="accent_name_3">Tramonto</string>

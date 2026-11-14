@@ -316,7 +316,7 @@ object SettingsCatalog {
     /** O aspeto dos painéis na TV: o vidro escuro de sempre, ou o vidro claro (ver ItvStyle). */
     val UI_STYLE = Setting.Choice(
         Prefs.Key.UI_STYLE, { it.uiStyle },
-        options = { s -> listOf(Prefs.UiStyle.CLASSIC to s.uiStyleClassic, Prefs.UiStyle.GLASS to s.uiStyleGlass) },
+        options = { s -> listOf(Prefs.UiStyle.CLASSIC to s.uiStyleClassic, Prefs.UiStyle.GLASS_DARK to s.uiStyleGlassDark, Prefs.UiStyle.GLASS to s.uiStyleGlass) },
         read = { it.prefs.uiStyle },
         tv = Place(TvPage.APPEARANCE, 5, TvSection.PANELS_COLOUR),
     )

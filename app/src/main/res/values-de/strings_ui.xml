@@ -534,7 +534,8 @@
     <string name="accent">Akzentfarbe</string>
     <string name="ui_style">Stil</string>
     <string name="ui_style_classic">Klassisch</string>
-    <string name="ui_style_glass">Glas</string>
+    <string name="ui_style_glass">Helles Glas</string>
+    <string name="ui_style_glass_dark">Dunkles Glas</string>
     <string name="accent_name">Violett</string>
     <string name="accent_name_2">Minze</string>
     <string name="accent_name_3">Sonnenuntergang</string>

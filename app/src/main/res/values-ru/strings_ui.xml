@@ -534,7 +534,8 @@
     <string name="accent">Цвет акцента</string>
     <string name="ui_style">Стиль</string>
     <string name="ui_style_classic">Классический</string>
-    <string name="ui_style_glass">Стекло</string>
+    <string name="ui_style_glass">Светлое стекло</string>
+    <string name="ui_style_glass_dark">Тёмное стекло</string>
     <string name="accent_name">Фиолетовый</string>
     <string name="accent_name_2">Мятный</string>
     <string name="accent_name_3">Закат</string>
