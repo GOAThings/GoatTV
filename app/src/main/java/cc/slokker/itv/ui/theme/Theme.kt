@@ -90,6 +90,9 @@ fun outlineBrush(id: String, accent: Accent): Brush = when (id) {
 /** O contorno do seletor em uso (Definições → Aspeto → Cor do seletor). */
 val LocalOutlineBrush = staticCompositionLocalOf<Brush> { SolidColor(Color.White) }
 
+/** O estilo dos painéis (Definições → Aspeto; ver Prefs.PanelStyles): muda o vidro e o foco das listas. */
+val LocalPanelStyle = staticCompositionLocalOf { cc.slokker.itv.data.Prefs.PanelStyles.SHADOW }
+
 /** Margens de segurança de TV (overscan). */
 val TvSafePadding = PaddingValues(horizontal = 48.dp, vertical = 27.dp)
 

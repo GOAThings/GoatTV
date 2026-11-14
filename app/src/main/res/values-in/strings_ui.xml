@@ -380,6 +380,13 @@
     <string name="channel_numbers">Nomor saluran</string>
     <string name="channel_logos">Logo saluran</string>
     <string name="outline_color">Warna pemilih</string>
+    <string name="panel_style">Tema</string>
+    <string name="panel_style_shadow">Bayangan</string>
+    <string name="panel_style_shadow_white">Pemilih putih</string>
+    <string name="panel_style_glass">Kaca</string>
+    <string name="panel_style_glass_sub">Yang asli</string>
+    <string name="panel_style_shadow_sub">Tanpa panel, di atas bayangan di kiri</string>
+    <string name="white_selector_sub">Baris yang difokus menjadi putih dengan teks gelap</string>
     <string name="outline_accent">Warna aksen</string>
     <string name="color_white">Putih</string>
     <string name="color_blue">Biru</string>

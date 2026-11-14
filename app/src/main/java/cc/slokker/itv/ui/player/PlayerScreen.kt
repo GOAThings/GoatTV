@@ -198,6 +198,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val netHintFocus = remember { FocusRequester() }
     /** As Definições abrem já na página Ligação (botão "Detalhes" do aviso). */
     var settingsAtConnection by remember { mutableStateOf(false) }
+    var settingsAtNewPlaylist by remember { mutableStateOf(false) }
     /** Lista de faixas aberta a partir do HUD: C.TRACK_TYPE_AUDIO ou C.TRACK_TYPE_TEXT. */
     var trackPicker by remember { mutableStateOf<Int?>(null) }
     /** EPG aberto ao lado da lista de canais (→ num canal). */
@@ -1314,6 +1315,15 @@ fun PlayerScreen(vm: AppViewModel) {
                 lastNotice?.let { UpdateCard(it, update, hold, updateHidesIn) }
             }
 
+            // Estilo Sombra: sem painel, uma sombra à esquerda do ecrã por baixo das listas (só aparece e desaparece).
+            AnimatedVisibility(
+                visible = panel != Panel.None && prefs.panelLook != Prefs.PanelStyles.GLASS,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Box(Modifier.fillMaxSize().background(PanelShadow))
+            }
             AnimatedVisibility(
                 visible = panel != Panel.None,
                 modifier = Modifier.align(Alignment.CenterStart),
@@ -1349,6 +1359,11 @@ fun PlayerScreen(vm: AppViewModel) {
                         panel = Panel.None
                         showRecordings = true
                     },
+                    onAddPlaylist = {
+                        panel = Panel.None
+                        settingsAtNewPlaylist = true
+                        showSettings = true
+                    },
                     onClose = { panel = Panel.None },
                     playlistMenu = playlistMenu,
                     onPlaylistMenu = { playlistMenu = it },
@@ -1369,16 +1384,27 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
+            // Estilo Sombra: as Definições abrem à esquerda, como as listas, por cima da mesma sombra.
+            val settingsLeft = prefs.panelLook != Prefs.PanelStyles.GLASS
+            AnimatedVisibility(
+                visible = showSettings && settingsLeft,
+                modifier = Modifier.fillMaxSize(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Box(Modifier.fillMaxSize().background(PanelShadow))
+            }
             AnimatedVisibility(
                 visible = showSettings,
-                modifier = Modifier.align(Alignment.CenterEnd),
-                enter = fadeIn() + slideInHorizontally { it / 4 },
-                exit = fadeOut() + slideOutHorizontally { it / 4 },
+                modifier = Modifier.align(if (settingsLeft) Alignment.CenterStart else Alignment.CenterEnd),
+                enter = fadeIn() + slideInHorizontally { if (settingsLeft) -it / 4 else it / 4 },
+                exit = fadeOut() + slideOutHorizontally { if (settingsLeft) -it / 4 else it / 4 },
             ) {
-                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, onManualTrack = playback::onManualTrack, onClose = {
+                SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, startAtNewPlaylist = settingsAtNewPlaylist, onManualTrack = playback::onManualTrack, onClose = {
                     showSettings = false
                     settingsAtEpg = false
                     settingsAtConnection = false
+                    settingsAtNewPlaylist = false
                 })
             }
 
@@ -1402,6 +1428,14 @@ fun PlayerScreen(vm: AppViewModel) {
     }
 }
 
+
+/** A sombra do estilo Sombra: quase preta à esquerda, onde estão as listas, e some antes do meio do ecrã. */
+private val PanelShadow = Brush.horizontalGradient(
+    0f to Color.Black.copy(alpha = 0.92f),
+    0.28f to Color.Black.copy(alpha = 0.85f),
+    0.44f to Color.Black.copy(alpha = 0.55f),
+    0.62f to Color.Transparent,
+)
 private const val HUD_TIMEOUT_MS = 8_000L
 /** O aviso de paragens sai sozinho ao fim deste tempo. */
 private const val NET_HINT_MS = 30_000L

@@ -39,6 +39,8 @@ struct RootView: View {
             }
             ToastView()
         }
+        // O tema dos painéis (Definições → Aspeto → Tema) chega a todas as caixas e listas.
+        .environment(\.panelLook, model.prefs.panelLook)
     }
 }
 

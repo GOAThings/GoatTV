@@ -380,6 +380,13 @@
     <string name="channel_numbers">أرقام القنوات</string>
     <string name="channel_logos">شعارات القنوات</string>
     <string name="outline_color">لون المحدد</string>
+    <string name="panel_style">السمة</string>
+    <string name="panel_style_shadow">ظل</string>
+    <string name="panel_style_shadow_white">محدد أبيض</string>
+    <string name="panel_style_glass">زجاج</string>
+    <string name="panel_style_glass_sub">الأصلي</string>
+    <string name="panel_style_shadow_sub">بدون لوحة، فوق ظل على اليسار</string>
+    <string name="white_selector_sub">يصبح الصف المحدد أبيض بنص داكن</string>
     <string name="outline_accent">لون التمييز</string>
     <string name="color_white">أبيض</string>
     <string name="color_blue">أزرق</string>

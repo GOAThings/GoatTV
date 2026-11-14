@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
+import cc.slokker.itv.ui.theme.LocalPanelStyle
+import cc.slokker.itv.data.Prefs
 import kotlinx.coroutines.launch
 
 /**
@@ -41,13 +43,16 @@ fun panelListState(first: Int) = LazyListState(PanelListCache, first)
 /**
  * Um só destaque por baixo da lista, que desliza até à linha com foco (como na Apple TV) em vez de cada linha acender
  * e apagar o seu. [focusedKey] é a chave (do `items`) da linha com foco; só se mostra com o foco dentro da lista.
+ * Com [fill], o destaque é só um fundo dessa cor por baixo da linha, sem contorno (o estilo Sombra dos painéis).
  */
 @Composable
-fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, focusedKey: () -> Any?): Modifier {
+fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, fill: Color? = null, focusedKey: () -> Any?): Modifier {
     val top = remember { Animatable(0f) }
     val height = remember { Animatable(0f) }
     var focused by remember { mutableStateOf(false) }
     val brush = LocalOutlineBrush.current
+    // Estilo Sombra suave: as listas que não escolhem (ex.: Definições) também levam o fundo claro em vez do contorno.
+    val fill = fill ?: ShadowFocusFill.takeIf { !plate && LocalPanelStyle.current == Prefs.PanelStyles.SHADOW }
     LaunchedEffect(state) {
         var shown = false
         snapshotFlow {
@@ -78,6 +83,17 @@ fun Modifier.slidingFocus(state: LazyListState, plate: Boolean = false, focusedK
                 if (!focused || height.value <= 0f) return@drawWithContent
                 val outline = ItvShapes.Row.createOutline(Size(size.width, height.value), layoutDirection, this)
                 translate(top = top.value) { drawOutline(outline, Color.White, blendMode = BlendMode.Difference) }
+            }
+    }
+    if (fill != null) {
+        return onFocusChanged { focused = it.hasFocus }
+            .clipToBounds()
+            .drawWithContent {
+                if (focused && height.value > 0f) {
+                    val outline = ItvShapes.Row.createOutline(Size(size.width, height.value), layoutDirection, this)
+                    translate(top = top.value) { drawOutline(outline, fill) }
+                }
+                drawContent()
             }
     }
     return onFocusChanged { focused = it.hasFocus }

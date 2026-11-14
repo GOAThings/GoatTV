@@ -380,6 +380,13 @@
     <string name="channel_numbers">频道编号</string>
     <string name="channel_logos">频道台标</string>
     <string name="outline_color">选择框颜色</string>
+    <string name="panel_style">主题</string>
+    <string name="panel_style_shadow">阴影</string>
+    <string name="panel_style_shadow_white">白色选择框</string>
+    <string name="panel_style_glass">玻璃</string>
+    <string name="panel_style_glass_sub">原版</string>
+    <string name="panel_style_shadow_sub">无面板，显示在左侧阴影上</string>
+    <string name="white_selector_sub">选中的行变为白底深色文字</string>
     <string name="outline_accent">强调色</string>
     <string name="color_white">白色</string>
     <string name="color_blue">蓝色</string>

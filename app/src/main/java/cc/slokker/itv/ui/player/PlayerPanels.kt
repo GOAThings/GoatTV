@@ -98,6 +98,9 @@ import kotlinx.coroutines.launch
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
 import cc.slokker.itv.data.at
+import cc.slokker.itv.data.Prefs
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 
 /** Painel de vidro encostado à esquerda; canais e grupos trocam no mesmo sítio. */
 @Composable
@@ -111,6 +114,7 @@ internal fun SidePanel(
     onSelectGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onAddPlaylist: () -> Unit,
     onClose: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
@@ -122,7 +126,11 @@ internal fun SidePanel(
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     PanelScale(prefs.textScale) {
+    // Estilo Sombra: as listas ficam sem painel por cima da sombra do ecrã (ver PlayerScreen), com o texto sombreado.
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
+    ShadowText(shadow) {
     val shape = ItvShapes.Panel
+    val panel = if (shadow) Modifier else Modifier.glass(shape)
     // Os grupos abrem num painel próprio, ao lado dos canais, que ficam atrás esbatidos. Os dois ficam montados:
     // abrir é só animar largura e opacidade (lidas no desenho), sem reconstruir as listas.
     val toGroups = animateFloatAsState(
@@ -131,8 +139,9 @@ internal fun SidePanel(
         label = "panel",
     )
     val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
-    val groupsWidth = (prefs.panelWidth * 0.85f).dp
-    // Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (→ abre-o).
+    // Mais a coluna de botões (⇄, gravações, definições) à esquerda dos grupos.
+    val groupsWidth = (prefs.panelWidth * 0.85f + 56).dp
+    // Com os grupos abertos, a lista de canais (escondida) acompanha o grupo com foco (→ abre-o já pronto).
     var preview by remember(group) { mutableStateOf(group) }
     val shownGroup = if (mode == Panel.Groups) preview else group
     Row(Modifier.padding(start = 32.dp, top = 27.dp, bottom = 27.dp)) {
@@ -147,20 +156,21 @@ internal fun SidePanel(
                 layout(w, placeable.height) { if (w > 0) placeable.placeRelative(w - full, 0) }
             }
             .padding(end = 12.dp)
-            .glass(shape)
+            .then(panel)
             .clip(shape)
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
-            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, onAddPlaylist, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
         }
     }
     Box(
         Modifier
             .width(prefs.panelWidth.dp)
             .fillMaxHeight()
-            .graphicsLayer { alpha = 1f - 0.45f * toGroups.value }
-            .glass(shape)
+            // Com os grupos abertos, os canais saem (só os grupos no ecrã).
+            .graphicsLayer { alpha = 1f - toGroups.value }
+            .then(panel)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
             // e as margens ficam por dentro para o brilho do foco ter espaço.
             .clip(shape)
@@ -183,6 +193,30 @@ internal fun SidePanel(
     }
     }
     }
+    }
+}
+
+/** O fundo da linha com foco no estilo Sombra. */
+private val ShadowFocus = cc.slokker.itv.ui.glass.ShadowFocusFill
+
+/** No estilo Sombra o texto fica por cima do vídeo: uma sombra leve por baixo das letras mantém-no legível. */
+@Composable
+private fun ShadowText(on: Boolean, content: @Composable () -> Unit) {
+    if (!on) {
+        content()
+        return
+    }
+    val t = MaterialTheme.typography
+    val typography = remember(t) {
+        val s = Shadow(Color.Black.copy(alpha = 0.5f), Offset(0f, 1.5f), 4f)
+        t.copy(
+            titleLarge = t.titleLarge.copy(shadow = s),
+            titleSmall = t.titleSmall.copy(shadow = s),
+            bodySmall = t.bodySmall.copy(shadow = s),
+            labelMedium = t.labelMedium.copy(shadow = s),
+        )
+    }
+    MaterialTheme(colorScheme = MaterialTheme.colorScheme, shapes = MaterialTheme.shapes, typography = typography, content = content)
 }
 
 /**
@@ -238,6 +272,9 @@ private fun ChannelList(
     val channels = remember(data, group, favorites, prefs.sort, prefs.hiddenChannels, prefs.channelOrder) { vm.channelsOf(group) }
     val favoriteKeys = remember(favorites, data) { favorites[data.playlist.id].orEmpty().toSet() }
 
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
+    // Seletor branco: cada linha pinta a sua placa branca com o texto escuro (não há destaque a deslizar).
+    val white = prefs.panelLook == Prefs.PanelStyles.SHADOW_WHITE
     val startIndex = remember(channels) { channels.indexOfFirst { it.uid == playing.uid }.coerceAtLeast(0) }
     val state = remember(channels) { panelListState((startIndex - 3).coerceAtLeast(0)) }
     val initialFocus = remember { FocusRequester() }
@@ -334,7 +371,8 @@ private fun ChannelList(
     ) {
         PanelHeader(
             title = data.categoryName(group),
-            subtitle = LocalStrings.current.channelsCount(channels.size, data.playlist.name),
+            // No estilo Sombra o cabeçalho é só o nome do grupo.
+            subtitle = if (shadow) null else LocalStrings.current.channelsCount(channels.size, data.playlist.name),
             hint = LocalStrings.current.groupsHint,
         )
         if (channels.isEmpty()) {
@@ -350,7 +388,7 @@ private fun ChannelList(
             state = state,
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
-            modifier = Modifier.slidingFocus(state) { focusedUid },
+            modifier = if (white) Modifier else Modifier.slidingFocus(state, fill = ShadowFocus.takeIf { shadow }) { focusedUid },
         ) {
             items(channels, key = { it.uid }) { ch ->
                 val isPlaying = ch.uid == playing.uid
@@ -358,10 +396,11 @@ private fun ChannelList(
                 GlassRow(
                     onClick = { onPlay(ch) },
                     onLongClick = { vm.toggleFavorite(ch) },
-                    selected = isPlaying,
+                    selected = isPlaying && !white,
                     // Só contorno no foco: os logótipos (muitos brancos sobre transparente) não precisam de placa.
-                    outlineFocus = true,
-                    slidingFocus = true,
+                    outlineFocus = !white,
+                    slidingFocus = !white,
+                    growOnFocus = false,
                     title = ch.name,
                     // Todas as linhas com a mesma altura: o programa numa linha (anda para o lado na que tem foco),
                     // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
@@ -422,6 +461,7 @@ private fun GroupList(
     onFocusGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onAddPlaylist: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
     active: Boolean,
@@ -456,6 +496,10 @@ private fun GroupList(
             onFocusGroup(id)
         }
     }
+    // Estilo Sombra: o foco é o mesmo fundo claro dos canais e o grupo atual não leva fundo (pareceria um segundo foco).
+    val soft = prefs.panelLook == Prefs.PanelStyles.SHADOW
+    // No estilo Sombra as listas abrem no lugar dos grupos, na mesma coluna (sem caixa por cima).
+    val inline = prefs.panelLook != Prefs.PanelStyles.GLASS
     val selectedIndex = groups.indexOfFirst { it.id == selected }.coerceAtLeast(0)
     val state = remember { panelListState((selectedIndex - 3).coerceAtLeast(0)) }
     val pillFocus = remember { FocusRequester() }
@@ -486,39 +530,49 @@ private fun GroupList(
         menuWasOpen = playlistMenu
     }
 
+    // ← nos grupos vai para a coluna de botões à esquerda (listas, gravações, definições); → volta ao grupo.
+    // Assim o cabeçalho fica só com o título, sem o cortar.
+    val recordingsFocus = remember { FocusRequester() }
+    val railFocus = if (playlists.size > 1) pillFocus else recordingsFocus
+    var inRail by remember { mutableStateOf(false) }
     Box {
-    Column(
+    Row(
         Modifier.onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown || playlistMenu) return@onPreviewKeyEvent false
-            val group = focusedGroup
             val code = e.key.nativeKeyCode
-            // Nos botões do cabeçalho (⇄, ⚙): ↓ volta ao primeiro grupo; as outras setas só mudam o foco.
-            if (group == null) {
-                if (code != AndroidKeyEvent.KEYCODE_DPAD_DOWN || groups.isEmpty()) return@onPreviewKeyEvent false
-                focusRow(0)
-                return@onPreviewKeyEvent true
+            if (inRail) {
+                return@onPreviewKeyEvent when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (groups.isNotEmpty()) focusRow(groups.indexOfFirst { it.id == focusedGroup }.takeIf { it >= 0 } ?: selectedIndex)
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> true
+                    else -> false
+                }
             }
+            val group = focusedGroup ?: return@onPreviewKeyEvent false
             when (code) {
-                // ↑ no primeiro grupo sobe para os botões do cabeçalho; ↓ no último fica.
+                // ↑ no primeiro grupo e ↓ no último ficam.
                 AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                     val index = groups.indexOfFirst { it.id == group }
                     if (index < 0) return@onPreviewKeyEvent false
-                    val up = code == AndroidKeyEvent.KEYCODE_DPAD_UP
-                    if (up && index == 0) return@onPreviewKeyEvent false
-                    val to = if (up) index - 1 else index + 1
-                    if (to <= groups.lastIndex) focusRow(to)
+                    val to = if (code == AndroidKeyEvent.KEYCODE_DPAD_UP) index - 1 else index + 1
+                    if (to in groups.indices) focusRow(to)
                     true
                 }
                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                     onSelectGroup(group)
                     true
                 }
-                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> true
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                    runCatching { railFocus.requestFocus() }
+                    true
+                }
                 else -> false
             }
         },
     ) {
-        PanelHeader(title = s.groups, subtitle = data.playlist.name) {
+        Column(Modifier.padding(start = 4.dp, top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (playlists.size > 1) {
                 GlassIconButton(
                     ItvIcons.SwapPlaylist,
@@ -527,30 +581,48 @@ private fun GroupList(
                     enabled = !playlistMenu,
                     modifier = Modifier
                         .focusRequester(pillFocus)
-                        .onFocusChanged { if (it.isFocused) focusedGroup = null },
+                        .onFocusChanged { if (it.isFocused) inRail = true },
                 )
-                Spacer(Modifier.width(8.dp))
             }
-            // As gravações, ao lado das Definições (como o ⇄ das listas).
             GlassIconButton(
                 ItvIcons.Recordings,
                 contentDescription = s.recordings,
                 onClick = onRecordings,
                 enabled = !playlistMenu,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedGroup = null },
+                modifier = Modifier
+                    .focusRequester(recordingsFocus)
+                    .onFocusChanged { if (it.isFocused) inRail = true },
             )
-            Spacer(Modifier.width(8.dp))
             GlassIconButton(
                 ItvIcons.Settings,
                 contentDescription = s.settings,
                 onClick = onSettings,
                 enabled = !playlistMenu,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedGroup = null },
+                modifier = Modifier.onFocusChanged { if (it.isFocused) inRail = true },
             )
         }
+    if (inline && playlistMenu) {
+        PlaylistColumn(
+            playlists = playlists,
+            current = data.playlist.id,
+            white = !soft,
+            onPick = { p ->
+                onPlaylistMenu(false)
+                if (p.id != data.playlist.id) vm.switchPlaylist(p)
+            },
+            onAdd = {
+                onPlaylistMenu(false)
+                onAddPlaylist()
+            },
+            onClose = { onPlaylistMenu(false) },
+            modifier = Modifier.weight(1f),
+        )
+    } else {
+    Column(Modifier.weight(1f)) {
+        PanelHeader(title = s.groups, subtitle = data.playlist.name)
         LazyColumn(
             state = state,
-            modifier = Modifier.slidingFocus(state, plate = true) { focusedGroup?.let { "g:$it" } },
+            modifier = Modifier.slidingFocus(state, plate = !soft, fill = ShadowFocus.takeIf { soft }) { focusedGroup?.let { "g:$it" } },
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
         ) {
@@ -564,7 +636,7 @@ private fun GroupList(
                 val locked = prefs.isLocked(data.playlist.id, g.id)
                 GlassRow(
                     onClick = { onSelectGroup(g.id) },
-                    selected = g.id == selected,
+                    selected = g.id == selected && !soft,
                     enabled = !playlistMenu,
                     slidingFocus = true,
                     title = g.name,
@@ -580,12 +652,19 @@ private fun GroupList(
                     modifier = Modifier
                         .then(if (index == selectedIndex) Modifier.focusRequester(initialFocus) else Modifier)
                         .focusRequester(rowFocus[index])
-                        .onFocusChanged { if (it.isFocused) focusedGroup = g.id },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                focusedGroup = g.id
+                                inRail = false
+                            }
+                        },
                 )
             }
         }
     }
-        if (playlistMenu) {
+    }
+    }
+        if (playlistMenu && !inline) {
             PlaylistMenu(
                 playlists = playlists,
                 current = data.playlist.id,
@@ -593,13 +672,66 @@ private fun GroupList(
                     onPlaylistMenu(false)
                     vm.switchPlaylist(p)
                 },
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 4.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 60.dp, top = 4.dp),
             )
         }
     }
 }
 
-/** Menu de playlists por baixo do botão ⇄ do cabeçalho. */
+/**
+ * Estilo Sombra: as listas da conta no lugar dos grupos, com o mesmo foco das outras listas ([white] = placa branca).
+ * Em baixo, adicionar uma lista (abre as Definições) e a dica do site. ← volta aos botões.
+ */
+@Composable
+private fun PlaylistColumn(
+    playlists: List<Playlist>,
+    current: String,
+    white: Boolean,
+    onPick: (Playlist) -> Unit,
+    onAdd: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val s = LocalStrings.current
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusWithRetry(focus) }
+    val fill = if (white) null else ShadowFocus
+    Column(
+        modifier.onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (e.key.nativeKeyCode) {
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { onClose(); true }
+                AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                else -> false
+            }
+        },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        PanelHeader(title = s.playlists, subtitle = null)
+        playlists.forEach { p ->
+            GlassRow(
+                onClick = { onPick(p) },
+                title = p.name,
+                subtitle = p.type.kind.label,
+                subtitleLines = 1,
+                growOnFocus = false,
+                focusFill = fill,
+                trailing = if (p.id == current) { { Text("✓", color = if (LocalContentColor.current == Color.Black) Color.Black else LocalAccent.current.start) } } else null,
+                modifier = if (p.id == current) Modifier.focusRequester(focus) else Modifier,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        GlassRow(onClick = onAdd, title = s.addPlaylist, growOnFocus = false, focusFill = fill)
+        Text(
+            s.playlistsSiteTip,
+            style = MaterialTheme.typography.bodySmall,
+            color = ItvColors.TextDim,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+/** Menu de playlists ao lado do botão ⇄ da coluna de botões dos grupos (estilo Vidro). */
 @Composable
 private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Playlist) -> Unit, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
@@ -625,11 +757,11 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
 
 /** Cabeçalho do painel; à direita, uma dica ([hint]) ou uma ação ([action]). */
 @Composable
-private fun PanelHeader(title: String, subtitle: String, hint: String? = null, action: (@Composable () -> Unit)? = null) {
+private fun PanelHeader(title: String, subtitle: String?, hint: String? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ItvColors.TextDim, maxLines = 1)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ItvColors.TextDim, maxLines = 1)
         }
         if (hint != null) Text(hint, style = MaterialTheme.typography.labelMedium, color = ItvColors.TextFaint)
         action?.invoke()
@@ -651,7 +783,7 @@ private fun LiveDot() {
     )
 }
 
-/** Painel de definições à direita, por cima do vídeo. */
+/** Painel de definições à direita, por cima do vídeo (à esquerda e sem painel no estilo Sombra). */
 @Composable
 internal fun SettingsSheet(
     vm: AppViewModel,
@@ -660,19 +792,24 @@ internal fun SettingsSheet(
     onClose: () -> Unit,
     startAtEpg: Boolean = false,
     startAtConnection: Boolean = false,
+    startAtNewPlaylist: Boolean = false,
     onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
+    // Estilo Sombra: sem painel, à esquerda por cima da sombra das listas (ver PlayerScreen).
+    val shadow = prefs.panelLook != Prefs.PanelStyles.GLASS
     PanelScale(prefs.textScale) {
+    ShadowText(shadow) {
     Box(
         Modifier
-            .padding(end = 32.dp, top = 27.dp, bottom = 27.dp)
+            .padding(start = if (shadow) 32.dp else 0.dp, end = if (shadow) 0.dp else 32.dp, top = 27.dp, bottom = 27.dp)
             .width((prefs.panelWidth + 40).dp)
             .fillMaxHeight()
-            .glass(ItvShapes.Panel)
+            .then(if (shadow) Modifier else Modifier.glass(ItvShapes.Panel))
             .padding(horizontal = 8.dp, vertical = 12.dp),
     ) {
-        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, onManualTrack = onManualTrack)
+        SettingsContent(vm, player, playing, onClose, startAtEpgFor = playing.takeIf { startAtEpg }, startAtConnection = startAtConnection, startAtNewPlaylist = startAtNewPlaylist, onManualTrack = onManualTrack)
+    }
     }
     }
 }

@@ -15,6 +15,21 @@ enum Theme {
 
     static let accent = LinearGradient(colors: [sky, indigo], startPoint: .leading, endPoint: .trailing)
 
+    /// Tema Sombra: o fundo da linha com foco (sem placa branca nem contorno).
+    static let shadowFocus = Color.white.opacity(0.22)
+    /// Tema Sombra: as caixas são um cartão escuro, sem vidro.
+    static let shadowCard = hex(0x121317).opacity(0.92)
+    /// Tema Sombra: a sombra à esquerda do ecrã por baixo das listas e das Definições (some antes do meio).
+    static let panelShadow = LinearGradient(
+        stops: [
+            .init(color: .black.opacity(0.92), location: 0),
+            .init(color: .black.opacity(0.85), location: 0.28),
+            .init(color: .black.opacity(0.55), location: 0.44),
+            .init(color: .clear, location: 0.62),
+        ],
+        startPoint: .leading, endPoint: .trailing
+    )
+
     static let backdrop = RadialGradient(
         colors: [Color(red: 0x16 / 255, green: 0x20 / 255, blue: 0x48 / 255), background],
         center: .center, startRadius: 0, endRadius: 1100
@@ -55,22 +70,45 @@ enum Theme {
 }
 
 /// Painel de vidro (desfoca o vídeo por trás). A opacidade é a das definições (0 = só desfocado, 100 = escuro).
+/// No tema Sombra é um cartão escuro sólido com um contorno muito leve.
 struct Glass: ViewModifier {
     @Environment(AppModel.self) private var model
+    @Environment(\.panelLook) private var look
     var radius: CGFloat = 28
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        content
-            // O material escuro da Apple já escurece: a tinta do Android (#0A0D16) vai mais leve para dar o mesmo.
-            .background(Theme.hex(0x0A0D16).opacity(Double(model.prefs.glassOpacity) / 100 * 0.5), in: shape)
-            .background(.ultraThinMaterial, in: shape)
-            .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+        if look != Prefs.PanelLook.glass {
+            content
+                .background(Theme.shadowCard, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
+        } else {
+            content
+                // O material escuro da Apple já escurece: a tinta do Android (#0A0D16) vai mais leve para dar o mesmo.
+                .background(Theme.hex(0x0A0D16).opacity(Double(model.prefs.glassOpacity) / 100 * 0.5), in: shape)
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+        }
+    }
+}
+
+/// O fundo dos painéis laterais (listas, Definições): vidro no tema Vidro; no Sombra nada (ficam por cima da sombra)
+/// e o texto ganha uma sombra leve para se ler sobre o vídeo.
+struct PanelBackground: ViewModifier {
+    @Environment(\.panelLook) private var look
+
+    func body(content: Content) -> some View {
+        if look == Prefs.PanelLook.glass {
+            content.glass()
+        } else {
+            content.shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+        }
     }
 }
 
 extension View {
     func glass(radius: CGFloat = 28) -> some View { modifier(Glass(radius: radius)) }
+    func panelBackground() -> some View { modifier(PanelBackground()) }
 }
 
 /// Linha de uma lista: sem fundo, com contorno quando tem foco (como no GoatTV Android).
@@ -88,6 +126,7 @@ struct RowButtonStyle: ButtonStyle {
         let outline: AnyShapeStyle
         let sliding: Bool
         @Environment(\.isFocused) private var focused
+        @Environment(\.panelLook) private var look
 
         var body: some View {
             if sliding {
@@ -103,19 +142,20 @@ struct RowButtonStyle: ButtonStyle {
         }
 
         private var plain: some View {
-            configuration.label
+            let soft = look == Prefs.PanelLook.shadow
+            return configuration.label
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(focused ? 0.12 : (configuration.isPressed ? 0.2 : 0)))
+                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white.opacity(0.12)) : Color.white.opacity(configuration.isPressed ? 0.2 : 0))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(outline, lineWidth: focused ? 3 : 0)
+                        .strokeBorder(outline, lineWidth: focused && !soft ? 3 : 0)
                 )
-                .scaleEffect(focused ? 1.02 : 1)
+                .scaleEffect(focused && look == Prefs.PanelLook.glass ? 1.02 : 1)
                 .animation(.easeOut(duration: 0.12), value: focused)
         }
     }
@@ -181,12 +221,14 @@ struct ChannelLogo: View {
 struct ProgressLine: View {
     let value: Double
     var height: CGFloat = 4
+    /// A cor da barra (escura numa linha com a placa branca do seletor branco).
+    var tint: Color = .white
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.18))
-                Capsule().fill(Color.white.opacity(0.85)).frame(width: geo.size.width * value)
+                Capsule().fill(tint.opacity(0.18))
+                Capsule().fill(tint.opacity(0.85)).frame(width: geo.size.width * value)
             }
         }
         .frame(height: height)
@@ -222,6 +264,10 @@ struct FillRowStyle: ButtonStyle {
         let selected: Bool
         let sliding: Bool
         @Environment(\.isFocused) private var focused
+        @Environment(\.panelLook) private var look
+
+        /// Tema Sombra suave: o foco é um fundo claro e o item atual não leva fundo (pareceria um segundo foco).
+        private var soft: Bool { look == Prefs.PanelLook.shadow }
 
         var body: some View {
             if sliding {
@@ -231,7 +277,7 @@ struct FillRowStyle: ButtonStyle {
                     .padding(.vertical, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(selected && !focused ? 0.16 : 0))
+                        RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(selected && !focused && !soft ? 0.16 : 0))
                     )
                     .contentShape(Rectangle())
                     .rowFocusAnchor(focused)
@@ -242,15 +288,16 @@ struct FillRowStyle: ButtonStyle {
 
         private var plain: some View {
             configuration.label
-                .foregroundStyle(focused ? Color.black : Theme.text)
+                .foregroundStyle(focused && !soft ? Color.black : Theme.text)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(focused ? Color.white : Color.white.opacity(selected ? 0.16 : 0))
+                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white) : Color.white.opacity(selected && !soft ? 0.16 : 0))
                 )
-                .scaleEffect(focused ? 1.02 : 1)
+                // No tema Sombra as linhas não crescem com o foco: só muda a cor.
+                .scaleEffect(focused && look == Prefs.PanelLook.glass ? 1.02 : 1)
                 .animation(.easeOut(duration: 0.12), value: focused)
         }
     }
@@ -298,6 +345,9 @@ struct SwitchMark: View {
 }
 
 extension EnvironmentValues {
+    /// O aspeto dos painéis (Prefs.panelLook): vidro, sombra, ou sombra com o seletor branco.
+    @Entry var panelLook: String = Prefs.PanelLook.glass
+
     /// Os painéis do player fecham sozinhos sem mexer: cada tecla lá dentro avisa (true enquanto se escreve num
     /// campo, para não fechar a meio).
     @Entry var panelActivity: (_ typing: Bool) -> Void = { _ in }
@@ -428,9 +478,26 @@ struct SlidingHighlight: ViewModifier {
     let plate: Bool
     let outline: AnyShapeStyle
     let radius: CGFloat
+    @Environment(\.panelLook) private var look
 
     func body(content: Content) -> some View {
-        if plate {
+        if look == Prefs.PanelLook.shadow {
+            // Tema Sombra suave: só um fundo claro por baixo da linha, sem placa nem contorno.
+            content
+                .backgroundPreferenceValue(RowFocusKey.self) { anchor in
+                    GeometryReader { geo in
+                        if let anchor {
+                            let r = geo[anchor]
+                            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                .fill(Theme.shadowFocus)
+                                .frame(width: r.width, height: r.height)
+                                .offset(x: r.minX, y: r.minY)
+                                .animation(highlightSpring, value: r)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
+        } else if plate {
             content
                 .overlayPreferenceValue(RowFocusKey.self) { anchor in
                     GeometryReader { geo in

@@ -307,6 +307,8 @@ object SettingsCatalog {
     )
     /** Telemóvel: abre os grupos à vista (na TV é em Listas → a lista → Grupos). */
     val VISIBLE_GROUPS = Setting.Custom("visible_groups", phone = Place(PhonePage.CHANNELS, 70))
+    /** Abre a página Tema (Vidro ou Sombra, e no Sombra o seletor branco). */
+    val PANEL_STYLE = Setting.Custom(Prefs.Key.PANEL_STYLE, tv = Place(TvPage.APPEARANCE, 5, TvSection.PANELS_COLOUR))
     val PANEL_WIDTH = Setting.Choice(
         Prefs.Key.PANEL_WIDTH, { it.panelWidth },
         options = { s -> listOf(300 to s.widthNarrow, 340 to s.widthNormal, 400 to s.widthWide, 460 to s.widthExtraWide) },
@@ -410,7 +412,7 @@ object SettingsCatalog {
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
-        BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_WIDTH,
+        BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
     )

@@ -97,6 +97,7 @@ internal sealed interface Route {
     class ChannelsOrder(val groupId: String, private val name: String) : Route { override fun title(s: Strings) = name }
     data object Zapping : Route { override fun title(s: Strings) = s.zapping }
     data object Appearance : Route { override fun title(s: Strings) = s.appearance }
+    data object Theme : Route { override fun title(s: Strings) = s.panelStyle }
     data object Guide : Route { override fun title(s: Strings) = s.guide }
     data object ParentalGate : Route { override fun title(s: Strings) = s.parental }
     data object LogoutGate : Route { override fun title(s: Strings) = s.logoutThisTv }
@@ -206,8 +207,9 @@ fun SettingsContent(
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {
         val first = when {
-            startAtNewPlaylist -> Route.NewPlaylistType
+            // O PIN das Definições vem primeiro, também para adicionar uma lista a partir do player.
             vm.settingsNeedPin() -> Route.SettingsGate
+            startAtNewPlaylist -> Route.NewPlaylistType
             startAtEpgFor != null -> Route.EpgPick(startAtEpgFor)
             startAtConnection -> Route.Connection
             else -> Route.Root

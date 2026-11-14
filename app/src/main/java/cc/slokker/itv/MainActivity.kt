@@ -85,6 +85,28 @@ class MainActivity : AppCompatActivity() {
         }
         // Testes no emulador: entra logo com uma lista de demonstração, sem conta.
         if (BuildConfig.DEBUG && savedInstanceState == null) {
+            // Uma definição de texto para testar (ex.: --es demo_pref buffer=large).
+            // Grava-se depois de o perfil carregar (senão o que vem do disco apagava-a).
+            intent.getStringExtra("demo_pref")?.split("=", limit = 2)?.takeIf { it.size == 2 }?.let { (k, v) ->
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(4_000)
+                    vm.setPref(k, v)
+                }
+            }
+            // O aviso de versão nova (ex.: --es demo_update 0.16.0), para ver o cartão sem publicar nada.
+            intent.getStringExtra("demo_update")?.let { version ->
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(8_000)
+                    vm.showDemoUpdate(
+                        cc.slokker.itv.data.AppRelease(
+                            version,
+                            "- New Shadow panel style, with a white selector option\n- Settings open on the left\n- Playlists switch from the groups column",
+                            apkUrl = "",
+                            size = 0,
+                        ),
+                    )
+                }
+            }
             intent.getStringExtra("demo_m3u")?.let { url ->
                 lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = intent.getStringExtra("demo_name") ?: "Demo", url = url)) }
             }
@@ -201,6 +223,7 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
         LocalOutlineBrush provides outlineBrush(prefs.outlineColor, Accent.byId(prefs.accent)),
+        cc.slokker.itv.ui.theme.LocalPanelStyle provides prefs.panelLook,
         LocalDensity provides scaled,
         LocalChannelLogos provides channelLogos,
     ) {
