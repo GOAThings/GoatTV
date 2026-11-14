@@ -1,10 +1,12 @@
 package cc.slokker.itv.ui.glass
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.neverEqualPolicy
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.graphics.SolidColor
 import cc.slokker.itv.ui.theme.ItvStyle
+import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import android.graphics.Bitmap
@@ -113,6 +115,9 @@ class GlassBackdrop {
 
 const val DEFAULT_GLASS_OPACITY = 0.6f
 
+/** No vidro claro, quanto o vidro dos painéis fica para dentro: a placa da linha com foco sai este tanto para fora. */
+val GlassInset = 14.dp
+
 val LocalGlassBackdrop = staticCompositionLocalOf<GlassBackdrop?> { null }
 
 private val GlassTint = Color(0xFF0A0D16)
@@ -128,6 +133,8 @@ fun Modifier.glass(
     shape: Shape = ItvShapes.Panel,
     tint: Color? = null,
     fallbackTint: Color = Color(0xCC111522),
+    /** O vidro fica este tanto para dentro dos lados (o conteúdo não): no vidro claro a placa de foco sai dele. */
+    inset: Dp = 0.dp,
 ): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -135,11 +142,15 @@ fun Modifier.glass(
     this
         .onGloballyPositioned { origin = it.positionInWindow() }
         .drawWithCache {
-            val outline = shape.createOutline(size, layoutDirection, this)
+            val dx = inset.toPx()
+            val outline = shape.createOutline(Size(size.width - dx * 2, size.height), layoutDirection, this)
             // O vidro claro: um véu branco por cima do vídeo desfocado (um pouco escurecido, para o texto branco se
             // ler mesmo num vídeo claro) e o contorno mais marcado.
             val lightVeil = Color.White.copy(alpha = 0.16f)
-            val path = Path().apply { addOutline(outline) }
+            val path = Path().apply {
+                addOutline(outline)
+                translate(Offset(dx, 0f))
+            }
             val highlight = Brush.verticalGradient(
                 0f to Color.White.copy(alpha = 0.16f),
                 0.3f to Color.White.copy(alpha = 0.04f),
@@ -182,7 +193,9 @@ fun Modifier.glass(
                     }
                     drawRect(highlight)
                 }
-                drawOutline(outline, if (light) SolidColor(Color.White.copy(alpha = 0.32f)) else rim, style = stroke)
+                translate(left = dx) {
+                    drawOutline(outline, if (light) SolidColor(Color.White.copy(alpha = 0.32f)) else rim, style = stroke)
+                }
             }
         }
         // O conteúdo vai para uma camada própria: quando o fundo desfocado muda (várias vezes por segundo)
@@ -306,6 +319,10 @@ fun GlassRow(
     progress: Float? = null,
     /** Guarda o lugar da barra mesmo sem [progress] (linhas com a mesma altura numa lista). */
     reserveProgress: Boolean = false,
+    /** No vidro claro: o número do canal, à esquerda (em vez de o pôr no [leading]). */
+    number: String? = null,
+    /** No vidro claro: o [subtitle] e a [progress] só na linha com foco (a lista de canais do mockup). */
+    detailsOnFocus: Boolean = false,
     title: String,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -327,7 +344,7 @@ fun GlassRow(
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
     // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
-    val rest = if (selected && !outlineFocus && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    val rest = if (selected && !glassStyle && !outlineFocus && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
     val outlineBrush = LocalOutlineBrush.current
@@ -366,7 +383,7 @@ fun GlassRow(
             pressedContentColor = Color.Black,
         ),
         // No vidro claro a placa com foco sai um pouco para fora do painel (como uma roda que passa por ela).
-        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus) 1f else if (ItvStyle.glass) 1.06f else 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus || glassStyle) 1f else 1.02f),
     ) {
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
@@ -382,20 +399,40 @@ fun GlassRow(
                         drawRect(Color.White.copy(alpha = a))
                     }
                 }
-                .padding(horizontal = if (glassStyle) 18.dp else 12.dp, vertical = if (glassStyle) 13.dp else 7.dp),
+                .then(
+                    if (glassStyle) {
+                        // O texto alinha com o vidro (a linha vai até à borda de fora: a placa sai do painel).
+                        Modifier.padding(start = GlassInset + 18.dp, end = GlassInset + 14.dp, top = if (focused) 13.dp else 8.dp, bottom = if (focused) 13.dp else 8.dp)
+                    } else {
+                        Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                    },
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (glassStyle && number != null) {
+                Text(
+                    number,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp).tabular,
+                    color = LocalContentColor.current.copy(alpha = 0.7f),
+                    modifier = Modifier.width(36.dp),
+                )
+            }
             leading?.invoke(this)
             Column(Modifier.weight(1f)) {
-                // No vidro claro, letra maior e mais cheia (como no mockup).
+                // No vidro claro, letra grande; a da linha com foco maior e mais cheia (como no mockup).
                 Text(
                     title,
                     Modifier.rowText(),
-                    style = if (glassStyle) MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.titleSmall,
+                    style = when {
+                        !glassStyle -> MaterialTheme.typography.titleSmall
+                        focused -> MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold)
+                        else -> MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium)
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
+                val details = !(glassStyle && detailsOnFocus && !focused)
+                if (subtitle != null && details) {
                     Text(
                         subtitle,
                         if (subtitleLines == 1) Modifier.rowText() else Modifier,
@@ -405,7 +442,7 @@ fun GlassRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (progress != null || reserveProgress) {
+                if ((progress != null || reserveProgress) && details && !(glassStyle && progress == null)) {
                     val ink = LocalContentColor.current
                     Spacer(
                         Modifier

@@ -1,5 +1,7 @@
 package cc.slokker.itv.ui.player
 
+import androidx.compose.ui.text.font.FontWeight
+import cc.slokker.itv.ui.glass.GlassInset
 import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.animation.AnimatedVisibility
@@ -131,7 +133,10 @@ internal fun SidePanel(
         animationSpec = tween(PANEL_ANIM_MS, easing = FastOutSlowInEasing),
         label = "panel",
     )
-    val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
+    // No vidro claro as linhas vão até à borda de fora (a placa de foco sai do vidro, que fica recuado).
+    val glassStyle = ItvStyle.glass
+    val content = Modifier.fillMaxSize().padding(horizontal = if (glassStyle) 0.dp else 8.dp, vertical = if (glassStyle) 22.dp else 12.dp)
+    val panelGlass = if (glassStyle) Modifier.glass(shape, inset = GlassInset) else Modifier.glass(shape).clip(shape)
     val groupsWidth = (prefs.panelWidth * 0.85f).dp
     // Com os grupos abertos, os canais esbatidos ao lado são os do grupo com foco (→ abre-o).
     var preview by remember(group) { mutableStateOf(group) }
@@ -148,8 +153,7 @@ internal fun SidePanel(
                 layout(w, placeable.height) { if (w > 0) placeable.placeRelative(w - full, 0) }
             }
             .padding(end = 12.dp)
-            .glass(shape)
-            .clip(shape)
+            .then(panelGlass)
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
@@ -162,10 +166,9 @@ internal fun SidePanel(
             .fillMaxHeight()
             // Com os grupos abertos, os canais ficam esbatidos ao lado; no vidro claro desaparecem (só os grupos).
             .graphicsLayer { alpha = 1f - (if (ItvStyle.glass) 1f else 0.45f) * toGroups.value }
-            .glass(shape)
             // Recortado pela borda do vidro: o conteúdo a deslizar nunca passa para fora do painel,
-            // e as margens ficam por dentro para o brilho do foco ter espaço.
-            .clip(shape)
+            // e as margens ficam por dentro para o brilho do foco ter espaço (no vidro claro a placa sai dele).
+            .then(panelGlass)
             .focusProperties { canFocus = mode == Panel.Channels },
     ) {
         Box(content) {
@@ -369,15 +372,20 @@ private fun ChannelList(
                     // ou "Sem informação" sem guia. Assim mudar o foco não mexe no layout da lista.
                     subtitle = when {
                         programme != null -> programme.title
+                        ItvStyle.glass -> null
                         isPlaying -> LocalStrings.current.watchingNow
                         prefs.epgInList -> LocalStrings.current.noGuideInfo
                         else -> null
                     },
+                    number = if (prefs.showNumbers) ch.num.toString() else null,
+                    detailsOnFocus = true,
                     subtitleLines = 1,
                     // Barra do programa (o espaço fica reservado sem guia, para as linhas terem todas a mesma altura).
                     progress = programme?.let { e -> ((minute * 60_000 - e.startMs).toFloat() / (e.endMs - e.startMs)).coerceIn(0f, 1f) },
-                    reserveProgress = prefs.epgInList,
-                    leading = if (prefs.showNumbers || prefs.showLogos) {
+                    reserveProgress = prefs.epgInList && !ItvStyle.glass,
+                    leading = if (ItvStyle.glass) {
+                        null
+                    } else if (prefs.showNumbers || prefs.showLogos) {
                         {
                             if (prefs.showNumbers) {
                                 Text(
@@ -628,6 +636,18 @@ private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Pl
 /** Cabeçalho do painel; à direita, uma dica ([hint]) ou uma ação ([action]). */
 @Composable
 private fun PanelHeader(title: String, subtitle: String, hint: String? = null, action: (@Composable () -> Unit)? = null) {
+    // No vidro claro: só o título, grande, e a dica à direita (como no mockup).
+    if (ItvStyle.glass) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = GlassInset + 22.dp, end = GlassInset + 18.dp, top = 6.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (hint != null) Text(hint, style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.75f))
+            action?.invoke()
+        }
+        return
+    }
     Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)

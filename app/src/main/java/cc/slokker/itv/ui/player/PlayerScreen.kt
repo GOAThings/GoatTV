@@ -1226,7 +1226,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         vm.setSleepTimer(minutes)
                         showSleep = false
                     },
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.align(if (ItvStyle.glass) Alignment.CenterStart else Alignment.Center),
                 )
             }
 
@@ -1253,7 +1253,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     title = if (type == C.TRACK_TYPE_AUDIO) LocalStrings.current.audio else LocalStrings.current.subtitles,
                     options = trackOptions(stream.tracks, type, player, allowOff = type == C.TRACK_TYPE_TEXT, onManual = playback::onManualTrack),
                     onPicked = { trackPicker = null },
-                    modifier = Modifier.align(Alignment.Center),
+                    // No vidro claro, o painel alto encostado à esquerda (o mockup das legendas).
+                    modifier = Modifier.align(if (ItvStyle.glass) Alignment.CenterStart else Alignment.Center),
                 )
             }
 

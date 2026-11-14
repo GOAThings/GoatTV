@@ -54,7 +54,7 @@ object ItvShapes {
     private val ClassicRow = RoundedCornerShape(ControlRadius)
     private val GlassPanel = RoundedCornerShape(28.dp)
     private val GlassCard = RoundedCornerShape(22.dp)
-    private val GlassRow = RoundedCornerShape(18.dp)
+    private val GlassRow = RoundedCornerShape(24.dp)
 }
 
 /** Raio dos controlos (também o do brilho de foco, que tem de coincidir). */

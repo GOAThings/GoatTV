@@ -1,5 +1,10 @@
 package cc.slokker.itv.ui.player
 
+import androidx.compose.ui.graphics.luminance
+import androidx.tv.material3.LocalContentColor
+import androidx.compose.foundation.lazy.itemsIndexed
+import cc.slokker.itv.ui.glass.GlassInset
+import cc.slokker.itv.ui.theme.ItvStyle
 import cc.slokker.itv.ui.theme.ItvShapes
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -346,6 +351,19 @@ internal fun SleepPicker(current: Long?, onPick: (Int?) -> Unit, modifier: Modif
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }
     val now = rememberNow()
+    if (ItvStyle.glass) {
+        val options = listOf<Int?>(null, 15, 30, 45, 60, 90, 120)
+        GlassPicker(current?.let { s.sleepRemaining(minutesLeft(it, now)) } ?: s.sleepTimer, modifier) {
+            itemsIndexed(options) { i, minutes ->
+                GlassRow(
+                    onClick = { onPick(minutes) },
+                    modifier = if (i == 0) Modifier.focusRequester(focus) else Modifier,
+                    title = minutes?.let { s.minutes(it) } ?: s.off,
+                )
+            }
+        }
+        return
+    }
     Column(
         modifier
             .width(360.dp)
@@ -374,6 +392,28 @@ internal fun TrackPicker(title: String, options: List<TrackOption>, onPicked: ()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }
     val focusIndex = options.indexOfFirst { it.selected }.coerceAtLeast(0)
+    if (ItvStyle.glass && options.isNotEmpty()) {
+        GlassPicker(title, modifier) {
+            itemsIndexed(options, key = { _, o -> o.key }) { i, o ->
+                GlassRow(
+                    onClick = {
+                        o.select()
+                        onPicked()
+                    },
+                    modifier = if (i == focusIndex) Modifier.focusRequester(focus) else Modifier,
+                    title = o.label,
+                    subtitle = o.details?.takeIf { it.isNotEmpty() },
+                    detailsOnFocus = true,
+                    trailing = if (o.selected) {
+                        { CheckBadge() }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+        return
+    }
     Column(
         modifier
             .width(420.dp)
@@ -403,6 +443,50 @@ internal fun TrackPicker(title: String, options: List<TrackOption>, onPicked: ()
                 },
             )
         }
+    }
+}
+
+/**
+ * O painel de escolha do vidro claro (o mockup das legendas): alto, encostado à esquerda, o título grande e as opções
+ * numa lista que anda com o foco ao centro; a placa da opção com foco sai do vidro.
+ */
+@Composable
+private fun GlassPicker(title: String, modifier: Modifier, items: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+    Column(
+        modifier
+            .padding(start = 40.dp)
+            .width(360.dp)
+            .fillMaxHeight(0.74f)
+            .glass(ItvShapes.Panel, inset = GlassInset)
+            .padding(top = 26.dp, bottom = 10.dp),
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(start = GlassInset + 22.dp, bottom = 8.dp),
+        )
+        LazyColumn(contentPadding = PaddingValues(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp), content = items)
+    }
+}
+
+/** O visto da opção escolhida: na placa branca, um círculo escuro com o visto branco; fora dela, só o visto. */
+@Composable
+private fun CheckBadge() {
+    val ink = LocalContentColor.current
+    val onPlate = ink.luminance() < 0.5f
+    androidx.compose.foundation.Canvas(Modifier.size(26.dp)) {
+        val w = size.width
+        if (onPlate) drawCircle(ink)
+        val check = androidx.compose.ui.graphics.Path().apply {
+            moveTo(w * 0.29f, w * 0.52f)
+            lineTo(w * 0.44f, w * 0.66f)
+            lineTo(w * 0.72f, w * 0.37f)
+        }
+        drawPath(
+            check,
+            if (onPlate) Color.White else ink,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = w * 0.1f, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round),
+        )
     }
 }
 
