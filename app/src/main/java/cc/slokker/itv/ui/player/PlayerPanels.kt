@@ -138,7 +138,8 @@ internal fun SidePanel(
         label = "panel",
     )
     val content = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 12.dp)
-    val groupsWidth = (prefs.panelWidth * 0.85f).dp
+    // Mais a coluna de botões (⇄, gravações, definições) à esquerda dos grupos.
+    val groupsWidth = (prefs.panelWidth * 0.85f + 56).dp
     // Com os grupos abertos, a lista de canais (escondida) acompanha o grupo com foco (→ abre-o já pronto).
     var preview by remember(group) { mutableStateOf(group) }
     val shownGroup = if (mode == Panel.Groups) preview else group
@@ -525,39 +526,49 @@ private fun GroupList(
         menuWasOpen = playlistMenu
     }
 
+    // ← nos grupos vai para a coluna de botões à esquerda (listas, gravações, definições); → volta ao grupo.
+    // Assim o cabeçalho fica só com o título, sem o cortar.
+    val recordingsFocus = remember { FocusRequester() }
+    val railFocus = if (playlists.size > 1) pillFocus else recordingsFocus
+    var inRail by remember { mutableStateOf(false) }
     Box {
-    Column(
+    Row(
         Modifier.onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown || playlistMenu) return@onPreviewKeyEvent false
-            val group = focusedGroup
             val code = e.key.nativeKeyCode
-            // Nos botões do cabeçalho (⇄, ⚙): ↓ volta ao primeiro grupo; as outras setas só mudam o foco.
-            if (group == null) {
-                if (code != AndroidKeyEvent.KEYCODE_DPAD_DOWN || groups.isEmpty()) return@onPreviewKeyEvent false
-                focusRow(0)
-                return@onPreviewKeyEvent true
+            if (inRail) {
+                return@onPreviewKeyEvent when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (groups.isNotEmpty()) focusRow(groups.indexOfFirst { it.id == focusedGroup }.takeIf { it >= 0 } ?: selectedIndex)
+                        true
+                    }
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> true
+                    else -> false
+                }
             }
+            val group = focusedGroup ?: return@onPreviewKeyEvent false
             when (code) {
-                // ↑ no primeiro grupo sobe para os botões do cabeçalho; ↓ no último fica.
+                // ↑ no primeiro grupo e ↓ no último ficam.
                 AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
                     val index = groups.indexOfFirst { it.id == group }
                     if (index < 0) return@onPreviewKeyEvent false
-                    val up = code == AndroidKeyEvent.KEYCODE_DPAD_UP
-                    if (up && index == 0) return@onPreviewKeyEvent false
-                    val to = if (up) index - 1 else index + 1
-                    if (to <= groups.lastIndex) focusRow(to)
+                    val to = if (code == AndroidKeyEvent.KEYCODE_DPAD_UP) index - 1 else index + 1
+                    if (to in groups.indices) focusRow(to)
                     true
                 }
                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
                     onSelectGroup(group)
                     true
                 }
-                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> true
+                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+                    runCatching { railFocus.requestFocus() }
+                    true
+                }
                 else -> false
             }
         },
     ) {
-        PanelHeader(title = s.groups, subtitle = data.playlist.name) {
+        Column(Modifier.padding(start = 4.dp, top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (playlists.size > 1) {
                 GlassIconButton(
                     ItvIcons.SwapPlaylist,
@@ -566,27 +577,28 @@ private fun GroupList(
                     enabled = !playlistMenu,
                     modifier = Modifier
                         .focusRequester(pillFocus)
-                        .onFocusChanged { if (it.isFocused) focusedGroup = null },
+                        .onFocusChanged { if (it.isFocused) inRail = true },
                 )
-                Spacer(Modifier.width(8.dp))
             }
-            // As gravações, ao lado das Definições (como o ⇄ das listas).
             GlassIconButton(
                 ItvIcons.Recordings,
                 contentDescription = s.recordings,
                 onClick = onRecordings,
                 enabled = !playlistMenu,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedGroup = null },
+                modifier = Modifier
+                    .focusRequester(recordingsFocus)
+                    .onFocusChanged { if (it.isFocused) inRail = true },
             )
-            Spacer(Modifier.width(8.dp))
             GlassIconButton(
                 ItvIcons.Settings,
                 contentDescription = s.settings,
                 onClick = onSettings,
                 enabled = !playlistMenu,
-                modifier = Modifier.onFocusChanged { if (it.isFocused) focusedGroup = null },
+                modifier = Modifier.onFocusChanged { if (it.isFocused) inRail = true },
             )
         }
+    Column(Modifier.weight(1f)) {
+        PanelHeader(title = s.groups, subtitle = data.playlist.name)
         LazyColumn(
             state = state,
             modifier = Modifier.slidingFocus(state, plate = !soft, fill = ShadowFocus.takeIf { soft }) { focusedGroup?.let { "g:$it" } },
@@ -619,10 +631,16 @@ private fun GroupList(
                     modifier = Modifier
                         .then(if (index == selectedIndex) Modifier.focusRequester(initialFocus) else Modifier)
                         .focusRequester(rowFocus[index])
-                        .onFocusChanged { if (it.isFocused) focusedGroup = g.id },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                focusedGroup = g.id
+                                inRail = false
+                            }
+                        },
                 )
             }
         }
+    }
     }
         if (playlistMenu) {
             PlaylistMenu(
@@ -632,13 +650,13 @@ private fun GroupList(
                     onPlaylistMenu(false)
                     vm.switchPlaylist(p)
                 },
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 4.dp),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 60.dp, top = 4.dp),
             )
         }
     }
 }
 
-/** Menu de playlists por baixo do botão ⇄ do cabeçalho. */
+/** Menu de playlists ao lado do botão ⇄ da coluna de botões dos grupos. */
 @Composable
 private fun PlaylistMenu(playlists: List<Playlist>, current: String, onPick: (Playlist) -> Unit, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
