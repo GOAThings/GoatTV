@@ -123,12 +123,14 @@ struct PlayerScreen: View {
 
     private func videoView(_ view: UIView, box: VideoBox, name: String?, audible: Bool, status: String? = nil) -> some View {
         let small = box.size != nil
+        // Mais arredondado no dividido (canais maiores), como no Android.
+        let corner: CGFloat = split ? 30 : 18
         return VideoSurface(view: view)
             .frame(width: box.size?.width, height: box.size?.height)
-            .clipShape(RoundedRectangle(cornerRadius: small ? 18 : 0, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: small ? corner : 0, style: .continuous))
             .overlay {
                 if small, !tvGuide {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
                         .strokeBorder(audible ? AnyShapeStyle(Theme.accent(model.prefs.accent)) : AnyShapeStyle(Color.white.opacity(0.35)), lineWidth: audible ? 5 : 2)
                 }
             }

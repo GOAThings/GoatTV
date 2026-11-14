@@ -3,6 +3,12 @@ package cc.slokker.itv.ui.player
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -77,8 +83,8 @@ internal data class TileRect(val x: Float, val y: Float, val w: Float, val h: Fl
 
 /**
  * Onde fica cada lugar com [count] canais (2–4). O lugar 0 é o grande na imagem na imagem (os outros ficam em coluna
- * no canto de cima à direita); no dividido, 2 canais ficam lado a lado (16:9 cada) e 3 ou 4 numa grelha 2×2 (com 3, o
- * terceiro ao centro em baixo).
+ * no canto de cima à direita); no dividido, 2 canais ficam lado a lado e 3 ou 4 numa grelha 2×2 (com 3, o terceiro ao
+ * centro em baixo), todos 16:9, com margem à volta e um espaço entre eles (para os cantos arredondados).
  */
 internal fun tileRects(count: Int, layout: DualLayout): List<TileRect> {
     if (count <= 1) return listOf(TileRect(0f, 0f, 1f, 1f))
@@ -86,13 +92,29 @@ internal fun tileRects(count: Int, layout: DualLayout): List<TileRect> {
         DualLayout.PIP -> listOf(TileRect(0f, 0f, 1f, 1f)) + (1 until count).map { k ->
             TileRect(1f - PIP_FRACTION - PIP_MARGIN_X, PIP_MARGIN_Y + (k - 1) * (PIP_FRACTION + PIP_GAP), PIP_FRACTION, PIP_FRACTION)
         }
-        DualLayout.SPLIT -> when (count) {
-            2 -> listOf(TileRect(0f, 0.25f, 0.5f, 0.5f), TileRect(0.5f, 0.25f, 0.5f, 0.5f))
-            3 -> listOf(TileRect(0f, 0f, 0.5f, 0.5f), TileRect(0.5f, 0f, 0.5f, 0.5f), TileRect(0.25f, 0.5f, 0.5f, 0.5f))
-            else -> listOf(TileRect(0f, 0f, 0.5f, 0.5f), TileRect(0.5f, 0f, 0.5f, 0.5f), TileRect(0f, 0.5f, 0.5f, 0.5f), TileRect(0.5f, 0.5f, 0.5f, 0.5f))
+        DualLayout.SPLIT -> {
+            // A mesma fração na largura e na altura: 16:9 num ecrã 16:9. O espaço na vertical é o mesmo em píxeis.
+            val w = (1f - 2 * SPLIT_MARGIN - SPLIT_GAP) / 2
+            val gapY = SPLIT_GAP * 16 / 9
+            val left = SPLIT_MARGIN
+            val right = SPLIT_MARGIN + w + SPLIT_GAP
+            val top = (1f - 2 * w - gapY) / 2
+            val bottom = top + w + gapY
+            when (count) {
+                2 -> listOf(TileRect(left, (1f - w) / 2, w, w), TileRect(right, (1f - w) / 2, w, w))
+                3 -> listOf(TileRect(left, top, w, w), TileRect(right, top, w, w), TileRect((1f - w) / 2, bottom, w, w))
+                else -> listOf(TileRect(left, top, w, w), TileRect(right, top, w, w), TileRect(left, bottom, w, w), TileRect(right, bottom, w, w))
+            }
         }
     }
 }
+
+/** No dividido: a margem às bordas do ecrã e o espaço entre canais, em frações da largura. */
+private const val SPLIT_MARGIN = 0.015f
+private const val SPLIT_GAP = 0.008f
+
+/** O arredondado dos canais no dividido. */
+internal val SplitCorner = 15.dp
 
 /** A imagem pequena: um quarto da largura (e da altura: fica 16:9 num ecrã 16:9), afastada das margens. */
 private const val PIP_FRACTION = 0.25f
@@ -320,9 +342,10 @@ internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, s
     val accent = LocalAccent.current
     tiles.forEachIndexed { position, tile ->
         val small = !split && position > 0
+        val shape = RoundedCornerShape(if (split) SplitCorner else 4.dp)
         val border = when {
-            tile.audible && (split || small) -> Modifier.border(3.dp, accent.brush, RoundedCornerShape(4.dp))
-            small -> Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+            tile.audible && (split || small) -> Modifier.border(3.dp, accent.brush, shape)
+            small -> Modifier.border(1.dp, Color.White.copy(alpha = 0.35f), shape)
             else -> Modifier
         }
         Box(modifiers[position].then(border)) {
@@ -349,5 +372,24 @@ internal fun TileDecorations(tiles: List<TileInfo>, modifiers: List<Modifier>, s
                 }
             }
         }
+    }
+}
+
+/**
+ * No dividido: pinta de preto tudo à volta dos canais, menos os cantos arredondados deles. O vídeo é uma SurfaceView
+ * (por trás da janela), por isso um clip não o corta; o que se desenha por cima tapa-lhe os cantos.
+ */
+@Composable
+internal fun SplitCornerMask(rects: List<TileRect>) {
+    Canvas(Modifier.fillMaxSize()) {
+        val r = SplitCorner.toPx()
+        val path = Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+            rects.forEach { t ->
+                addRoundRect(RoundRect(t.x * size.width, t.y * size.height, (t.x + t.w) * size.width, (t.y + t.h) * size.height, CornerRadius(r)))
+            }
+        }
+        drawPath(path, Color.Black)
     }
 }

@@ -457,8 +457,8 @@ struct SecondChannelPicker: View {
 }
 
 /// Onde fica cada lugar com [count] canais (2–4), em frações do ecrã (como no Android). O lugar 0 é o grande na imagem
-/// na imagem (os outros ficam em coluna no canto de cima à direita); no dividido, 2 canais ficam lado a lado (16:9
-/// cada) e 3 ou 4 numa grelha 2×2 (com 3, o terceiro ao centro em baixo).
+/// na imagem (os outros ficam em coluna no canto de cima à direita); no dividido, 2 canais ficam lado a lado e 3 ou 4
+/// numa grelha 2×2 (com 3, o terceiro ao centro em baixo), todos 16:9, com margem à volta e um espaço entre eles.
 func tileRects(_ count: Int, split: Bool) -> [CGRect] {
     guard count > 1 else { return [CGRect(x: 0, y: 0, width: 1, height: 1)] }
     if !split {
@@ -467,11 +467,15 @@ func tileRects(_ count: Int, split: Bool) -> [CGRect] {
             CGRect(x: 1 - f - mx, y: my + CGFloat(k - 1) * (f + gap), width: f, height: f)
         }
     }
+    // A mesma fração na largura e na altura: 16:9 num ecrã 16:9. O espaço na vertical é o mesmo em pontos.
+    let margin: CGFloat = 0.015, gap: CGFloat = 0.008
+    let w = (1 - 2 * margin - gap) / 2, gapY = gap * 16 / 9
+    let left = margin, right = margin + w + gap
+    let top = (1 - 2 * w - gapY) / 2, bottom = top + w + gapY
+    func r(_ x: CGFloat, _ y: CGFloat) -> CGRect { CGRect(x: x, y: y, width: w, height: w) }
     switch count {
-    case 2: return [CGRect(x: 0, y: 0.25, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0.25, width: 0.5, height: 0.5)]
-    case 3: return [CGRect(x: 0, y: 0, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5),
-                    CGRect(x: 0.25, y: 0.5, width: 0.5, height: 0.5)]
-    default: return [CGRect(x: 0, y: 0, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5),
-                     CGRect(x: 0, y: 0.5, width: 0.5, height: 0.5), CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5)]
+    case 2: return [r(left, (1 - w) / 2), r(right, (1 - w) / 2)]
+    case 3: return [r(left, top), r(right, top), r((1 - w) / 2, bottom)]
+    default: return [r(left, top), r(right, top), r(left, bottom), r(right, bottom)]
     }
 }

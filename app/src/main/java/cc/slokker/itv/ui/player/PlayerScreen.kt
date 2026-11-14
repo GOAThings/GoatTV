@@ -994,6 +994,7 @@ fun PlayerScreen(vm: AppViewModel) {
                             }
                         }
                     }
+                    if (split) SplitCornerMask(rects)
                     val s = LocalStrings.current
                     TileDecorations(
                         tiles = order.map { tile ->
