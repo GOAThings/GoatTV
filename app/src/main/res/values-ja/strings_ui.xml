@@ -549,6 +549,15 @@
     <string name="manage_groups">グループ</string>
     <string name="manage_groups_sub">非表示と並べ替え</string>
     <string name="visible_groups">一覧に表示</string>
+    <string name="countries">国</string>
+    <string name="countries_all">すべての国</string>
+    <string name="countries_some">%2$s か国中 %1$s か国</string>
+    <string name="countries_header">次の国のグループだけを表示</string>
+    <string name="countries_none">国なし</string>
+    <string name="countries_clear">すべての国を表示</string>
+    <plurals name="groups_count">
+        <item quantity="other">%d グループ</item>
+    </plurals>
     <string name="reorder_groups">グループを並べ替え</string>
     <string name="reorder_groups_sub">OK でグループを選び、↑/↓ で移動、OK で確定</string>
     <string name="moving">移動中…</string>

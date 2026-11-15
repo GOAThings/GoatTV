@@ -549,6 +549,15 @@
     <string name="manage_groups">分组</string>
     <string name="manage_groups_sub">隐藏和排序</string>
     <string name="visible_groups">在列表中显示</string>
+    <string name="countries">国家/地区</string>
+    <string name="countries_all">所有国家/地区</string>
+    <string name="countries_some">%2$s 个中的 %1$s 个</string>
+    <string name="countries_header">只显示以下国家/地区的分组</string>
+    <string name="countries_none">无国家/地区</string>
+    <string name="countries_clear">显示所有国家/地区</string>
+    <plurals name="groups_count">
+        <item quantity="other">%d 个分组</item>
+    </plurals>
     <string name="reorder_groups">调整分组顺序</string>
     <string name="reorder_groups_sub">按 OK 选中分组，↑/↓ 移动，再按 OK 放下</string>
     <string name="moving">正在移动…</string>

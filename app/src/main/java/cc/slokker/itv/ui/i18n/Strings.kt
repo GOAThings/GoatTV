@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.i18n
 
+import cc.slokker.itv.data.GroupCountries
 import androidx.core.os.ConfigurationCompat
 import android.content.Context
 import android.content.res.Configuration
@@ -31,6 +32,7 @@ class Strings(context: Context) {
     fun activateExpiresText(min: Long, sec: Long) = s(R.string.activate_expires_text, min, sec)
     fun streamsLimit(n: Int) = p(R.plurals.streams_limit, n, n)
     fun hiddenGroups(n: Int) = p(R.plurals.hidden_groups, n, n)
+    fun groupsCount(n: Int) = p(R.plurals.groups_count, n, n)
     private fun inParens(codec: String?) = codec?.let { " ($it)" }.orEmpty()
 
     // ---- Geral ----
@@ -1029,6 +1031,19 @@ class Strings(context: Context) {
     val manageGroups get() = s(R.string.manage_groups)
     fun manageGroupsSub(hidden: Int) = if (hidden == 0) s(R.string.manage_groups_sub) else hiddenGroups(hidden)
     val visibleGroups get() = s(R.string.visible_groups)
+    val countries get() = s(R.string.countries)
+    val countriesAll get() = s(R.string.countries_all)
+    fun countriesSome(chosen: Int, total: Int) = s(R.string.countries_some, chosen.toString(), total.toString())
+    val countriesHeader get() = s(R.string.countries_header)
+    val countriesClear get() = s(R.string.countries_clear)
+
+    /** O nome de um país ou região do filtro de países ([GroupCountries]), na língua da app. */
+    fun countryName(code: String): String = when (code) {
+        GroupCountries.NONE -> s(R.string.countries_none)
+        GroupCountries.EXYU -> "Ex-YU"
+        GroupCountries.ARAB -> Locale("ar").getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
+        else -> Locale("", code.uppercase()).getDisplayCountry(locale).ifEmpty { code.uppercase() }
+    }
     val reorderGroups get() = s(R.string.reorder_groups)
     val reorderGroupsSub get() = s(R.string.reorder_groups_sub)
     val moving get() = s(R.string.moving)

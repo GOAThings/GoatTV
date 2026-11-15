@@ -9,6 +9,8 @@ public struct Library: Sendable {
     public let recents: [String]
     /// Grupos desbloqueados com o PIN nesta sessão ("playlistId:groupId").
     public let unlocked: Set<String>
+    /// Os grupos que o filtro de países esconde (o núcleo partilhado diz o país de cada um).
+    public let countryHidden: Set<String>
 
     public init(content: PlaylistContent, prefs: Prefs, favorites: [String], recents: [String], unlocked: Set<String> = []) {
         self.content = content
@@ -16,11 +18,18 @@ public struct Library: Sendable {
         self.favorites = favorites
         self.recents = recents
         self.unlocked = unlocked
+        let allowed = Set(prefs.groupCountries[content.playlist.id] ?? [])
+        if allowed.isEmpty {
+            countryHidden = []
+        } else {
+            let codes = GroupCountry.codes(content.categories.map(\.name))
+            countryHidden = Set(zip(content.categories, codes).filter { !allowed.contains($0.1) }.map { $0.0.id })
+        }
     }
 
     private var playlistId: String { content.playlist.id }
 
-    public func isGroupHidden(_ groupId: String) -> Bool { prefs.isHidden(playlistId, groupId) }
+    public func isGroupHidden(_ groupId: String) -> Bool { prefs.isHidden(playlistId, groupId) || countryHidden.contains(groupId) }
 
     public func isGroupLocked(_ groupId: String) -> Bool {
         prefs.isLocked(playlistId, groupId) && !unlocked.contains("\(playlistId):\(groupId)")
@@ -38,7 +47,8 @@ public struct Library: Sendable {
         return indexed
             .sorted { (position[$0.cat.id] ?? order.count + $0.index) < (position[$1.cat.id] ?? order.count + $1.index) }
             .map(\.cat)
-            .filter { includeHidden || !isGroupHidden($0.id) }
+            // Os do filtro de países nem com includeHidden: escolhem-se em "Países", não grupo a grupo.
+            .filter { !countryHidden.contains($0.id) && (includeHidden || !isGroupHidden($0.id)) }
     }
 
     /// Os grupos que se percorrem: os especiais visíveis e os normais sem os escondidos nem bloqueados.

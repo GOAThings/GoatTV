@@ -127,6 +127,8 @@ final class AppModel {
     @ObservationIgnored private var mappingsLoadedFor: String?
     /// Logótipos do país escolhido em "Origem dos logótipos" para a lista em uso ("playlistId:país", channelKey → URL).
     private var countryLogos: (key: String, logos: [String: String])?
+    /// Os países dos grupos da lista aberta (ver groupCountryCounts): não é estado da interface.
+    @ObservationIgnored private var countryCountsCache: (key: String, counts: [(code: String, count: Int)])?
     @ObservationIgnored private var countryGuide: (country: String, channels: [EpgGuideChannel])?
 
     // MARK: Dependências
@@ -684,6 +686,40 @@ final class AppModel {
         var set = prefs.hiddenGroups
         if hidden { set.insert("\(id):\(groupId)") } else { set.remove("\(id):\(groupId)") }
         setPref("hidden_groups", .strings(set.sorted()))
+    }
+
+    // MARK: Filtro de países (Definições → Gerir grupos → Países)
+
+    /// Os países dos grupos da lista aberta, com quantos grupos cada um (guardados até a lista mudar).
+    var groupCountryCounts: [(code: String, count: Int)] {
+        guard let content else { return [] }
+        let key = "\(content.playlist.id):\(content.categories.count):\(content.categories.first?.name ?? "")"
+        if let cached = countryCountsCache, cached.key == key { return cached.counts }
+        let counts = GroupCountry.counts(content.categories.map(\.name))
+        countryCountsCache = (key, counts)
+        return counts
+    }
+
+    /// Os países escolhidos para a lista aberta; vazio = sem filtro.
+    var groupCountries: Set<String> {
+        guard let id = content?.playlist.id else { return [] }
+        return Set(prefs.groupCountries[id] ?? [])
+    }
+
+    func setGroupCountry(_ code: String, _ on: Bool) {
+        var set = groupCountries
+        if on { set.insert(code) } else { set.remove(code) }
+        saveGroupCountries(set)
+    }
+
+    /// Sem filtro: todos os países à vista.
+    func clearGroupCountries() { saveGroupCountries([]) }
+
+    private func saveGroupCountries(_ set: Set<String>) {
+        guard let id = content?.playlist.id else { return }
+        var map = prefs.groupCountries
+        if set.isEmpty { map.removeValue(forKey: id) } else { map[id] = set.sorted() }
+        setPref("group_countries", .object(map.mapValues { JSON.strings($0) }))
     }
 
     func isChannelHidden(_ channel: Channel) -> Bool {

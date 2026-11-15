@@ -13,6 +13,8 @@ public struct Prefs: Equatable, Sendable {
     public var showRecentGroup = true
     public var hiddenGroups: Set<String> = []
     public var groupOrder: [String: [String]] = [:]
+    /// Filtro de países por lista: playlistId → os países à vista ("none" = os grupos sem país); vazio = sem filtro.
+    public var groupCountries: [String: [String]] = [:]
     public var hiddenChannels: Set<String> = []
     public var channelOrder: [String: [String]] = [:]
     // Reprodução
@@ -220,6 +222,7 @@ public struct Prefs: Equatable, Sendable {
         showRecentGroup = p.showRecentGroup
         hiddenGroups = p.hiddenGroups
         groupOrder = p.groupOrder
+        groupCountries = p.groupCountries
         hiddenChannels = p.hiddenChannels
         channelOrder = p.channelOrder
         reconnectSeconds = Int(p.reconnectSeconds)

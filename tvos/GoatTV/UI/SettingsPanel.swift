@@ -54,6 +54,8 @@ struct SettingsPanel: View {
         case logoSource
         case epgCountries
         case groupsOrder
+        /// O filtro de países da lista em uso.
+        case groupCountries
         case channelsOrder(String)
         /// Lista nova, primeiro passo: Xtream Codes ou lista M3U.
         case newPlaylistType
@@ -628,6 +630,7 @@ struct SettingsPanel: View {
         case .lists: return s.playlists
         case .playlist(let id): return model.playlists.first { $0.id == id }?.name ?? s.playlists
         case .groups: return s.groups
+        case .groupCountries: return s.r("countries")
         case .channelGroups: return s.t("Channels", "Canais")
         case .channels(let g): return model.allGroups.first { $0.id == g }?.name ?? s.t("Channels", "Canais")
         case .account: return s.account
@@ -976,7 +979,16 @@ struct SettingsPanel: View {
             return list
 
         case .groups:
-            var list: [Item] = [
+            var list: [Item] = []
+            // Com muitos países na lista (quando os grupos se percebem), primeiro os países.
+            let countries = model.groupCountryCounts
+            if countries.filter({ $0.code != GroupCountry.none }).count > 1 {
+                let chosen = model.groupCountries
+                list.append(.nav("countries", s.r("countries"),
+                                 subtitle: chosen.isEmpty ? s.r("countries_all") : s.r("countries_some", "\(chosen.count)", "\(countries.count)"),
+                                 to: .groupCountries))
+            }
+            list += [
                 .nav("reorder", s.t("Reorder groups", "Reordenar grupos"),
                      subtitle: s.t("OK to pick up a group, ↑/↓ to move it, OK to drop it", "OK para pegar num grupo, ↑/↓ para o mover, OK para largar"), to: .groupsOrder),
                 .action("resetorder", s.t("Restore the playlist's order", "Repor a ordem da lista"),
@@ -988,6 +1000,19 @@ struct SettingsPanel: View {
             list.append(.eye("show_recent_group", s.recents, prefs.showRecentGroup) { model.setPref("show_recent_group", .bool($0)) })
             list += model.allGroups.map { (g: ChannelGroup) -> Item in
                 .eye("g:\(g.id)", g.name, !model.isGroupHidden(g.id)) { visible in model.setGroupHidden(g.id, !visible) }
+            }
+            return list
+
+        case .groupCountries:
+            let chosen = model.groupCountries
+            var list: [Item] = []
+            if !chosen.isEmpty { list.append(.action("clear", s.r("countries_clear")) { model.clearGroupCountries() }) }
+            list.append(.header("h", s.r("countries_header")))
+            // Sem filtro nenhum está marcado (tudo à vista); marcar um passa a mostrar só os grupos desse.
+            let locale = Locale(identifier: s.lang)
+            list += model.groupCountryCounts.map { c -> Item in
+                .check("c:\(c.code)", GroupCountry.name(c.code, locale: locale, noneName: s.r("countries_none")), chosen.contains(c.code),
+                       subtitle: s.plural("groups_count", c.count)) { model.setGroupCountry(c.code, !chosen.contains(c.code)) }
             }
             return list
 

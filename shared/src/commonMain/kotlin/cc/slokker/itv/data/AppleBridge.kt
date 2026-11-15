@@ -26,6 +26,9 @@ object AppleBridge {
 
     fun groupKey(name: String): String = ChannelMatch.groupKey(name)
 
+    /** O país de cada nome de grupo ([GroupCountries.of]), lado a lado; "none" nos sem país. */
+    fun groupCountryCodes(names: List<String>): List<String> = names.map { GroupCountries.of(it) ?: GroupCountries.NONE }
+
     fun find(matcher: AppleMatcher, name: String, epgId: String?, chosen: String?, group: String?): AppleResult =
         result(matcher.matcher.find(name, epgId, chosen, group))
 

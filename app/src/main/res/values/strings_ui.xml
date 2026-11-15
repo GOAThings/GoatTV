@@ -550,6 +550,16 @@
     <string name="manage_groups">Groups</string>
     <string name="manage_groups_sub">Hide and reorder</string>
     <string name="visible_groups">Show in the list</string>
+    <string name="countries">Countries</string>
+    <string name="countries_all">All countries</string>
+    <string name="countries_some">%1$s of %2$s countries</string>
+    <string name="countries_header">Show only the groups from</string>
+    <string name="countries_none">No country</string>
+    <string name="countries_clear">Show all countries</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d group</item>
+        <item quantity="other">%d groups</item>
+    </plurals>
     <string name="reorder_groups">Reorder groups</string>
     <string name="reorder_groups_sub">OK to pick up a group, ↑/↓ to move it, OK to drop it</string>
     <string name="moving">Moving…</string>

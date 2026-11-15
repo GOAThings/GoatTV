@@ -1707,6 +1707,15 @@ private struct MenuTab: View {
                         Toggle(s.r("all"), isOn: Binding(get: { model.prefs.showAllGroup }, set: { model.setPref("show_all_group", .bool($0)) }))
                         Toggle(s.r("recents"), isOn: Binding(get: { model.prefs.showRecentGroup }, set: { model.setPref("show_recent_group", .bool($0)) }))
                     }
+                    // Com muitos países na lista (quando os grupos se percebem), primeiro os países.
+                    if model.groupCountryCounts.filter({ $0.code != GroupCountry.none }).count > 1 {
+                        Section {
+                            NavigationLink { PhoneGroupCountries() } label: {
+                                LabeledContent(s.r("countries"), value: model.groupCountries.isEmpty
+                                    ? s.r("countries_all") : s.r("countries_some", "\(model.groupCountries.count)", "\(model.groupCountryCounts.count)"))
+                            }
+                        }
+                    }
                     Section {
                         ForEach(model.allGroups, id: \.id) { g in
                             Toggle(g.name, isOn: Binding(get: { !model.isGroupHidden(g.id) }, set: { model.setGroupHidden(g.id, !$0) }))
@@ -2334,5 +2343,39 @@ private struct PhoneBackupChannelsList: View {
         .navigationTitle(s.r("backup_channels"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.prefs.backupChannels) { model.checkBackupCoverage(playlistId) }
+    }
+}
+
+/// O filtro de países da lista em uso: só os grupos dos países marcados ficam à vista (nenhum marcado = todos).
+private struct PhoneGroupCountries: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let s = model.strings
+        let chosen = model.groupCountries
+        let locale = Locale(identifier: s.lang)
+        List {
+            if !chosen.isEmpty {
+                Section { Button(s.r("countries_clear")) { model.clearGroupCountries() } }
+            }
+            Section(s.r("countries_header")) {
+                ForEach(model.groupCountryCounts, id: \.code) { c in
+                    Button {
+                        model.setGroupCountry(c.code, !chosen.contains(c.code))
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(GroupCountry.name(c.code, locale: locale, noneName: s.r("countries_none"))).foregroundStyle(Theme.text)
+                                Text(s.plural("groups_count", c.count)).font(.footnote).foregroundStyle(Theme.textFaint)
+                            }
+                            Spacer()
+                            if chosen.contains(c.code) { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(s.r("countries"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

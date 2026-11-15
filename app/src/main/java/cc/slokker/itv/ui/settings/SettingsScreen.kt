@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.settings
 
+import cc.slokker.itv.data.GroupCountries
 import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.ReportState
@@ -162,7 +163,7 @@ internal fun settingItems(
         Route.Connection -> connectionItems(vm, player, nav)
         Route.Playback, Route.General, Route.Zapping, Route.Appearance, Route.Theme, Route.Guide -> prefPageItems(route, vm, nav)
         Route.Parental, Route.LockedGroups -> parentalItems(route, vm, nav)
-        Route.GroupsManage, Route.ChannelGroups, is Route.ChannelsManage -> organizeItems(route, vm, nav)
+        Route.GroupsManage, Route.GroupCountries, Route.ChannelGroups, is Route.ChannelsManage -> organizeItems(route, vm, nav)
         Route.Lists, is Route.PlaylistDetail, Route.NewPlaylistType, is Route.PlaylistEdit -> playlistItems(route, vm, nav)
         Route.Account, Route.Licenses -> accountItems(route, vm, nav)
         is Route.Pick -> route.options.mapIndexed { i, (value, label) ->
@@ -700,6 +701,13 @@ private fun organizeItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     val push = nav.push
     return when (route) {
         Route.GroupsManage -> buildList {
+            // Com muitos países na lista (quando os grupos se percebem), primeiro os países.
+            val countries = vm.groupCountryCounts()
+            if (countries.count { it.first != GroupCountries.NONE } > 1) {
+                val chosen = prefs.groupCountries[content?.playlist?.id].orEmpty().toSet()
+                val sub = if (chosen.isEmpty()) s.countriesAll else s.countriesSome(chosen.size, countries.size)
+                add(Item.Nav("countries", s.countries, subtitle = sub) { push(Route.GroupCountries, "countries") })
+            }
             add(Item.Action("reorder", s.reorderGroups, s.reorderGroupsSub) { push(Route.GroupsOrder, "reorder") })
             // Sempre à vista: se desaparecesse ao carregar, o foco ficava sem sítio (visto na SHIELD).
             add(Item.Action("resetorder", s.resetOrder, s.resetOrderSub) { vm.resetGroupOrder() })
@@ -712,6 +720,18 @@ private fun organizeItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             vm.orderedGroups(includeHidden = true).forEach { g ->
                 val name = if (g.id == PlaylistContent.OTHERS) s.others else g.name
                 add(Item.Toggle("g:" + g.id, name, !prefs.isHidden(data.playlist.id, g.id), eye = true) { visible -> vm.setGroupHidden(g.id, !visible) })
+            }
+        }
+
+        Route.GroupCountries -> buildList {
+            val chosen = prefs.groupCountries[content?.playlist?.id].orEmpty().toSet()
+            if (chosen.isNotEmpty()) add(Item.Action("clear", s.countriesClear) { vm.clearGroupCountries() })
+            add(Item.Header("h", s.countriesHeader))
+            // Sem filtro nenhum está marcado (tudo à vista); marcar um passa a mostrar só os grupos desse.
+            vm.groupCountryCounts().forEach { (code, n) ->
+                add(Item.Check("c:$code", s.countryName(code), code in chosen, subtitle = s.groupsCount(n)) {
+                    vm.setGroupCountry(code, code !in chosen)
+                })
             }
         }
 

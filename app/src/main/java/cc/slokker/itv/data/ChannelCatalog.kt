@@ -31,6 +31,12 @@ class ChannelCatalog(
 ) {
     private val playlistId: String? = content?.playlist?.id
 
+    /** Os grupos que o filtro de países esconde (calculados uma vez por retrato). */
+    private val countryHidden: Set<String> by lazy {
+        val c = content ?: return@lazy emptySet()
+        prefs.countryHidden(c.playlist.id, c.categories)
+    }
+
     fun channelsOf(categoryId: String, audience: Audience = Audience.SESSION): List<Channel> {
         val content = content ?: return emptyList()
         val visible = { ch: Channel -> isVisible(ch, audience) }
@@ -57,7 +63,7 @@ class ChannelCatalog(
      */
     fun isVisible(channel: Channel, audience: Audience = Audience.SESSION): Boolean {
         val playlistId = playlistId ?: return true
-        return isVisible(prefs, unlocked, playlistId, channel, audience)
+        return isVisible(prefs, unlocked, playlistId, channel, audience) && channel.categoryId !in countryHidden
     }
 
     fun isChannelHidden(channel: Channel): Boolean {
@@ -85,14 +91,15 @@ class ChannelCatalog(
 
     fun isGroupHidden(groupId: String): Boolean {
         val playlistId = playlistId ?: return false
-        return prefs.isHidden(playlistId, groupId)
+        return prefs.isHidden(playlistId, groupId) || groupId in countryHidden
     }
 
     /** Grupos da lista atual pela ordem escolhida (os novos ficam no fim, pela ordem da lista). */
     fun orderedGroups(includeHidden: Boolean): List<Category> {
         val content = content ?: return emptyList()
         return content.orderedCategories(prefs.groupOrder[content.playlist.id].orEmpty())
-            .filter { includeHidden || !isGroupHidden(it.id) }
+            // Os do filtro de países nem com [includeHidden]: escolhem-se em "Países", não grupo a grupo.
+            .filter { it.id !in countryHidden && (includeHidden || !isGroupHidden(it.id)) }
     }
 
     /**

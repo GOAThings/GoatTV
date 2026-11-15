@@ -549,6 +549,16 @@
     <string name="manage_groups">Gruplar</string>
     <string name="manage_groups_sub">Gizle ve yeniden sırala</string>
     <string name="visible_groups">Listede göster</string>
+    <string name="countries">Ülkeler</string>
+    <string name="countries_all">Tüm ülkeler</string>
+    <string name="countries_some">%2$s ülkeden %1$s</string>
+    <string name="countries_header">Yalnızca şu ülkelerin gruplarını göster</string>
+    <string name="countries_none">Ülkesiz</string>
+    <string name="countries_clear">Tüm ülkeleri göster</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d grup</item>
+        <item quantity="other">%d grup</item>
+    </plurals>
     <string name="reorder_groups">Grupları yeniden sırala</string>
     <string name="reorder_groups_sub">Grubu almak için OK, taşımak için ↑/↓, bırakmak için OK</string>
     <string name="moving">Taşınıyor…</string>

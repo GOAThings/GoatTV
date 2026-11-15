@@ -549,6 +549,15 @@
     <string name="manage_groups">그룹</string>
     <string name="manage_groups_sub">숨기기 및 순서 변경</string>
     <string name="visible_groups">목록에 표시</string>
+    <string name="countries">국가</string>
+    <string name="countries_all">모든 국가</string>
+    <string name="countries_some">%2$s개 국가 중 %1$s개</string>
+    <string name="countries_header">다음 국가의 그룹만 표시</string>
+    <string name="countries_none">국가 없음</string>
+    <string name="countries_clear">모든 국가 표시</string>
+    <plurals name="groups_count">
+        <item quantity="other">%d개 그룹</item>
+    </plurals>
     <string name="reorder_groups">그룹 순서 변경</string>
     <string name="reorder_groups_sub">OK로 그룹을 집고, ↑/↓로 옮기고, OK로 놓으세요</string>
     <string name="moving">이동 중…</string>

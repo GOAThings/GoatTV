@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.mobile
 
+import cc.slokker.itv.data.GroupCountries
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -417,8 +418,19 @@ private fun GroupsPage(vm: AppViewModel, onClose: () -> Unit) {
     val s = LocalStrings.current
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
+    var countries by remember { mutableStateOf(false) }
+    if (countries) {
+        CountriesPage(vm) { countries = false }
+        return
+    }
     BackHandler(onBack = onClose)
     SubPage(s.visibleGroups, onClose) {
+        // Com muitos países na lista (quando os grupos se percebem), primeiro os países.
+        val counts = vm.groupCountryCounts()
+        if (counts.count { it.first != GroupCountries.NONE } > 1) {
+            val chosen = vm.groupCountries()
+            MenuRow(s.countries, if (chosen.isEmpty()) s.countriesAll else s.countriesSome(chosen.size, counts.size), chevron = true) { countries = true }
+        }
         ToggleRow(s.favoritesStar, prefs.showFavoritesGroup) { vm.setPref(Prefs.Key.SHOW_FAVORITES_GROUP, it) }
         ToggleRow(s.all, prefs.showAllGroup) { vm.setPref(Prefs.Key.SHOW_ALL_GROUP, it) }
         ToggleRow(s.recents, prefs.showRecentGroup) { vm.setPref(Prefs.Key.SHOW_RECENT_GROUP, it) }
@@ -427,6 +439,22 @@ private fun GroupsPage(vm: AppViewModel, onClose: () -> Unit) {
             vm.orderedGroups(includeHidden = true).forEach { g ->
                 ToggleRow(g.name, !prefs.isHidden(id, g.id)) { visible -> vm.setGroupHidden(g.id, !visible) }
             }
+        }
+    }
+}
+
+/** O filtro de países da lista em uso: só os grupos dos países marcados ficam à vista (nenhum marcado = todos). */
+@Composable
+private fun CountriesPage(vm: AppViewModel, onClose: () -> Unit) {
+    val s = LocalStrings.current
+    // Para redesenhar quando a escolha muda.
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
+    BackHandler(onBack = onClose)
+    SubPage(s.countries, onClose) {
+        val chosen = remember(prefs) { vm.groupCountries() }
+        if (chosen.isNotEmpty()) MenuRow(s.countriesClear, null) { vm.clearGroupCountries() }
+        vm.groupCountryCounts().forEach { (code, n) ->
+            MenuRow(s.countryName(code), null, checked = code in chosen, subtitle = s.groupsCount(n)) { vm.setGroupCountry(code, code !in chosen) }
         }
     }
 }

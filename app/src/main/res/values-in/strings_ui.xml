@@ -549,6 +549,16 @@
     <string name="manage_groups">Grup</string>
     <string name="manage_groups_sub">Sembunyikan dan urutkan ulang</string>
     <string name="visible_groups">Tampilkan di daftar</string>
+    <string name="countries">Negara</string>
+    <string name="countries_all">Semua negara</string>
+    <string name="countries_some">%1$s dari %2$s negara</string>
+    <string name="countries_header">Hanya tampilkan grup dari</string>
+    <string name="countries_none">Tanpa negara</string>
+    <string name="countries_clear">Tampilkan semua negara</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d grup</item>
+        <item quantity="other">%d grup</item>
+    </plurals>
     <string name="reorder_groups">Urutkan ulang grup</string>
     <string name="reorder_groups_sub">OK untuk mengambil grup, ↑/↓ untuk memindahkan, OK untuk meletakkan</string>
     <string name="moving">Memindahkan…</string>

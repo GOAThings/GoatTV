@@ -549,6 +549,16 @@
     <string name="manage_groups">Группы</string>
     <string name="manage_groups_sub">Скрыть и упорядочить</string>
     <string name="visible_groups">Показывать в списке</string>
+    <string name="countries">Страны</string>
+    <string name="countries_all">Все страны</string>
+    <string name="countries_some">%1$s из %2$s стран</string>
+    <string name="countries_header">Показывать только группы из</string>
+    <string name="countries_none">Без страны</string>
+    <string name="countries_clear">Показать все страны</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d группа</item>
+        <item quantity="other">%d групп</item>
+    </plurals>
     <string name="reorder_groups">Упорядочить группы</string>
     <string name="reorder_groups_sub">OK — взять группу, ↑/↓ — переместить, OK — отпустить</string>
     <string name="moving">Перемещение…</string>

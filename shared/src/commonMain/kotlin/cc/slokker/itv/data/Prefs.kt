@@ -77,6 +77,11 @@ data class Prefs(
     val showRecentGroup: Boolean = true,
     /** Grupos escondidos: "playlistId:groupId". */
     val hiddenGroups: Set<String> = emptySet(),
+    /**
+     * Filtro de países por lista: playlistId → os países que ficam à vista (ver [GroupCountries]; "none" = os grupos
+     * sem país). Sem entrada, ou vazia, não há filtro.
+     */
+    val groupCountries: Map<String, List<String>> = emptyMap(),
     /** Ordem dos grupos por lista: playlistId → groupIds. */
     val groupOrder: Map<String, List<String>> = emptyMap(),
     /** Canais escondidos: "playlistId:channelKey". */
@@ -191,6 +196,9 @@ data class Prefs(
 
     fun isHidden(playlistId: String, groupId: String) = "$playlistId:$groupId" in hiddenGroups
 
+    /** Os grupos de [groups] que o filtro de países de [playlistId] esconde (ver [GroupCountries.hidden]). */
+    fun countryHidden(playlistId: String, groups: List<Category>): Set<String> = GroupCountries.hidden(groups, groupCountries[playlistId])
+
     fun isChannelHidden(playlistId: String, channelKey: String) = "$playlistId:$channelKey" in hiddenChannels
 
     /** Grupo de [playlistId] marcado como bloqueado (com ou sem PIN definido). */
@@ -237,6 +245,7 @@ data class Prefs(
         const val BACK_ACTION = "back_action"
         const val SETTINGS_PIN = "settings_pin"
         const val GROUP_ORDER = "group_order"
+        const val GROUP_COUNTRIES = "group_countries"
         const val HIDDEN_CHANNELS = "hidden_channels"
         const val CHANNEL_ORDER = "channel_order"
         const val UP_DOWN = "up_down"
@@ -508,6 +517,7 @@ data class Prefs(
                 settingsPin = bool(Key.SETTINGS_PIN, d.settingsPin),
                 hiddenGroups = stringSet(s, Key.HIDDEN_GROUPS),
                 groupOrder = stringListMap(s, Key.GROUP_ORDER),
+                groupCountries = stringListMap(s, Key.GROUP_COUNTRIES),
                 hiddenChannels = stringSet(s, Key.HIDDEN_CHANNELS),
                 channelOrder = stringListMap(s, Key.CHANNEL_ORDER),
                 upDown = str(Key.UP_DOWN, d.upDown, UpDown.ALL),
@@ -636,7 +646,7 @@ data class Prefs(
                 }
             }
             for ((key, perGroup) in listOf(
-                Key.GROUP_ORDER to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false,
+                Key.GROUP_ORDER to false, Key.GROUP_COUNTRIES to false, Key.EXTRA_EPG to false, Key.BACKUP_PLAYLIST to false, Key.BACKUP_MODE to false,
                 Key.MERGE_VARIANTS to false, Key.NAME_RULES to false,
                 Key.CHANNEL_ORDER to true, Key.CHANNEL_LOGOS to true, Key.BACKUP_CHANNELS to true, Key.CHANNEL_NAMES to true,
             )) {

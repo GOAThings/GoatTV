@@ -549,6 +549,16 @@
     <string name="manage_groups">Grupos</string>
     <string name="manage_groups_sub">Esconder e reordenar</string>
     <string name="visible_groups">Mostrar na lista</string>
+    <string name="countries">Países</string>
+    <string name="countries_all">Todos os países</string>
+    <string name="countries_some">%1$s de %2$s países</string>
+    <string name="countries_header">Mostrar só os grupos de</string>
+    <string name="countries_none">Sem país</string>
+    <string name="countries_clear">Mostrar todos os países</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d grupo</item>
+        <item quantity="other">%d grupos</item>
+    </plurals>
     <string name="reorder_groups">Reordenar grupos</string>
     <string name="reorder_groups_sub">OK para pegar num grupo, ↑/↓ para o mover, OK para largar</string>
     <string name="moving">A mover…</string>

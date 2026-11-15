@@ -245,6 +245,7 @@ class PersistedFormatTest {
         "showRecentGroup" to (Prefs.Key.SHOW_RECENT_GROUP to false),
         "hiddenGroups" to (Prefs.Key.HIDDEN_GROUPS to listOf("p1:7", "p1:Outros")),
         "groupOrder" to (Prefs.Key.GROUP_ORDER to mapOf("p1" to listOf("3", "1"))),
+        "groupCountries" to (Prefs.Key.GROUP_COUNTRIES to mapOf("p1" to listOf("pt", "none"))),
         "hiddenChannels" to (Prefs.Key.HIDDEN_CHANNELS to listOf("p1:101")),
         "channelOrder" to (Prefs.Key.CHANNEL_ORDER to mapOf("p1:1" to listOf("102", "101"))),
         "upDown" to (Prefs.Key.UP_DOWN to Prefs.UpDown.LIST),

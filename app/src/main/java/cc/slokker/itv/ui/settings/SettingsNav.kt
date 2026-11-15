@@ -91,6 +91,8 @@ internal sealed interface Route {
     data object Licenses : Route { override fun title(s: Strings) = s.licenses }
     data object GroupsManage : Route { override fun title(s: Strings) = s.manageGroups }
     data object GroupsOrder : Route { override fun title(s: Strings) = s.reorderGroups }
+    /** O filtro de países da lista em uso. */
+    data object GroupCountries : Route { override fun title(s: Strings) = s.countries }
     /** Canais da lista em uso: primeiro escolhe-se o grupo. */
     data object ChannelGroups : Route { override fun title(s: Strings) = s.manageChannels }
     class ChannelsManage(val groupId: String, private val name: String) : Route { override fun title(s: Strings) = name }

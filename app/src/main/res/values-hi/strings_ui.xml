@@ -549,6 +549,16 @@
     <string name="manage_groups">ग्रुप</string>
     <string name="manage_groups_sub">छिपाएँ और क्रम बदलें</string>
     <string name="visible_groups">सूची में दिखाएँ</string>
+    <string name="countries">देश</string>
+    <string name="countries_all">सभी देश</string>
+    <string name="countries_some">%2$s में से %1$s देश</string>
+    <string name="countries_header">केवल इन देशों के समूह दिखाएँ</string>
+    <string name="countries_none">बिना देश</string>
+    <string name="countries_clear">सभी देश दिखाएँ</string>
+    <plurals name="groups_count">
+        <item quantity="one">%d समूह</item>
+        <item quantity="other">%d समूह</item>
+    </plurals>
     <string name="reorder_groups">ग्रुप का क्रम बदलें</string>
     <string name="reorder_groups_sub">ग्रुप उठाने के लिए OK, हिलाने के लिए ↑/↓, रखने के लिए OK</string>
     <string name="moving">जगह बदल रहे हैं…</string>

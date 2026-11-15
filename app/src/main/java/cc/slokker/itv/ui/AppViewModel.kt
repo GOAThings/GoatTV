@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui
 
+import cc.slokker.itv.data.GroupCountries
 import cc.slokker.itv.data.AppRelease
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.CatchupRules
@@ -994,6 +995,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun orderedGroups(includeHidden: Boolean): List<Category> = catalog().orderedGroups(includeHidden)
 
     fun guideGroups(): List<Category> = catalog().guideGroups(groupNames())
+
+    /** Os países dos grupos da lista aberta, com quantos grupos cada um (guardados até a lista mudar). */
+    fun groupCountryCounts(): List<Pair<String, Int>> {
+        val c = content.value ?: return emptyList()
+        countryCounts?.let { (from, counts) -> if (from === c) return counts }
+        return GroupCountries.count(c.categories).also { countryCounts = c to it }
+    }
+
+    private var countryCounts: Pair<PlaylistContent, List<Pair<String, Int>>>? = null
+
+    /** Os países escolhidos no filtro da lista aberta; vazio = sem filtro. */
+    fun groupCountries(): Set<String> {
+        val playlistId = content.value?.playlist?.id ?: return emptySet()
+        return prefs.value.groupCountries[playlistId].orEmpty().toSet()
+    }
+
+    fun setGroupCountry(code: String, on: Boolean) {
+        val current = groupCountries()
+        saveGroupCountries(if (on) current + code else current - code)
+    }
+
+    /** Sem filtro: todos os países à vista. */
+    fun clearGroupCountries() = saveGroupCountries(emptySet())
+
+    private fun saveGroupCountries(codes: Set<String>) {
+        val playlistId = content.value?.playlist?.id ?: return
+        val map = prefs.value.groupCountries
+        setPref(Prefs.Key.GROUP_COUNTRIES, if (codes.isEmpty()) map - playlistId else map + (playlistId to codes.sorted()))
+    }
 
     fun setGroupHidden(groupId: String, hidden: Boolean) {
         val playlistId = content.value?.playlist?.id ?: return
