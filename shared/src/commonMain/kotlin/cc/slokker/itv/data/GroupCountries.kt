@@ -114,7 +114,7 @@ object GroupCountries {
             val eq = line.indexOf('=')
             if (eq != 2) continue
             val code = line.substring(0, 2)
-            for (n in line.substring(3).split('|')) if (n.isNotEmpty()) map.putIfAbsent(n, code)
+            for (n in line.substring(3).split('|')) if (n.isNotEmpty() && n !in map) map[n] = code
         }
         map
     }
