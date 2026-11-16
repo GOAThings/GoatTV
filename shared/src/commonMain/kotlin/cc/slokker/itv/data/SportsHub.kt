@@ -53,6 +53,12 @@ data class SportsHubResult(val games: List<SportsGame>, val channels: List<Sport
  * país e língua da pessoa; as repetições (o mesmo jogo horas depois) e os resumos ficam de fora.
  */
 object SportsHub {
+    /**
+     * Mostrar o Sports Hub (botões e tecla de cor) nas quatro apps. Desligado: está parado até se decidir avançar
+     * (fase 2, resultados e logótipos); o código fica.
+     */
+    const val ENABLED = false
+
     const val FOOTBALL = "football"
     const val BASKETBALL = "basketball"
     const val AMFOOTBALL = "amfootball"

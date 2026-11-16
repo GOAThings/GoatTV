@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cc.slokker.itv.data.SportsHub
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.SpecialCategory
@@ -98,11 +99,13 @@ internal fun MobileHome(
                     Text(data.playlist.name, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // O Sports Hub, as gravações (o ponto fica vermelho enquanto grava) e a pesquisa.
-                Box(
-                    Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onSports),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(ItvIcons.Sports, s.sportsHub, tint = ItvColors.TextDim, modifier = Modifier.size(20.dp)) }
-                Spacer(Modifier.width(10.dp))
+                if (SportsHub.ENABLED) {
+                    Box(
+                        Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onSports),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(ItvIcons.Sports, s.sportsHub, tint = ItvColors.TextDim, modifier = Modifier.size(20.dp)) }
+                    Spacer(Modifier.width(10.dp))
+                }
                 Box(
                     Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onRecordings),
                     contentAlignment = Alignment.Center,

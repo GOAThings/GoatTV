@@ -42,6 +42,9 @@ public final class SportsEngine: @unchecked Sendable {
 
     public init() {}
 
+    /// Mostrar o Sports Hub (SportsHub.ENABLED no núcleo partilhado): parado por agora, sem botões.
+    public static var enabled: Bool { GoatShared.SportsHub.shared.ENABLED }
+
     /// Canal de desporto pelo nome dele ou do grupo.
     public static func isSportsChannel(name: String, group: String) -> Bool {
         GoatShared.SportsHub.shared.isSportsChannel(name: name, group: group)

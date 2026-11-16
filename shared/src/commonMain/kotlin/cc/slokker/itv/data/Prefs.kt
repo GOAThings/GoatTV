@@ -421,7 +421,7 @@ data class Prefs(
         const val SEARCH = "search"; const val AUDIO = "audio"; const val SUBTITLES = "subtitles"; const val SLEEP = "sleep"
         const val SPORTS = "sports"
         /** Por esta ordem nas definições. */
-        val OPTIONS = listOf(NONE, RECORD, GUIDE, CHANNELS, FAVORITE, PREVIOUS, RECORDINGS, SPORTS, SEARCH, AUDIO, SUBTITLES, SLEEP)
+        val OPTIONS = listOfNotNull(NONE, RECORD, GUIDE, CHANNELS, FAVORITE, PREVIOUS, RECORDINGS, SPORTS.takeIf { SportsHub.ENABLED }, SEARCH, AUDIO, SUBTITLES, SLEEP)
         val ALL = OPTIONS.toSet()
     }
     object UpDown {

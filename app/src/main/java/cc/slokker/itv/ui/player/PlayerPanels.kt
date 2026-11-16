@@ -68,6 +68,7 @@ import androidx.media3.common.Player
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import cc.slokker.itv.data.SportsHub
 import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
@@ -595,7 +596,7 @@ private fun GroupList(
                     .focusRequester(recordingsFocus)
                     .onFocusChanged { if (it.isFocused) inRail = true },
             )
-            GlassIconButton(
+            if (SportsHub.ENABLED) GlassIconButton(
                 ItvIcons.Sports,
                 contentDescription = s.sportsHub,
                 onClick = onSports,

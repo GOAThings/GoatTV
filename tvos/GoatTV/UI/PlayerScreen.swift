@@ -1246,16 +1246,18 @@ struct PlayerScreen: View {
             .focused($focus, equals: .recordings)
             .accessibilityIdentifier("recordings")
             .disabled(playlistMenu)
-            Button {
-                closePanel()
-                sportsHub = true
-            } label: {
-                Image(systemName: "sportscourt").font(.system(size: 26, weight: .semibold))
+            if SportsEngine.enabled {
+                Button {
+                    closePanel()
+                    sportsHub = true
+                } label: {
+                    Image(systemName: "sportscourt").font(.system(size: 26, weight: .semibold))
+                }
+                .buttonStyle(IconButtonStyle())
+                .focused($focus, equals: .sports)
+                .accessibilityIdentifier("sports")
+                .disabled(playlistMenu)
             }
-            .buttonStyle(IconButtonStyle())
-            .focused($focus, equals: .sports)
-            .accessibilityIdentifier("sports")
-            .disabled(playlistMenu)
             Button {
                 panel = .settings(.root)
             } label: {

@@ -74,6 +74,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import android.util.Log
+import cc.slokker.itv.data.SportsHub
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
@@ -348,7 +349,7 @@ fun PlayerScreen(vm: AppViewModel) {
             Prefs.KeyAction.FAVORITE -> vm.toggleFavorite(current)
             Prefs.KeyAction.PREVIOUS -> if (!vm.playPrevious()) vm.showToast(I18n.s.noPreviousChannel)
             Prefs.KeyAction.RECORDINGS -> showRecordings = true
-            Prefs.KeyAction.SPORTS -> showSports = true
+            Prefs.KeyAction.SPORTS -> if (SportsHub.ENABLED) showSports = true else return false
             Prefs.KeyAction.SEARCH -> showSearch = true
             Prefs.KeyAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
             Prefs.KeyAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT

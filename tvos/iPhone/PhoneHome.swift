@@ -39,12 +39,14 @@ struct PhoneHome: View {
                         Text(model.content?.playlist.name ?? "").font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
                     }
                     Spacer()
-                    Button(action: onSports) {
-                        Image(systemName: "sportscourt").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
-                            .frame(width: 38, height: 38).background(tileFill, in: Circle())
+                    if SportsEngine.enabled {
+                        Button(action: onSports) {
+                            Image(systemName: "sportscourt").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
+                                .frame(width: 38, height: 38).background(tileFill, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(s.r("sports_hub"))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(s.r("sports_hub"))
                     Button(action: onRecordings) {
                         Image(systemName: "record.circle").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
                             .frame(width: 38, height: 38).background(tileFill, in: Circle())
