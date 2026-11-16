@@ -74,6 +74,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import cc.slokker.itv.ui.theme.tabular
 import cc.slokker.itv.ui.common.focusWithRetry
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import cc.slokker.itv.ui.common.formatDuration
 import cc.slokker.itv.data.minutesLeft
 
@@ -132,6 +137,13 @@ internal fun SearchPanel(vm: AppViewModel, width: Dp, onPick: (AppViewModel.Sear
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(fieldFocus)
+                // ↓ no campo vai para os resultados: com o teclado fechado pelo Voltar (sem "Pesquisar"), o campo
+                // ficava com o foco e o comando não chegava aos resultados.
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionDown || hits.isEmpty()) return@onPreviewKeyEvent false
+                    keyboard?.hide()
+                    runCatching { firstResult.requestFocus() }.getOrDefault(false)
+                }
                 .clip(ItvShapes.Control)
                 .background(Color.White.copy(alpha = 0.12f))
                 .padding(horizontal = 14.dp, vertical = 14.dp),
