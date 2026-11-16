@@ -258,9 +258,9 @@ struct SportsHubView: View {
 private struct HubCardStyle: ButtonStyle {
     let padding: CGFloat
 
-    func makeBody(configuration: Configuration) -> some View { Body(configuration: configuration, padding: padding) }
+    func makeBody(configuration: Configuration) -> some View { Card(configuration: configuration, padding: padding) }
 
-    private struct Body: View {
+    private struct Card: View {
         let configuration: Configuration
         let padding: CGFloat
         @Environment(\.isFocused) private var focused
@@ -282,9 +282,9 @@ private struct HubPillStyle: ButtonStyle {
     var rest: Color
     var restText: Color = Theme.text
 
-    func makeBody(configuration: Configuration) -> some View { Body(configuration: configuration, rest: rest, restText: restText) }
+    func makeBody(configuration: Configuration) -> some View { Pill(configuration: configuration, rest: rest, restText: restText) }
 
-    private struct Body: View {
+    private struct Pill: View {
         let configuration: Configuration
         let rest: Color
         let restText: Color
