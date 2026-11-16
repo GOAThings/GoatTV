@@ -13,7 +13,24 @@ enum SportsUI {
     static let nextText = hex(0x7DD3FC)
 
     /// O nome do desporto (os textos do Android: `sport_football`…).
-    static func sportName(_ sport: String, _ s: Strings) -> String { s.r("sport_" + sport) }
+    static func sportName(_ sport: String, _ s: Strings) -> String {
+        switch sport {
+        case "football": s.r("sport_football")
+        case "basketball": s.r("sport_basketball")
+        case "amfootball": s.r("sport_amfootball")
+        case "hockey": s.r("sport_hockey")
+        case "baseball": s.r("sport_baseball")
+        case "tennis": s.r("sport_tennis")
+        case "motor": s.r("sport_motor")
+        case "fight": s.r("sport_fight")
+        case "rugby": s.r("sport_rugby")
+        case "cricket": s.r("sport_cricket")
+        case "handball": s.r("sport_handball")
+        case "volleyball": s.r("sport_volleyball")
+        case "golf": s.r("sport_golf")
+        default: s.r("sport_other")
+        }
+    }
 
     /// "Hoje 22:15" ou "Amanhã 15:00".
     static func when(_ start: Int64, now: Int64, _ s: Strings) -> String {
