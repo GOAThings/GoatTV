@@ -119,6 +119,9 @@ object GroupCountries {
         map
     }
 
+    /** O país se [name] for só o nome de um país ("Portugal", "Deutschland"): as seleções nos jogos do Sports Hub. */
+    internal fun exactName(name: String): String? = byName[words(fold(name)).joinToString(" ")]
+
     private val longestName: Int by lazy { byName.keys.maxOf { it.count { c -> c == ' ' } + 1 } }
 
     /** O código de uma palavra: ISO, aliás ou região; os de 3 letras e "AR"/"LA" só dentro de uma etiqueta. */

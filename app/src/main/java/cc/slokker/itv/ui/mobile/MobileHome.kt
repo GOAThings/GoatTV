@@ -71,6 +71,7 @@ internal fun MobileHome(
     onLockedGroup: (String) -> Unit,
     onSearch: () -> Unit,
     onRecordings: () -> Unit,
+    onSports: () -> Unit,
 ) {
     val s = LocalStrings.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
@@ -96,7 +97,12 @@ internal fun MobileHome(
                     Text(s.greeting(hour), color = ItvColors.Text, fontSize = 30.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                     Text(data.playlist.name, color = ItvColors.TextFaint, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                // As gravações (o ponto fica vermelho enquanto grava) e a pesquisa.
+                // O Sports Hub, as gravações (o ponto fica vermelho enquanto grava) e a pesquisa.
+                Box(
+                    Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onSports),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(ItvIcons.Sports, s.sportsHub, tint = ItvColors.TextDim, modifier = Modifier.size(20.dp)) }
+                Spacer(Modifier.width(10.dp))
                 Box(
                     Modifier.size(38.dp).clip(CircleShape).background(PhoneColors.Tile).clickable(onClick = onRecordings),
                     contentAlignment = Alignment.Center,

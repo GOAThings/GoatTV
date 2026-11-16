@@ -445,6 +445,7 @@ object SettingsCatalog {
         Prefs.KeyAction.FAVORITE -> s.favorite
         Prefs.KeyAction.PREVIOUS -> s.keyActionLast
         Prefs.KeyAction.RECORDINGS -> s.recordings
+        Prefs.KeyAction.SPORTS -> s.sportsHub
         Prefs.KeyAction.SEARCH -> s.search
         Prefs.KeyAction.AUDIO -> s.audio
         Prefs.KeyAction.SUBTITLES -> s.subtitles

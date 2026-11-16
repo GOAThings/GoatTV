@@ -28,6 +28,7 @@ struct PlayerScreen: View {
         case group(String)
         case gear
         case recordings
+        case sports
         case swap
         case playlist(String)
         case addPlaylist
@@ -52,6 +53,8 @@ struct PlayerScreen: View {
     @State private var now = nowMs()
     /// O guia de TV em grelha (o vídeo encolhe para o canto).
     @State private var tvGuide = false
+    /// O Sports Hub (painéis opacos por cima de tudo; o vídeo continua por trás).
+    @State private var sportsHub = false
     /// O guia foi aberto pelo Voltar: fechá-lo conta como o 1.º Voltar para sair.
     @State private var guideFromBack = false
     /// Durante 2,5 s depois de um Voltar, o seguinte sai da app (o sistema trata-o).
@@ -194,6 +197,15 @@ struct PlayerScreen: View {
                     onClose: { closeGuide(fromBack: guideFromBack) }
                 )
                 .zIndex(1)
+                .transition(.opacity)
+            }
+
+            if sportsHub {
+                SportsHubView(
+                    onPlayed: { sportsHub = false; focusLater(.surface) },
+                    onClose: { sportsHub = false; focusLater(.surface) }
+                )
+                .zIndex(10)
                 .transition(.opacity)
             }
 
@@ -464,6 +476,7 @@ struct PlayerScreen: View {
         .animation(.easeOut(duration: 0.18), value: hud)
         .animation(.easeOut(duration: 0.18), value: zapCard)
         .animation(.easeOut(duration: 0.25), value: tvGuide)
+        .animation(.easeOut(duration: 0.2), value: sportsHub)
         .animation(.easeOut(duration: 0.25), value: split)
         .animation(.easeOut(duration: 0.25), value: bigTile)
         .animation(.easeOut(duration: 0.25), value: tileCount)
@@ -602,7 +615,7 @@ struct PlayerScreen: View {
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focus, equals: .surface)
-        .disabled(panel != .none || hud || tvGuide || reminder != nil || recordingCard)
+        .disabled(panel != .none || hud || tvGuide || sportsHub || reminder != nil || recordingCard)
         .onMoveCommand(perform: move)
         .onPlayPauseCommand(perform: playPause)
         .onExitCommand(perform: backAction)
@@ -1209,7 +1222,7 @@ struct PlayerScreen: View {
     }
 
     /// A coluna de botões à esquerda dos grupos: ⇄ troca de lista (só com mais de uma), as gravações (com um ponto
-    /// vermelho enquanto grava) e ⚙ as Definições. Assim o título dos grupos não fica cortado.
+    /// vermelho enquanto grava), o Sports Hub e ⚙ as Definições. Assim o título dos grupos não fica cortado.
     private var groupRail: some View {
         VStack(spacing: 18) {
             if model.playlists.count > 1 {
@@ -1232,6 +1245,16 @@ struct PlayerScreen: View {
             .buttonStyle(IconButtonStyle())
             .focused($focus, equals: .recordings)
             .accessibilityIdentifier("recordings")
+            .disabled(playlistMenu)
+            Button {
+                closePanel()
+                sportsHub = true
+            } label: {
+                Image(systemName: "sportscourt").font(.system(size: 26, weight: .semibold))
+            }
+            .buttonStyle(IconButtonStyle())
+            .focused($focus, equals: .sports)
+            .accessibilityIdentifier("sports")
             .disabled(playlistMenu)
             Button {
                 panel = .settings(.root)

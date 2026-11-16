@@ -56,6 +56,10 @@ class AppContainer(context: Context) {
     @Volatile
     var testMode = false
 
+    /** Só em debug (`--el sports_now <ms>`): a hora do Sports Hub, para testar com um guia antigo do emulador. */
+    @Volatile
+    var debugNow = 0L
+
     /** Token atual em memória; o interceptor junta-o a cada pedido ao backend. */
     @Volatile
     var token: String? = null

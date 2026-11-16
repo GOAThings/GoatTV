@@ -196,6 +196,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showBackup by remember { mutableStateOf(false) }
     val backupNav = remember { BackupPanelNav() }
     var showRecordings by remember { mutableStateOf(false) }
+    var showSports by remember { mutableStateOf(false) }
     /** Aviso "este canal está sempre a parar" (uma vez por canal; ver NetHintCard). */
     var netHint by remember { mutableStateOf(false) }
     val netHintFocus = remember { FocusRequester() }
@@ -243,7 +244,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val extraPlayers = extraPlaybacks.map { it?.player }
     /** Fecha o canal extra com foco (com o foco no principal, o último que se abriu). */
     fun closeFocusedExtra() = vm.closeExtra(if (focusTile > 0) focusTile - 1 else extras.lastIndex)
-    val overlayOpen = showGuide || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
+    val overlayOpen = showGuide || showSports || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
 
     /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
     fun covered() = panel != Panel.None || showSettings || overlayOpen
@@ -312,7 +313,7 @@ fun PlayerScreen(vm: AppViewModel) {
     fun tsShifted() = tsActive() && (seek.paused || !timeshift.atLive || seek.pending != null)
 
     /** No canto de cima à direita está a cápsula do catch-up ou de quanto se está atrás do direto. */
-    fun cornerPill() = !showGuide && (playback.ready || playback.failure != null) &&
+    fun cornerPill() = !showGuide && !showSports && (playback.ready || playback.failure != null) &&
         (catchup != null || tsShifted() && playback.failure == null)
 
     /** A cápsula da gravação: por baixo da do catch-up/atrás do direto, quando essa está lá. */
@@ -347,6 +348,7 @@ fun PlayerScreen(vm: AppViewModel) {
             Prefs.KeyAction.FAVORITE -> vm.toggleFavorite(current)
             Prefs.KeyAction.PREVIOUS -> if (!vm.playPrevious()) vm.showToast(I18n.s.noPreviousChannel)
             Prefs.KeyAction.RECORDINGS -> showRecordings = true
+            Prefs.KeyAction.SPORTS -> showSports = true
             Prefs.KeyAction.SEARCH -> showSearch = true
             Prefs.KeyAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
             Prefs.KeyAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
@@ -484,6 +486,12 @@ fun PlayerScreen(vm: AppViewModel) {
         if (playback.failure?.analysing == true) showInfo()
     }
 
+    // Um jogo aberto no Sports Hub não arrancou: passa ao canal seguinte do jogo (país e língua primeiro).
+    LaunchedEffect(playback.failure != null) {
+        if (playback.failure == null) return@LaunchedEffect
+        vm.sportsFallback(current)?.let { vm.play(it, it.categoryId) }
+    }
+
     // Box em segundo plano / ecrã desligado: parar o stream (e libertar a ligação Xtream). Ao recriar o player
     // (definições, VLC) o canal só volta a abrir pelo efeito acima, uma vez.
     LifecycleStartEffect(playback) {
@@ -557,7 +565,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
     // Fundo do vidro: miniatura desfocada do vídeo, renovada enquanto houver painéis à vista.
     // O guia não usa vidro (o vídeo fica pequeno, no canto).
-    val glassVisible = !showGuide && (
+    val glassVisible = !showGuide && !showSports && (
         panel != Panel.None || showSettings || infoVisible || playback.failure != null || !playback.ready ||
             showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || catchup != null || reminder != null || recordingPrompt != null || switchPrompt != null || sleepWarning != null || numberEntry.isNotEmpty() ||
             tsShifted()
@@ -639,6 +647,7 @@ fun PlayerScreen(vm: AppViewModel) {
             search = showSearch,
             backup = showBackup,
             recordings = showRecordings,
+            sports = showSports,
             guide = showGuide,
             epgPanel = epgPanelChannel != null,
             panel = panel != Panel.None,
@@ -664,6 +673,7 @@ fun PlayerScreen(vm: AppViewModel) {
             TvBack.CLOSE_SEARCH -> showSearch = false
             TvBack.CLOSE_BACKUP -> if (!backupNav.back()) showBackup = false
             TvBack.CLOSE_RECORDINGS -> showRecordings = false
+            TvBack.CLOSE_SPORTS -> showSports = false
             TvBack.CLOSE_GUIDE -> {
                 showGuide = false
                 // Fechar o guia que o Voltar abriu conta como o 1.º Voltar para sair: o seguinte sai,
@@ -1038,9 +1048,14 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
+            // Sports Hub: painéis opacos por cima de tudo (o vídeo continua por trás).
+            if (showSports) {
+                SportsHubTv(vm, onPlayed = { showSports = false })
+            }
+
             // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã.
             // Na pausa do direto, a gravar por trás, a cápsula de voltar a ligar não tapa a da pausa.
-            if ((playback.reconnects > 0 && !tsShifted() || !playback.ready) && playback.failure == null && !showGuide && numberEntry.isEmpty()) {
+            if ((playback.reconnects > 0 && !tsShifted() || !playback.ready) && playback.failure == null && !showGuide && !showSports && numberEntry.isEmpty()) {
                 // Com o segundo canal no canto direito, o aviso passa para a esquerda.
                 TuningPill(
                     channel = current.name,
@@ -1056,7 +1071,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
-            if (!showGuide) {
+            if (!showGuide && !showSports) {
                 playback.failure?.let { f ->
                     val s = LocalStrings.current
                     ErrorCard(f.titleCard(s), f.status(s), Modifier.align(Alignment.Center))
@@ -1146,7 +1161,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             catchup?.let { cu ->
-                if (!showGuide) {
+                if (!showGuide && !showSports) {
                     AnimatedVisibility(
                         visible = seek.barVisible || seek.paused || seek.pending != null,
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -1162,7 +1177,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 }
             }
 
-            if (tsActive() && !showGuide) {
+            if (tsActive() && !showGuide && !showSports) {
                 val shifted = tsShifted()
                 AnimatedVisibility(
                     visible = (shifted && seek.barVisible) || seek.paused || seek.pending != null,
@@ -1268,7 +1283,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
             sleepWarning?.let { SleepWarning(it, Modifier.align(Alignment.Center)) }
 
-            if (prefs.netGraph && !showGuide && panel == Panel.None) {
+            if (prefs.netGraph && !showGuide && !showSports && panel == Panel.None) {
                 NetGraph(vm.net, current.name, Modifier.align(Alignment.TopStart))
             }
 
@@ -1370,6 +1385,10 @@ fun PlayerScreen(vm: AppViewModel) {
                     onRecordings = {
                         panel = Panel.None
                         showRecordings = true
+                    },
+                    onSports = {
+                        panel = Panel.None
+                        showSports = true
                     },
                     onAddPlaylist = {
                         panel = Panel.None

@@ -36,6 +36,8 @@ internal data class PhoneNav(
     val homeGroup: String? = null,
     /** As gravações abertas a partir do ecrã inicial (no lugar dele, como um grupo). */
     val recordings: Boolean = false,
+    /** O Sports Hub aberto a partir do ecrã inicial (no lugar dele, como as gravações). */
+    val sports: Boolean = false,
 ) {
     /** Nas Definições o canal está fechado. */
     val settings: Boolean get() = tab == PhoneTab.Menu
@@ -58,7 +60,7 @@ internal data class PhoneNav(
         fullscreen -> PhoneBack.LEAVE_FULLSCREEN
         epgOpen -> PhoneBack.CLOSE_EPG
         tab != PhoneTab.Tv -> PhoneBack.TV_TAB
-        homeGroup != null || recordings -> PhoneBack.LEAVE_GROUP
+        homeGroup != null || recordings || sports -> PhoneBack.LEAVE_GROUP
         !home -> PhoneBack.HOME
         else -> null
     }
@@ -66,17 +68,17 @@ internal data class PhoneNav(
     /** O estado depois de [back] (as folhas e a rotação mudam-se no ecrã). */
     fun after(back: PhoneBack): PhoneNav = when (back) {
         PhoneBack.TV_TAB -> copy(tab = PhoneTab.Tv)
-        PhoneBack.LEAVE_GROUP -> copy(homeGroup = null, recordings = false)
+        PhoneBack.LEAVE_GROUP -> copy(homeGroup = null, recordings = false, sports = false)
         PhoneBack.HOME -> copy(home = true)
         PhoneBack.CLOSE_OPTIONS, PhoneBack.LEAVE_FULLSCREEN, PhoneBack.CLOSE_EPG -> this
     }
 
     /** Abriu-se um canal a partir de uma lista, do guia, da procura, do catch-up ou de um lembrete: vê-se em grande. */
-    fun played(): PhoneNav = copy(stopped = false, home = false, homeGroup = null, recordings = false, tab = PhoneTab.Tv)
+    fun played(): PhoneNav = copy(stopped = false, home = false, homeGroup = null, recordings = false, sports = false, tab = PhoneTab.Tv)
 
     /** Toque num separador; "TV" outra vez, já na TV, volta ao ecrã inicial. */
     fun tabTapped(tapped: PhoneTab): PhoneNav =
-        if (tapped == PhoneTab.Tv && tab == PhoneTab.Tv) copy(tab = tapped, home = true, homeGroup = null, recordings = false) else copy(tab = tapped)
+        if (tapped == PhoneTab.Tv && tab == PhoneTab.Tv) copy(tab = tapped, home = true, homeGroup = null, recordings = false, sports = false) else copy(tab = tapped)
 
     /** Toque no mini-leitor: o canal em grande. */
     fun openPlayer(): PhoneNav = copy(tab = PhoneTab.Tv, home = false)
@@ -93,6 +95,11 @@ internal data class PhoneNav(
 
     fun closeRecordings(): PhoneNav = copy(recordings = false)
 
+    /** O Sports Hub, a partir do ecrã inicial. */
+    fun openSports(): PhoneNav = copy(tab = PhoneTab.Tv, home = true, homeGroup = null, recordings = false, sports = true)
+
+    fun closeSports(): PhoneNav = copy(sports = false)
+
     /** Um grupo escolhido na procura abre-se no ecrã inicial da TV. */
     fun groupFromSearch(id: String): PhoneNav = copy(tab = PhoneTab.Tv, home = true, homeGroup = id)
 
@@ -100,7 +107,7 @@ internal data class PhoneNav(
     fun channelChanged(): PhoneNav = if (settings) copy(tab = PhoneTab.Tv) else this
 
     /** Para o rememberSaveable (sobrevive à rotação e à app ir para trás). */
-    fun toList(): List<Any?> = listOf(tab.name, home, stopped, homeGroup, recordings)
+    fun toList(): List<Any?> = listOf(tab.name, home, stopped, homeGroup, recordings, sports)
 
     companion object {
         /** Ao abrir: o ecrã inicial sem nada a dar, ou já o último canal em grande (Definições → no arranque). */
@@ -110,6 +117,6 @@ internal data class PhoneNav(
         }
 
         fun fromList(list: List<Any?>): PhoneNav =
-            PhoneNav(PhoneTab.valueOf(list[0] as String), list[1] as Boolean, list[2] as Boolean, list[3] as String?, list.getOrNull(4) as? Boolean ?: false)
+            PhoneNav(PhoneTab.valueOf(list[0] as String), list[1] as Boolean, list[2] as Boolean, list[3] as String?, list.getOrNull(4) as? Boolean ?: false, list.getOrNull(5) as? Boolean ?: false)
     }
 }

@@ -1,6 +1,12 @@
 package cc.slokker.itv.ui
 
 import cc.slokker.itv.data.GroupCountries
+import java.util.Locale
+import cc.slokker.itv.data.SportsSource
+import cc.slokker.itv.data.SportsHubResult
+import cc.slokker.itv.data.SportsMemory
+import cc.slokker.itv.data.SportsHub
+import cc.slokker.itv.data.SportsGame
 import cc.slokker.itv.data.AppRelease
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.CatchupRules
@@ -1302,6 +1308,74 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Programas do canal para a grelha (passado incluído), com o desvio horário das definições. */
     fun guideEntries(channel: Channel): List<EpgEntry> = guide.guideEntries(channel)
 
+    // ---- Sports Hub --------------------------------------------------------------------------
+
+    /** A hora do Sports Hub (em debug pode vir do arranque, para testar com um guia antigo). */
+    fun sportsNow(): Long = c.debugNow.takeIf { it > 0 } ?: System.currentTimeMillis()
+
+    /**
+     * Os jogos do guia nos canais de desporto à vista (ver SportsHub), com os canais pelo país e língua da pessoa.
+     * Percorre a lista toda: chamar fora do main.
+     */
+    fun sportsHub(): SportsHubResult {
+        val data = content.value ?: return SportsHubResult(emptyList(), emptyList(), emptyList())
+        val memory = sportsMemory?.takeIf { it.first == data.playlist.id }?.second ?: SportsMemory().also { sportsMemory = data.playlist.id to it }
+        val groups = data.categories.associate { it.id to it.name }
+        // Um grupo de desporto ("PT | DESPORTO") vale para os canais todos; senão vê-se o nome do canal.
+        val sportsGroups = groups.filterValues { SportsHub.isSportsChannel("", it) }.keys
+        val sources = channelsOf(SpecialCategory.ALL).mapNotNull { ch ->
+            if (ch.categoryId !in sportsGroups && !SportsHub.isSportsChannel(ch.name, "")) return@mapNotNull null
+            SportsSource(ch.key, ch.name, groups[ch.categoryId].orEmpty(), guideEntries(ch))
+        }
+        val locale = Locale.getDefault()
+        val language = prefs.value.language.takeIf { it != "auto" }?.substringBefore('-') ?: locale.language
+        return synchronized(memory) {
+            SportsHub.build(sources, sportsNow(), locale.country.lowercase().ifEmpty { null }, language.ifEmpty { null }, memory)
+        }.also { sportsLast = data.playlist.id to it }
+    }
+
+    /** O último Sports Hub da lista aberta, para o ecrã abrir já com ele enquanto faz as contas de novo. */
+    fun sportsLast(): SportsHubResult? = sportsLast?.takeIf { it.first == content.value?.playlist?.id }?.second
+
+    @Volatile
+    private var sportsLast: Pair<String, SportsHubResult>? = null
+
+    /** O que o Sports Hub já percebeu dos títulos da lista aberta (ver SportsMemory). */
+    @Volatile
+    private var sportsMemory: Pair<String, SportsMemory>? = null
+
+    /** Os canais ainda por tentar do jogo aberto no Sports Hub, se o que está a dar falhar (ver [sportsFallback]). */
+    private var sportsQueue: List<String> = emptyList()
+    private var sportsPlaying: String? = null
+
+    /** Abre o jogo no primeiro canal de [channels] (ou em [from]); se falhar, [sportsFallback] passa aos seguintes. */
+    fun playGame(game: SportsGame, from: String? = null) {
+        val data = content.value ?: return
+        val keys = game.channels.map { it.key }.let { k -> if (from != null) listOf(from) + (k - from) else k }
+        val channels = keys.mapNotNull { data.byKey[it] }
+        val first = channels.firstOrNull() ?: return
+        sportsQueue = channels.drop(1).take(MAX_SPORTS_TRIES).map { it.key }
+        sportsPlaying = first.key
+        play(first, first.categoryId)
+    }
+
+    /** O canal falhou: se era um jogo do Sports Hub, o canal seguinte a tentar (e avisa); senão null. */
+    fun sportsFallback(failed: Channel): Channel? {
+        if (failed.key != sportsPlaying) return null
+        val data = content.value ?: return null
+        while (sportsQueue.isNotEmpty()) {
+            val next = data.byKey[sportsQueue.first()]
+            sportsQueue = sportsQueue.drop(1)
+            if (next != null) {
+                sportsPlaying = next.key
+                showToast(I18n.s.sportsTrying(next.name))
+                return next
+            }
+        }
+        sportsPlaying = null
+        return null
+    }
+
     /** Os programas a mostrar de [channel]: o guia, ou o EPG curto [shortEpg] já carregado (ver data/Programmes). */
     fun programmes(channel: Channel, shortEpg: List<EpgEntry>): List<EpgEntry> =
         cc.slokker.itv.data.programmes(guideEntries(channel), shortEpg)
@@ -2225,6 +2299,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         /** Os programas seguintes que vão para o "A seguir" (o GoatLauncher mostra até três, mesmo depois de o atual acabar). */
         const val HOME_UPCOMING = 4
         const val MAX_RECENTS = 20
+        /** No Sports Hub, quantos canais de reserva se tentam a seguir ao primeiro. */
+        const val MAX_SPORTS_TRIES = 4
         const val MAX_SEARCH = 40
         private val ACCENTS = Regex("\\p{Mn}+")
 

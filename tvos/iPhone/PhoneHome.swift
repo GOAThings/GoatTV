@@ -23,6 +23,8 @@ struct PhoneHome: View {
     let onSearch: () -> Void
     /// As gravações (com um ponto vermelho enquanto grava).
     let onRecordings: () -> Void
+    /// O Sports Hub.
+    let onSports: () -> Void
     @State private var page: Int? = 0
 
     var body: some View {
@@ -37,6 +39,12 @@ struct PhoneHome: View {
                         Text(model.content?.playlist.name ?? "").font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(1)
                     }
                     Spacer()
+                    Button(action: onSports) {
+                        Image(systemName: "sportscourt").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
+                            .frame(width: 38, height: 38).background(tileFill, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(s.r("sports_hub"))
                     Button(action: onRecordings) {
                         Image(systemName: "record.circle").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textDim)
                             .frame(width: 38, height: 38).background(tileFill, in: Circle())

@@ -823,4 +823,32 @@
     <string name="channel_name_sub">Leer = Name aus der Liste</string>
     <string name="name_rules">Namensregeln</string>
     <string name="name_rules_sub">Bearbeiten auf thegoat.systems</string>
+    <string name="sports_hub">Sports Hub</string>
+    <string name="sports_all">Alle</string>
+    <string name="sport_football">Fußball</string>
+    <string name="sport_basketball">Basketball</string>
+    <string name="sport_amfootball">American Football</string>
+    <string name="sport_hockey">Eishockey</string>
+    <string name="sport_baseball">Baseball</string>
+    <string name="sport_tennis">Tennis</string>
+    <string name="sport_motor">Motorsport</string>
+    <string name="sport_fight">Kampfsport</string>
+    <string name="sport_rugby">Rugby</string>
+    <string name="sport_cricket">Cricket</string>
+    <string name="sport_handball">Handball</string>
+    <string name="sport_volleyball">Volleyball</string>
+    <string name="sport_golf">Golf</string>
+    <string name="sport_other">Andere Sportarten</string>
+    <string name="sports_live">Live</string>
+    <string name="sports_next">Demnächst</string>
+    <string name="sports_channels">Sportsender</string>
+    <string name="sports_where">Wo läuft es</string>
+    <string name="sports_watch_on">Auf %1$s ansehen</string>
+    <string name="sports_other_channels">Andere Sender · %1$s</string>
+    <string name="sports_started">Begann um %1$s</string>
+    <string name="sports_today">Heute %1$s</string>
+    <string name="sports_tomorrow">Morgen %1$s</string>
+    <string name="sports_empty">Gerade keine Spiele im Programm. Sie kommen aus dem Programm der Sportsender dieser Liste.</string>
+    <string name="sports_loading">Suche Spiele im Programm…</string>
+    <string name="sports_trying">Versuche anderen Sender: %1$s</string>
 </resources>

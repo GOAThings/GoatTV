@@ -11,7 +11,7 @@ internal enum class TvBack {
     SECOND_PICKER,
     CLOSE_TRACKS, CLOSE_SEARCH,
     /** O painel "Canal de reserva". */
-    CLOSE_BACKUP, CLOSE_RECORDINGS, CLOSE_GUIDE, CLOSE_EPG_PANEL, CLOSE_PANEL, HIDE_INFO, EXIT_CATCHUP, GO_LIVE, CLOSE_SECOND,
+    CLOSE_BACKUP, CLOSE_RECORDINGS, CLOSE_SPORTS, CLOSE_GUIDE, CLOSE_EPG_PANEL, CLOSE_PANEL, HIDE_INFO, EXIT_CATCHUP, GO_LIVE, CLOSE_SECOND,
     /** Com "Voltar abre o guia": abre-o (o Voltar seguinte, ao fechá-lo, conta como o primeiro para sair). */
     OPEN_GUIDE,
     EXIT,
@@ -32,6 +32,8 @@ internal class TvBackState(
     val search: Boolean = false,
     val backup: Boolean = false,
     val recordings: Boolean = false,
+    /** O Sports Hub. */
+    val sports: Boolean = false,
     val guide: Boolean = false,
     val epgPanel: Boolean = false,
     val panel: Boolean = false,
@@ -63,6 +65,7 @@ internal fun tvBack(state: TvBackState, sinceLastBackMs: Long): TvBack = with(st
         search -> TvBack.CLOSE_SEARCH
         backup -> TvBack.CLOSE_BACKUP
         recordings -> TvBack.CLOSE_RECORDINGS
+        sports -> TvBack.CLOSE_SPORTS
         guide -> TvBack.CLOSE_GUIDE
         epgPanel -> TvBack.CLOSE_EPG_PANEL
         // Voltar fecha o painel lateral (canais ou grupos) e volta ao vídeo. Antes os grupos voltavam

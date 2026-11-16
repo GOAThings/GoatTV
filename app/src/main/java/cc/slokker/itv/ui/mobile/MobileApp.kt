@@ -141,6 +141,12 @@ fun MobileMain(vm: AppViewModel) {
         }
     }
 
+    // Um jogo aberto no Sports Hub não arrancou: passa ao canal seguinte do jogo (país e língua primeiro).
+    LaunchedEffect(playback.failure != null) {
+        if (playback.failure == null) return@LaunchedEffect
+        vm.sportsFallback(current)?.let { vm.play(it, it.categoryId) }
+    }
+
     FullscreenBars(landscape)
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
     val back = nav.back(optionsOpen = showingOptions, fullscreen = landscape, epgOpen = epgFor != null)
@@ -189,6 +195,7 @@ fun MobileMain(vm: AppViewModel) {
                                 NextUp(vm, current)
                                 ChannelsTab(vm, current) { epgFor = it }
                             }
+                            nav.sports -> SportsPage(vm, onBack = { nav = nav.closeSports() }, onPlayed = { played() })
                             nav.recordings -> RecordingsPage(vm, onBack = { nav = nav.closeRecordings() }) { info ->
                                 vm.playRecording(info)
                                 played()
@@ -209,6 +216,7 @@ fun MobileMain(vm: AppViewModel) {
                                 onLockedGroup = { homePinFor = it },
                                 onSearch = { nav = nav.tabTapped(PhoneTab.Search) },
                                 onRecordings = { nav = nav.openRecordings() },
+                                onSports = { nav = nav.openSports() },
                             )
                         }
                         PhoneTab.Guide -> ChannelsTab(vm, current, guide = true) { epgFor = it }

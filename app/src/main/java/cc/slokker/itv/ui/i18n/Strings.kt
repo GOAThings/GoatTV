@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.i18n
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.SportsHub
 import androidx.core.os.ConfigurationCompat
 import android.content.Context
 import android.content.res.Configuration
@@ -1044,6 +1045,38 @@ class Strings(context: Context) {
         GroupCountries.ARAB -> Locale("ar").getDisplayLanguage(locale).replaceFirstChar { it.titlecase(locale) }
         else -> Locale("", code.uppercase()).getDisplayCountry(locale).ifEmpty { code.uppercase() }
     }
+    val sportsHub get() = s(R.string.sports_hub)
+    val sportsAll get() = s(R.string.sports_all)
+
+    /** O nome de um desporto do Sports Hub ([SportsHub.SPORTS]). */
+    fun sportName(sport: String): String = when (sport) {
+        SportsHub.FOOTBALL -> s(R.string.sport_football)
+        SportsHub.BASKETBALL -> s(R.string.sport_basketball)
+        SportsHub.AMFOOTBALL -> s(R.string.sport_amfootball)
+        SportsHub.HOCKEY -> s(R.string.sport_hockey)
+        SportsHub.BASEBALL -> s(R.string.sport_baseball)
+        SportsHub.TENNIS -> s(R.string.sport_tennis)
+        SportsHub.MOTOR -> s(R.string.sport_motor)
+        SportsHub.FIGHT -> s(R.string.sport_fight)
+        SportsHub.RUGBY -> s(R.string.sport_rugby)
+        SportsHub.CRICKET -> s(R.string.sport_cricket)
+        SportsHub.HANDBALL -> s(R.string.sport_handball)
+        SportsHub.VOLLEYBALL -> s(R.string.sport_volleyball)
+        SportsHub.GOLF -> s(R.string.sport_golf)
+        else -> s(R.string.sport_other)
+    }
+    val sportsLive get() = s(R.string.sports_live)
+    val sportsNext get() = s(R.string.sports_next)
+    val sportsChannels get() = s(R.string.sports_channels)
+    val sportsWhere get() = s(R.string.sports_where)
+    fun sportsWatchOn(channel: String) = s(R.string.sports_watch_on, channel)
+    fun sportsOtherChannels(n: Int) = s(R.string.sports_other_channels, n.toString())
+    fun sportsStarted(time: String) = s(R.string.sports_started, time)
+    fun sportsToday(time: String) = s(R.string.sports_today, time)
+    fun sportsTomorrow(time: String) = s(R.string.sports_tomorrow, time)
+    val sportsEmpty get() = s(R.string.sports_empty)
+    val sportsLoading get() = s(R.string.sports_loading)
+    fun sportsTrying(channel: String) = s(R.string.sports_trying, channel)
     val reorderGroups get() = s(R.string.reorder_groups)
     val reorderGroupsSub get() = s(R.string.reorder_groups_sub)
     val moving get() = s(R.string.moving)

@@ -114,6 +114,7 @@ internal fun SidePanel(
     onSelectGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onSports: () -> Unit,
     onAddPlaylist: () -> Unit,
     onClose: () -> Unit,
     playlistMenu: Boolean,
@@ -161,7 +162,7 @@ internal fun SidePanel(
             .focusProperties { canFocus = mode == Panel.Groups },
     ) {
         Box(content.graphicsLayer { alpha = toGroups.value }) {
-            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, onAddPlaylist, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
+            GroupList(group, vm, onSelectGroup, { preview = it }, onSettings, onRecordings, onSports, onAddPlaylist, playlistMenu, onPlaylistMenu, active = mode == Panel.Groups)
         }
     }
     Box(
@@ -461,6 +462,7 @@ private fun GroupList(
     onFocusGroup: (String) -> Unit,
     onSettings: () -> Unit,
     onRecordings: () -> Unit,
+    onSports: () -> Unit,
     onAddPlaylist: () -> Unit,
     playlistMenu: Boolean,
     onPlaylistMenu: (Boolean) -> Unit,
@@ -592,6 +594,13 @@ private fun GroupList(
                 modifier = Modifier
                     .focusRequester(recordingsFocus)
                     .onFocusChanged { if (it.isFocused) inRail = true },
+            )
+            GlassIconButton(
+                ItvIcons.Sports,
+                contentDescription = s.sportsHub,
+                onClick = onSports,
+                enabled = !playlistMenu,
+                modifier = Modifier.onFocusChanged { if (it.isFocused) inRail = true },
             )
             GlassIconButton(
                 ItvIcons.Settings,

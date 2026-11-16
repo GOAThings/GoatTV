@@ -264,6 +264,7 @@ struct PhoneMain: View {
     /// Áudio, legendas ou temporizador, cada um no seu botão (por baixo do vídeo).
     @State private var playerOption: PlayerOption?
     @State private var showRecordings = PhoneMain.startRecordings
+    @State private var showSports = false
     /// Um programa com lembrete vai começar (o cartão em cima, como no Android); com a definição, os segundos até mudar.
     @State private var reminder: AppModel.Reminder?
     @State private var reminderLeft: Int?
@@ -349,7 +350,8 @@ struct PhoneMain: View {
                                 onGroup: { homeGroup = $0 },
                                 onLockedGroup: { homePinFor = $0 },
                                 onSearch: { tab = .search },
-                                onRecordings: { showRecordings = true }
+                                onRecordings: { showRecordings = true },
+                                onSports: { showSports = true }
                             )
                         }
                     case .guide: ChannelsTab(epgFor: $epgFor, guide: true)
@@ -381,6 +383,7 @@ struct PhoneMain: View {
         .sheet(item: $epgFor) { GuideSheet(channel: $0).environment(\.played, played) }
         .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0) }
         .sheet(isPresented: $showRecordings) { PhoneRecordings().environment(\.played, played) }
+        .sheet(isPresented: $showSports) { PhoneSports().environment(\.played, played) }
         // Mudar de canal com uma gravação a decorrer: o fornecedor só deixa uma ligação.
         // Em pausa ou atrás do direto, o mesmo cartão com outras palavras: o que está guardado apaga-se.
         .alert(model.switchPrompt.map { $0.live ? model.strings.r("behind_switch_title") : model.strings.r("recording_switch_title", $0.title) } ?? "",

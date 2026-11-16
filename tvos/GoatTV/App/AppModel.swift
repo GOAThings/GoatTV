@@ -252,6 +252,8 @@ final class AppModel {
 
     /// O canal não abriu: explica porquê (pergunta ao servidor Xtream se a conta está ocupada antes de o dizer).
     private func explainPlaybackFailure() {
+        // Um jogo aberto no Sports Hub passa ao canal seguinte do jogo (país e língua primeiro).
+        if sportsFallback() { return }
         guard let content else { return }
         playbackError = ErrorInfo(title: strings.r("cant_open_channel").trimmingCharacters(in: CharacterSet(charactersIn: ".")))
         playbackStatus = strings.r("analysing_error")
@@ -2070,6 +2072,77 @@ final class AppModel {
         var list = Guide.entries(for: channel, account: accountGuide, main: mainGuide, extra: extraGuide)
         if list.isEmpty { list = shortEpg[channel.key] ?? [] }
         return Guide.shifted(list, minutes: prefs.epgOffsetMin)
+    }
+
+    // MARK: Sports Hub
+
+    @ObservationIgnored private let sportsEngine = SportsEngine()
+    /// O último Sports Hub da lista aberta: o ecrã abre já com ele enquanto faz as contas de novo.
+    private(set) var sportsLast: SportsHubData?
+    @ObservationIgnored private var sportsLastPlaylist: String?
+    /// Os canais ainda por tentar do jogo aberto no Sports Hub, se o que está a dar falhar.
+    @ObservationIgnored private var sportsQueue: [String] = []
+    @ObservationIgnored private var sportsPlaying: String?
+
+    /// Os jogos do guia nos canais de desporto à vista (ver SportsHub.kt), com os canais pelo país e língua da pessoa.
+    func sportsHub() async -> SportsHubData? {
+        guard let content, let library else { return nil }
+        let playlistId = content.playlist.id
+        let all = library.channels(in: SpecialCategory.all)
+        var groups: [String: String] = [:]
+        for ch in all where groups[ch.categoryId] == nil { groups[ch.categoryId] = content.categoryName(ch.categoryId) ?? "" }
+        // Um grupo de desporto vale para os canais todos; senão vê-se o nome do canal (fora do main: são milhares).
+        let groupList = groups
+        let picked = await Task.detached(priority: .userInitiated) { () -> [Channel] in
+            let sportsGroups = Set(groupList.filter { SportsEngine.isSportsChannel(name: "", group: $0.value) }.keys)
+            return all.filter { sportsGroups.contains($0.categoryId) || SportsEngine.isSportsChannel(name: $0.name, group: "") }
+        }.value
+        let sources = picked.map { (channel: $0, group: groups[$0.categoryId] ?? "", entries: programmes(for: $0)) }
+        let country = Locale.current.region?.identifier.lowercased()
+        let language = String(strings.lang.prefix(2))
+        let engine = sportsEngine
+        let result = await Task.detached(priority: .userInitiated) {
+            engine.build(playlistId: playlistId, sources: sources, now: nowMs(), country: country, language: language)
+        }.value
+        if self.content?.playlist.id == playlistId {
+            sportsLast = result
+            sportsLastPlaylist = playlistId
+        }
+        return result
+    }
+
+    /// O último Sports Hub, se for da lista aberta.
+    var sportsCached: SportsHubData? { sportsLastPlaylist == content?.playlist.id ? sportsLast : nil }
+
+    /// Abre o jogo no primeiro canal (ou em `from`); se falhar, passa aos seguintes (ver explainPlaybackFailure).
+    func playGame(_ game: SportsGameInfo, from key: String? = nil) {
+        guard let content else { return }
+        var keys = game.channels.map(\.key)
+        if let key { keys = [key] + keys.filter { $0 != key } }
+        let channels = keys.compactMap { content.byKey[$0] }
+        guard let first = channels.first else { return }
+        sportsQueue = channels.dropFirst().prefix(Self.maxSportsTries).map(\.key)
+        sportsPlaying = first.key
+        play(first, from: groupFor(first))
+    }
+
+    /// No Sports Hub, quantos canais de reserva se tentam a seguir ao primeiro.
+    static let maxSportsTries = 4
+
+    /// O canal falhou: se era um jogo do Sports Hub, abre o seguinte (e avisa) e devolve true.
+    private func sportsFallback() -> Bool {
+        guard let failed = current, failed.key == sportsPlaying, let content else { return false }
+        while let key = sportsQueue.first {
+            sportsQueue.removeFirst()
+            if let next = content.byKey[key] {
+                sportsPlaying = next.key
+                showToast(strings.r("sports_trying", next.name))
+                play(next, from: groupFor(next))
+                return true
+            }
+        }
+        sportsPlaying = nil
+        return false
     }
 
     /// Quando começou o programa do guia do canal a dar que dá às [wallMs] (ms desde 1970), ou nil sem guia para essa hora.

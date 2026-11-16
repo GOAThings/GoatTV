@@ -419,8 +419,9 @@ data class Prefs(
         const val NONE = "none"; const val RECORD = "record"; const val GUIDE = "guide"; const val CHANNELS = "channels"
         const val FAVORITE = "favorite"; const val PREVIOUS = "previous"; const val RECORDINGS = "recordings"
         const val SEARCH = "search"; const val AUDIO = "audio"; const val SUBTITLES = "subtitles"; const val SLEEP = "sleep"
+        const val SPORTS = "sports"
         /** Por esta ordem nas definições. */
-        val OPTIONS = listOf(NONE, RECORD, GUIDE, CHANNELS, FAVORITE, PREVIOUS, RECORDINGS, SEARCH, AUDIO, SUBTITLES, SLEEP)
+        val OPTIONS = listOf(NONE, RECORD, GUIDE, CHANNELS, FAVORITE, PREVIOUS, RECORDINGS, SPORTS, SEARCH, AUDIO, SUBTITLES, SLEEP)
         val ALL = OPTIONS.toSet()
     }
     object UpDown {

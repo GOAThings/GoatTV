@@ -13,7 +13,7 @@ class TvBackTest {
         val order = listOf(
             TvBack.DISMISS_REMINDER, TvBack.CLEAR_NUMBER, TvBack.CLOSE_NET_HINT, TvBack.CLOSE_PIN, TvBack.CLOSE_PLAYLIST_MENU,
             TvBack.CLOSE_SLEEP, TvBack.SECOND_PICKER, TvBack.CLOSE_TRACKS, TvBack.CLOSE_SEARCH, TvBack.CLOSE_BACKUP, TvBack.CLOSE_RECORDINGS,
-            TvBack.CLOSE_GUIDE,
+            TvBack.CLOSE_SPORTS, TvBack.CLOSE_GUIDE,
             TvBack.CLOSE_EPG_PANEL, TvBack.CLOSE_PANEL, TvBack.HIDE_INFO, TvBack.EXIT_CATCHUP, TvBack.GO_LIVE, TvBack.CLOSE_SECOND,
         )
         val open = order.toMutableSet()
@@ -57,6 +57,7 @@ class TvBackTest {
         search = TvBack.CLOSE_SEARCH in open,
         backup = TvBack.CLOSE_BACKUP in open,
         recordings = TvBack.CLOSE_RECORDINGS in open,
+        sports = TvBack.CLOSE_SPORTS in open,
         guide = TvBack.CLOSE_GUIDE in open,
         epgPanel = TvBack.CLOSE_EPG_PANEL in open,
         panel = TvBack.CLOSE_PANEL in open,

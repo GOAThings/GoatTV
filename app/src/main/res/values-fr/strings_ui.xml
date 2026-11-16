@@ -825,4 +825,32 @@
     <string name="channel_name_sub">Vide = le nom de la liste</string>
     <string name="name_rules">Règles de noms</string>
     <string name="name_rules_sub">À modifier sur thegoat.systems</string>
+    <string name="sports_hub">Sports Hub</string>
+    <string name="sports_all">Tout</string>
+    <string name="sport_football">Football</string>
+    <string name="sport_basketball">Basket-ball</string>
+    <string name="sport_amfootball">Football américain</string>
+    <string name="sport_hockey">Hockey sur glace</string>
+    <string name="sport_baseball">Baseball</string>
+    <string name="sport_tennis">Tennis</string>
+    <string name="sport_motor">Sports mécaniques</string>
+    <string name="sport_fight">Sports de combat</string>
+    <string name="sport_rugby">Rugby</string>
+    <string name="sport_cricket">Cricket</string>
+    <string name="sport_handball">Handball</string>
+    <string name="sport_volleyball">Volley-ball</string>
+    <string name="sport_golf">Golf</string>
+    <string name="sport_other">Autres sports</string>
+    <string name="sports_live">En direct</string>
+    <string name="sports_next">À suivre</string>
+    <string name="sports_channels">Chaînes de sport</string>
+    <string name="sports_where">Où regarder</string>
+    <string name="sports_watch_on">Regarder sur %1$s</string>
+    <string name="sports_other_channels">Autres chaînes · %1$s</string>
+    <string name="sports_started">A commencé à %1$s</string>
+    <string name="sports_today">Aujourd’hui %1$s</string>
+    <string name="sports_tomorrow">Demain %1$s</string>
+    <string name="sports_empty">Aucun match dans le guide pour l’instant. Ils viennent du guide des chaînes de sport de cette liste.</string>
+    <string name="sports_loading">Recherche de matchs dans le guide…</string>
+    <string name="sports_trying">Essai d’une autre chaîne : %1$s</string>
 </resources>

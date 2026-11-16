@@ -825,4 +825,32 @@
     <string name="channel_name_sub">Vuoto = il nome della lista</string>
     <string name="name_rules">Regole dei nomi</string>
     <string name="name_rules_sub">Si modificano su thegoat.systems</string>
+    <string name="sports_hub">Sports Hub</string>
+    <string name="sports_all">Tutto</string>
+    <string name="sport_football">Calcio</string>
+    <string name="sport_basketball">Basket</string>
+    <string name="sport_amfootball">Football americano</string>
+    <string name="sport_hockey">Hockey su ghiaccio</string>
+    <string name="sport_baseball">Baseball</string>
+    <string name="sport_tennis">Tennis</string>
+    <string name="sport_motor">Motori</string>
+    <string name="sport_fight">Sport da combattimento</string>
+    <string name="sport_rugby">Rugby</string>
+    <string name="sport_cricket">Cricket</string>
+    <string name="sport_handball">Pallamano</string>
+    <string name="sport_volleyball">Pallavolo</string>
+    <string name="sport_golf">Golf</string>
+    <string name="sport_other">Altri sport</string>
+    <string name="sports_live">In diretta</string>
+    <string name="sports_next">A seguire</string>
+    <string name="sports_channels">Canali sportivi</string>
+    <string name="sports_where">Dove vederlo</string>
+    <string name="sports_watch_on">Guarda su %1$s</string>
+    <string name="sports_other_channels">Altri canali · %1$s</string>
+    <string name="sports_started">Iniziata alle %1$s</string>
+    <string name="sports_today">Oggi %1$s</string>
+    <string name="sports_tomorrow">Domani %1$s</string>
+    <string name="sports_empty">Al momento non ci sono partite nella guida. Arrivano dalla guida dei canali sportivi di questa lista.</string>
+    <string name="sports_loading">Cerco partite nella guida…</string>
+    <string name="sports_trying">Provo un altro canale: %1$s</string>
 </resources>

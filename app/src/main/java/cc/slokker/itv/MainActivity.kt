@@ -80,6 +80,9 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.DEBUG && intent.getBooleanExtra("test_mode", false)) {
             (application as ItvApp).container.testMode = true
         }
+        if (BuildConfig.DEBUG) {
+            intent.getLongExtra("sports_now", 0L).takeIf { it > 0 }?.let { (application as ItvApp).container.debugNow = it }
+        }
         if (BuildConfig.DEBUG && intent.getBooleanExtra("no_video", false)) {
             (application as ItvApp).container.noVideo = true
         }

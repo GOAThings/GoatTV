@@ -102,6 +102,19 @@ class PhoneNavTest {
     }
 
     @Test
+    fun `the sports hub opens on the TV home and back or playing leaves it`() {
+        val open = watching.tabTapped(PhoneTab.Search).openSports()
+        assertEquals(PhoneNav(PhoneTab.Tv, home = true, stopped = false, sports = true), open)
+        assertEquals(PhoneBack.LEAVE_GROUP, open.back(optionsOpen = false, fullscreen = false, epgOpen = false))
+        assertFalse(open.after(PhoneBack.LEAVE_GROUP).sports)
+        assertFalse(open.played().sports)
+        assertFalse(open.tabTapped(PhoneTab.Tv).sports)
+        assertEquals(open, PhoneNav.fromList(open.toList()))
+        // Guardado antes do Sports Hub (cinco campos).
+        assertEquals(home, PhoneNav.fromList(home.toList().take(5)))
+    }
+
+    @Test
     fun `survives being saved and restored`() {
         val state = watching.copy(home = true).openGroup("news").tabTapped(PhoneTab.Guide)
         assertEquals(state, PhoneNav.fromList(state.toList()))
