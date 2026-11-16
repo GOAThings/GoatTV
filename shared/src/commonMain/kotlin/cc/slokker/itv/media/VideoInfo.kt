@@ -14,7 +14,16 @@ class VideoInfo(
     val transfer: Int,
     val matrix: Int,
     val fullRange: Boolean,
+    /**
+     * A proporção de cada píxel (o "SAR" do VUI): os canais HD de satélite vêm muitas vezes em 1440×1080 com píxeis
+     * 4:3, e os SD em 720×576 com píxeis largos. Sem isto a imagem saía apertada, com barras dos lados.
+     */
+    val sarWidth: Int = 1,
+    val sarHeight: Int = 1,
 ) {
+    /** Largura ÷ altura de um píxel (1 nos quadrados). */
+    val pixelRatio: Float get() = if (sarWidth > 0 && sarHeight > 0) sarWidth.toFloat() / sarHeight else 1f
+
     val isHdr10: Boolean get() = transfer == 16
     val isHlg: Boolean get() = transfer == 18
     val isHdr: Boolean get() = isHdr10 || isHlg
@@ -80,7 +89,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / (2.0 * units)).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1)
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5])
         }.getOrNull()
 
         /** O SPS de HEVC (o NAL inteiro, com os 2 bytes do cabeçalho), ou null se não se perceber. */
@@ -161,7 +170,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / units.toDouble()).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1)
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5])
         }.getOrNull()
 
         private val HIGH_PROFILES = setOf(100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135)
@@ -204,11 +213,23 @@ internal class SpsBits(private val d: ByteArray) {
         return if (k % 2 == 1) (k + 1) / 2 else -(k / 2)
     }
 
-    /** O aspect ratio, o overscan e o video_signal_type do VUI: [primárias, transferência, matriz, gama completa]. */
+    /**
+     * O aspect ratio, o overscan e o video_signal_type do VUI: [primárias, transferência, matriz, gama completa,
+     * largura e altura do píxel].
+     */
     fun signalType(): IntArray {
-        if (u(1) == 1 && u(8) == 255) u32() // aspect_ratio_idc 255: sar_width, sar_height
+        val out = intArrayOf(-1, -1, -1, 0, 1, 1)
+        if (u(1) == 1) {
+            val idc = u(8)
+            if (idc == 255) {
+                out[4] = u(16)
+                out[5] = u(16)
+            } else if (idc in 1 until SAR_TABLE.size / 2) {
+                out[4] = SAR_TABLE[idc * 2]
+                out[5] = SAR_TABLE[idc * 2 + 1]
+            }
+        }
         if (u(1) == 1) u(1) // overscan
-        val out = intArrayOf(-1, -1, -1, 0)
         if (u(1) == 1) {
             u(3) // video_format
             out[3] = u(1)
@@ -294,3 +315,6 @@ internal class SpsBits(private val d: ByteArray) {
         }
     }
 }
+
+/** O aspect_ratio_idc do H.264 e do HEVC (tabela E-1): largura e altura do píxel, do 0 (não diz) ao 16. */
+private val SAR_TABLE = intArrayOf(1, 1, 1, 1, 12, 11, 10, 11, 16, 11, 40, 33, 24, 11, 20, 11, 32, 11, 80, 33, 18, 11, 15, 11, 64, 33, 160, 99, 4, 3, 3, 2, 2, 1)

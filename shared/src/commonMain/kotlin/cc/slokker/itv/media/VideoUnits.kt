@@ -46,6 +46,13 @@ class NalReader(private val hevc: Boolean) {
     var loneFields = 0
         private set
 
+    /**
+     * Juntar os dois campos de uma imagem entrelaçada num só ([next]). O VideoToolbox quer-nos juntos; o MediaCodec quer
+     * um campo de cada vez, cada um com o seu tempo (como o ExoPlayer os dá): juntos, a NVIDIA da SHIELD dava a imagem
+     * estragada nos canais 1080i e 576i.
+     */
+    var pairFields = true
+
     /** O SPS diz que as imagens podem vir entrelaçadas (H.264 sem frame_mbs_only). */
     val interlaced: Boolean get() = spsInfo?.frameMbsOnly == false
 
@@ -58,6 +65,10 @@ class NalReader(private val hevc: Boolean) {
         val u = unit(annexB).let { VideoUnit(it.data, it.keyframe, it.parameterSets, pts, dts) }
         val slice = lastSlice
         val h = held
+        if (!pairFields && slice != null && slice.field) {
+            fieldPairs++
+            return u
+        }
         if (hevc || slice == null || !slice.field) {
             // Uma imagem inteira: um campo que ficou sem par já não serve.
             if (h != null) loneFields++

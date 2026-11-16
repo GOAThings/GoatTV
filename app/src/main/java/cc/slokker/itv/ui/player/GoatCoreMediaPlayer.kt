@@ -224,7 +224,7 @@ internal class GoatCoreMediaPlayer(
                 playbackState = Player.STATE_ENDED
             }
 
-            override fun onVideoSize(width: Int, height: Int) = post(g) { videoSize = VideoSize(width, height) }
+            override fun onVideoSize(width: Int, height: Int, pixelRatio: Float) = post(g) { videoSize = VideoSize(width, height, pixelRatio) }
 
             override fun onCaptionsFound() = post(g) {
                 captionsFound = true

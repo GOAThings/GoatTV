@@ -840,8 +840,9 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         }
         if !reportedSize, let f = CMSampleBufferGetFormatDescription(b) {
             reportedSize = true
-            let d = CMVideoFormatDescriptionGetDimensions(f)
-            onEvent?(.videoSize(width: Int(d.width), height: Int(d.height)))
+            // Com a proporção do píxel (1440×1080 com píxeis 4:3 é 16:9): sem ela a imagem saía apertada, com barras.
+            let d = CMVideoFormatDescriptionGetPresentationDimensions(f, usePixelAspectRatio: true, useCleanAperture: false)
+            onEvent?(.videoSize(width: Int(d.width.rounded()), height: Int(d.height.rounded())))
         }
         display.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)

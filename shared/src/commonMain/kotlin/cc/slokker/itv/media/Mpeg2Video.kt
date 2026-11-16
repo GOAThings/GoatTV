@@ -45,6 +45,25 @@ class Mpeg2Reader {
         return VideoUnit(data, keyframe, sets, pts, dts)
     }
 
+    /**
+     * Largura ÷ altura de um píxel, pelo aspect_ratio_information do cabeçalho (a proporção do ecrã: 4:3, 16:9 ou
+     * 2,21:1); 1 sem cabeçalho ou com píxeis quadrados. Os canais SD vêm em 720×576 a mostrar 16:9 ou 4:3.
+     */
+    val pixelRatio: Float
+        get() {
+            val h = sequence ?: return 1f
+            if (h.size < 8) return 1f
+            val width = ((h[4].toInt() and 0xFF) shl 4) or ((h[5].toInt() and 0xFF) shr 4)
+            val height = ((h[5].toInt() and 0x0F) shl 8) or (h[6].toInt() and 0xFF)
+            val display = when ((h[7].toInt() and 0xFF) shr 4) {
+                2 -> 4f / 3
+                3 -> 16f / 9
+                4 -> 2.21f
+                else -> return 1f
+            }
+            return if (width > 0 && height > 0) display * height / width else 1f
+        }
+
     fun reset() {
         sequence = null
     }

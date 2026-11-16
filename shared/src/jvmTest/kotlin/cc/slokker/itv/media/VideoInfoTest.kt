@@ -56,4 +56,28 @@ class VideoInfoTest {
         assertEquals(listOf(5, 1, 5), listOf(v.primaries, v.transfer, v.matrix))
         assertFalse(v.isHdr)
     }
+
+    @Test
+    fun h264AnamorphicHd() {
+        // HD de satélite: 1440×1080 com píxeis 4:3, que se vê 16:9 (sem isto saía 4:3, com barras dos lados).
+        val v = info("h264_1440_sar43.ts", hevc = false)
+        assertEquals(listOf(1440, 1080), listOf(v.width, v.height))
+        assertEquals(listOf(4, 3), listOf(v.sarWidth, v.sarHeight))
+        assertEquals(16f / 9, v.width * v.pixelRatio / v.height, 0.01f)
+    }
+
+    @Test
+    fun mpeg2WideSd() {
+        val bytes = javaClass.getResourceAsStream("/ts/mpeg2_576_169.ts")!!.readBytes()
+        val reader = Mpeg2Reader()
+        val d = TsDemuxer(object : TsListener {
+            override fun onTracks(tracks: List<TsTrack>) {}
+            override fun onSample(track: TsTrack, sample: TsSample) {
+                if (track.kind == TrackKind.VIDEO) reader.next(sample.data, 0, 0)
+            }
+        })
+        d.feed(bytes, 0, bytes.size)
+        d.flush()
+        assertEquals(16f / 9, 720 * reader.pixelRatio / 576, 0.01f)
+    }
 }

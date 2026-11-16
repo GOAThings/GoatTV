@@ -65,7 +65,8 @@ class GoatCorePlayer(
         /** Falhou; [unsupported]: um formato que este aparelho (ou este motor) não toca, e outro motor talvez sim. */
         fun onError(why: String, unsupported: Boolean, cause: Throwable?)
         fun onEnded()
-        fun onVideoSize(width: Int, height: Int) {}
+        /** O tamanho do vídeo e a proporção de cada píxel ([VideoInfo.pixelRatio]). */
+        fun onVideoSize(width: Int, height: Int, pixelRatio: Float) {}
 
         /** O que o SPS diz do vídeo (tamanho, cadência, cor/HDR): a primeira vez e quando muda. */
         fun onVideoInfo(info: VideoInfo) {}
@@ -382,7 +383,7 @@ class GoatCorePlayer(
         if (video != null && video.pid != videoPid) {
             videoPid = video.pid
             when (video.codec) {
-                Codec.H264 -> { nal = NalReader(hevc = false); hevc = false; videoMime = MediaFormat.MIMETYPE_VIDEO_AVC }
+                Codec.H264 -> { nal = NalReader(hevc = false).apply { pairFields = false }; hevc = false; videoMime = MediaFormat.MIMETYPE_VIDEO_AVC }
                 Codec.HEVC -> { nal = NalReader(hevc = true); hevc = true; videoMime = MediaFormat.MIMETYPE_VIDEO_HEVC }
                 // O MPEG-2 (canais SD de cabo e satélite): muitas boxes têm descodificador de hardware para ele.
                 Codec.MPEG2_VIDEO -> if (hasDecoder(MediaFormat.MIMETYPE_VIDEO_MPEG2)) {
@@ -529,6 +530,9 @@ class GoatCorePlayer(
         } else {
             sets.firstOrNull { it.isNotEmpty() && (it[0].toInt() and 0x1F) == 7 }?.let { VideoInfo.h264(it) }
         } ?: return
+        if (videoInfo?.let { it.width != info.width || it.height != info.height || it.pixelRatio != info.pixelRatio } != false) {
+            Log.i(TAG, "sps ${info.width}x${info.height} sar ${info.sarWidth}:${info.sarHeight} ${info.fps} fps")
+        }
         videoInfo = info
         listener.onVideoInfo(info)
     }
@@ -707,7 +711,7 @@ class GoatCorePlayer(
                     val w = if (f.containsKey("crop-right")) f.getInteger("crop-right") - f.getInteger("crop-left") + 1 else f.getInteger(MediaFormat.KEY_WIDTH)
                     val h = if (f.containsKey("crop-bottom")) f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1 else f.getInteger(MediaFormat.KEY_HEIGHT)
                     Log.i(TAG, "video ${w}x$h ${c.name}")
-                    listener.onVideoSize(w, h)
+                    listener.onVideoSize(w, h, mpeg2?.pixelRatio ?: videoInfo?.pixelRatio ?: 1f)
                 }
             }
         } catch (e: InterruptedException) {
