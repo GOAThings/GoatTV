@@ -65,4 +65,15 @@ class BugReportTest {
         assertEquals("h.tv", BugReport.hostOf("https://u:p@h.tv/x?y=1"))
         assertEquals("seen on *** port 1", BugReport.redact("seen on myportal port 1", listOf(BugReport.hostOf("http://myportal:8080/c/")!!)))
     }
+
+    @Test
+    fun masksEmailsAndIpv6ButKeepsTimes() {
+        val out = BugReport.redact(
+            "01:12:03  contact someone.else+tv@mail.example.org from fe80::1c2b:3aff:fe4d:5e6f%wlan0 and 2001:db8:0:0:0:0:0:1 via ::1\n" +
+                "at String::class 12:30 done",
+            emptyList(),
+        )
+        for (leak in listOf("someone.else", "mail.example", "fe80", "1c2b", "2001:db8", "::1")) assertFalse("$leak leaked:\n$out", out.contains(leak))
+        for (kept in listOf("01:12:03", "String::class", "12:30")) assertTrue("$kept lost:\n$out", out.contains(kept))
+    }
 }

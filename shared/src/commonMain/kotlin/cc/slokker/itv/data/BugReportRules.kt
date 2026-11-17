@@ -45,6 +45,7 @@ object BugReportRules {
         for (secret in secrets.filter { it.length >= 3 }.distinct().sortedByDescending { it.length }) out = out.replace(secret, "***")
         // Os links dos canais podem ter credenciais em qualquer parte do caminho ou do servidor.
         out = URL.replace(out) { "${it.groupValues[1]}://***" }
+        out = EMAIL.replace(out, "***")
         out = QUERY.replace(out) { "${it.groupValues[1]}=***" }
         out = XTREAM_PATH.replace(out) { "/${it.groupValues[1]}/***/***/" }
         out = STALKER_PATH.replace(out, "/stalker/***/***/")
@@ -53,6 +54,7 @@ object BugReportRules {
         out = AUTH.replace(out) { "${it.groupValues[1]} ***" }
         out = HOST.replace(out) { if (looksLikeCode(it.value)) it.value else "***" }
         out = IPV4.replace(out, "***")
+        out = IPV6.replace(out, "***")
         return out
     }
 
@@ -74,6 +76,9 @@ object BugReportRules {
     private val AUTH = Regex("(?i)(authorization:?|bearer)\\s+[^\\s,]+")
     private val HOST = Regex("(?<![\\w.-])(?:[A-Za-z0-9_-]+\\.)+[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9](?![\\w-])")
     private val IPV4 = Regex("(?<![\\w.])\\d{1,3}(?:\\.\\d{1,3}){3}(?![\\w.])")
+    private val EMAIL = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+")
+    /** Com "::" ou os 8 grupos (as horas, 01:12:03, ficam); também o fe80::1%wlan0 da rede local. */
+    private val IPV6 = Regex("(?i)(?<![\\w:.])(?=[0-9a-f:]*[0-9a-f])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:)*[0-9a-f]{0,4}::(?:[0-9a-f]{1,4}:)*[0-9a-f]{0,4})(?:%[\\w.-]+)?(?![\\w:])")
     private val FILE_ENDINGS = setOf("kt", "java", "swift", "cpp", "dex", "jar", "apk", "ipa", "dylib", "xml", "json", "png", "jpg", "webp", "gz", "ts", "m3u", "m3u8", "mp4", "mkv", "php", "html", "js", "css", "txt", "log")
     private val COMMON_TLDS = setOf("com", "net", "org", "info", "biz", "xyz", "top", "site", "online", "club", "live", "pro", "stream", "app", "dev", "tech", "store", "shop", "cloud", "link", "icu", "vip", "fun", "space", "website", "one", "world", "today", "media", "example", "invalid", "test", "local", "lan")
     private val CODE_ROOTS = setOf("java", "javax", "kotlin", "kotlinx", "android", "androidx", "dalvik", "libcore", "sun", "okhttp3", "okio", "retrofit2", "coil", "coil3", "com.android", "com.google", "com.squareup", "com.apple", "org.videolan", "org.json", "cc.slokker")
