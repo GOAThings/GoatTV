@@ -565,6 +565,8 @@
     <string name="version">الإصدار</string>
     <string name="licenses">التراخيص</string>
     <string name="source_code">الشيفرة المصدرية</string>
+    <string name="privacy_policy">سياسة الخصوصية</string>
+    <string name="delete_account">حذف الحساب</string>
     <string name="none">لا شيء</string>
     <string name="subtitles_off">متوقفة</string>
     <string name="no_tracks">لا تحتوي هذه القناة على مسارات</string>

@@ -564,6 +564,8 @@
     <string name="version">バージョン</string>
     <string name="licenses">ライセンス</string>
     <string name="source_code">ソースコード</string>
+    <string name="privacy_policy">プライバシーポリシー</string>
+    <string name="delete_account">アカウントを削除</string>
     <string name="none">なし</string>
     <string name="subtitles_off">オフ</string>
     <string name="no_tracks">このチャンネルにはトラックがありません</string>

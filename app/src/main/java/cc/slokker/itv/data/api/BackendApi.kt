@@ -22,6 +22,10 @@ const val BACKEND_URL = "https://thegoat.systems/"
 /** Nome desta app na conta Slokker (cada TV fica registada como um dispositivo da GoatTV). */
 const val BACKEND_APP = "goattv"
 
+/** Páginas públicas do site (abrem no browser; o site tem o seu próprio login, o token da TV nunca vai no endereço). */
+const val PRIVACY_URL = "${BACKEND_URL}privacy"
+const val DELETE_ACCOUNT_URL = "${BACKEND_URL}account/delete"
+
 /**
  * API da conta Slokker para a GoatTV. A TV tem um login de dispositivo (não o da pessoa), que só serve para
  * esta app: lê listas e definições, grava favoritos e definições, e cria, altera e apaga as listas da conta.

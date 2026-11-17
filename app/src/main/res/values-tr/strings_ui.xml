@@ -565,6 +565,8 @@
     <string name="version">Sürüm</string>
     <string name="licenses">Lisanslar</string>
     <string name="source_code">Kaynak kodu</string>
+    <string name="privacy_policy">Gizlilik politikası</string>
+    <string name="delete_account">Hesabı sil</string>
     <string name="none">Yok</string>
     <string name="subtitles_off">Kapalı</string>
     <string name="no_tracks">Bu kanalda parça yok</string>

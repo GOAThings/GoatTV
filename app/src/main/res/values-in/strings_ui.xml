@@ -565,6 +565,8 @@
     <string name="version">Versi</string>
     <string name="licenses">Lisensi</string>
     <string name="source_code">Kode sumber</string>
+    <string name="privacy_policy">Kebijakan privasi</string>
+    <string name="delete_account">Hapus akun</string>
     <string name="none">Tidak ada</string>
     <string name="subtitles_off">Nonaktif</string>
     <string name="no_tracks">Saluran ini tidak punya trek</string>

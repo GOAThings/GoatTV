@@ -564,6 +564,8 @@
     <string name="version">버전</string>
     <string name="licenses">라이선스</string>
     <string name="source_code">소스 코드</string>
+    <string name="privacy_policy">개인정보 처리방침</string>
+    <string name="delete_account">계정 삭제</string>
     <string name="none">없음</string>
     <string name="subtitles_off">끄기</string>
     <string name="no_tracks">이 채널에는 트랙이 없어요</string>

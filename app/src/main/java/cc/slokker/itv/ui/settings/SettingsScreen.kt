@@ -1,6 +1,8 @@
 package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
+import cc.slokker.itv.data.api.PRIVACY_URL
 import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.ReportState
@@ -991,6 +993,9 @@ private fun accountItems(route: Route, vm: AppViewModel, nav: PageNav): List<Ite
                 }
             },
             Item.Info("version", s.version, BuildConfig.VERSION_NAME),
+            // Na TV não há browser garantido: mostra-se o endereço para abrir no telemóvel.
+            Item.Info("privacy", s.privacyPolicy, PRIVACY_URL.removePrefix("https://")),
+            Item.Info("delete", s.deleteAccount, DELETE_ACCOUNT_URL.removePrefix("https://")).takeIf { !local },
             Item.Nav("licenses", s.licenses, value = "GPL-3.0") { push(Route.Licenses, "licenses") },
             // A mesma chave em todos os estados: a linha muda de texto sem perder o foco.
             updateItem(updateState, vm, s, "checkupdate") ?: Item.Action(

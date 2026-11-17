@@ -565,6 +565,8 @@
     <string name="version">Версия</string>
     <string name="licenses">Лицензии</string>
     <string name="source_code">Исходный код</string>
+    <string name="privacy_policy">Политика конфиденциальности</string>
+    <string name="delete_account">Удалить аккаунт</string>
     <string name="none">Нет</string>
     <string name="subtitles_off">Выкл.</string>
     <string name="no_tracks">На этом канале нет дорожек</string>

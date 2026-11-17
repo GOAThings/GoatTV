@@ -565,6 +565,8 @@
     <string name="version">वर्शन</string>
     <string name="licenses">लाइसेंस</string>
     <string name="source_code">सोर्स कोड</string>
+    <string name="privacy_policy">गोपनीयता नीति</string>
+    <string name="delete_account">खाता हटाएँ</string>
     <string name="none">कोई नहीं</string>
     <string name="subtitles_off">बंद</string>
     <string name="no_tracks">इस चैनल में कोई ट्रैक नहीं है</string>

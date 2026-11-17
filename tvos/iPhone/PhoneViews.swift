@@ -1871,6 +1871,17 @@ private struct MenuTab: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Abrem no Safari: o site tem o seu próprio login.
+            Button { UIApplication.shared.open(Backend.privacyURL) } label: {
+                MenuRowLabel(title: s.r("privacy_policy"), icon: "hand.raised", chevron: true)
+            }
+            .buttonStyle(.plain)
+            if model.hasAccount {
+                Button { UIApplication.shared.open(Backend.deleteAccountURL) } label: {
+                    MenuRowLabel(title: s.r("delete_account"), icon: "person.crop.circle.badge.xmark", chevron: true)
+                }
+                .buttonStyle(.plain)
+            }
         }
         Text("GoatTV \(model.appVersion)").font(.caption).foregroundStyle(Theme.textFaint).frame(maxWidth: .infinity).padding(.top, 4)
     }

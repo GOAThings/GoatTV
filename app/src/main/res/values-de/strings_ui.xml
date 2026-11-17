@@ -565,6 +565,8 @@
     <string name="version">Version</string>
     <string name="licenses">Lizenzen</string>
     <string name="source_code">Quellcode</string>
+    <string name="privacy_policy">Datenschutzerklärung</string>
+    <string name="delete_account">Konto löschen</string>
     <string name="none">Keine</string>
     <string name="subtitles_off">Aus</string>
     <string name="no_tracks">Dieser Sender hat keine Spuren</string>

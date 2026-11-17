@@ -1094,6 +1094,8 @@ class Strings(context: Context) {
     val version get() = s(R.string.version)
     val licenses get() = s(R.string.licenses)
     val sourceCode get() = s(R.string.source_code)
+    val privacyPolicy get() = s(R.string.privacy_policy)
+    val deleteAccount get() = s(R.string.delete_account)
 
     // ---- Faixas e stream ----
     val none get() = s(R.string.none)

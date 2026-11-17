@@ -564,6 +564,8 @@
     <string name="version">版本</string>
     <string name="licenses">许可</string>
     <string name="source_code">源代码</string>
+    <string name="privacy_policy">隐私政策</string>
+    <string name="delete_account">删除账户</string>
     <string name="none">无</string>
     <string name="subtitles_off">关</string>
     <string name="no_tracks">此频道没有可选轨道</string>

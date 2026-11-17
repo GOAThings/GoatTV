@@ -1,6 +1,8 @@
 package cc.slokker.itv.ui.mobile
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
+import cc.slokker.itv.data.api.PRIVACY_URL
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -142,7 +144,8 @@ fun MobileMenu(vm: AppViewModel) {
     val open: (Picking) -> Unit = { picking = it }
     val values = SettingValues(prefs, format)
     fun label(setting: Setting.Choice) = setting.label(s, values, phone = true)
-    val pipSupported = (LocalContext.current as? MainActivity)?.pipSupported == true
+    val context = LocalContext.current
+    val pipSupported = (context as? MainActivity)?.pipSupported == true
     page?.let { BackHandler { page = null } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = LocalBarSpace.current), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when (page) {
@@ -193,6 +196,9 @@ fun MobileMenu(vm: AppViewModel) {
                         UpdateState.UpToDate -> MenuRow(s.upToDate, BuildConfig.VERSION_NAME, ItvIcons.Update) { vm.checkForUpdate(true) }
                         else -> MenuRow(s.checkUpdates, BuildConfig.VERSION_NAME, ItvIcons.Update) { vm.checkForUpdate(true) }
                     }
+                    // Abrem no browser: o site tem o seu próprio login.
+                    MenuRow(s.privacyPolicy, null, chevron = true) { openWeb(context, PRIVACY_URL) }
+                    if (!local) MenuRow(s.deleteAccount, null, chevron = true) { openWeb(context, DELETE_ACCOUNT_URL) }
                 }
                 Text("GoatTV ${BuildConfig.VERSION_NAME}", color = ItvColors.TextFaint, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), textAlign = TextAlign.Center)
             }
@@ -595,4 +601,8 @@ private fun BackupChannelsPage(vm: AppViewModel, playlistId: String, onClose: ()
             }
         }
     }
+}
+
+private fun openWeb(context: android.content.Context, url: String) {
+    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
 }

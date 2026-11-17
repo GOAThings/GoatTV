@@ -1044,6 +1044,8 @@ struct SettingsPanel: View {
                 .action("version", s.r("check_updates"), subtitle: model.appVersion) { model.checkForUpdate(force: true) },
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
                 reportItem,
+                // A Apple TV não tem browser: mostra-se o endereço para abrir no telemóvel.
+                .info("privacy", s.r("privacy_policy"), "thegoat.systems/privacy"),
             ]
             if model.topShelfStatus != nil { list.append(.nav("topshelf", "Top Shelf", to: .topShelf)) }
             return list
@@ -1064,6 +1066,9 @@ struct SettingsPanel: View {
                 .action("version", s.r("check_updates"), subtitle: model.appVersion) { model.checkForUpdate(force: true) },
                 .nav("licenses", s.t("Licences", "Licenças"), value: "GPL-3.0", to: .licenses),
                 reportItem,
+                // A Apple TV não tem browser: mostra-se o endereço para abrir no telemóvel.
+                .info("privacy", s.r("privacy_policy"), "thegoat.systems/privacy"),
+                .info("delete", s.r("delete_account"), "thegoat.systems/account/delete"),
             ]
             if model.topShelfStatus != nil { list.append(.nav("topshelf", "Top Shelf", to: .topShelf)) }
             return list

@@ -9,6 +9,9 @@ import FoundationNetworking
 public final class Backend: @unchecked Sendable {
     public static let baseURL = URL(string: "https://thegoat.systems/")!
     public static let app = "goattv"
+    /// Páginas públicas do site (abrem no browser; o site tem o seu próprio login, o token nunca vai no endereço).
+    public static let privacyURL = URL(string: "https://thegoat.systems/privacy")!
+    public static let deleteAccountURL = URL(string: "https://thegoat.systems/account/delete")!
 
     public struct DeviceStart: Sendable {
         public var code: String

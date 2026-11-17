@@ -566,6 +566,8 @@
     <string name="version">Version</string>
     <string name="licenses">Licenses</string>
     <string name="source_code">Source code</string>
+    <string name="privacy_policy">Privacy policy</string>
+    <string name="delete_account">Delete account</string>
     <string name="none">None</string>
     <string name="subtitles_off">Off</string>
     <string name="no_tracks">This channel has no tracks</string>

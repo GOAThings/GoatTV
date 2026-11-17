@@ -565,6 +565,8 @@
     <string name="version">Versione</string>
     <string name="licenses">Licenze</string>
     <string name="source_code">Codice sorgente</string>
+    <string name="privacy_policy">Informativa sulla privacy</string>
+    <string name="delete_account">Elimina account</string>
     <string name="none">Nessuno</string>
     <string name="subtitles_off">Disattivati</string>
     <string name="no_tracks">Questo canale non ha tracce</string>
