@@ -850,4 +850,15 @@
     <string name="sports_empty">지금은 편성표에 경기가 없어요. 경기는 이 목록의 스포츠 채널 편성표에서 찾아요.</string>
     <string name="sports_loading">편성표에서 경기를 찾는 중…</string>
     <string name="sports_trying">다른 채널 시도 중: %1$s</string>
+    <string name="pro_general">종합</string>
+    <string name="pro_news">뉴스</string>
+    <string name="pro_entertainment">엔터테인먼트</string>
+    <string name="pro_movies">영화·시리즈</string>
+    <string name="pro_sports">스포츠</string>
+    <string name="pro_kids">키즈</string>
+    <string name="pro_docs">다큐멘터리</string>
+    <string name="pro_music">음악</string>
+    <string name="pro_more">기타 채널</string>
+    <string name="pro_mode">TV Pro 모드</string>
+    <string name="pro_mode_sub">통신사 셋톱박스처럼 정리된 하나의 목록</string>
 </resources>

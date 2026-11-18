@@ -855,4 +855,15 @@
     <string name="sports_empty">Não há jogos no guia agora. Vêm do guia dos canais de desporto desta lista.</string>
     <string name="sports_loading">À procura de jogos no guia…</string>
     <string name="sports_trying">A tentar outro canal: %1$s</string>
+    <string name="pro_general">Generalistas</string>
+    <string name="pro_news">Notícias</string>
+    <string name="pro_entertainment">Entretenimento</string>
+    <string name="pro_movies">Filmes e Séries</string>
+    <string name="pro_sports">Desporto</string>
+    <string name="pro_kids">Infantis</string>
+    <string name="pro_docs">Documentários</string>
+    <string name="pro_music">Música</string>
+    <string name="pro_more">Mais canais</string>
+    <string name="pro_mode">Modo TV Pro</string>
+    <string name="pro_mode_sub">Uma lista só, como a box de um operador</string>
 </resources>

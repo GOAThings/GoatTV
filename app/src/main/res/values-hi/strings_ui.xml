@@ -853,4 +853,15 @@
     <string name="sports_empty">अभी गाइड में कोई मैच नहीं है। मैच इस सूची के स्पोर्ट्स चैनलों की गाइड से आते हैं।</string>
     <string name="sports_loading">गाइड में मैच खोजे जा रहे हैं…</string>
     <string name="sports_trying">दूसरा चैनल आज़मा रहे हैं: %1$s</string>
+    <string name="pro_general">सामान्य</string>
+    <string name="pro_news">समाचार</string>
+    <string name="pro_entertainment">मनोरंजन</string>
+    <string name="pro_movies">फ़िल्में और सीरीज़</string>
+    <string name="pro_sports">खेल</string>
+    <string name="pro_kids">बच्चे</string>
+    <string name="pro_docs">डॉक्यूमेंट्री</string>
+    <string name="pro_music">संगीत</string>
+    <string name="pro_more">और चैनल</string>
+    <string name="pro_mode">TV Pro मोड</string>
+    <string name="pro_mode_sub">ऑपरेटर बॉक्स जैसी एक साफ़ सूची</string>
 </resources>

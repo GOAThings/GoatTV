@@ -115,6 +115,8 @@ class PlaylistContent(
     val hidden: List<Channel> = emptyList(),
     /** A melhor variante de cada canal → as outras (chaves em [hidden]), da melhor para a pior. */
     val variants: Map<String, List<String>> = emptyMap(),
+    /** Modo TV Pro: esta lista não é do fornecedor, junta as da pessoa (ver ProContent). */
+    val pro: ProSet? = null,
 ) {
     /** Sem ids repetidos nem os dos grupos especiais: as listas do ecrã usam o id como chave única. Vale também para as cópias em cache. */
     val categories: List<Category> = categories.filter { it.id !in SpecialCategory.RESERVED }.distinctBy { it.id }

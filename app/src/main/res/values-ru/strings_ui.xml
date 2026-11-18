@@ -857,4 +857,15 @@
     <string name="sports_empty">Сейчас в программе нет матчей. Они берутся из программы спортивных каналов этого списка.</string>
     <string name="sports_loading">Ищем матчи в программе…</string>
     <string name="sports_trying">Пробуем другой канал: %1$s</string>
+    <string name="pro_general">Общие</string>
+    <string name="pro_news">Новости</string>
+    <string name="pro_entertainment">Развлечения</string>
+    <string name="pro_movies">Фильмы и сериалы</string>
+    <string name="pro_sports">Спорт</string>
+    <string name="pro_kids">Детские</string>
+    <string name="pro_docs">Документальные</string>
+    <string name="pro_music">Музыка</string>
+    <string name="pro_more">Другие каналы</string>
+    <string name="pro_mode">Режим TV Pro</string>
+    <string name="pro_mode_sub">Один список, как у приставки оператора</string>
 </resources>

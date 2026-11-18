@@ -854,4 +854,15 @@
     <string name="sports_empty">No games in the guide right now. They come from the guide of the sports channels in this list.</string>
     <string name="sports_loading">Looking for games in the guide…</string>
     <string name="sports_trying">Trying another channel: %1$s</string>
+    <string name="pro_general">General</string>
+    <string name="pro_news">News</string>
+    <string name="pro_entertainment">Entertainment</string>
+    <string name="pro_movies">Movies and series</string>
+    <string name="pro_sports">Sports</string>
+    <string name="pro_kids">Kids</string>
+    <string name="pro_docs">Documentaries</string>
+    <string name="pro_music">Music</string>
+    <string name="pro_more">More channels</string>
+    <string name="pro_mode">TV Pro mode</string>
+    <string name="pro_mode_sub">One clean list, like an operator\'s box</string>
 </resources>

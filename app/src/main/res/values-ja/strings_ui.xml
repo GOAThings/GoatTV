@@ -850,4 +850,15 @@
     <string name="sports_empty">いま番組表に試合はありません。試合はこのリストのスポーツチャンネルの番組表から探します。</string>
     <string name="sports_loading">番組表から試合を探しています…</string>
     <string name="sports_trying">別のチャンネルを試しています：%1$s</string>
+    <string name="pro_general">総合</string>
+    <string name="pro_news">ニュース</string>
+    <string name="pro_entertainment">エンタメ</string>
+    <string name="pro_movies">映画・ドラマ</string>
+    <string name="pro_sports">スポーツ</string>
+    <string name="pro_kids">キッズ</string>
+    <string name="pro_docs">ドキュメンタリー</string>
+    <string name="pro_music">音楽</string>
+    <string name="pro_more">その他のチャンネル</string>
+    <string name="pro_mode">TV Proモード</string>
+    <string name="pro_mode_sub">事業者のチューナーのような1つのリスト</string>
 </resources>

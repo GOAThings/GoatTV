@@ -861,4 +861,15 @@
     <string name="sports_empty">لا توجد مباريات في الدليل الآن. تأتي من دليل القنوات الرياضية في هذه القائمة.</string>
     <string name="sports_loading">جارٍ البحث عن مباريات في الدليل…</string>
     <string name="sports_trying">تجربة قناة أخرى: %1$s</string>
+    <string name="pro_general">القنوات العامة</string>
+    <string name="pro_news">الأخبار</string>
+    <string name="pro_entertainment">الترفيه</string>
+    <string name="pro_movies">أفلام ومسلسلات</string>
+    <string name="pro_sports">الرياضة</string>
+    <string name="pro_kids">الأطفال</string>
+    <string name="pro_docs">وثائقيات</string>
+    <string name="pro_music">موسيقى</string>
+    <string name="pro_more">قنوات أخرى</string>
+    <string name="pro_mode">وضع TV Pro</string>
+    <string name="pro_mode_sub">قائمة واحدة مرتبة مثل جهاز المشغّل</string>
 </resources>

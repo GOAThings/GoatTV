@@ -851,4 +851,15 @@
     <string name="sports_empty">Belum ada pertandingan di panduan. Pertandingan diambil dari panduan saluran olahraga di daftar ini.</string>
     <string name="sports_loading">Mencari pertandingan di panduan…</string>
     <string name="sports_trying">Mencoba saluran lain: %1$s</string>
+    <string name="pro_general">Umum</string>
+    <string name="pro_news">Berita</string>
+    <string name="pro_entertainment">Hiburan</string>
+    <string name="pro_movies">Film dan serial</string>
+    <string name="pro_sports">Olahraga</string>
+    <string name="pro_kids">Anak-anak</string>
+    <string name="pro_docs">Dokumenter</string>
+    <string name="pro_music">Musik</string>
+    <string name="pro_more">Saluran lain</string>
+    <string name="pro_mode">Mode TV Pro</string>
+    <string name="pro_mode_sub">Satu daftar rapi, seperti box operator</string>
 </resources>

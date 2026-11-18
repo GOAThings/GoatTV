@@ -9,6 +9,8 @@ import cc.slokker.itv.data.ContentView
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProContent
+import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.ProfileRepository
 import cc.slokker.itv.data.RefreshTracker
 import cc.slokker.itv.data.api.BackendApi
@@ -20,7 +22,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -41,6 +47,8 @@ class PlaylistController(
     private val tracker: RefreshTracker,
     private val prefs: StateFlow<Prefs>,
     private val toast: (String) -> Unit,
+    /** Modo TV Pro: as listas da pessoa, pela ordem, que entram na lista única. */
+    private val proMembers: () -> List<Playlist> = { emptyList() },
     /** Chegaram canais novos da lista aberta ([guideChanged]: o guia dela também mudou). */
     private val onRefreshed: (fresh: PlaylistContent, guideChanged: Boolean) -> Unit,
 ) {
@@ -78,13 +86,20 @@ class PlaylistController(
     private var refreshJob: Job? = null
     private var indexJob: Job? = null
 
-    /** A lista em cache, só se tiver sido carregada com os mesmos dados (servidor, credenciais, URL). */
-    suspend fun cached(playlist: Playlist): PlaylistContent? = cache.loadPlaylist(playlist)
+    /**
+     * A lista em cache, só se tiver sido carregada com os mesmos dados (servidor, credenciais, URL). A lista Pro faz-se
+     * com as listas da pessoa em cache (todas, senão null).
+     */
+    suspend fun cached(playlist: Playlist): PlaylistContent? =
+        if (ProLineup.isPro(playlist.id)) buildPro(playlist, ProLoad.CACHED) else cache.loadPlaylist(playlist)
 
     suspend fun hasCached(playlist: Playlist): Boolean = cache.hasPlaylist(playlist)
 
     /** Descarrega [playlist] e guarda-a (conta como verificada desde que a app abriu). Os erros saem como exceção. */
     suspend fun download(playlist: Playlist): PlaylistContent {
+        if (ProLineup.isPro(playlist.id)) {
+            return requireNotNull(buildPro(playlist, ProLoad.ANY)).also { tracker.markChecked(RefreshTracker.Slot.PLAYLIST, playlist.id) }
+        }
         val loaded = load(playlist)
         cache.savePlaylist(loaded)
         tracker.markChecked(RefreshTracker.Slot.PLAYLIST, playlist.id)
@@ -112,8 +127,9 @@ class PlaylistController(
     fun refreshInBackground(playlist: Playlist, notify: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
+            val pro = ProLineup.isPro(playlist.id)
             val fresh = try {
-                load(playlist)
+                if (pro) requireNotNull(buildPro(playlist, ProLoad.FRESH)) else load(playlist)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -121,7 +137,7 @@ class PlaylistController(
                 return@launch
             }
             if (_content.value?.playlist != playlist || fresh.channels.isEmpty()) return@launch
-            cache.savePlaylist(fresh)
+            if (!pro) cache.savePlaylist(fresh)
             val guideChanged = fresh.guideUrl != _content.value?.guideUrl
             raw = fresh
             val viewed = view(fresh)
@@ -158,6 +174,42 @@ class PlaylistController(
                 Log.w(TAG, "Índice de canais: ${e.message}")
             }
         }
+    }
+
+    private enum class ProLoad {
+        /** Só as listas em cache (abrir já); falta uma, não há lista Pro. */
+        CACHED,
+
+        /** As em cache e as outras descarregadas. */
+        ANY,
+
+        /** Todas descarregadas de novo (as que falham ficam como estavam na cache). */
+        FRESH,
+    }
+
+    /**
+     * A lista Pro de [playlist] (ver ProContent), feita com as listas da pessoa como se mostram. Sem nenhuma lista que
+     * carregue: null em [ProLoad.CACHED], exceção nos outros.
+     */
+    private suspend fun buildPro(playlist: Playlist, mode: ProLoad): PlaylistContent? {
+        val members = proMembers().filterNot { ProLineup.isPro(it.id) }
+        val loaded = coroutineScope {
+            members.map { m ->
+                async {
+                    when (mode) {
+                        ProLoad.CACHED -> cache.loadPlaylist(m)
+                        ProLoad.ANY -> cache.loadPlaylist(m) ?: runCatching { download(m) }.getOrNull()
+                        ProLoad.FRESH -> runCatching { download(m) }.getOrNull() ?: cache.loadPlaylist(m)
+                    }
+                }
+            }.awaitAll()
+        }
+        if (mode == ProLoad.CACHED && (loaded.isEmpty() || loaded.any { it == null })) return null
+        val ok = loaded.filterNotNull()
+        if (ok.isEmpty()) error(I18n.s.errPlaylistEmpty(playlist.name).title)
+        // Cada lista com as opções dela (nomes limpos, variantes juntas), como apareceria sozinha.
+        val viewed = ok.map { ContentView.apply(it, ContentView.options(prefs.value, it.playlist.id)) }
+        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.countryOf(playlist.id), viewed) }
     }
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */

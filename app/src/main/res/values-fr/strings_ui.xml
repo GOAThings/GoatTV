@@ -855,4 +855,15 @@
     <string name="sports_empty">Aucun match dans le guide pour l’instant. Ils viennent du guide des chaînes de sport de cette liste.</string>
     <string name="sports_loading">Recherche de matchs dans le guide…</string>
     <string name="sports_trying">Essai d’une autre chaîne : %1$s</string>
+    <string name="pro_general">Généralistes</string>
+    <string name="pro_news">Info</string>
+    <string name="pro_entertainment">Divertissement</string>
+    <string name="pro_movies">Films et séries</string>
+    <string name="pro_sports">Sport</string>
+    <string name="pro_kids">Jeunesse</string>
+    <string name="pro_docs">Documentaires</string>
+    <string name="pro_music">Musique</string>
+    <string name="pro_more">Autres chaînes</string>
+    <string name="pro_mode">Mode TV Pro</string>
+    <string name="pro_mode_sub">Une seule liste, comme la box d\'un opérateur</string>
 </resources>

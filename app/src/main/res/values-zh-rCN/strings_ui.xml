@@ -850,4 +850,15 @@
     <string name="sports_empty">节目指南里暂时没有比赛。比赛来自此列表中体育频道的节目指南。</string>
     <string name="sports_loading">正在节目指南中查找比赛…</string>
     <string name="sports_trying">正在尝试另一个频道：%1$s</string>
+    <string name="pro_general">综合</string>
+    <string name="pro_news">新闻</string>
+    <string name="pro_entertainment">娱乐</string>
+    <string name="pro_movies">电影和剧集</string>
+    <string name="pro_sports">体育</string>
+    <string name="pro_kids">少儿</string>
+    <string name="pro_docs">纪录片</string>
+    <string name="pro_music">音乐</string>
+    <string name="pro_more">更多频道</string>
+    <string name="pro_mode">TV Pro 模式</string>
+    <string name="pro_mode_sub">像运营商机顶盒一样的一个列表</string>
 </resources>

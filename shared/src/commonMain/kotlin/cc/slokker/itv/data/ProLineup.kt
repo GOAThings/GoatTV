@@ -37,6 +37,19 @@ object ProLineup {
     /** Os "Mais canais" começam aqui (como os canais acima dos principais numa box). */
     const val MORE_FROM = 200
 
+    /** Os países que se podem escolher (os que têm tabela). */
+    val COUNTRIES = listOf("pt")
+
+    /** O id da lista Pro de [country] (não é uma lista da pessoa: não se guarda em cache nem vai para a conta). */
+    fun playlistId(country: String) = "$PREFIX$country"
+
+    fun isPro(playlistId: String) = playlistId.startsWith(PREFIX)
+
+    /** O país da lista Pro [playlistId]. */
+    fun countryOf(playlistId: String) = playlistId.removePrefix(PREFIX)
+
+    private const val PREFIX = "pro:"
+
     /** As tabelas que há, pelo código do país. */
     fun lineup(country: String): Lineup? = when (country.lowercase()) {
         "pt" -> ProLineups.PT

@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
 import cc.slokker.itv.data.api.PRIVACY_URL
 import android.net.Uri
@@ -786,6 +787,13 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     var confirmDelete by remember(route) { mutableStateOf(false) }
     return when (route) {
         Route.Lists -> buildList {
+            // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
+            val proOptions = listOf<Pair<Any?, String>>(null to s.off) + ProLineup.COUNTRIES.map { it to s.countryName(it) }
+            add(
+                Item.Nav("pro", s.proMode, value = prefs.proCountry?.let { s.countryName(it) } ?: s.off, subtitle = s.proModeSub) {
+                    push(Route.Pick(s.proMode, proOptions, prefs.proCountry) { v -> vm.setProCountry(v as String?); nav.pop() }, "pro")
+                },
+            )
             playlists.forEach { p ->
                 add(
                     Item.Nav(
@@ -807,7 +815,7 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
         is Route.PlaylistDetail -> buildList {
             val p = playlists.firstOrNull { it.id == route.id } ?: return@buildList
             val isCurrent = p.id == content?.playlist?.id
-            if (!isCurrent) add(Item.Action("use", s.usePlaylist) { vm.switchPlaylist(p) })
+            if (!isCurrent) add(Item.Action("use", s.usePlaylist) { vm.switchPlaylist(p, leavePro = true) })
             add(Item.Action("reload", s.reloadChannels, s.reloadChannelsSub) {
                 if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(p)
             })

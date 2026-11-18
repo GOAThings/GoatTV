@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.mobile
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
 import cc.slokker.itv.data.api.PRIVACY_URL
 import androidx.activity.compose.BackHandler
@@ -154,11 +155,16 @@ fun MobileMenu(vm: AppViewModel) {
                 // A lista em uso em destaque, como o canal atual nas Definições da TV; as outras por baixo.
                 content?.let { c ->
                     val type = c.playlist.type.kind.label
-                    PlaylistCard(c.playlist.name, "$type · ${s.groupChannels(c.channels.size)}") { opened = c.playlist }
+                    PlaylistCard(c.playlist.name, "${if (c.pro != null) s.proMode else type} · ${s.groupChannels(c.channels.size)}") { if (c.pro == null) opened = c.playlist }
                 }
                 // Como na TV: cada lista abre-se (usar, recarregar, editar, remover) e há sempre "Adicionar lista".
                 val others = playlists.filter { it.id != content?.playlist?.id }
                 Section(s.playlists) {
+                    // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
+                    val proOptions = listOf<Pair<Any?, String>>(null to s.settingOff) + ProLineup.COUNTRIES.map { it to s.countryName(it) }
+                    MenuRow(s.proMode, prefs.proCountry?.let { s.countryName(it) } ?: s.settingOff, ItvIcons.Playlist, chevron = true, subtitle = s.proModeSub) {
+                        open(Picking(s.proMode, proOptions, prefs.proCountry) { v -> vm.setProCountry(v as String?) })
+                    }
                     others.forEach { p -> MenuRow(p.name, p.type.kind.label, ItvIcons.Playlist, chevron = true) { opened = p } }
                     MenuRow(s.addPlaylist, null, ItvIcons.Playlist, chevron = true) { adding = true }
                 }
@@ -332,7 +338,7 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
     if (reviewing) return BackupChannelsPage(vm, playlist.id) { reviewing = false }
     BackHandler(onBack = onClose)
     SubPage(playlist.name, onClose) {
-        if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist); onClose() }
+        if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist, leavePro = true); onClose() }
         MenuRow(s.reloadChannels, null) {
             if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(playlist)
             onClose()

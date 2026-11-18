@@ -6,6 +6,7 @@ import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
+import cc.slokker.itv.data.ProContent
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
@@ -104,6 +105,12 @@ internal class PlaybackRequest(
             stalker: StalkerLinks?,
             correctionMin: Int = 0,
         ): PlaybackRequest {
+            // Modo TV Pro: o canal abre-se na lista da melhor fonte (as outras são os failovers, ver backupStreams).
+            content.pro?.let { pro ->
+                val (member, source) = pro.resolve(channel.key).firstOrNull() ?: return PlaybackRequest(channel, null, 0L, emptyList())
+                val shown = ProContent.asShown(source, channel)
+                return of(member, shown, catchup?.let { if (it.channel.key == channel.key) it.copy(channel = shown) else it }, streamFormat, stalker, correctionMin)
+            }
             val playlist = content.playlist
             // Uma gravação no disco: o ficheiro, a começar no ponto pedido (o ExoPlayer salta dentro dele).
             catchup?.recording?.let { file ->

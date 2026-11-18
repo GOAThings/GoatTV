@@ -1097,6 +1097,19 @@ class Strings(context: Context) {
     val privacyPolicy get() = s(R.string.privacy_policy)
     val deleteAccount get() = s(R.string.delete_account)
 
+    // ---- Modo TV Pro ----
+    val proGeneral get() = s(R.string.pro_general)
+    val proNews get() = s(R.string.pro_news)
+    val proEntertainment get() = s(R.string.pro_entertainment)
+    val proMovies get() = s(R.string.pro_movies)
+    val proSports get() = s(R.string.pro_sports)
+    val proKids get() = s(R.string.pro_kids)
+    val proDocs get() = s(R.string.pro_docs)
+    val proMusic get() = s(R.string.pro_music)
+    val proMore get() = s(R.string.pro_more)
+    val proMode get() = s(R.string.pro_mode)
+    val proModeSub get() = s(R.string.pro_mode_sub)
+
     // ---- Faixas e stream ----
     val none get() = s(R.string.none)
     val subtitlesOff get() = s(R.string.subtitles_off)

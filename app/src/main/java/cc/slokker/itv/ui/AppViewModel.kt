@@ -43,6 +43,8 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.data.entry
 import cc.slokker.itv.data.ProviderOutage
+import cc.slokker.itv.data.ProContent
+import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -206,6 +208,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (guideChanged) guide.open(fresh)
             playback.onContentRefreshed(fresh)
         },
+        proMembers = { playlists.value },
     )
 
     val content: StateFlow<PlaylistContent?> = lists.content
@@ -600,6 +603,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Um link do ecrã inicial manda na lista a abrir (se ainda existir).
         pendingLink?.first?.let { id -> playlists.value.firstOrNull { it.id == id }?.let { return it } }
         adoptNewerLastChannel()
+        // Modo TV Pro: abre sempre a lista única (as listas da pessoa ficam por trás dela).
+        prefs.value.proCountry?.let { return ProContent.playlist(it) }
         val lastId = profile.lastPlaylistId ?: c.session.lastPlaylist()
         return playlists.value.firstOrNull { it.id == lastId } ?: playlists.value.first()
     }
@@ -872,7 +877,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _screen.value = Screen.Welcome
             }
             playlist.id == content.value?.playlist?.id -> switchPlaylist(remaining.first())
-            else -> playback.closeExtras { it.content.playlist.id == playlist.id }
+            else -> {
+                playback.closeExtras { it.content.playlist.id == playlist.id }
+                // A lista única tinha canais dela.
+                if (proMode) reloadPlaylist()
+            }
         }
     }
 
@@ -910,9 +919,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (generation != sessionGeneration) return
         c.cache.saveConfig(config)
         if (generation != sessionGeneration) return
+        val before = profile.playlists.value
         applyAccountConfig(config, keepSettingsIfMissing = true)
         val playlists = profile.playlists.value
         val current = content.value?.playlist ?: return
+        // Modo TV Pro: ligado ou desligado noutra TV, ou mudaram as listas por trás da lista única.
+        val pro = prefs.value.proCountry
+        if (pro != null || ProLineup.isPro(current.id)) {
+            when {
+                pro == null -> playlists.firstOrNull()?.let { switchPlaylist(it) }
+                current.id != ProLineup.playlistId(pro) -> switchPlaylist(ProContent.playlist(pro))
+                before != playlists -> lists.refreshInBackground(current)
+            }
+            return
+        }
         val updated = playlists.firstOrNull { it.id == current.id }
         when {
             // A lista atual foi apagada no site: abre outra.
@@ -924,7 +944,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun switchPlaylist(playlist: Playlist, force: Boolean = false) {
+    /**
+     * Abre [playlist]. Com o Modo TV Pro ligado, só [leavePro] (a pessoa escolheu "Usar esta lista") o desliga; as
+     * outras vezes (uma lista criada ou alterada) a lista única refaz-se com as listas novas.
+     */
+    fun switchPlaylist(playlist: Playlist, force: Boolean = false, leavePro: Boolean = false) {
+        if (prefs.value.proCountry != null && !ProLineup.isPro(playlist.id)) {
+            if (!leavePro) return reloadPlaylist()
+            setPref(Prefs.Key.PRO_COUNTRY, null)
+        }
         if (!force && playlist.id == content.value?.playlist?.id) {
             if (_screen.value == Screen.Settings) closeSettings()
             return
@@ -937,6 +965,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadPlaylist(playlist, resume = false) }
     }
+
+    /** Modo TV Pro: liga com o país [country] (abre a lista única) ou desliga (null: volta à última lista da pessoa). */
+    fun setProCountry(country: String?) {
+        if (prefs.value.proCountry == country) return
+        setPref(Prefs.Key.PRO_COUNTRY, country)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val target = country?.let { ProContent.playlist(it) }
+                ?: playlists.value.firstOrNull { it.id == (profile.lastPlaylistId ?: c.session.lastPlaylist()) } ?: playlists.value.firstOrNull() ?: return@launch
+            loadPlaylist(target, resume = true)
+        }
+    }
+
+    /** O Modo TV Pro está ligado (a lista aberta é a única, feita com as da pessoa). */
+    val proMode: Boolean get() = content.value?.pro != null
 
     // ---- Canais e grupos ---------------------------------------------------------------------------
 
@@ -1856,6 +1899,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null, tile: Int = 0): List<BackupStream> {
         if (streamsDisabled) return emptyList()
+        // Modo TV Pro: as outras fontes do canal, pela ordem (as das listas em baixo há pouco ficam para o fim).
+        main.pro?.let { pro ->
+            val (down, up) = pro.resolve(channel.key).drop(1).partition { (m, _) -> providerOutage.isDown(m.playlist.id) }
+            return (up + down).map { (m, c) ->
+                BackupStream(PlaybackRequest.of(m, ProContent.asShown(c, channel).copy(name = c.name), null, streamFormat.value, stalkerLinks), main.playlist.name, m.playlist.name)
+            }
+        }
         val id = main.playlist.id
         // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
         val backup = backupOf(id)?.takeUnless { it.sharesConnectionsWith(main.playlist) }

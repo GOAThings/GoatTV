@@ -536,7 +536,9 @@ private fun GroupList(
     // ← nos grupos vai para a coluna de botões à esquerda (listas, gravações, definições); → volta ao grupo.
     // Assim o cabeçalho fica só com o título, sem o cortar.
     val recordingsFocus = remember { FocusRequester() }
-    val railFocus = if (playlists.size > 1) pillFocus else recordingsFocus
+    // No Modo TV Pro não se escolhe lista: é uma só, feita com todas.
+    val pickList = playlists.size > 1 && data.pro == null
+    val railFocus = if (pickList) pillFocus else recordingsFocus
     var inRail by remember { mutableStateOf(false) }
     Box {
     Row(
@@ -576,7 +578,7 @@ private fun GroupList(
         },
     ) {
         Column(Modifier.padding(start = 4.dp, top = 4.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (playlists.size > 1) {
+            if (pickList) {
                 GlassIconButton(
                     ItvIcons.SwapPlaylist,
                     contentDescription = s.playlists,

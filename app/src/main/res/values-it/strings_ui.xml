@@ -855,4 +855,15 @@
     <string name="sports_empty">Al momento non ci sono partite nella guida. Arrivano dalla guida dei canali sportivi di questa lista.</string>
     <string name="sports_loading">Cerco partite nella guida…</string>
     <string name="sports_trying">Provo un altro canale: %1$s</string>
+    <string name="pro_general">Generalisti</string>
+    <string name="pro_news">Notizie</string>
+    <string name="pro_entertainment">Intrattenimento</string>
+    <string name="pro_movies">Film e serie</string>
+    <string name="pro_sports">Sport</string>
+    <string name="pro_kids">Bambini</string>
+    <string name="pro_docs">Documentari</string>
+    <string name="pro_music">Musica</string>
+    <string name="pro_more">Altri canali</string>
+    <string name="pro_mode">Modalità TV Pro</string>
+    <string name="pro_mode_sub">Un\'unica lista, come il decoder di un operatore</string>
 </resources>
