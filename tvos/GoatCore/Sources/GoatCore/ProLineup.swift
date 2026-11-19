@@ -24,6 +24,8 @@ public enum ProLineup {
     public struct Result: Sendable {
         public let groups: [String]
         public let channels: [Entry]
+        /// Os "Mais canais" que parecem um canal da tabela ("CNN PT ~ CNN"), para o registo: os nomes que lhe faltam.
+        public let nearMisses: [String]
     }
 
     /// As tabelas que se podem escolher ("pt"), pela ordem do menu.
@@ -61,7 +63,7 @@ public enum ProLineup {
             }
             return Entry(id: c.id, number: Int(c.number), name: c.name, group: c.group, sources: refs)
         }
-        return Result(groups: r.groups, channels: channels)
+        return Result(groups: r.groups, channels: channels, nearMisses: AppleBridge.shared.proNearMisses(lineupId: lineupId, result: r))
     }
 }
 

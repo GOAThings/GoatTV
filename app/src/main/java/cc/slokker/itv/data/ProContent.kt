@@ -66,6 +66,8 @@ object ProContent {
             ProLineup.Source(m.playlist.id, (m.channels + m.hidden).map { ProLineup.Input(it.key, it.name, m.categoryName(it.categoryId)) })
         }
         val result = ProLineup.build(lineup, country, sources)
+        // Os nomes que faltam à tabela (só nomes de canais, sem links), para os acrescentar.
+        ProLineup.nearMisses(lineup, result).takeIf { it.isNotEmpty() }?.let { android.util.Log.i("GoatTV", "Pro: em Mais canais, parecidos com a tabela: " + it.take(60).joinToString(" | ")) }
         val guide = members.firstOrNull { it.guideUrl != null }
         val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources }, store)
         val channels = result.channels.mapIndexedNotNull { i, pc ->

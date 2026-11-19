@@ -1184,6 +1184,7 @@ final class AppModel {
         let viewed = ok.map { ContentView.apply($0, ContentView.options(prefs, playlistId: $0.playlist.id)) }
         let result = await Task.detached(priority: .userInitiated) { ProLineup.build(lineupId, members: viewed) }.value
         guard generation == sessionGeneration, prefs.proLineup == lineupId else { return }
+        if !result.nearMisses.isEmpty { DebugLog.add("Pro: in More channels, close to the table: " + result.nearMisses.prefix(60).joined(separator: " | ")) }
         let built = ProContent.build(lineupId, members: viewed, result: result, health: proHealth, strings: strings)
         DebugLog.add("Pro: \(built.content.channels.count) channels in \(built.content.categories.count) groups")
         if built.content.channels.isEmpty {

@@ -112,6 +112,39 @@ class ProLineupTest {
     }
 
     @Test
+    fun theCountryCodeAtTheEndIsTheCountrysVersion() {
+        // Como os fornecedores portugueses escrevem: "CNN PT" é a CNN Portugal, "SIC PT" é a SIC; "CNN" num grupo
+        // português e "CNN International" são a internacional.
+        val r = pt(
+            list(
+                "a",
+                "CNN PT ᴴᴰ" to "PT | Informação", "SIC PT" to "PT | Generalistas", "Eurosport PT" to "PT | Desporto",
+                "CNN International ᴴᴰ" to "PT | Informação", "SIC Notícias" to "PT | Informação",
+            ),
+        )
+        assertEquals(
+            listOf(3 to "SIC", 5 to "SIC Notícias", 7 to "CNN Portugal", 130 to "Eurosport 1", 204 to "CNN"),
+            r.channels.map { it.number to it.name },
+        )
+        assertTrue(r.channels.none { it.group == ProLineup.MORE })
+    }
+
+    @Test
+    fun nearMissesShowNamesTheTableLacks() {
+        val r = pt(list("a", "PT| CNN Prime" to null, "PT| Canal Teste" to null, "PT| SIC" to null))
+        assertEquals(listOf("CNN Prime ~ CNN"), ProLineup.nearMisses(ProLineup.lineup("pt"), r))
+    }
+
+    @Test
+    fun foreignNewsIsInternationalNotNews() {
+        val r = pt(list("a", "PT| CNN Portugal" to null, "CNN International" to "PT | Info", "BBC World News" to "UK | News"))
+        assertEquals(
+            listOf("CNN Portugal" to ProLineups.NEWS, "CNN" to ProLineups.INTERNATIONAL, "BBC World News" to ProLineups.INTERNATIONAL),
+            r.channels.map { it.name to it.group },
+        )
+    }
+
+    @Test
     fun everyTableFindsItsOwnChannels() {
         // Cada canal de cada tabela, como vem numa lista do país ("ES| La 1 HD" no grupo "ES | Generalistas"), vai
         // para o lugar dele.

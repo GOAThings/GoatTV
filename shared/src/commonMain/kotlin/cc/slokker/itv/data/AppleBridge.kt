@@ -185,6 +185,10 @@ object AppleBridge {
         })
     }
 
+    /** Os "Mais canais" de [result] que parecem um da tabela [lineupId] ("CNN PT ~ CNN"), para o registo. */
+    fun proNearMisses(lineupId: String, result: AppleProResult): List<String> =
+        ProLineup.nearMisses(ProLineup.lineup(lineupId), ProLineup.Result(result.groups, result.channels.map { ProLineup.Channel(it.id, it.number, it.name, it.group, emptyList()) }))
+
     fun proPlaylistId(lineupId: String): String = ProLineup.playlistId(lineupId)
 
     fun proIsPro(playlistId: String): Boolean = ProLineup.isPro(playlistId)

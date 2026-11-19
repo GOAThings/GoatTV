@@ -106,6 +106,17 @@ object ProLineup {
         val slotOf = HashMap<String, Slot>()
         lineup?.slots?.forEach { slot -> (listOf(slot.name) + slot.aliases).forEach { n -> slotOf.getOrPut(ChannelMatch.parse(n).base) { slot } } }
 
+        val countryBases = GroupCountries.nameBases(cc)
+        // O canal da tabela de [name]; "CNN PT", "SIC PT" (o código do país no fim) são a versão do país: "CNN
+        // Portugal", ou o próprio canal se não for estrangeiro.
+        fun slotFor(name: String, p: ChannelMatch.Parsed): Slot? {
+            if (p.shift != 0) return null
+            slotOf[p.base]?.let { return it }
+            val stem = countryStem(name, p, cc) ?: return null
+            for (n in countryBases) slotOf[stem + n]?.let { return it }
+            return slotOf[stem]?.takeIf { !it.foreign }
+        }
+
         class Hit(val ref: Ref, val explicit: Boolean, val order: Int)
         val bySlot = HashMap<Int, MutableList<Hit>>()
         val more = LinkedHashMap<String, MutableList<Hit>>()
@@ -118,15 +129,16 @@ object ProLineup {
                 if (p.base.length < 2) continue
                 val group = c.group?.let { GroupCountries.of(it) }
                 // De outro país (pelo nome ou pelo grupo): não é este canal, é a versão de lá.
-                val slot = if (p.shift == 0) slotOf[p.base] else null
+                val slot = slotFor(c.name, p)
                 if (slot?.foreign != true && ((p.country != null && p.country != cc) || (group != null && group != cc))) continue
-                val explicit = p.country == cc || group == cc
+                val explicit = p.country == cc || group == cc || countryStem(c.name, p, cc) != null
                 val ref = Ref(source.playlistId, c.key, p.quality)
                 when {
                     slot != null -> bySlot.getOrPut(slot.number) { mutableListOf() } += Hit(ref, explicit, order)
                     // Os "Mais canais" só com os que são mesmo do país (um grupo "Desporto" sem país pode ser de qualquer lado).
                     explicit -> {
-                        val id = if (p.shift == 0) p.base else "${p.base}+${p.shift}"
+                        val base = countryStem(c.name, p, cc) ?: p.base
+                        val id = if (p.shift == 0) base else "$base+${p.shift}"
                         more.getOrPut(id) { mutableListOf() } += Hit(ref, true, order)
                         moreName.getOrPut(id) { cleanName(c.name) }
                     }
@@ -137,7 +149,10 @@ object ProLineup {
         val channels = mutableListOf<Channel>()
         lineup?.slots?.sortedBy { it.number }?.forEach { slot ->
             val hits = bySlot[slot.number] ?: return@forEach
-            channels += Channel("pro:$cc:${ChannelMatch.parse(slot.name).base}", slot.number, slot.name, slot.group, hits.sortedWith(best).map { it.ref }.distinct())
+            // Os canais de informação estrangeiros (CNN International, BBC News) ficam com os internacionais, não ao pé
+            // dos do país.
+            val group = if (slot.foreign && slot.group == ProLineups.NEWS) ProLineups.INTERNATIONAL else slot.group
+            channels += Channel("pro:$cc:${ChannelMatch.parse(slot.name).base}", slot.number, slot.name, group, hits.sortedWith(best).map { it.ref }.distinct())
         }
         var n = moreFrom(lineup)
         more.entries.sortedBy { moreName[it.key]?.lowercase() }.forEach { (id, hits) ->
@@ -146,6 +161,30 @@ object ProLineup {
         val used = channels.map { it.group }.toSet()
         val groups = (lineup?.groups.orEmpty() + MORE).filter { it in used }
         return Result(groups, channels)
+    }
+
+    /**
+     * Os "Mais canais" de [result] que parecem um canal da tabela [lineup] (o nome começa pelo dele: "CNN PT" e "CNN"),
+     * como "CNN PT ~ CNN": vão para o registo, para se ver que nomes faltam à tabela sem ler as listas da pessoa.
+     */
+    fun nearMisses(lineup: Lineup?, result: Result): List<String> {
+        if (lineup == null) return emptyList()
+        val bases = lineup.slots.flatMap { s -> (listOf(s.name) + s.aliases).map { ChannelMatch.parse(it).base to s.name } }.filter { it.first.length >= 3 }
+        return result.channels.filter { it.group == MORE }.mapNotNull { c ->
+            val base = ChannelMatch.parse(c.name).base
+            bases.firstOrNull { (b, _) -> base.startsWith(b) || b.startsWith(base) && base.length >= 3 }?.let { "${c.name} ~ ${it.second}" }
+        }
+    }
+
+    /**
+     * O nome sem o código do país no fim ("CNN PT" → "cnn"), se [name] acabar nele como palavra à parte (sem contar a
+     * qualidade: "SIC PT ᴴᴰ"); null se não.
+     */
+    internal fun countryStem(name: String, p: ChannelMatch.Parsed, cc: String): String? {
+        if (p.base.length <= cc.length + 1 || !p.base.endsWith(cc)) return null
+        val last = name.trim().split(Regex("\\s+")).lastOrNull { ChannelMatch.parse(it).base.isNotEmpty() } ?: return null
+        if (ChannelMatch.parse(last).base != cc) return null
+        return p.base.dropLast(cc.length)
     }
 
     /** Um país sem tabela: os canais que são mesmo do país, juntos pelo nome, pela ordem da primeira lista. */
@@ -162,9 +201,10 @@ object ProLineup {
                 if (p.base.length < 2) continue
                 val group = c.group?.let { GroupCountries.of(it) }
                 // Só os do país: pelo nome ("PL| TVP 1") ou pelo grupo ("PL | Sport"); um sem país pode ser de qualquer lado.
-                if (p.country != cc && group != cc) continue
+                if (p.country != cc && group != cc && countryStem(c.name, p, cc) == null) continue
                 if (p.country != null && p.country != cc) continue
-                val id = if (p.shift == 0) p.base else "${p.base}+${p.shift}"
+                val base = countryStem(c.name, p, cc) ?: p.base
+                val id = if (p.shift == 0) base else "$base+${p.shift}"
                 val e = byId.getOrPut(id) { Entry(cleanName(c.name), ProThemes.of(c.group, c.name), order, mutableListOf()) }
                 e.hits += Hit(Ref(source.playlistId, c.key, p.quality), order)
             }

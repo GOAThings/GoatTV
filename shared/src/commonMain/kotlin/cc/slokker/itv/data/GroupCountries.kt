@@ -119,6 +119,9 @@ object GroupCountries {
         map
     }
 
+    /** Os nomes do país [code] ("pt" → "portugal", …), sem espaços, como ficam na base de um nome (ChannelMatch). */
+    internal fun nameBases(code: String): List<String> = byName.filterValues { it == code }.keys.map { it.replace(" ", "") }.distinct()
+
     /** O país se [name] for só o nome de um país ("Portugal", "Deutschland"): as seleções nos jogos do Sports Hub. */
     internal fun exactName(name: String): String? = byName[words(fold(name)).joinToString(" ")]
 
