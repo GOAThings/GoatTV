@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player
 
+import cc.slokker.itv.ui.glass.fadeEdgesHorizontal
 import cc.slokker.itv.ui.theme.ItvShapes
 import androidx.compose.ui.input.key.nativeKeyCode
 import android.view.KeyEvent as AndroidKeyEvent
@@ -337,6 +338,8 @@ internal fun TvGuide(
         Column(Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GroupTabs(tabs, group, onHeader, Modifier.weight(1f))
+                // Sem este espaço, o último separador ficava encostado ao relógio (com muitos grupos, no Modo TV Pro).
+                Spacer(Modifier.width(24.dp))
                 Text(formatTime(now), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, shadow = TextShadow).tabular)
             }
             Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).padding(start = 20.dp, bottom = 10.dp), contentAlignment = Alignment.BottomStart) {
@@ -480,7 +483,7 @@ private fun GroupTabs(groups: List<Pair<String, String>>, selected: String, focu
     val state = rememberLazyListState()
     val index = groups.indexOfFirst { it.first == selected }
     LaunchedEffect(index) { if (index >= 0) state.animateScrollToItem((index - 1).coerceAtLeast(0)) }
-    LazyRow(state = state, modifier = modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    LazyRow(state = state, modifier = modifier.fadeEdgesHorizontal(state), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         items(groups, key = { it.first }) { (id, name) ->
             val on = id == selected
             Text(

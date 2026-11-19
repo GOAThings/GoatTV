@@ -6,22 +6,40 @@ import cc.slokker.itv.ui.i18n.I18n
  * Modo TV Pro: as listas de onde vêm os canais ([members], como se mostram) e as fontes de cada canal da lista única,
  * da melhor para a pior (ver ProLineup). A primeira que existe é a que dá; as outras são os failovers.
  */
-class ProSet(val members: Map<String, PlaylistContent>, private val sources: Map<String, List<ProLineup.Ref>>) {
-    /** As fontes que falharam nesta sessão ("lista|canal"): passam para o fim da fila (ver [demote]). */
-    private val failed = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+class ProSet(
+    val members: Map<String, PlaylistContent>,
+    private val sources: Map<String, List<ProLineup.Ref>>,
+    private val store: ProHealthStore? = null,
+) {
+    /** Sem [store] (testes): as que falharam só contam enquanto este ProSet existir. */
+    private val health = store?.health ?: ProHealth()
+
+    private fun down(playlistId: String, key: String) = health.isDown(playlistId, key, System.currentTimeMillis())
 
     /** As fontes do canal [key] que ainda existem, como (lista, canal dela), da melhor para a pior (as que falharam no fim). */
     fun resolve(key: String): List<Pair<PlaylistContent, Channel>> = sources[key].orEmpty().mapNotNull { r ->
         members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { m to it } }
-    }.sortedBy { (m, c) -> "${m.playlist.id}|${c.key}" in failed }
+    }.sortedBy { (m, c) -> down(m.playlist.id, c.key) }
 
-    /** A fonte [channel] de [member] falhou (cai sempre, ou não abre): até a lista se refazer, as outras vêm antes. */
+    /** A fonte [channel] de [member] falhou (cai sempre, ou não abre): durante uns dias as outras vêm antes (ProHealth). */
     fun demote(member: PlaylistContent, channel: Channel) {
-        failed += "${member.playlist.id}|${channel.key}"
+        health.markDown(member.playlist.id, channel.key, System.currentTimeMillis())
+        store?.save()
     }
 
-    /** A qualidade (pelo nome) da melhor fonte do canal [key] (ChannelMatch.Quality), ou null. */
-    fun quality(key: String): Int? = sources[key]?.firstOrNull()?.quality
+    /** A pessoa escolheu a fonte [channel] de [member] no painel: volta ao lugar dela. */
+    fun promote(member: PlaylistContent, channel: Channel) {
+        if (health.markUp(member.playlist.id, channel.key)) store?.save()
+    }
+
+    /** A fonte [channel] de [member] falhou há pouco. */
+    fun isDown(member: PlaylistContent, channel: Channel): Boolean = down(member.playlist.id, channel.key)
+
+    /** A qualidade (pelo nome, ChannelMatch.Quality) da fonte que vai dar o canal [key] (a primeira de [resolve]), ou null. */
+    fun quality(key: String): Int? = sources[key].orEmpty()
+        .filter { r -> members[r.playlistId]?.byKey?.containsKey(r.key) == true }
+        .sortedBy { down(it.playlistId, it.key) }
+        .firstOrNull()?.quality
 
     /** Quantas fontes tem o canal [key]. */
     fun count(key: String): Int = sources[key]?.size ?: 0
@@ -40,7 +58,7 @@ object ProContent {
      * nome e o número da tabela, e com o logótipo e o guia da melhor fonte que os tenha (o guia, de preferência, da
      * lista cujo guia se usa: o da primeira que tem um).
      */
-    fun build(lineupId: String, members: List<PlaylistContent>): PlaylistContent {
+    fun build(lineupId: String, members: List<PlaylistContent>, store: ProHealthStore? = null): PlaylistContent {
         val lineup = ProLineup.lineup(lineupId)
         val country = lineup?.country ?: lineupId
         val sources = members.map { m ->
@@ -48,7 +66,7 @@ object ProContent {
         }
         val result = ProLineup.build(lineup, country, sources)
         val guide = members.firstOrNull { it.guideUrl != null }
-        val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources })
+        val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources }, store)
         val channels = result.channels.mapIndexedNotNull { i, pc ->
             val found = set.resolve(pc.id)
             val first = found.firstOrNull()?.second ?: return@mapIndexedNotNull null

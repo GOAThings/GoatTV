@@ -209,6 +209,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             playback.onContentRefreshed(fresh)
         },
         proMembers = { playlists.value.filterNot { it.id in prefs.value.proSkip } },
+        proHealth = c.proHealth,
     )
 
     val content: StateFlow<PlaylistContent?> = lists.content
@@ -985,7 +986,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun proSources(channel: Channel): List<ProSource> {
         val pro = content.value?.pro ?: return emptyList()
         return pro.resolve(channel.key).mapIndexed { i, (m, c) ->
-            ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id))
+            ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id) || pro.isDown(m, c))
         }
     }
 
@@ -1925,6 +1926,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Sem escolha no painel, é porque a fonte que dava falhou: fica para o fim nas próximas vezes.
             if (chosen == null) all.firstOrNull()?.let { (m, c) -> pro.demote(m, c) }
             val start = chosen?.firstOrNull()?.toIntOrNull()?.coerceIn(0, (all.size - 1).coerceAtLeast(0))
+            // Escolhida no painel: a pessoa quer essa, mesmo que tenha falhado antes (se voltar a cair, volta para o fim).
+            start?.let { all.getOrNull(it) }?.let { (m, c) -> pro.promote(m, c) }
             val order = if (start == null) all.drop(1) else all.drop(start) + all.take(start)
             val (down, up) = order.partition { (m, _) -> providerOutage.isDown(m.playlist.id) }
             // O aviso diz a lista que falhou (a da primeira fonte), não "Portugal".

@@ -128,5 +128,26 @@ fun Modifier.fadeEdges(state: LazyListState, top: Boolean = true) =
         }
     }
 
+/** O mesmo para uma fila na horizontal: desvanece à direita (e à esquerda) quando há mais separadores para ver. */
+fun Modifier.fadeEdgesHorizontal(state: LazyListState) =
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val w = 48.dp.toPx()
+        if (state.canScrollBackward) {
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = w),
+                size = Size(w, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (state.canScrollForward) {
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - w, endX = size.width),
+                topLeft = Offset(size.width - w, 0f),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
+
 @OptIn(ExperimentalFoundationApi::class)
 private val PanelListCache = LazyLayoutCacheWindow(ahead = 360.dp, behind = 160.dp)

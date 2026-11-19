@@ -8,6 +8,7 @@ import cc.slokker.itv.data.LocalStore
 import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.PlaylistType
+import cc.slokker.itv.data.ProHealthStore
 import cc.slokker.itv.data.SessionStore
 import cc.slokker.itv.data.Updater
 import cc.slokker.itv.data.api.BACKEND_URL
@@ -48,6 +49,7 @@ class AppContainer(context: Context) {
     val home = HomeScreen(context)
     val cache = CacheStore(context, gson)
     val local = LocalStore(context, gson)
+    val proHealth = ProHealthStore(context)
 
     /**
      * Modo de teste (só em debug, `adb shell am start ... --ez test_mode true`):

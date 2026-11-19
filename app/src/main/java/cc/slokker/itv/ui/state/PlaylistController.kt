@@ -10,6 +10,7 @@ import cc.slokker.itv.data.Playlist
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.ProContent
+import cc.slokker.itv.data.ProHealthStore
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.ProfileRepository
 import cc.slokker.itv.data.RefreshTracker
@@ -49,6 +50,8 @@ class PlaylistController(
     private val toast: (String) -> Unit,
     /** Modo TV Pro: as listas da pessoa, pela ordem, que entram na lista única. */
     private val proMembers: () -> List<Playlist> = { emptyList() },
+    /** Modo TV Pro: as fontes que falharam, guardadas nesta TV (null nos testes). */
+    private val proHealth: ProHealthStore? = null,
     /** Chegaram canais novos da lista aberta ([guideChanged]: o guia dela também mudou). */
     private val onRefreshed: (fresh: PlaylistContent, guideChanged: Boolean) -> Unit,
 ) {
@@ -209,7 +212,7 @@ class PlaylistController(
         if (ok.isEmpty()) error(I18n.s.errPlaylistEmpty(playlist.name).title)
         // Cada lista com as opções dela (nomes limpos, variantes juntas), como apareceria sozinha.
         val viewed = ok.map { ContentView.apply(it, ContentView.options(prefs.value, it.playlist.id)) }
-        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed) }
+        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed, proHealth) }
     }
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
