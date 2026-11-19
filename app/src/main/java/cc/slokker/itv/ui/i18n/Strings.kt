@@ -1106,6 +1106,7 @@ class Strings(context: Context) {
     val proKids get() = s(R.string.pro_kids)
     val proDocs get() = s(R.string.pro_docs)
     val proMusic get() = s(R.string.pro_music)
+    val proInternational get() = s(R.string.pro_international)
     val proMore get() = s(R.string.pro_more)
     val proMode get() = s(R.string.pro_mode)
     val proModeSub get() = s(R.string.pro_mode_sub)

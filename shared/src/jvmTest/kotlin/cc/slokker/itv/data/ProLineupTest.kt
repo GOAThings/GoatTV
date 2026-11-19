@@ -32,7 +32,7 @@ class ProLineupTest {
     @Test
     fun aliasesAndNumbers() {
         val r = pt(list("a", "PT: TVI24 HD" to null, "PT: Eleven Sports 1" to null, "SPORT.TV 1 FHD" to "PT Desporto"))
-        assertEquals(listOf(7, 50, 58), r.channels.map { it.number })
+        assertEquals(listOf(7, 21, 28), r.channels.map { it.number })
         assertEquals(listOf("CNN Portugal", "Sport TV 1", "DAZN 1"), r.channels.map { it.name })
         assertEquals(listOf(ProLineups.NEWS, ProLineups.SPORTS), r.groups)
     }
@@ -47,7 +47,7 @@ class ProLineupTest {
             ),
         )
         assertEquals(listOf(Ref("a", "a-4", Quality.HD)), r.channels.single { it.number == 3 }.sources)
-        assertNull(r.channels.firstOrNull { it.number == 68 })
+        assertNull(r.channels.firstOrNull { it.number == 38 })
         // O SIC +1 é do país mas não é o SIC: vai para os "Mais canais".
         assertEquals(listOf("SIC +1"), r.channels.filter { it.group == ProLineup.MORE }.map { it.name })
     }
@@ -68,7 +68,7 @@ class ProLineupTest {
     @Test
     fun idsAreStable() {
         val r = pt(list("a", "PT| RTP 2" to null, "PT| Canal Q" to null))
-        assertEquals(listOf("pro:pt:2", "pro:pt:26"), r.channels.map { it.id })
+        assertEquals(listOf("pro:pt:2", "pro:pt:101"), r.channels.map { it.id })
     }
 
     @Test
@@ -95,5 +95,11 @@ class ProLineupTest {
         assertEquals("SIC Radical", ProLineup.cleanName("PT| SIC Radical FHD"))
         assertEquals("Kuriakos TV", ProLineup.cleanName("[PT] Kuriakos TV (HD)"))
         assertEquals("A Bola TV", ProLineup.cleanName("A Bola TV"))
+    }
+
+    @Test
+    fun foreignChannelsTheOperatorCarriesCountFromAnyGroup() {
+        val r = pt(list("a", "UK| Sky News HD" to "UK | News", "RTP3 HD" to "PT | Info", "US| ESPN" to "US | Sports"))
+        assertEquals(listOf(6 to "RTP Notícias", 211 to "Sky News"), r.channels.map { it.number to it.name })
     }
 }

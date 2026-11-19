@@ -11,8 +11,11 @@ package cc.slokker.itv.data
  * do país que a tabela não tem vão para "Mais canais" ([MORE]), juntos da mesma maneira pelo nome.
  */
 object ProLineup {
-    /** Um canal da tabela do operador: o número, o nome a mostrar, o grupo e os outros nomes por que aparece nas listas. */
-    data class Slot(val number: Int, val name: String, val group: String, val aliases: List<String> = emptyList())
+    /**
+     * Um canal da tabela do operador: o número, o nome a mostrar, o grupo e os outros nomes por que aparece nas listas.
+     * [foreign]: um canal estrangeiro que o operador também tem (Sky News, TV5Monde): conta mesmo no grupo de outro país.
+     */
+    data class Slot(val number: Int, val name: String, val group: String, val aliases: List<String> = emptyList(), val foreign: Boolean = false)
 
     /** A tabela de um país: os grupos pela ordem e os canais. */
     data class Lineup(val country: String, val groups: List<String>, val slots: List<Slot>)
@@ -74,10 +77,10 @@ object ProLineup {
                 if (p.base.length < 2) continue
                 val group = c.group?.let { GroupCountries.of(it) }
                 // De outro país (pelo nome ou pelo grupo): não é este canal, é a versão de lá.
-                if ((p.country != null && p.country != cc) || (group != null && group != cc)) continue
+                val slot = if (p.shift == 0) slotOf[p.base] else null
+                if (slot?.foreign != true && ((p.country != null && p.country != cc) || (group != null && group != cc))) continue
                 val explicit = p.country == cc || group == cc
                 val ref = Ref(source.playlistId, c.key, p.quality)
-                val slot = if (p.shift == 0) slotOf[p.base] else null
                 when {
                     slot != null -> bySlot.getOrPut(slot.number) { mutableListOf() } += Hit(ref, explicit, order)
                     // Os "Mais canais" só com os que são mesmo do país (um grupo "Desporto" sem país pode ser de qualquer lado).
@@ -91,7 +94,7 @@ object ProLineup {
         }
         val best = compareByDescending<Hit> { it.ref.quality }.thenByDescending { it.explicit }.thenBy { it.order }
         val channels = mutableListOf<Channel>()
-        lineup?.slots?.forEach { slot ->
+        lineup?.slots?.sortedBy { it.number }?.forEach { slot ->
             val hits = bySlot[slot.number] ?: return@forEach
             channels += Channel("pro:$cc:${slot.number}", slot.number, slot.name, slot.group, hits.sortedWith(best).map { it.ref }.distinct())
         }

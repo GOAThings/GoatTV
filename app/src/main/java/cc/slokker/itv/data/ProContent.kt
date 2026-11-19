@@ -69,6 +69,7 @@ object ProContent {
             "kids" -> s.proKids
             "docs" -> s.proDocs
             "music" -> s.proMusic
+            "international" -> s.proInternational
             else -> s.proMore
         }
     }
