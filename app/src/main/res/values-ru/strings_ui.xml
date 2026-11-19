@@ -872,6 +872,7 @@
     <string name="pro_sources">Источники</string>
     <string name="pro_sources_intro">Сначала лучший; если не работает, включается следующий. OK открывает этот.</string>
     <string name="pro_source_down">Список недоступен</string>
+    <string name="pro_source_failed">%1$s перестал работать. Воспроизводится %2$s.</string>
     <string name="pro_use_list">Использовать в режиме TV Pro</string>
     <string name="pro_use_list_sub">Её каналы попадают в единый список</string>
 </resources>

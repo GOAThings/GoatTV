@@ -865,6 +865,7 @@
     <string name="pro_sources">来源</string>
     <string name="pro_sources_intro">最佳的优先；失败时切换到下一个。按 OK 打开此来源。</string>
     <string name="pro_source_down">列表不可用</string>
+    <string name="pro_source_failed">%1$s 已停止工作。正在播放 %2$s。</string>
     <string name="pro_use_list">在 TV Pro 模式中使用</string>
     <string name="pro_use_list_sub">其频道会加入同一个列表</string>
 </resources>

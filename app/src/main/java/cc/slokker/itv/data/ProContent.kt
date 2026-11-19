@@ -14,32 +14,33 @@ class ProSet(
     /** Sem [store] (testes): as que falharam só contam enquanto este ProSet existir. */
     private val health = store?.health ?: ProHealth()
 
-    private fun down(playlistId: String, key: String) = health.isDown(playlistId, key, System.currentTimeMillis())
+    // Com o nome do canal: a versão dele ("ᴴᴰ") também conta (ver ProHealth.variantOf).
+    private fun down(playlistId: String, channel: Channel) = health.isDown(playlistId, channel.key, System.currentTimeMillis(), channel.name)
 
     /** As fontes do canal [key] que ainda existem, como (lista, canal dela), da melhor para a pior (as que falharam no fim). */
     fun resolve(key: String): List<Pair<PlaylistContent, Channel>> = sources[key].orEmpty().mapNotNull { r ->
         members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { m to it } }
-    }.sortedBy { (m, c) -> down(m.playlist.id, c.key) }
+    }.sortedBy { (m, c) -> down(m.playlist.id, c) }
 
     /** A fonte [channel] de [member] falhou (cai sempre, ou não abre): durante uns dias as outras vêm antes (ProHealth). */
     fun demote(member: PlaylistContent, channel: Channel) {
-        health.markDown(member.playlist.id, channel.key, System.currentTimeMillis())
+        health.markDown(member.playlist.id, channel.key, System.currentTimeMillis(), channel.name)
         store?.save()
     }
 
     /** A pessoa escolheu a fonte [channel] de [member] no painel: volta ao lugar dela. */
     fun promote(member: PlaylistContent, channel: Channel) {
-        if (health.markUp(member.playlist.id, channel.key)) store?.save()
+        if (health.markUp(member.playlist.id, channel.key, channel.name)) store?.save()
     }
 
     /** A fonte [channel] de [member] falhou há pouco. */
-    fun isDown(member: PlaylistContent, channel: Channel): Boolean = down(member.playlist.id, channel.key)
+    fun isDown(member: PlaylistContent, channel: Channel): Boolean = down(member.playlist.id, channel)
 
     /** A qualidade (pelo nome, ChannelMatch.Quality) da fonte que vai dar o canal [key] (a primeira de [resolve]), ou null. */
     fun quality(key: String): Int? = sources[key].orEmpty()
-        .filter { r -> members[r.playlistId]?.byKey?.containsKey(r.key) == true }
-        .sortedBy { down(it.playlistId, it.key) }
-        .firstOrNull()?.quality
+        .mapNotNull { r -> members[r.playlistId]?.byKey?.get(r.key)?.let { r to it } }
+        .sortedBy { (r, c) -> down(r.playlistId, c) }
+        .firstOrNull()?.first?.quality
 
     /** Quantas fontes tem o canal [key]. */
     fun count(key: String): Int = sources[key]?.size ?: 0

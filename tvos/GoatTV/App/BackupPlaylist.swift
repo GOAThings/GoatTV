@@ -357,8 +357,10 @@ extension AppModel {
     /// Um failover começou a dar: o aviso ("<lista> não responde. A dar da <reserva>.", ou o canal da própria lista).
     func backupPlaying() {
         guard let content, let stream = failoverNow else { return }
-        proBackupPlaying()
-        if stream.sameList {
+        // No Modo TV Pro, o aviso diz a fonte que falhou e a que está a dar (as duas podem ser da mesma lista).
+        if let failed = proBackupPlaying() {
+            showToast(strings.r("pro_source_failed", failed, stream.label))
+        } else if stream.sameList {
             showToast(strings.r("backup_playing_channel", current?.name ?? "", stream.channel.name))
         } else {
             showToast(strings.r("backup_playing", (proMode ? proFailedFrom : nil) ?? content.playlist.name, stream.playlist.name))

@@ -76,17 +76,18 @@ public final class ProHealth {
         health = AppleBridge.shared.proHealthDecode(text: UserDefaults.standard.string(forKey: Self.key), nowMs: Self.nowMs())
     }
 
-    public func isDown(_ playlistId: String, _ channelKey: String) -> Bool {
-        health.isDown(playlistId: playlistId, channelKey: channelKey, nowMs: Self.nowMs())
+    /// Com [channelName], a versão do canal ("ᴴᴰ") também conta: se falhou nessa lista, todos os dela vão para o fim.
+    public func isDown(_ playlistId: String, _ channelKey: String, _ channelName: String?) -> Bool {
+        health.isDown(playlistId: playlistId, channelKey: channelKey, nowMs: Self.nowMs(), channelName: channelName)
     }
 
-    public func markDown(_ playlistId: String, _ channelKey: String) {
-        health.markDown(playlistId: playlistId, channelKey: channelKey, nowMs: Self.nowMs())
+    public func markDown(_ playlistId: String, _ channelKey: String, _ channelName: String?) {
+        health.markDown(playlistId: playlistId, channelKey: channelKey, nowMs: Self.nowMs(), channelName: channelName)
         save()
     }
 
-    public func markUp(_ playlistId: String, _ channelKey: String) {
-        if health.markUp(playlistId: playlistId, channelKey: channelKey) { save() }
+    public func markUp(_ playlistId: String, _ channelKey: String, _ channelName: String?) {
+        if health.markUp(playlistId: playlistId, channelKey: channelKey, channelName: channelName) { save() }
     }
 
     private func save() {

@@ -24,22 +24,25 @@ final class ProSet {
             guard let m = members[r.playlistId], let c = m.byKey[r.key] else { return nil }
             return (m, c)
         }
-        let up = found.filter { !health.isDown($0.member.playlist.id, $0.channel.key) }
-        return up + found.filter { health.isDown($0.member.playlist.id, $0.channel.key) }
+        let up = found.filter { !isDown($0.member, $0.channel) }
+        return up + found.filter { isDown($0.member, $0.channel) }
     }
 
     /// A fonte [channel] de [member] falhou (cai sempre, ou não abre): durante uns dias as outras vêm antes.
-    func demote(_ member: PlaylistContent, _ channel: Channel) { health.markDown(member.playlist.id, channel.key) }
+    func demote(_ member: PlaylistContent, _ channel: Channel) { health.markDown(member.playlist.id, channel.key, channel.name) }
 
     /// A pessoa escolheu a fonte no painel: volta ao lugar dela.
-    func promote(_ member: PlaylistContent, _ channel: Channel) { health.markUp(member.playlist.id, channel.key) }
+    func promote(_ member: PlaylistContent, _ channel: Channel) { health.markUp(member.playlist.id, channel.key, channel.name) }
 
-    func isDown(_ member: PlaylistContent, _ channel: Channel) -> Bool { health.isDown(member.playlist.id, channel.key) }
+    /// Com o nome do canal: a versão dele ("ᴴᴰ") também conta (ver ProHealth.variantOf no GoatShared).
+    func isDown(_ member: PlaylistContent, _ channel: Channel) -> Bool { health.isDown(member.playlist.id, channel.key, channel.name) }
 
     /// A qualidade (pelo nome, ChannelMatch.Quality) da fonte que vai dar o canal [key], ou nil.
     func quality(_ key: String) -> Int? {
-        let refs = (sources[key] ?? []).filter { members[$0.playlistId]?.byKey[$0.key] != nil }
-        return (refs.first { !health.isDown($0.playlistId, $0.key) } ?? refs.first)?.quality
+        let refs = (sources[key] ?? []).compactMap { r -> (ref: ProLineup.Ref, channel: Channel)? in
+            members[r.playlistId]?.byKey[r.key].map { (r, $0) }
+        }
+        return (refs.first { !health.isDown($0.ref.playlistId, $0.ref.key, $0.channel.name) } ?? refs.first)?.ref.quality
     }
 }
 
@@ -160,11 +163,14 @@ extension AppModel {
         }
     }
 
-    /// Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth).
-    func proBackupPlaying() {
-        guard let pending = proPendingDemote else { return }
+    /// Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth). Devolve-a como
+    /// aparece no aviso ("SIC ᴴᴰ (PrincipalTV)"), ou nil se não havia nenhuma à espera.
+    @discardableResult
+    func proBackupPlaying() -> String? {
+        guard let pending = proPendingDemote else { return nil }
         proPendingDemote = nil
         pending.set.demote(pending.member, pending.channel)
+        return "\(pending.channel.name) (\(pending.member.playlist.name))"
     }
 
     /// O painel das fontes: dá já a fonte [index] (e as seguintes ficam como failovers dela).

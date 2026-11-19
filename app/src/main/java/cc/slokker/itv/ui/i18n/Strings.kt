@@ -801,6 +801,9 @@ class Strings(context: Context) {
     fun backupPlaying(main: String, backup: String) = s(R.string.backup_playing, main, backup)
     fun backupAlsoFailed(backup: String) = s(R.string.backup_also_failed, backup)
     fun backupPlayingChannel(main: String, channel: String) = s(R.string.backup_playing_channel, main, channel)
+
+    /** Modo TV Pro: a fonte [failed] deixou de dar e está a dar [playing] (as duas como "SIC ᴴᴰ (PrincipalTV)"). */
+    fun proSourceFailed(failed: String, playing: String) = s(R.string.pro_source_failed, failed, playing)
     val backupFailoversHint get() = s(R.string.backup_failovers_hint)
     val backupFailoversHintPhone get() = s(R.string.backup_failovers_hint_phone)
     val backupChannelSearchAll get() = s(R.string.backup_channel_search_all)

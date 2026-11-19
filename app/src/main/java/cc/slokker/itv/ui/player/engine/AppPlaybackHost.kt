@@ -31,9 +31,14 @@ internal class AppPlaybackHost(
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
     override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = vm.backupStreams(latestData(), request.channel)
     override fun onBackupPlaying(origin: BackupOrigin) {
-        vm.proBackupPlaying()
+        // No Modo TV Pro, o aviso diz a fonte que falhou e a que está a dar (as duas podem ser da mesma lista).
+        val proFailed = vm.proBackupPlaying()
         vm.showToast(
-            if (origin.sameList) I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName) else I18n.s.backupPlaying(origin.mainName, origin.backupName),
+            when {
+                proFailed != null -> I18n.s.proSourceFailed(proFailed, origin.label)
+                origin.sameList -> I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName)
+                else -> I18n.s.backupPlaying(origin.mainName, origin.backupName)
+            },
         )
     }
     override fun providerDown(request: PlaybackRequest): Boolean = vm.providerOutage.isDown(latestData().playlist.id)

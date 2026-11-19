@@ -868,6 +868,7 @@
     <string name="pro_sources">स्रोत</string>
     <string name="pro_sources_intro">सबसे अच्छा पहले; विफल होने पर अगला चलता है। OK इसे खोलता है।</string>
     <string name="pro_source_down">सूची बंद है</string>
+    <string name="pro_source_failed">%1$s ने काम करना बंद कर दिया। %2$s चल रहा है।</string>
     <string name="pro_use_list">TV Pro मोड में इस्तेमाल करें</string>
     <string name="pro_use_list_sub">इसके चैनल एक ही सूची में जाते हैं</string>
 </resources>

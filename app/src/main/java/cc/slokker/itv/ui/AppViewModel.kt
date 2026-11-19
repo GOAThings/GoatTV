@@ -1005,11 +1005,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A fonte do Modo TV Pro que falhou, à espera de saber se outra deu no lugar dela (ver [backupStreams]). */
     private var proPendingDemote: Triple<ProSet, PlaylistContent, Channel>? = null
 
-    /** Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth). */
-    fun proBackupPlaying() {
-        val (pro, member, channel) = proPendingDemote ?: return
+    /**
+     * Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth). Devolve-a como
+     * aparece no aviso ("SIC ᴴᴰ (PrincipalTV)"), ou null se não havia nenhuma à espera.
+     */
+    fun proBackupPlaying(): String? {
+        val (pro, member, channel) = proPendingDemote ?: return null
         proPendingDemote = null
         pro.demote(member, channel)
+        return "${channel.name} (${member.playlist.name})"
     }
 
     /** Uma fonte de um canal do Modo TV Pro (ver [proSources]): [down] se a lista dela esteve em baixo há pouco. */
