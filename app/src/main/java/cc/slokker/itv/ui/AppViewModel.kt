@@ -969,6 +969,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Modo TV Pro: liga com a tabela [lineup] ("pt": abre a lista única) ou desliga (null: volta à última lista da pessoa). */
+    /** Os países sem tabela que se podem escolher no Modo TV Pro (ver [scanProCountries]). */
+    private val _proCountries = MutableStateFlow<List<String>>(emptyList())
+    val proCountries: StateFlow<List<String>> = _proCountries.asStateFlow()
+
+    /** Vê, pelas listas em cache, que países sem tabela há (as Definições chamam-no ao abrir as listas). */
+    fun scanProCountries() {
+        viewModelScope.launch { _proCountries.value = lists.proCountries() }
+    }
+
+    /**
+     * As escolhas do Modo TV Pro: as tabelas, e depois os países sem tabela das listas da pessoa, pelo nome (o que está
+     * escolhido fica sempre, mesmo que a lista dele já não esteja em cache).
+     */
+    fun proLineupChoices(countries: List<String>): List<String> {
+        val tables = ProLineup.LINEUPS.map { it.id }
+        val others = (countries + listOfNotNull(prefs.value.proLineup)).distinct().filter { it !in tables }
+        return tables + others.sortedBy { ProContent.lineupName(it).lowercase() }
+    }
+
     fun setProLineup(lineup: String?) {
         if (prefs.value.proLineup == lineup) return
         setPref(Prefs.Key.PRO_LINEUP, lineup)

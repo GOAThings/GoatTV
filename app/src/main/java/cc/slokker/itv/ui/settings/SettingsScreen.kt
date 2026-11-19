@@ -783,13 +783,16 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     val detailId = (route as? Route.PlaylistDetail)?.id
     val detailBackup = detailId?.let { prefs.backupPlaylist[it] }
     LaunchedEffect(detailId, detailBackup, prefs.backupChannels, prefs.backupMode) { detailId?.let(vm::checkBackupCoverage) }
+    // Modo TV Pro: os países sem tabela saem das listas em cache (ver AppViewModel.proLineupChoices).
+    val proCountries by vm.proCountries.collectAsStateWithLifecycle()
+    LaunchedEffect(route == Route.Lists) { if (route == Route.Lists) vm.scanProCountries() }
     // Um "carregar outra vez para confirmar" por ação e por página: armar um não pode confirmar o outro.
     var confirmEpgReset by remember(route) { mutableStateOf(false) }
     var confirmDelete by remember(route) { mutableStateOf(false) }
     return when (route) {
         Route.Lists -> buildList {
             // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
-            val proOptions = listOf<Pair<Any?, String>>(null to s.off) + ProLineup.LINEUPS.map { it.id to ProContent.lineupName(it.id) }
+            val proOptions = listOf<Pair<Any?, String>>(null to s.off) + vm.proLineupChoices(proCountries).map { it to ProContent.lineupName(it) }
             add(
                 Item.Nav("pro", s.proMode, value = prefs.proLineup?.let { ProContent.lineupName(it) } ?: s.off, subtitle = s.proModeSub) {
                     push(Route.Pick(s.proMode, proOptions, prefs.proLineup) { v -> vm.setProLineup(v as String?); nav.pop() }, "pro")

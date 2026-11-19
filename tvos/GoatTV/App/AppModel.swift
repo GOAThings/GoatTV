@@ -119,6 +119,36 @@ final class AppModel {
     @ObservationIgnored var proFailedFrom: String?
     /// A fonte do Modo TV Pro que falhou, à espera de saber se outra deu no lugar dela (ver proBackupPlaying).
     @ObservationIgnored var proPendingDemote: (set: ProSet, member: PlaylistContent, channel: Channel)?
+    /// Os países sem tabela que se podem escolher no Modo TV Pro, pelas listas em cache (ver [scanProCountries]).
+    var proCountries: [String] = []
+
+    /// Vê, pelos grupos das listas em cache (não descarrega nada), que países sem tabela há para o Modo TV Pro.
+    func scanProCountries() {
+        let members = playlists.filter { !ProLineup.isPro($0.id) }
+        let open = content
+        let cache = self.cache
+        Task {
+            let codes = await Task.detached(priority: .utility) { () -> [String] in
+                var names: [String] = []
+                for m in members {
+                    let c = open?.playlist == m ? open : cache.load(PlaylistContent.self, key: "content-\(m.id)")
+                    guard let c, c.playlist == m else { continue }
+                    names += c.categories.map(\.name)
+                }
+                return ProLineup.countriesIn(names)
+            }.value
+            proCountries = codes
+        }
+    }
+
+    /// As escolhas do Modo TV Pro: as tabelas, e depois os países sem tabela das listas da pessoa, pelo nome (o que
+    /// está escolhido fica sempre).
+    func proLineupChoices() -> [String] {
+        let tables = ProLineup.lineupIds
+        var others: [String] = []
+        for c in proCountries + [prefs.proLineup].compactMap({ $0 }) where !tables.contains(c) && !others.contains(c) { others.append(c) }
+        return tables + others.sorted { ProContent.lineupName($0, strings).lowercased() < ProContent.lineupName($1, strings).lowercased() }
+    }
     @ObservationIgnored private var shownOptions: ContentView.Options?
 
     /// O programa a ver em catch-up (nil = em direto).

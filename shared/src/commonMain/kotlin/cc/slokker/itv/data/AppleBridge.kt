@@ -170,6 +170,9 @@ object AppleBridge {
     /** Os ids das tabelas que se podem escolher ("pt"), pela ordem do menu. */
     fun proLineupIds(): List<String> = ProLineup.LINEUPS.map { it.id }
 
+    /** Os países sem tabela dos grupos [groupNames] ("pl"), do que tem mais grupos para o que tem menos. */
+    fun proCountriesIn(groupNames: List<String>): List<String> = ProLineup.countriesIn(groupNames)
+
     /** O país da tabela [id] ("pt"), ou null se não existir. */
     fun proLineupCountry(id: String): String? = ProLineup.lineup(id)?.country
 

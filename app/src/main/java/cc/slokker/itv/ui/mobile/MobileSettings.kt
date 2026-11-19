@@ -88,6 +88,9 @@ fun MobileMenu(vm: AppViewModel) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
+    // Modo TV Pro: os países sem tabela saem das listas em cache (ver AppViewModel.proLineupChoices).
+    val proCountries by vm.proCountries.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.scanProCountries() }
     val email by vm.email.collectAsStateWithLifecycle()
     val local by vm.local.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
@@ -162,7 +165,7 @@ fun MobileMenu(vm: AppViewModel) {
                 val others = playlists.filter { it.id != content?.playlist?.id }
                 Section(s.playlists) {
                     // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
-                    val proOptions = listOf<Pair<Any?, String>>(null to s.settingOff) + ProLineup.LINEUPS.map { it.id to ProContent.lineupName(it.id) }
+                    val proOptions = listOf<Pair<Any?, String>>(null to s.settingOff) + vm.proLineupChoices(proCountries).map { it to ProContent.lineupName(it) }
                     MenuRow(s.proMode, prefs.proLineup?.let { ProContent.lineupName(it) } ?: s.settingOff, ItvIcons.Playlist, chevron = true, subtitle = s.proModeSub) {
                         open(Picking(s.proMode, proOptions, prefs.proLineup) { v -> vm.setProLineup(v as String?) })
                     }

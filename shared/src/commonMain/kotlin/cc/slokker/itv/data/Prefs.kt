@@ -564,7 +564,7 @@ data class Prefs(
                 uiScale = int(Key.UI_SCALE, d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
                 textSize = str(Key.TEXT_SIZE, d.textSize, TextSize.ALL),
                 language = normalizeLanguage(prim(s, Key.LANGUAGE)?.text),
-                proLineup = prim(s, Key.PRO_LINEUP)?.text?.lowercase()?.takeIf { ProLineup.lineup(it) != null },
+                proLineup = prim(s, Key.PRO_LINEUP)?.text?.lowercase()?.takeIf { ProLineup.isLineupId(it) },
                 proSkip = stringSet(s, Key.PRO_SKIP),
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.epgRefreshHours,

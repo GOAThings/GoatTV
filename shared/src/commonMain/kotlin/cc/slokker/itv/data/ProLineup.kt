@@ -71,7 +71,36 @@ object ProLineup {
     /** A tabela [id] ("pt"), se existir. */
     fun lineup(id: String): Lineup? = LINEUPS.firstOrNull { it.id == id.lowercase() }
 
+    /**
+     * [id] serve para o Modo TV Pro: uma tabela, ou o código de um país sem tabela ("pl"), em que a lista segue a
+     * ordem da lista da pessoa (ver [build]).
+     */
+    fun isLineupId(id: String): Boolean = lineup(id) != null || COUNTRY_CODE.matches(id.lowercase())
+
+    private val COUNTRY_CODE = Regex("[a-z]{2}")
+
+    /**
+     * Os países sem tabela que se podem escolher, pelos grupos das listas da pessoa ([groupNames]): os que têm pelo
+     * menos [MIN_GROUPS] grupos, do que tem mais para o que tem menos. As regiões ("LATINO", "ARABIC") não contam.
+     */
+    fun countriesIn(groupNames: List<String>): List<String> {
+        val counts = HashMap<String, Int>()
+        for (g in groupNames) {
+            val c = GroupCountries.of(g) ?: continue
+            if (COUNTRY_CODE.matches(c) && lineup(c) == null) counts[c] = (counts[c] ?: 0) + 1
+        }
+        return counts.entries.filter { it.value >= MIN_GROUPS }.sortedByDescending { it.value }.map { it.key }
+    }
+
+    private const val MIN_GROUPS = 1
+
+    /**
+     * A lista Pro de [country]: com [lineup], arrumada pela tabela; sem ela ([lineup] null, um país sem tabela), com
+     * os canais do país pela ordem em que vêm na primeira lista que os tem (os fornecedores costumam copiar a do
+     * operador), cada um no tema que o grupo dele diz (ver [ProThemes]).
+     */
     fun build(lineup: Lineup?, country: String, sources: List<Source>): Result {
+        if (lineup == null) return buildAuto(country, sources)
         val cc = country.lowercase()
         // O nome normalizado de cada nome da tabela → o canal da tabela.
         val slotOf = HashMap<String, Slot>()
@@ -117,6 +146,35 @@ object ProLineup {
         val used = channels.map { it.group }.toSet()
         val groups = (lineup?.groups.orEmpty() + MORE).filter { it in used }
         return Result(groups, channels)
+    }
+
+    /** Um país sem tabela: os canais que são mesmo do país, juntos pelo nome, pela ordem da primeira lista. */
+    private fun buildAuto(country: String, sources: List<Source>): Result {
+        val cc = country.lowercase()
+        class Hit(val ref: Ref, val order: Int)
+        class Entry(val name: String, val theme: String, val first: Int, val hits: MutableList<Hit>)
+        val byId = LinkedHashMap<String, Entry>()
+        var order = 0
+        for (source in sources) {
+            for (c in source.channels) {
+                order++
+                val p = ChannelMatch.parse(c.name)
+                if (p.base.length < 2) continue
+                val group = c.group?.let { GroupCountries.of(it) }
+                // Só os do país: pelo nome ("PL| TVP 1") ou pelo grupo ("PL | Sport"); um sem país pode ser de qualquer lado.
+                if (p.country != cc && group != cc) continue
+                if (p.country != null && p.country != cc) continue
+                val id = if (p.shift == 0) p.base else "${p.base}+${p.shift}"
+                val e = byId.getOrPut(id) { Entry(cleanName(c.name), ProThemes.of(c.group, c.name), order, mutableListOf()) }
+                e.hits += Hit(Ref(source.playlistId, c.key, p.quality), order)
+            }
+        }
+        val best = compareByDescending<Hit> { it.ref.quality }.thenBy { it.order }
+        val channels = byId.entries.sortedBy { it.value.first }.mapIndexed { i, (id, e) ->
+            Channel("pro:$cc:$id", i + 1, e.name, e.theme, e.hits.sortedWith(best).map { it.ref }.distinct())
+        }
+        val used = channels.map { it.group }.toSet()
+        return Result((ProLineups.GROUPS + MORE).filter { it in used }, channels)
     }
 
     /** O nome sem o país à frente nem a qualidade ("PT| SIC Radical FHD" → "SIC Radical"), para os "Mais canais". */

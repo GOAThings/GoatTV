@@ -1628,6 +1628,8 @@ private struct MenuTab: View {
             }
             .background(Theme.background)
             .navigationTitle(s.r("settings"))
+            // Modo TV Pro: os países sem tabela saem das listas em cache (ver AppModel.proLineupChoices).
+            .onAppear { model.scanProCountries() }
             .navigationDestination(for: Page.self) { page in
                 ScrollView {
                     VStack(spacing: 14) { rows(of: page) }.padding(.vertical, 8)
@@ -1845,7 +1847,7 @@ private struct MenuTab: View {
         section(s.r("playlists")) {
             // Modo TV Pro: uma lista só, feita com todas estas (como na TV).
             pick(s.r("pro_mode"), "pro_lineup", p.proLineup.map { JSON.string($0) },
-                 [(nil, s.r("off"))] + ProLineup.lineupIds.map { (JSON.string($0), ProContent.lineupName($0, s)) })
+                 [(nil, s.r("off"))] + model.proLineupChoices().map { (JSON.string($0), ProContent.lineupName($0, s)) })
             ForEach(others, id: \.id) { pl in
                 Button { openedPlaylist = pl } label: { MenuRowLabel(title: pl.name, value: playlistTypeName(pl.type), icon: "list.bullet", chevron: true) }.buttonStyle(.plain)
             }

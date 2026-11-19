@@ -165,6 +165,8 @@ struct SettingsPanel: View {
             guard stack.isEmpty else { return }
             // O PIN das Definições vem primeiro, também para adicionar uma lista a partir do player.
             stack = [(start == .root || start == .newPlaylistType) && model.settingsNeedPin ? .settingsGate : start]
+            // Modo TV Pro: os países sem tabela saem das listas em cache (ver AppModel.proLineupChoices).
+            model.scanProCountries()
         }
         .onExitCommand { back() }
         .onChange(of: focus) { _, now in onActivity(now == "field") }
@@ -911,7 +913,7 @@ struct SettingsPanel: View {
             var list: [Item] = [
                 .check("pro_off", s.r("off"), prefs.proLineup == nil) { model.setProLineup(nil) },
             ]
-            list += ProLineup.lineupIds.map { (id: String) -> Item in
+            list += model.proLineupChoices().map { (id: String) -> Item in
                 .check("pro_\(id)", ProContent.lineupName(id, s), prefs.proLineup == id) { model.setProLineup(id) }
             }
             return list

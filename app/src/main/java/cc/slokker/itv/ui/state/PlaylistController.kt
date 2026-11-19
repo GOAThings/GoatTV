@@ -215,6 +215,23 @@ class PlaylistController(
         return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed, proHealth) }
     }
 
+    /** Os nomes dos grupos de cada lista (da cache), para os países do Modo TV Pro: lê-se uma vez por sessão. */
+    private val groupNames = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+
+    /**
+     * Os países sem tabela que se podem escolher no Modo TV Pro, pelos grupos das listas da pessoa (só as que estão em
+     * cache: não descarrega nada).
+     */
+    suspend fun proCountries(): List<String> = withContext(Dispatchers.IO) {
+        val names = proMembers().filterNot { ProLineup.isPro(it.id) }.flatMap { m ->
+            groupNames[m.id] ?: run {
+                val c = _content.value?.takeIf { it.playlist.id == m.id } ?: runCatching { cache.loadPlaylist(m) }.getOrNull()
+                c?.categories?.map { it.name }?.also { groupNames[m.id] = it }.orEmpty()
+            }
+        }
+        ProLineup.countriesIn(names)
+    }
+
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */
     suspend fun loadForSecond(playlist: Playlist): PlaylistContent {
         _content.value?.takeIf { it.playlist.id == playlist.id }?.let { return it }

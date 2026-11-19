@@ -39,6 +39,9 @@ public enum ProLineup {
 
     public static func lineupId(of playlistId: String) -> String { AppleBridge.shared.proLineupIdOf(playlistId: playlistId) }
 
+    /// Os países sem tabela que os grupos [groupNames] das listas da pessoa têm ("pl"), do que tem mais para o que tem menos.
+    public static func countriesIn(_ groupNames: [String]) -> [String] { AppleBridge.shared.proCountriesIn(groupNames: groupNames) }
+
     /// O grupo dos canais do país que a tabela não tem ("Mais canais").
     public static var moreGroup: String { AppleBridge.shared.proMoreGroup() }
 
