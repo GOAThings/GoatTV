@@ -469,17 +469,16 @@ struct PlayerScreen: View {
             }
 
             if case .settings(let page) = panel {
-                // Tema Sombra: à esquerda, como as listas; no Vidro à direita, como sempre.
+                // À esquerda, como as listas, em todos os temas.
                 HStack {
-                    if !shadowTheme { Spacer(minLength: 0) }
                     SettingsPanel(start: page, onClose: closePanel)
                         .id(page)
-                    if shadowTheme { Spacer(minLength: 0) }
+                    Spacer(minLength: 0)
                 }
-                .padding(shadowTheme ? .leading : .trailing, 40)
+                .padding(.leading, 40)
                 .padding(.vertical, 40)
                 .ignoresSafeArea()
-                .transition(.move(edge: shadowTheme ? .leading : .trailing).combined(with: .opacity))
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.18), value: panel)

@@ -817,13 +817,14 @@ internal fun SettingsSheet(
     onManualTrack: (Int) -> Unit = {},
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
-    // Estilo Sombra: sem painel, à esquerda por cima da sombra das listas (ver PlayerScreen).
+    // À esquerda em todos os temas, com a margem das listas (ver PlayerScreen); no Sombra sem painel, por cima da
+    // sombra delas.
     val shadow = Prefs.PanelStyles.isShadow(LocalPanelStyle.current)
     PanelScale(prefs.textScale) {
     ShadowText(shadow) {
     Box(
         Modifier
-            .padding(start = if (shadow) 32.dp else 0.dp, end = if (shadow) 0.dp else 32.dp, top = 27.dp, bottom = 27.dp)
+            .padding(start = 32.dp, top = 27.dp, bottom = 27.dp)
             .width((prefs.panelWidth + 40).dp)
             .fillMaxHeight()
             .then(if (shadow) Modifier else Modifier.glass(ItvShapes.Panel))

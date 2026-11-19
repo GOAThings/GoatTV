@@ -1426,10 +1426,9 @@ fun PlayerScreen(vm: AppViewModel) {
                 )
             }
 
-            // Estilo Sombra: as Definições abrem à esquerda, como as listas, por cima da mesma sombra.
-            val settingsLeft = Prefs.PanelStyles.isShadow(LocalPanelStyle.current)
+            // As Definições abrem à esquerda, como as listas, em todos os temas; no Sombra por cima da mesma sombra.
             AnimatedVisibility(
-                visible = showSettings && settingsLeft,
+                visible = showSettings && Prefs.PanelStyles.isShadow(LocalPanelStyle.current),
                 modifier = Modifier.fillMaxSize(),
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -1438,9 +1437,9 @@ fun PlayerScreen(vm: AppViewModel) {
             }
             AnimatedVisibility(
                 visible = showSettings,
-                modifier = Modifier.align(if (settingsLeft) Alignment.CenterStart else Alignment.CenterEnd),
-                enter = fadeIn() + slideInHorizontally { if (settingsLeft) -it / 4 else it / 4 },
-                exit = fadeOut() + slideOutHorizontally { if (settingsLeft) -it / 4 else it / 4 },
+                modifier = Modifier.align(Alignment.CenterStart),
+                enter = fadeIn() + slideInHorizontally { -it / 4 },
+                exit = fadeOut() + slideOutHorizontally { -it / 4 },
             ) {
                 SettingsSheet(vm, player, current, startAtEpg = settingsAtEpg, startAtConnection = settingsAtConnection, startAtNewPlaylist = settingsAtNewPlaylist, onManualTrack = playback::onManualTrack, onClose = {
                     showSettings = false
