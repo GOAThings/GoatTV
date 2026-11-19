@@ -18,21 +18,24 @@ class ProSet(val members: Map<String, PlaylistContent>, private val sources: Map
 
 /** A lista única do Modo TV Pro, feita com as listas da pessoa (ver ProLineup). */
 object ProContent {
-    /** A "lista" que se abre no Modo TV Pro: só o id e o nome (o país); não tem fornecedor. */
-    fun playlist(country: String) = Playlist(ProLineup.playlistId(country), PlaylistType.M3U, countryName(country))
+    /** A "lista" que se abre no Modo TV Pro com a tabela [lineupId]: só o id e o nome; não tem fornecedor. */
+    fun playlist(lineupId: String) = Playlist(ProLineup.playlistId(lineupId), PlaylistType.M3U, lineupName(lineupId))
 
-    fun countryName(country: String): String = I18n.s.countryName(country)
+    /** O nome do país da tabela ("Portugal"). */
+    fun lineupName(lineupId: String): String = I18n.s.countryName(ProLineup.lineup(lineupId)?.country ?: lineupId)
 
     /**
-     * Os canais de [members] (pela ordem de preferência) arrumados pela tabela de [country]. Cada canal fica com o
+     * Os canais de [members] (pela ordem de preferência) arrumados pela tabela [lineupId]. Cada canal fica com o
      * nome e o número da tabela, e com o logótipo e o guia da melhor fonte que os tenha (o guia, de preferência, da
      * lista cujo guia se usa: o da primeira que tem um).
      */
-    fun build(country: String, members: List<PlaylistContent>): PlaylistContent {
+    fun build(lineupId: String, members: List<PlaylistContent>): PlaylistContent {
+        val lineup = ProLineup.lineup(lineupId)
+        val country = lineup?.country ?: lineupId
         val sources = members.map { m ->
             ProLineup.Source(m.playlist.id, (m.channels + m.hidden).map { ProLineup.Input(it.key, it.name, m.categoryName(it.categoryId)) })
         }
-        val result = ProLineup.build(ProLineup.lineup(country), country, sources)
+        val result = ProLineup.build(lineup, country, sources)
         val guide = members.firstOrNull { it.guideUrl != null }
         val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources })
         val channels = result.channels.mapIndexedNotNull { i, pc ->
@@ -52,7 +55,7 @@ object ProContent {
             )
         }
         val categories = result.groups.map { Category(it, groupName(it)) }
-        return PlaylistContent(playlist(country), categories, channels, guideUrl = guide?.guideUrl, pro = set)
+        return PlaylistContent(playlist(lineupId), categories, channels, guideUrl = guide?.guideUrl, pro = set)
     }
 
     /** O canal [source] (de uma lista da pessoa) a dar no lugar de [shown] (o da lista Pro): o ecrã continua a mostrar este. */

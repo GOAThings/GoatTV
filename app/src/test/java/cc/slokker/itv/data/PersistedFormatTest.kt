@@ -275,7 +275,7 @@ class PersistedFormatTest {
         "panelWidth" to (Prefs.Key.PANEL_WIDTH to 400),
         "textSize" to (Prefs.Key.TEXT_SIZE to Prefs.TextSize.LARGE),
         "language" to (Prefs.Key.LANGUAGE to "pt-BR"),
-        "proCountry" to (Prefs.Key.PRO_COUNTRY to "pt"),
+        "proLineup" to (Prefs.Key.PRO_LINEUP to "pt"),
         "playlistRefreshHours" to (Prefs.Key.PLAYLIST_REFRESH to 24),
         "epgRefreshHours" to (Prefs.Key.EPG_REFRESH to 6),
         "epgOffsetMin" to (Prefs.Key.EPG_OFFSET to -90),

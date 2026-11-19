@@ -17,8 +17,8 @@ object ProLineup {
      */
     data class Slot(val number: Int, val name: String, val group: String, val aliases: List<String> = emptyList(), val foreign: Boolean = false)
 
-    /** A tabela de um país: os grupos pela ordem e os canais. */
-    data class Lineup(val country: String, val groups: List<String>, val slots: List<Slot>)
+    /** A tabela de um país ([id]: "pt", arrumada como a do [operator]): os grupos pela ordem e os canais. */
+    data class Lineup(val id: String, val country: String, val operator: String, val groups: List<String>, val slots: List<Slot>)
 
     /** Um canal de uma lista, com o nome do grupo dele (para saber o país quando o nome não diz). */
     data class Input(val key: String, val name: String, val group: String?)
@@ -29,7 +29,10 @@ object ProLineup {
     /** Uma fonte de um canal: a lista, a chave do canal nela e a qualidade pelo nome (ChannelMatch.Quality). */
     data class Ref(val playlistId: String, val key: String, val quality: Int)
 
-    /** Um canal da lista Pro: [id] fica igual entre arranques (favoritos, recentes), [sources] da melhor para a pior. */
+    /**
+     * Um canal da lista Pro: [id] fica igual entre arranques e entre operadores (favoritos, recentes), [sources] da
+     * melhor para a pior.
+     */
     data class Channel(val id: String, val number: Int, val name: String, val group: String, val sources: List<Ref>)
 
     data class Result(val groups: List<String>, val channels: List<Channel>)
@@ -40,24 +43,21 @@ object ProLineup {
     /** Os "Mais canais" começam aqui (como os canais acima dos principais numa box). */
     const val MORE_FROM = 200
 
-    /** Os países que se podem escolher (os que têm tabela). */
-    val COUNTRIES = listOf("pt")
+    /** As tabelas que se podem escolher, pela ordem do menu. */
+    val LINEUPS: List<Lineup> get() = listOf(ProLineups.PT)
 
-    /** O id da lista Pro de [country] (não é uma lista da pessoa: não se guarda em cache nem vai para a conta). */
-    fun playlistId(country: String) = "$PREFIX$country"
+    /** O id da lista Pro da tabela [lineupId] (não é uma lista da pessoa: não se guarda em cache nem vai para a conta). */
+    fun playlistId(lineupId: String) = "$PREFIX$lineupId"
 
     fun isPro(playlistId: String) = playlistId.startsWith(PREFIX)
 
-    /** O país da lista Pro [playlistId]. */
-    fun countryOf(playlistId: String) = playlistId.removePrefix(PREFIX)
+    /** A tabela da lista Pro [playlistId]. */
+    fun lineupIdOf(playlistId: String) = playlistId.removePrefix(PREFIX)
 
     private const val PREFIX = "pro:"
 
-    /** As tabelas que há, pelo código do país. */
-    fun lineup(country: String): Lineup? = when (country.lowercase()) {
-        "pt" -> ProLineups.PT
-        else -> null
-    }
+    /** A tabela [id] ("pt"), se existir. */
+    fun lineup(id: String): Lineup? = LINEUPS.firstOrNull { it.id == id.lowercase() }
 
     fun build(lineup: Lineup?, country: String, sources: List<Source>): Result {
         val cc = country.lowercase()
@@ -96,7 +96,7 @@ object ProLineup {
         val channels = mutableListOf<Channel>()
         lineup?.slots?.sortedBy { it.number }?.forEach { slot ->
             val hits = bySlot[slot.number] ?: return@forEach
-            channels += Channel("pro:$cc:${slot.number}", slot.number, slot.name, slot.group, hits.sortedWith(best).map { it.ref }.distinct())
+            channels += Channel("pro:$cc:${ChannelMatch.parse(slot.name).base}", slot.number, slot.name, slot.group, hits.sortedWith(best).map { it.ref }.distinct())
         }
         var n = MORE_FROM
         more.entries.sortedBy { moreName[it.key]?.lowercase() }.forEach { (id, hits) ->

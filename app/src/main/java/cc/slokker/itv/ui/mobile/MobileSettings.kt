@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.mobile
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.ProContent
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
 import cc.slokker.itv.data.api.PRIVACY_URL
@@ -161,9 +162,9 @@ fun MobileMenu(vm: AppViewModel) {
                 val others = playlists.filter { it.id != content?.playlist?.id }
                 Section(s.playlists) {
                     // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
-                    val proOptions = listOf<Pair<Any?, String>>(null to s.settingOff) + ProLineup.COUNTRIES.map { it to s.countryName(it) }
-                    MenuRow(s.proMode, prefs.proCountry?.let { s.countryName(it) } ?: s.settingOff, ItvIcons.Playlist, chevron = true, subtitle = s.proModeSub) {
-                        open(Picking(s.proMode, proOptions, prefs.proCountry) { v -> vm.setProCountry(v as String?) })
+                    val proOptions = listOf<Pair<Any?, String>>(null to s.settingOff) + ProLineup.LINEUPS.map { it.id to ProContent.lineupName(it.id) }
+                    MenuRow(s.proMode, prefs.proLineup?.let { ProContent.lineupName(it) } ?: s.settingOff, ItvIcons.Playlist, chevron = true, subtitle = s.proModeSub) {
+                        open(Picking(s.proMode, proOptions, prefs.proLineup) { v -> vm.setProLineup(v as String?) })
                     }
                     others.forEach { p -> MenuRow(p.name, p.type.kind.label, ItvIcons.Playlist, chevron = true) { opened = p } }
                     MenuRow(s.addPlaylist, null, ItvIcons.Playlist, chevron = true) { adding = true }

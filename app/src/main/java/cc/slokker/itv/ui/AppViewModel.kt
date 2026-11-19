@@ -604,7 +604,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         pendingLink?.first?.let { id -> playlists.value.firstOrNull { it.id == id }?.let { return it } }
         adoptNewerLastChannel()
         // Modo TV Pro: abre sempre a lista única (as listas da pessoa ficam por trás dela).
-        prefs.value.proCountry?.let { return ProContent.playlist(it) }
+        prefs.value.proLineup?.let { return ProContent.playlist(it) }
         val lastId = profile.lastPlaylistId ?: c.session.lastPlaylist()
         return playlists.value.firstOrNull { it.id == lastId } ?: playlists.value.first()
     }
@@ -924,7 +924,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val playlists = profile.playlists.value
         val current = content.value?.playlist ?: return
         // Modo TV Pro: ligado ou desligado noutra TV, ou mudaram as listas por trás da lista única.
-        val pro = prefs.value.proCountry
+        val pro = prefs.value.proLineup
         if (pro != null || ProLineup.isPro(current.id)) {
             when {
                 pro == null -> playlists.firstOrNull()?.let { switchPlaylist(it) }
@@ -949,9 +949,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * outras vezes (uma lista criada ou alterada) a lista única refaz-se com as listas novas.
      */
     fun switchPlaylist(playlist: Playlist, force: Boolean = false, leavePro: Boolean = false) {
-        if (prefs.value.proCountry != null && !ProLineup.isPro(playlist.id)) {
+        if (prefs.value.proLineup != null && !ProLineup.isPro(playlist.id)) {
             if (!leavePro) return reloadPlaylist()
-            setPref(Prefs.Key.PRO_COUNTRY, null)
+            setPref(Prefs.Key.PRO_LINEUP, null)
         }
         if (!force && playlist.id == content.value?.playlist?.id) {
             if (_screen.value == Screen.Settings) closeSettings()
@@ -966,13 +966,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch { loadPlaylist(playlist, resume = false) }
     }
 
-    /** Modo TV Pro: liga com o país [country] (abre a lista única) ou desliga (null: volta à última lista da pessoa). */
-    fun setProCountry(country: String?) {
-        if (prefs.value.proCountry == country) return
-        setPref(Prefs.Key.PRO_COUNTRY, country)
+    /** Modo TV Pro: liga com a tabela [lineup] ("pt": abre a lista única) ou desliga (null: volta à última lista da pessoa). */
+    fun setProLineup(lineup: String?) {
+        if (prefs.value.proLineup == lineup) return
+        setPref(Prefs.Key.PRO_LINEUP, lineup)
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val target = country?.let { ProContent.playlist(it) }
+            val target = lineup?.let { ProContent.playlist(it) }
                 ?: playlists.value.firstOrNull { it.id == (profile.lastPlaylistId ?: c.session.lastPlaylist()) } ?: playlists.value.firstOrNull() ?: return@launch
             loadPlaylist(target, resume = true)
         }

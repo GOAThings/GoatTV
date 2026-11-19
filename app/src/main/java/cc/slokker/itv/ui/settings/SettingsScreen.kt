@@ -1,6 +1,7 @@
 package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.data.GroupCountries
+import cc.slokker.itv.data.ProContent
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.api.DELETE_ACCOUNT_URL
 import cc.slokker.itv.data.api.PRIVACY_URL
@@ -788,10 +789,10 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
     return when (route) {
         Route.Lists -> buildList {
             // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
-            val proOptions = listOf<Pair<Any?, String>>(null to s.off) + ProLineup.COUNTRIES.map { it to s.countryName(it) }
+            val proOptions = listOf<Pair<Any?, String>>(null to s.off) + ProLineup.LINEUPS.map { it.id to ProContent.lineupName(it.id) }
             add(
-                Item.Nav("pro", s.proMode, value = prefs.proCountry?.let { s.countryName(it) } ?: s.off, subtitle = s.proModeSub) {
-                    push(Route.Pick(s.proMode, proOptions, prefs.proCountry) { v -> vm.setProCountry(v as String?); nav.pop() }, "pro")
+                Item.Nav("pro", s.proMode, value = prefs.proLineup?.let { ProContent.lineupName(it) } ?: s.off, subtitle = s.proModeSub) {
+                    push(Route.Pick(s.proMode, proOptions, prefs.proLineup) { v -> vm.setProLineup(v as String?); nav.pop() }, "pro")
                 },
             )
             playlists.forEach { p ->

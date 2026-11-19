@@ -156,8 +156,8 @@ data class Prefs(
     val textSize: String = TextSize.NORMAL,
     /** "auto" (sistema), "pt" ou "en". */
     val language: String = "auto",
-    /** Modo TV Pro: o país da lista única (ver ProLineup), ou null (desligado: as listas como sempre). */
-    val proCountry: String? = null,
+    /** Modo TV Pro: a tabela da lista única ("pt", ver ProLineup), ou null (desligado: as listas como sempre). */
+    val proLineup: String? = null,
     /** De quantas em quantas horas voltar a descarregar os canais (0 = sempre que se abre a app). */
     val playlistRefreshHours: Int = 0,
     // Guia
@@ -280,7 +280,7 @@ data class Prefs(
         const val UI_SCALE = "ui_scale"
         const val TEXT_SIZE = "text_size"
         const val LANGUAGE = "language"
-        const val PRO_COUNTRY = "pro_country"
+        const val PRO_LINEUP = "pro_lineup"
         const val PLAYLIST_REFRESH = "playlist_refresh_hours"
         const val EPG_REFRESH = "epg_refresh_hours"
         const val EPG_OFFSET = "epg_offset_min"
@@ -556,7 +556,7 @@ data class Prefs(
                 uiScale = int(Key.UI_SCALE, d.uiScale).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
                 textSize = str(Key.TEXT_SIZE, d.textSize, TextSize.ALL),
                 language = normalizeLanguage(prim(s, Key.LANGUAGE)?.text),
-                proCountry = prim(s, Key.PRO_COUNTRY)?.text?.lowercase()?.takeIf { it in ProLineup.COUNTRIES },
+                proLineup = prim(s, Key.PRO_LINEUP)?.text?.lowercase()?.takeIf { ProLineup.lineup(it) != null },
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.epgRefreshHours,
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),

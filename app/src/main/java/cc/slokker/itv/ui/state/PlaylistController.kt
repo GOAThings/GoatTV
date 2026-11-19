@@ -209,7 +209,7 @@ class PlaylistController(
         if (ok.isEmpty()) error(I18n.s.errPlaylistEmpty(playlist.name).title)
         // Cada lista com as opções dela (nomes limpos, variantes juntas), como apareceria sozinha.
         val viewed = ok.map { ContentView.apply(it, ContentView.options(prefs.value, it.playlist.id)) }
-        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.countryOf(playlist.id), viewed) }
+        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed) }
     }
 
     /** Os canais de [playlist] para escolher o segundo canal (da cache, ou descarregados). */

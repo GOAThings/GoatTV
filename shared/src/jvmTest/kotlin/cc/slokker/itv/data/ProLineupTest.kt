@@ -32,7 +32,7 @@ class ProLineupTest {
     @Test
     fun aliasesAndNumbers() {
         val r = pt(list("a", "PT: TVI24 HD" to null, "PT: Eleven Sports 1" to null, "SPORT.TV 1 FHD" to "PT Desporto"))
-        assertEquals(listOf(7, 21, 28), r.channels.map { it.number })
+        assertEquals(listOf(7, 20, 135), r.channels.map { it.number })
         assertEquals(listOf("CNN Portugal", "Sport TV 1", "DAZN 1"), r.channels.map { it.name })
         assertEquals(listOf(ProLineups.NEWS, ProLineups.SPORTS), r.groups)
     }
@@ -47,7 +47,7 @@ class ProLineupTest {
             ),
         )
         assertEquals(listOf(Ref("a", "a-4", Quality.HD)), r.channels.single { it.number == 3 }.sources)
-        assertNull(r.channels.firstOrNull { it.number == 38 })
+        assertNull(r.channels.firstOrNull { it.number == 130 })
         // O SIC +1 é do país mas não é o SIC: vai para os "Mais canais".
         assertEquals(listOf("SIC +1"), r.channels.filter { it.group == ProLineup.MORE }.map { it.name })
     }
@@ -55,11 +55,11 @@ class ProLineupTest {
     @Test
     fun moreChannelsAreOnlyTheCountrysAndMerged() {
         val r = pt(
-            list("a", "PT| Kuriakos TV HD" to "PT | Outros", "Random Movies" to "Filmes"),
-            list("b", "PT| Kuriakos TV SD" to "PT | Outros"),
+            list("a", "PT| Canal Teste HD" to "PT | Outros", "Random Movies" to "Filmes"),
+            list("b", "PT| Canal Teste SD" to "PT | Outros"),
         )
         val more = r.channels.filter { it.group == ProLineup.MORE }
-        assertEquals(listOf("Kuriakos TV"), more.map { it.name })
+        assertEquals(listOf("Canal Teste"), more.map { it.name })
         assertEquals(ProLineup.MORE_FROM, more.single().number)
         assertEquals(listOf(Ref("a", "a-0", Quality.HD), Ref("b", "b-0", Quality.SD)), more.single().sources)
         assertEquals(listOf(ProLineup.MORE), r.groups)
@@ -68,7 +68,7 @@ class ProLineupTest {
     @Test
     fun idsAreStable() {
         val r = pt(list("a", "PT| RTP 2" to null, "PT| Canal Q" to null))
-        assertEquals(listOf("pro:pt:2", "pro:pt:101"), r.channels.map { it.id })
+        assertEquals(listOf("pro:pt:rtp2", "pro:pt:canalq"), r.channels.map { it.id })
     }
 
     @Test
@@ -93,13 +93,26 @@ class ProLineupTest {
     @Test
     fun cleanNames() {
         assertEquals("SIC Radical", ProLineup.cleanName("PT| SIC Radical FHD"))
-        assertEquals("Kuriakos TV", ProLineup.cleanName("[PT] Kuriakos TV (HD)"))
+        assertEquals("Canal Teste", ProLineup.cleanName("[PT] Canal Teste (HD)"))
         assertEquals("A Bola TV", ProLineup.cleanName("A Bola TV"))
     }
 
     @Test
     fun foreignChannelsTheOperatorCarriesCountFromAnyGroup() {
         val r = pt(list("a", "UK| Sky News HD" to "UK | News", "RTP3 HD" to "PT | Info", "US| ESPN" to "US | Sports"))
-        assertEquals(listOf(6 to "RTP Notícias", 211 to "Sky News"), r.channels.map { it.number to it.name })
+        assertEquals(listOf(6 to "RTP Notícias", 205 to "Sky News"), r.channels.map { it.number to it.name })
+    }
+
+    @Test
+    fun numbersFollowTheNosThemes() {
+        val r = pt(list("a", "PT| SIC Radical" to null, "PT| Sport TV 1" to null, "PT| Mezzo" to null, "PT| V+ TVI" to null))
+        assertEquals(listOf("pro:pt:sicradical" to 9, "pro:pt:sporttv1" to 20, "pro:pt:vtvi" to 59, "pro:pt:mezzo" to 157), r.channels.map { it.id to it.number })
+    }
+
+    @Test
+    fun everyTableIsClean() {
+        for (lineup in ProLineup.LINEUPS) {
+            assertEquals(lineup.slots.size, lineup.slots.map { it.number }.toSet().size, "${lineup.id}: números repetidos")
+        }
     }
 }
