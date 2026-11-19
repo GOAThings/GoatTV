@@ -868,4 +868,6 @@
     <string name="pro_sources">Quellen</string>
     <string name="pro_sources_intro">Die beste zuerst; fällt sie aus, kommt die nächste. OK öffnet diese.</string>
     <string name="pro_source_down">Liste gestört</string>
+    <string name="pro_use_list">Im TV-Pro-Modus verwenden</string>
+    <string name="pro_use_list_sub">Ihre Sender kommen in die eine Liste</string>
 </resources>

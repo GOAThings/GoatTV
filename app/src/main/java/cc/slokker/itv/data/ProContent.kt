@@ -7,9 +7,17 @@ import cc.slokker.itv.ui.i18n.I18n
  * da melhor para a pior (ver ProLineup). A primeira que existe é a que dá; as outras são os failovers.
  */
 class ProSet(val members: Map<String, PlaylistContent>, private val sources: Map<String, List<ProLineup.Ref>>) {
-    /** As fontes do canal [key] que ainda existem, como (lista, canal dela), da melhor para a pior. */
+    /** As fontes que falharam nesta sessão ("lista|canal"): passam para o fim da fila (ver [demote]). */
+    private val failed = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** As fontes do canal [key] que ainda existem, como (lista, canal dela), da melhor para a pior (as que falharam no fim). */
     fun resolve(key: String): List<Pair<PlaylistContent, Channel>> = sources[key].orEmpty().mapNotNull { r ->
         members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { m to it } }
+    }.sortedBy { (m, c) -> "${m.playlist.id}|${c.key}" in failed }
+
+    /** A fonte [channel] de [member] falhou (cai sempre, ou não abre): até a lista se refazer, as outras vêm antes. */
+    fun demote(member: PlaylistContent, channel: Channel) {
+        failed += "${member.playlist.id}|${channel.key}"
     }
 
     /** A qualidade (pelo nome) da melhor fonte do canal [key] (ChannelMatch.Quality), ou null. */

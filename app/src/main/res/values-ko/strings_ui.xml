@@ -865,4 +865,6 @@
     <string name="pro_sources">소스</string>
     <string name="pro_sources_intro">가장 좋은 것부터. 실패하면 다음으로. OK로 이것을 엽니다.</string>
     <string name="pro_source_down">목록 중단됨</string>
+    <string name="pro_use_list">TV Pro 모드에서 사용</string>
+    <string name="pro_use_list_sub">이 목록의 채널이 하나의 목록에 들어갑니다</string>
 </resources>

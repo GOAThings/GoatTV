@@ -868,4 +868,6 @@
     <string name="pro_sources">Kaynaklar</string>
     <string name="pro_sources_intro">En iyisi önce; olmazsa sıradakine geçer. OK bunu açar.</string>
     <string name="pro_source_down">Liste çalışmıyor</string>
+    <string name="pro_use_list">TV Pro modunda kullan</string>
+    <string name="pro_use_list_sub">Kanalları tek listeye girer</string>
 </resources>

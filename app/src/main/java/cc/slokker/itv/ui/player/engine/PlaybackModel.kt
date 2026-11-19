@@ -108,6 +108,7 @@ internal class PlaybackRequest(
             // Modo TV Pro: o canal abre-se na lista da melhor fonte (as outras são os failovers, ver backupStreams).
             content.pro?.let { pro ->
                 val (member, source) = pro.resolve(channel.key).firstOrNull() ?: return PlaybackRequest(channel, null, 0L, emptyList())
+                android.util.Log.i("GoatTV", "Pro: ${channel.name} da lista ${member.playlist.name} (${source.name})")
                 val shown = ProContent.asShown(source, channel)
                 return of(member, shown, catchup?.let { if (it.channel.key == channel.key) it.copy(channel = shown) else it }, streamFormat, stalker, correctionMin)
             }

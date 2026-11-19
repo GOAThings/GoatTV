@@ -1110,6 +1110,8 @@ class Strings(context: Context) {
     val proMore get() = s(R.string.pro_more)
     val proMode get() = s(R.string.pro_mode)
     val proModeSub get() = s(R.string.pro_mode_sub)
+    val proUseList get() = s(R.string.pro_use_list)
+    val proUseListSub get() = s(R.string.pro_use_list_sub)
     val proSources get() = s(R.string.pro_sources)
     val proSourcesIntro get() = s(R.string.pro_sources_intro)
     val proSourceDown get() = s(R.string.pro_source_down)

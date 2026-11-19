@@ -870,4 +870,6 @@
     <string name="pro_sources">Fuentes</string>
     <string name="pro_sources_intro">La mejor primero; si falla, pasa a la siguiente. OK abre esta.</string>
     <string name="pro_source_down">Lista caída</string>
+    <string name="pro_use_list">Usar en el modo TV Pro</string>
+    <string name="pro_use_list_sub">Sus canales entran en la lista única</string>
 </resources>

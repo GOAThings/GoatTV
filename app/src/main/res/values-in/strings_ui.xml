@@ -866,4 +866,6 @@
     <string name="pro_sources">Sumber</string>
     <string name="pro_sources_intro">Yang terbaik dulu; jika gagal, lanjut ke berikutnya. OK membuka yang ini.</string>
     <string name="pro_source_down">Daftar mati</string>
+    <string name="pro_use_list">Pakai di mode TV Pro</string>
+    <string name="pro_use_list_sub">Salurannya masuk ke satu daftar</string>
 </resources>

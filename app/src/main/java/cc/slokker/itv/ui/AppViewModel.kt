@@ -208,7 +208,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (guideChanged) guide.open(fresh)
             playback.onContentRefreshed(fresh)
         },
-        proMembers = { playlists.value },
+        proMembers = { playlists.value.filterNot { it.id in prefs.value.proSkip } },
     )
 
     val content: StateFlow<PlaylistContent?> = lists.content
@@ -987,6 +987,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return pro.resolve(channel.key).mapIndexed { i, (m, c) ->
             ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id))
         }
+    }
+
+    /** A lista [playlistId] entra ([on]) ou não na lista única do Modo TV Pro; com ele ligado, a lista única refaz-se. */
+    fun setProMember(playlistId: String, on: Boolean) {
+        val skip = prefs.value.proSkip
+        if ((playlistId !in skip) == on) return
+        setPref(Prefs.Key.PRO_SKIP, (if (on) skip - playlistId else skip + playlistId).toList())
+        if (proMode) reloadPlaylist()
     }
 
     /** O Modo TV Pro está ligado (a lista aberta é a única, feita com as da pessoa). */
@@ -1914,6 +1922,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // [chosen] (o painel das fontes: o índice de uma), a partir dessa e depois as outras.
         main.pro?.let { pro ->
             val all = pro.resolve(channel.key)
+            // Sem escolha no painel, é porque a fonte que dava falhou: fica para o fim nas próximas vezes.
+            if (chosen == null) all.firstOrNull()?.let { (m, c) -> pro.demote(m, c) }
             val start = chosen?.firstOrNull()?.toIntOrNull()?.coerceIn(0, (all.size - 1).coerceAtLeast(0))
             val order = if (start == null) all.drop(1) else all.drop(start) + all.take(start)
             val (down, up) = order.partition { (m, _) -> providerOutage.isDown(m.playlist.id) }

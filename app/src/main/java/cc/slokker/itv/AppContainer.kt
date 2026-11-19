@@ -157,9 +157,15 @@ class AppContainer(context: Context) {
     /** As gravações (do processo, não do ecrã: continuam com a app em segundo plano). */
     val recordings = RecordingManager(context)
 
-    suspend fun loadPlaylist(playlist: Playlist): PlaylistContent = when (playlist.type) {
-        PlaylistType.XTREAM -> xtream.load(playlist)
-        PlaylistType.M3U -> m3u.load(playlist)
-        PlaylistType.STALKER -> stalker.load(playlist)
+    suspend fun loadPlaylist(playlist: Playlist): PlaylistContent = try {
+        when (playlist.type) {
+            PlaylistType.XTREAM -> xtream.load(playlist)
+            PlaylistType.M3U -> m3u.load(playlist)
+            PlaylistType.STALKER -> stalker.load(playlist)
+        }
+    } finally {
+        // As ligações que ficavam abertas à espera (keep-alive) contam no limite de ligações de muitos fornecedores:
+        // com várias listas do mesmo servidor (Modo TV Pro), o canal era cortado ao fim de um segundo.
+        iptvHttp.connectionPool.evictAll()
     }
 }

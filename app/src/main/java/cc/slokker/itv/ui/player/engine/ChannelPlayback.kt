@@ -152,6 +152,7 @@ internal class ChannelPlayback(
             reconnects = n
             retryDelayMs = waitMs
             nextTryAt = at
+            onDrop()
         }
         timeshift?.onConnected = {
             reconnects = 0
@@ -232,6 +233,7 @@ internal class ChannelPlayback(
      * ainda está a dar não abre nada.
      */
     suspend fun tune(request: PlaybackRequest) {
+        drops.clear()
         val previous = this.request
         // A dar da reserva, conta o canal do ecrã (o da lista principal).
         val same = previous?.shownKey == request.channel.key
@@ -532,6 +534,28 @@ internal class ChannelPlayback(
         }
     }
 
+    /** Quando a ligação do canal caiu (ms), no último minuto: cada queda que volta a dar um segundo não conta como falha. */
+    private val drops = ArrayDeque<Long>()
+
+    /**
+     * A ligação caiu e o gravador vai voltar a ligar. Um canal que dá um segundo e cai, sempre, nunca chega a falhar
+     * (cada religação dá vídeo): à terceira queda num minuto vai-se aos failovers, como num direto preso.
+     */
+    private fun onDrop() {
+        val req = request ?: return
+        val at = now()
+        drops.addLast(at)
+        while (drops.isNotEmpty() && at - drops.first() > DROP_WINDOW_MS) drops.removeFirst()
+        if (drops.size < DROPS_TO_FAIL_OVER || !canFailOver(req)) return
+        drops.clear()
+        Log.w(TAG, "A ligação caiu $DROPS_TO_FAIL_OVER vezes em ${DROP_WINDOW_MS / 1000} s: failovers")
+        backupJob = scope.launch {
+            val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
+            if (request !== req) return@launch
+            if (backups.isNotEmpty()) openBackup(backups, null)
+        }
+    }
+
     private fun onStall(req: PlaybackRequest) {
         val failover = stalls.stalled(now(), canFailOver(req))
         Log.w(TAG, "Direto preso a carregar há ${PlaybackRules.STALL_MS / 1000} s: ${if (failover) "failovers" else "volta a ligar"}")
@@ -734,5 +758,9 @@ internal class ChannelPlayback(
         const val TICK_MS = 500L
 
         const val TAG = "GoatTV.Playback"
+
+        /** Ver [onDrop]. */
+        const val DROP_WINDOW_MS = 60_000L
+        const val DROPS_TO_FAIL_OVER = 3
     }
 }

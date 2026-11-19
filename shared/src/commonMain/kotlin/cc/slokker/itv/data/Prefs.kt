@@ -158,6 +158,8 @@ data class Prefs(
     val language: String = "auto",
     /** Modo TV Pro: a tabela da lista única ("pt", ver ProLineup), ou null (desligado: as listas como sempre). */
     val proLineup: String? = null,
+    /** As listas que ficam fora da lista única do Modo TV Pro (ids); as outras entram todas. */
+    val proSkip: Set<String> = emptySet(),
     /** De quantas em quantas horas voltar a descarregar os canais (0 = sempre que se abre a app). */
     val playlistRefreshHours: Int = 0,
     // Guia
@@ -281,6 +283,7 @@ data class Prefs(
         const val TEXT_SIZE = "text_size"
         const val LANGUAGE = "language"
         const val PRO_LINEUP = "pro_lineup"
+        const val PRO_SKIP = "pro_skip"
         const val PLAYLIST_REFRESH = "playlist_refresh_hours"
         const val EPG_REFRESH = "epg_refresh_hours"
         const val EPG_OFFSET = "epg_offset_min"
@@ -562,6 +565,7 @@ data class Prefs(
                 textSize = str(Key.TEXT_SIZE, d.textSize, TextSize.ALL),
                 language = normalizeLanguage(prim(s, Key.LANGUAGE)?.text),
                 proLineup = prim(s, Key.PRO_LINEUP)?.text?.lowercase()?.takeIf { ProLineup.lineup(it) != null },
+                proSkip = stringSet(s, Key.PRO_SKIP),
                 playlistRefreshHours = int(Key.PLAYLIST_REFRESH, d.playlistRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.playlistRefreshHours,
                 epgRefreshHours = int(Key.EPG_REFRESH, d.epgRefreshHours).takeIf { it in Refresh.OPTIONS } ?: d.epgRefreshHours,
                 epgOffsetMin = int(Key.EPG_OFFSET, d.epgOffsetMin).coerceIn(-12 * 60, 12 * 60),

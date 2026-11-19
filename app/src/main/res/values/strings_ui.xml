@@ -869,4 +869,6 @@
     <string name="pro_sources">Sources</string>
     <string name="pro_sources_intro">The best first; if it fails, the next one plays. OK opens this one.</string>
     <string name="pro_source_down">List down</string>
+    <string name="pro_use_list">Use in TV Pro mode</string>
+    <string name="pro_use_list_sub">Its channels go into the one list</string>
 </resources>

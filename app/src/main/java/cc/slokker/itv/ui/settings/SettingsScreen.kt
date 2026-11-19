@@ -817,6 +817,8 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             val p = playlists.firstOrNull { it.id == route.id } ?: return@buildList
             val isCurrent = p.id == content?.playlist?.id
             if (!isCurrent) add(Item.Action("use", s.usePlaylist) { vm.switchPlaylist(p, leavePro = true) })
+            // Modo TV Pro: esta lista entra (ou não) na lista única.
+            if (prefs.proLineup != null) add(Item.Toggle("pro", s.proUseList, p.id !in prefs.proSkip, s.proUseListSub) { vm.setProMember(p.id, it) })
             add(Item.Action("reload", s.reloadChannels, s.reloadChannelsSub) {
                 if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(p)
             })

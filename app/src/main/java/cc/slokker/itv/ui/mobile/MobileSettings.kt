@@ -340,6 +340,8 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
     BackHandler(onBack = onClose)
     SubPage(playlist.name, onClose) {
         if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist, leavePro = true); onClose() }
+        // Modo TV Pro: esta lista entra (ou não) na lista única.
+        if (prefs.proLineup != null) ToggleRow(s.proUseList, playlist.id !in prefs.proSkip, s.proUseListSub) { vm.setProMember(playlist.id, it) }
         MenuRow(s.reloadChannels, null) {
             if (isCurrent) vm.reloadPlaylist() else vm.switchPlaylist(playlist)
             onClose()
