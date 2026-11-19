@@ -394,7 +394,8 @@ private fun ChannelList(
         }
         LazyColumn(
             state = state,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            // No Modo TV Pro as linhas são cartões: um pouco de ar entre eles.
+            verticalArrangement = Arrangement.spacedBy(if (LocalPanelStyle.current == Prefs.PanelStyles.SOLID) 8.dp else 2.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
             modifier = if (white) Modifier else Modifier.slidingFocus(state, fill = ShadowFocus.takeIf { shadow }) { focusedUid },
         ) {

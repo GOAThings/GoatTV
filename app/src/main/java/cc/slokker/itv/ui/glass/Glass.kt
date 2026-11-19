@@ -124,12 +124,12 @@ val ShadowFocusFill = Color.White.copy(alpha = 0.22f)
 private val ShadowCard = Color(0xEB121317)
 
 /**
- * O Modo TV Pro: dois pretos translúcidos sobre o vídeo, a moldura mais fechada (e mais escura em baixo) e o interior,
- * com os mesmos cantos, um pouco mais aberto.
+ * O Modo TV Pro: um preto translúcido sobre o vídeo (mais escuro em baixo), e cada linha num cartão cinzento por cima
+ * dele ([SolidRow]).
  */
 private val SolidFrameTop = Color(0xE61C2026)
 private val SolidFrameBottom = Color(0xF0121519)
-private val SolidInner = Color(0x12FFFFFF)
+private val SolidRow = Color(0x14FFFFFF)
 
 /**
  * Vidro líquido: fundo desfocado, véu escuro, reflexo de luz no topo e contorno fino.
@@ -145,14 +145,10 @@ fun Modifier.glass(
     if (tint == null && LocalPanelStyle.current == Prefs.PanelStyles.SOLID) {
         return@composed drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
-            val inset = 14.dp.toPx()
-            // O interior com os mesmos cantos da moldura.
-            val inner = shape.createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
             val frame = Brush.verticalGradient(listOf(SolidFrameTop, SolidFrameBottom))
             val stroke = Stroke(width = 1.dp.toPx())
             onDrawBehind {
                 drawOutline(outline, frame)
-                translate(inset, inset) { drawOutline(inner, SolidInner) }
                 drawOutline(outline, Color.White.copy(alpha = 0.12f), style = stroke)
             }
         }
@@ -344,7 +340,9 @@ fun GlassRow(
     // Com o contorno no foco, o item atual não leva fundo (parecia um segundo foco, apagado); marca-o quem chama
     // (ex.: o ponto azul e o "A ver agora" na lista de canais).
     // Com o destaque a deslizar, a linha com foco larga o seu fundo (a placa da lista fica por cima dele).
-    val rest = if (selected && !outlineFocus && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else Color.Transparent
+    // No Modo TV Pro cada linha é um cartão cinzento.
+    val card = if (LocalPanelStyle.current == Prefs.PanelStyles.SOLID) SolidRow else Color.Transparent
+    val rest = if (selected && !outlineFocus && !(slidingFocus && focused)) Color.White.copy(alpha = 0.16f) else card
     val content = if (dark) Color.Black else ItvColors.Text
     val shape = ItvShapes.Row
     val outlineBrush = LocalOutlineBrush.current
