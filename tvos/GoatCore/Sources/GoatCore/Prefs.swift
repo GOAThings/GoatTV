@@ -99,7 +99,8 @@ public struct Prefs: Equatable, Sendable {
     /// As listas que não entram no Modo TV Pro (`pro_skip`).
     public var proSkip: Set<String> = []
     public var outlineColor = "white"
-    /// O tema dos painéis (`panel_style`): "glass" (o vidro original) ou "shadow" (sem painel, sobre uma sombra).
+    /// O tema dos painéis (`panel_style`): "glass" (o vidro original), "shadow" (sem painel, sobre uma sombra) ou
+    /// "solid" (os painéis pretos em dois tons do Modo TV Pro).
     public var panelStyle = PanelLook.glass
     /// No tema Sombra, a linha com foco fica branca com o texto escuro (`white_selector`).
     public var whiteSelector = false
@@ -136,13 +137,13 @@ public struct Prefs: Equatable, Sendable {
     /// O aspeto dos painéis: o tema e, no Sombra, com ou sem o seletor branco (como Prefs.panelLook no Android).
     public enum PanelLook {
         public static let glass = "glass", shadow = "shadow", shadowWhite = "shadow_white"
-        /// Os painéis pretos em dois tons do Modo TV Pro (não se grava: vale enquanto ele está ligado).
+        /// Os painéis pretos em dois tons: o tema "Sólido", e sempre no Modo TV Pro.
         public static let solid = "solid"
     }
 
     public var panelLook: String {
         if proLineup != nil { return PanelLook.solid }
-        if panelStyle == PanelLook.glass { return PanelLook.glass }
+        if panelStyle == PanelLook.glass || panelStyle == PanelLook.solid { return panelStyle }
         return whiteSelector ? PanelLook.shadowWhite : PanelLook.shadow
     }
 

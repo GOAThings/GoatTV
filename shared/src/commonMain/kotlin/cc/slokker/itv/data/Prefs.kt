@@ -143,7 +143,7 @@ data class Prefs(
     val backupMode: Map<String, String> = emptyMap(),
     /** Cor do contorno da linha com foco nas listas (ver OutlineColors): "white", "accent" ou uma cor. */
     val outlineColor: String = OutlineColors.WHITE,
-    /** O tema dos painéis da TV (Definições → Aspeto → Tema): Vidro (o original) ou Sombra; ver [PanelStyles]. */
+    /** O tema dos painéis da TV (Definições → Aspeto → Tema): Vidro (o original), Sombra ou Sólido; ver [PanelStyles]. */
     val panelStyle: String = PanelStyles.GLASS,
     /** No tema Sombra, a linha com foco fica branca com o texto escuro (em vez do fundo claro translúcido). */
     val whiteSelector: Boolean = false,
@@ -192,6 +192,7 @@ data class Prefs(
     val panelLook: String
         get() = when {
             panelStyle == PanelStyles.GLASS -> PanelStyles.GLASS
+            panelStyle == PanelStyles.SOLID -> PanelStyles.SOLID
             whiteSelector -> PanelStyles.SHADOW_WHITE
             else -> PanelStyles.SHADOW
         }
@@ -370,14 +371,14 @@ data class Prefs(
     /**
      * Os temas dos painéis: o vidro original ([GLASS]) ou, sem painel, sobre uma sombra à esquerda do ecrã ([SHADOW]).
      * [SHADOW_WHITE] não se grava: é o aspeto do Sombra com o seletor branco (ver [panelLook]). [SOLID]: os painéis
-     * pretos em dois tons do Modo TV Pro (ainda não se escolhe nas Definições).
+     * pretos em dois tons (o do Modo TV Pro, que o usa sempre; também se escolhe para as outras listas).
      */
     object PanelStyles {
         const val GLASS = "glass"
         const val SHADOW = "shadow"
         const val SHADOW_WHITE = "shadow_white"
         const val SOLID = "solid"
-        val IDS = listOf(GLASS, SHADOW)
+        val IDS = listOf(GLASS, SHADOW, SOLID)
 
         /** Sem caixa: as listas sobre a sombra à esquerda (o Sombra, com ou sem seletor branco). */
         fun isShadow(look: String) = look == SHADOW || look == SHADOW_WHITE

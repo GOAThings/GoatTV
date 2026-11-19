@@ -386,6 +386,8 @@
     <string name="panel_style_glass">Cam</string>
     <string name="panel_style_glass_sub">Orijinal</string>
     <string name="panel_style_shadow_sub">Panel yok, solda bir gölgenin üzerinde</string>
+    <string name="panel_style_solid">Düz</string>
+    <string name="panel_style_solid_sub">TV Pro modundaki gibi iki tonlu siyah paneller</string>
     <string name="white_selector_sub">Odaktaki satır koyu yazıyla beyaz olur</string>
     <string name="outline_accent">Vurgu rengi</string>
     <string name="color_white">Beyaz</string>

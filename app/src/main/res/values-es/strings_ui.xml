@@ -386,6 +386,8 @@
     <string name="panel_style_glass">Cristal</string>
     <string name="panel_style_glass_sub">El original</string>
     <string name="panel_style_shadow_sub">Sin panel, sobre una sombra a la izquierda</string>
+    <string name="panel_style_solid">Sólido</string>
+    <string name="panel_style_solid_sub">Paneles negros en dos tonos, como en el modo TV Pro</string>
     <string name="white_selector_sub">La fila con foco se vuelve blanca con texto oscuro</string>
     <string name="outline_accent">Color de acento</string>
     <string name="color_white">Blanco</string>

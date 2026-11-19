@@ -386,6 +386,8 @@
     <string name="panel_style_glass">Vidro</string>
     <string name="panel_style_glass_sub">O original</string>
     <string name="panel_style_shadow_sub">Sem painel, sobre uma sombra à esquerda</string>
+    <string name="panel_style_solid">Sólido</string>
+    <string name="panel_style_solid_sub">Painéis pretos em dois tons, como no Modo TV Pro</string>
     <string name="white_selector_sub">A linha com foco fica branca com o texto escuro</string>
     <string name="outline_accent">Cor de destaque</string>
     <string name="color_white">Branco</string>

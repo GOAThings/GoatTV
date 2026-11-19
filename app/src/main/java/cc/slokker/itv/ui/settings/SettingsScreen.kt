@@ -621,19 +621,22 @@ private fun prefPageItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
             // No tema Sombra não há vidro; e com o foco suave também não há contorno (o seletor branco ainda o usa
             // nas Definições).
             when (item.key) {
-                Prefs.Key.GLASS_OPACITY -> prefs.panelStyle == Prefs.PanelStyles.SHADOW
+                Prefs.Key.GLASS_OPACITY -> prefs.panelStyle == Prefs.PanelStyles.SHADOW || prefs.panelStyle == Prefs.PanelStyles.SOLID
                 Prefs.Key.OUTLINE_COLOR -> prefs.panelLook == Prefs.PanelStyles.SHADOW
                 else -> false
             }
         }
 
-        // O tema: Vidro (o original) ou Sombra; só no Sombra aparece o seletor branco.
+        // O tema: Vidro (o original), Sombra ou Sólido (o do Modo TV Pro); só no Sombra aparece o seletor branco.
         Route.Theme -> buildList {
             add(Item.Check("theme_glass", s.panelStyleName(Prefs.PanelStyles.GLASS), prefs.panelStyle == Prefs.PanelStyles.GLASS, s.panelStyleGlassSub) {
                 vm.setPref(Prefs.Key.PANEL_STYLE, Prefs.PanelStyles.GLASS)
             })
             add(Item.Check("theme_shadow", s.panelStyleName(Prefs.PanelStyles.SHADOW), prefs.panelStyle == Prefs.PanelStyles.SHADOW, s.panelStyleShadowSub) {
                 vm.setPref(Prefs.Key.PANEL_STYLE, Prefs.PanelStyles.SHADOW)
+            })
+            add(Item.Check("theme_solid", s.panelStyleName(Prefs.PanelStyles.SOLID), prefs.panelStyle == Prefs.PanelStyles.SOLID, s.panelStyleSolidSub) {
+                vm.setPref(Prefs.Key.PANEL_STYLE, Prefs.PanelStyles.SOLID)
             })
             if (prefs.panelStyle == Prefs.PanelStyles.SHADOW) {
                 add(Item.Toggle(Prefs.Key.WHITE_SELECTOR, s.whiteSelector, prefs.whiteSelector, s.whiteSelectorSub) { vm.setPref(Prefs.Key.WHITE_SELECTOR, it) })

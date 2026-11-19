@@ -386,6 +386,8 @@
     <string name="panel_style_glass">Kaca</string>
     <string name="panel_style_glass_sub">Yang asli</string>
     <string name="panel_style_shadow_sub">Tanpa panel, di atas bayangan di kiri</string>
+    <string name="panel_style_solid">Solid</string>
+    <string name="panel_style_solid_sub">Panel hitam dua warna, seperti di mode TV Pro</string>
     <string name="white_selector_sub">Baris yang difokus menjadi putih dengan teks gelap</string>
     <string name="outline_accent">Warna aksen</string>
     <string name="color_white">Putih</string>

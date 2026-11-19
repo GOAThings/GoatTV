@@ -818,14 +818,15 @@ struct SettingsPanel: View {
                 .nav("logo_source", s.t("Logo source", "Origem dos logótipos"), value: logoSourceLabel(prefs.logoSource), to: .logoSource),
                 pickItem("sort"),
                 .header("hpanels", s.r("section_panels_colour")),
-                .nav("panel_style", s.r("panel_style"), value: s.r(prefs.panelStyle == Prefs.PanelLook.shadow ? "panel_style_shadow" : "panel_style_glass"), to: .theme),
+                .nav("panel_style", s.r("panel_style"), value: s.r(prefs.panelStyle == Prefs.PanelLook.shadow ? "panel_style_shadow"
+                         : prefs.panelStyle == Prefs.PanelLook.solid ? "panel_style_solid" : "panel_style_glass"), to: .theme),
                 pickItem("panel_width"),
                 pickItem("accent"),
             ]
             // No tema Sombra não há vidro; e com o foco suave também não há contorno (o seletor branco ainda o usa
             // nas Definições).
             if prefs.panelLook != Prefs.PanelLook.shadow { list.append(pickItem("outline_color")) }
-            if prefs.panelStyle != Prefs.PanelLook.shadow { list.append(pickItem("glass_opacity")) }
+            if prefs.panelStyle == Prefs.PanelLook.glass { list.append(pickItem("glass_opacity")) }
             list.append(pickItem("panel_timeout"))
             return list
 
@@ -836,6 +837,10 @@ struct SettingsPanel: View {
                 },
                 .check("theme_shadow", s.r("panel_style_shadow"), prefs.panelStyle == Prefs.PanelLook.shadow, subtitle: s.r("panel_style_shadow_sub")) {
                     model.setPref("panel_style", .string(Prefs.PanelLook.shadow))
+                },
+                // Os painéis pretos em dois tons do Modo TV Pro, também para as outras listas.
+                .check("theme_solid", s.r("panel_style_solid"), prefs.panelStyle == Prefs.PanelLook.solid, subtitle: s.r("panel_style_solid_sub")) {
+                    model.setPref("panel_style", .string(Prefs.PanelLook.solid))
                 },
             ]
             if prefs.panelStyle == Prefs.PanelLook.shadow {

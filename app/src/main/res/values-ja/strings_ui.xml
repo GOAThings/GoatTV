@@ -386,6 +386,8 @@
     <string name="panel_style_glass">ガラス</string>
     <string name="panel_style_glass_sub">オリジナル</string>
     <string name="panel_style_shadow_sub">パネルなし、左側の影の上に表示</string>
+    <string name="panel_style_solid">ソリッド</string>
+    <string name="panel_style_solid_sub">TV Pro モードと同じ 2 トーンの黒いパネル</string>
     <string name="white_selector_sub">選択中の行が白くなり、文字が暗くなります</string>
     <string name="outline_accent">アクセントカラー</string>
     <string name="color_white">白</string>
