@@ -862,4 +862,7 @@
     <string name="pro_more">その他のチャンネル</string>
     <string name="pro_mode">TV Proモード</string>
     <string name="pro_mode_sub">事業者のチューナーのような1つのリスト</string>
+    <string name="pro_sources">ソース</string>
+    <string name="pro_sources_intro">最良のものから順に。失敗したら次へ。OKでこれを開きます。</string>
+    <string name="pro_source_down">リスト停止中</string>
 </resources>

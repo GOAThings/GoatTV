@@ -869,4 +869,7 @@
     <string name="pro_more">Другие каналы</string>
     <string name="pro_mode">Режим TV Pro</string>
     <string name="pro_mode_sub">Один список, как у приставки оператора</string>
+    <string name="pro_sources">Источники</string>
+    <string name="pro_sources_intro">Сначала лучший; если не работает, включается следующий. OK открывает этот.</string>
+    <string name="pro_source_down">Список недоступен</string>
 </resources>

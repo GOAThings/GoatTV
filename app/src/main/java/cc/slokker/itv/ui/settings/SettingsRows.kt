@@ -155,7 +155,7 @@ internal fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
     }
 
     // No tema Sombra não há blocos: as linhas ficam soltas sobre a sombra, como a lista de canais.
-    val cards = LocalPanelStyle.current == Prefs.PanelStyles.GLASS
+    val cards = !Prefs.PanelStyles.isShadow(LocalPanelStyle.current)
 
     LazyColumn(
         state = state,
@@ -274,7 +274,7 @@ internal fun ItemList(items: List<Item>, focusKey: String?, enabled: Boolean) {
  */
 @Composable
 private fun IconTile(icon: ImageVector, brand: Boolean = false) {
-    val tile = LocalPanelStyle.current == Prefs.PanelStyles.GLASS
+    val tile = !Prefs.PanelStyles.isShadow(LocalPanelStyle.current)
     Box(
         Modifier
             .size(36.dp)

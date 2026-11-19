@@ -866,4 +866,7 @@
     <string name="pro_more">More channels</string>
     <string name="pro_mode">TV Pro mode</string>
     <string name="pro_mode_sub">One clean list, like an operator\'s box</string>
+    <string name="pro_sources">Sources</string>
+    <string name="pro_sources_intro">The best first; if it fails, the next one plays. OK opens this one.</string>
+    <string name="pro_source_down">List down</string>
 </resources>

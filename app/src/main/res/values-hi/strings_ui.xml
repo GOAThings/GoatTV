@@ -865,4 +865,7 @@
     <string name="pro_more">और चैनल</string>
     <string name="pro_mode">TV Pro मोड</string>
     <string name="pro_mode_sub">ऑपरेटर बॉक्स जैसी एक साफ़ सूची</string>
+    <string name="pro_sources">स्रोत</string>
+    <string name="pro_sources_intro">सबसे अच्छा पहले; विफल होने पर अगला चलता है। OK इसे खोलता है।</string>
+    <string name="pro_source_down">सूची बंद है</string>
 </resources>

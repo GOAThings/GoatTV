@@ -863,4 +863,7 @@
     <string name="pro_more">Saluran lain</string>
     <string name="pro_mode">Mode TV Pro</string>
     <string name="pro_mode_sub">Satu daftar rapi, seperti box operator</string>
+    <string name="pro_sources">Sumber</string>
+    <string name="pro_sources_intro">Yang terbaik dulu; jika gagal, lanjut ke berikutnya. OK membuka yang ini.</string>
+    <string name="pro_source_down">Daftar mati</string>
 </resources>

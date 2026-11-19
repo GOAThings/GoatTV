@@ -123,6 +123,10 @@ val ShadowFocusFill = Color.White.copy(alpha = 0.22f)
 /** As caixas no estilo Sombra: um cartão escuro, sem vidro. */
 private val ShadowCard = Color(0xEB121317)
 
+/** O Modo TV Pro: a moldura e o interior, dois pretos sólidos (o mais escuro por dentro). */
+private val SolidFrame = Color(0xF51E2228)
+private val SolidInner = Color(0xFF14171B)
+
 /**
  * Vidro líquido: fundo desfocado, véu escuro, reflexo de luz no topo e contorno fino.
  * Sem fundo disponível (antes do primeiro frame, ou fora do player) fica um vidro fumado.
@@ -134,6 +138,19 @@ fun Modifier.glass(
     fallbackTint: Color = Color(0xCC111522),
 ): Modifier = composed {
     val backdrop = LocalGlassBackdrop.current
+    if (tint == null && LocalPanelStyle.current == Prefs.PanelStyles.SOLID) {
+        return@composed drawWithCache {
+            val outline = shape.createOutline(size, layoutDirection, this)
+            val inset = 14.dp.toPx()
+            val inner = RoundedCornerShape(18.dp).createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
+            val stroke = Stroke(width = 1.dp.toPx())
+            onDrawBehind {
+                drawOutline(outline, SolidFrame)
+                translate(inset, inset) { drawOutline(inner, SolidInner) }
+                drawOutline(outline, Color.White.copy(alpha = 0.08f), style = stroke)
+            }
+        }
+    }
     if (tint == null && LocalPanelStyle.current != Prefs.PanelStyles.GLASS) {
         return@composed drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)

@@ -55,6 +55,8 @@ internal fun HudButtons(
     canAddChannel: Boolean,
     /** A lista tem reserva e é direto: o botão "Canal de reserva". */
     backup: Boolean,
+    /** Modo TV Pro: o botão da reserva abre as fontes do canal. */
+    pro: Boolean = false,
     dualLayout: DualLayout,
     /** O foco ao abrir, quando não vai para a barra de progresso (sem pausa do direto). */
     firstFocus: FocusRequester?,
@@ -127,7 +129,7 @@ internal fun HudButtons(
                 vm.showToast(s.epgNeedsAccount)
             }
         })
-        if (backup) GlassChipButton(ItvIcons.SwapPlaylist, s.backupChannel, { onAction(HudAction.BACKUP) })
+        if (backup) GlassChipButton(ItvIcons.SwapPlaylist, if (pro) s.proSources else s.backupChannel, { onAction(HudAction.BACKUP) })
         GlassChipButton(
             if (isFavorite) ItvIcons.Star else ItvIcons.StarOutline,
             if (isFavorite) s.removeFavorite else s.addFavorite,

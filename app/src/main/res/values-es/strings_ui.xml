@@ -867,4 +867,7 @@
     <string name="pro_more">Más canales</string>
     <string name="pro_mode">Modo TV Pro</string>
     <string name="pro_mode_sub">Una sola lista, como el deco de un operador</string>
+    <string name="pro_sources">Fuentes</string>
+    <string name="pro_sources_intro">La mejor primero; si falla, pasa a la siguiente. OK abre esta.</string>
+    <string name="pro_source_down">Lista caída</string>
 </resources>

@@ -78,6 +78,7 @@ import cc.slokker.itv.data.SportsHub
 import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.ui.theme.LocalPanelStyle
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import cc.slokker.itv.ui.AppViewModel
@@ -1108,7 +1109,8 @@ fun PlayerScreen(vm: AppViewModel) {
                         vm, current, live, prefs.aspect, isFavorite, sleepAt,
                         pauseLive = pausable, recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
                         second = extras.isNotEmpty(), canAddChannel = extras.size < PlaybackState.MAX_EXTRAS,
-                        backup = catchup == null && vm.backupOf(data.playlist.id) != null,
+                        backup = catchup == null && (data.pro != null || vm.backupOf(data.playlist.id) != null),
+                        pro = data.pro != null,
                         dualLayout = dualLayout, firstFocus = if (pausable) null else hudFocus,
                     ) { action ->
                         when (action) {
@@ -1225,11 +1227,19 @@ fun PlayerScreen(vm: AppViewModel) {
                 enter = fadeIn() + slideInHorizontally { -it / 4 },
                 exit = fadeOut() + slideOutHorizontally { -it / 4 },
             ) {
-                BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, nav = backupNav, onTry = { failovers ->
-                    showBackup = false
-                    // Fecha a ligação à lista principal e abre os failovers, pela ordem (o aviso aparece quando der).
-                    scope.launch { playback.playBackup(vm.backupStreams(data, current, failovers)) }
-                })
+                if (data.pro != null) {
+                    // Modo TV Pro: em vez da lista de reserva, as fontes do canal nas listas da pessoa.
+                    ProSourcesPanel(vm, current, width = (prefs.panelWidth + 60).dp, onPick = { index ->
+                        showBackup = false
+                        scope.launch { playback.playBackup(vm.backupStreams(data, current, listOf(index.toString()))) }
+                    })
+                } else {
+                    BackupChannelPanel(vm, current, width = (prefs.panelWidth + 60).dp, nav = backupNav, onTry = { failovers ->
+                        showBackup = false
+                        // Fecha a ligação à lista principal e abre os failovers, pela ordem (o aviso aparece quando der).
+                        scope.launch { playback.playBackup(vm.backupStreams(data, current, failovers)) }
+                    })
+                }
             }
 
             AnimatedVisibility(
@@ -1345,7 +1355,7 @@ fun PlayerScreen(vm: AppViewModel) {
 
             // Estilo Sombra: sem painel, uma sombra à esquerda do ecrã por baixo das listas (só aparece e desaparece).
             AnimatedVisibility(
-                visible = panel != Panel.None && prefs.panelLook != Prefs.PanelStyles.GLASS,
+                visible = panel != Panel.None && Prefs.PanelStyles.isShadow(LocalPanelStyle.current),
                 modifier = Modifier.fillMaxSize(),
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -1417,7 +1427,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             // Estilo Sombra: as Definições abrem à esquerda, como as listas, por cima da mesma sombra.
-            val settingsLeft = prefs.panelLook != Prefs.PanelStyles.GLASS
+            val settingsLeft = Prefs.PanelStyles.isShadow(LocalPanelStyle.current)
             AnimatedVisibility(
                 visible = showSettings && settingsLeft,
                 modifier = Modifier.fillMaxSize(),

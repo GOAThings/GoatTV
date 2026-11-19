@@ -867,4 +867,7 @@
     <string name="pro_more">Altri canali</string>
     <string name="pro_mode">Modalità TV Pro</string>
     <string name="pro_mode_sub">Un\'unica lista, come il decoder di un operatore</string>
+    <string name="pro_sources">Fonti</string>
+    <string name="pro_sources_intro">La migliore prima; se non va, si passa alla successiva. OK apre questa.</string>
+    <string name="pro_source_down">Lista non disponibile</string>
 </resources>

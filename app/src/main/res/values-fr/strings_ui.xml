@@ -867,4 +867,7 @@
     <string name="pro_more">Autres chaînes</string>
     <string name="pro_mode">Mode TV Pro</string>
     <string name="pro_mode_sub">Une seule liste, comme la box d\'un opérateur</string>
+    <string name="pro_sources">Sources</string>
+    <string name="pro_sources_intro">La meilleure d\'abord ; si elle échoue, on passe à la suivante. OK ouvre celle-ci.</string>
+    <string name="pro_source_down">Liste en panne</string>
 </resources>

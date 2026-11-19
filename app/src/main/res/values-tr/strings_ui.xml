@@ -865,4 +865,7 @@
     <string name="pro_more">Diğer kanallar</string>
     <string name="pro_mode">TV Pro modu</string>
     <string name="pro_mode_sub">Operatör kutusu gibi tek bir liste</string>
+    <string name="pro_sources">Kaynaklar</string>
+    <string name="pro_sources_intro">En iyisi önce; olmazsa sıradakine geçer. OK bunu açar.</string>
+    <string name="pro_source_down">Liste çalışmıyor</string>
 </resources>

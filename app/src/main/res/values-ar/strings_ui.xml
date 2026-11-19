@@ -873,4 +873,7 @@
     <string name="pro_more">قنوات أخرى</string>
     <string name="pro_mode">وضع TV Pro</string>
     <string name="pro_mode_sub">قائمة واحدة مرتبة مثل جهاز المشغّل</string>
+    <string name="pro_sources">المصادر</string>
+    <string name="pro_sources_intro">الأفضل أولاً؛ إذا فشل يُنتقل إلى التالي. OK يفتح هذا.</string>
+    <string name="pro_source_down">القائمة متوقفة</string>
 </resources>

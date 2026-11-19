@@ -865,4 +865,7 @@
     <string name="pro_more">Weitere Sender</string>
     <string name="pro_mode">TV-Pro-Modus</string>
     <string name="pro_mode_sub">Eine Liste, wie die Box eines Anbieters</string>
+    <string name="pro_sources">Quellen</string>
+    <string name="pro_sources_intro">Die beste zuerst; fällt sie aus, kommt die nächste. OK öffnet diese.</string>
+    <string name="pro_source_down">Liste gestört</string>
 </resources>

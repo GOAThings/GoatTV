@@ -978,6 +978,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Uma fonte de um canal do Modo TV Pro (ver [proSources]): [down] se a lista dela esteve em baixo há pouco. */
+    class ProSource(val index: Int, val playlistName: String, val channelName: String, val quality: Int, val down: Boolean)
+
+    /** As fontes de [channel] no Modo TV Pro, da melhor para a pior; vazia fora dele. */
+    fun proSources(channel: Channel): List<ProSource> {
+        val pro = content.value?.pro ?: return emptyList()
+        return pro.resolve(channel.key).mapIndexed { i, (m, c) ->
+            ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id))
+        }
+    }
+
     /** O Modo TV Pro está ligado (a lista aberta é a única, feita com as da pessoa). */
     val proMode: Boolean get() = content.value?.pro != null
 
@@ -1899,11 +1910,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     internal suspend fun backupStreams(main: PlaylistContent, channel: Channel, chosen: List<String>? = null, tile: Int = 0): List<BackupStream> {
         if (streamsDisabled) return emptyList()
-        // Modo TV Pro: as outras fontes do canal, pela ordem (as das listas em baixo há pouco ficam para o fim).
+        // Modo TV Pro: as outras fontes do canal, pela ordem (as das listas em baixo há pouco ficam para o fim). Com
+        // [chosen] (o painel das fontes: o índice de uma), a partir dessa e depois as outras.
         main.pro?.let { pro ->
-            val (down, up) = pro.resolve(channel.key).drop(1).partition { (m, _) -> providerOutage.isDown(m.playlist.id) }
+            val all = pro.resolve(channel.key)
+            val start = chosen?.firstOrNull()?.toIntOrNull()?.coerceIn(0, (all.size - 1).coerceAtLeast(0))
+            val order = if (start == null) all.drop(1) else all.drop(start) + all.take(start)
+            val (down, up) = order.partition { (m, _) -> providerOutage.isDown(m.playlist.id) }
+            // O aviso diz a lista que falhou (a da primeira fonte), não "Portugal".
+            val failed = all.firstOrNull()?.first?.playlist?.name ?: main.playlist.name
             return (up + down).map { (m, c) ->
-                BackupStream(PlaybackRequest.of(m, ProContent.asShown(c, channel).copy(name = c.name), null, streamFormat.value, stalkerLinks), main.playlist.name, m.playlist.name)
+                BackupStream(PlaybackRequest.of(m, ProContent.asShown(c, channel).copy(name = c.name), null, streamFormat.value, stalkerLinks), failed, m.playlist.name)
             }
         }
         val id = main.playlist.id
