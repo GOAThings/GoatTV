@@ -30,12 +30,19 @@ internal class AppPlaybackHost(
     override fun programmeStartAt(channel: Channel, wallMs: Long): Long? = vm.guideEntries(channel).at(wallMs)?.startMs
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
     override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = vm.backupStreams(latestData(), request.channel)
-    override fun onBackupPlaying(origin: BackupOrigin) = vm.showToast(
-        if (origin.sameList) I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName) else I18n.s.backupPlaying(origin.mainName, origin.backupName),
-    )
+    override fun onBackupPlaying(origin: BackupOrigin) {
+        vm.proBackupPlaying()
+        vm.showToast(
+            if (origin.sameList) I18n.s.backupPlayingChannel(origin.main.channel.name, origin.backupName) else I18n.s.backupPlaying(origin.mainName, origin.backupName),
+        )
+    }
     override fun providerDown(request: PlaybackRequest): Boolean = vm.providerOutage.isDown(latestData().playlist.id)
     override fun onMainFailed(request: PlaybackRequest, error: PlaybackException) {
-        if (ProviderOutage.providerWide(OpenRetry.httpCode(error))) vm.providerOutage.markDown(latestData().playlist.id)
+        if (!ProviderOutage.providerWide(OpenRetry.httpCode(error))) return
+        // No Modo TV Pro, a lista em baixo é a da fonte que dava (a lista única não tem fornecedor).
+        val data = latestData()
+        val member = data.pro?.resolve(request.shownKey)?.firstOrNull()?.first
+        vm.providerOutage.markDown(member?.playlist?.id ?: data.playlist.id)
     }
     override fun onMainPlaying(request: PlaybackRequest) = vm.providerOutage.clear(latestData().playlist.id)
 

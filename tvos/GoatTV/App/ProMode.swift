@@ -160,6 +160,13 @@ extension AppModel {
         }
     }
 
+    /// Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth).
+    func proBackupPlaying() {
+        guard let pending = proPendingDemote else { return }
+        proPendingDemote = nil
+        pending.set.demote(pending.member, pending.channel)
+    }
+
     /// O painel das fontes: dá já a fonte [index] (e as seguintes ficam como failovers dela).
     func tryProSource(_ index: Int) { tryBackup(["\(index)"]) }
 
@@ -168,8 +175,9 @@ extension AppModel {
     func proStreams(_ pro: ProSet, _ channel: Channel, start: Int?) -> [FailoverStream] {
         let all = pro.resolve(channel.key)
         guard !all.isEmpty else { return [] }
-        // Sem escolha no painel, é porque a fonte que dava falhou: fica para o fim nas próximas vezes.
-        if start == nil, let first = all.first { pro.demote(first.member, first.channel) }
+        // Sem escolha no painel, é porque a fonte que dava falhou: se outra der no lugar dela (ver [proBackupPlaying]),
+        // fica para o fim nas próximas vezes. Se nenhuma der (a conta toda recusa), não é culpa desta fonte.
+        proPendingDemote = start == nil ? all.first.map { (set: pro, member: $0.member, channel: $0.channel) } : nil
         // O aviso diz a lista que falhou (a da primeira fonte), não "Portugal".
         proFailedFrom = all.first?.member.playlist.name
         let order: [(member: PlaylistContent, channel: Channel)]

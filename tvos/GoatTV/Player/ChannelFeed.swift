@@ -23,7 +23,7 @@ final class ChannelFeed {
     private(set) var isClosed = false
 
     /// A ligação caiu e volta a ligar (tentativa, espera em s); voltou a dar; afinal não é TS. Na thread principal.
-    var onReconnect: ((_ attempt: Int, _ wait: TimeInterval) -> Void)?
+    var onReconnect: ((_ attempt: Int, _ wait: TimeInterval, _ dropped: Bool) -> Void)?
     var onConnected: (() -> Void)?
     var onNotTs: (() -> Void)?
 
@@ -66,10 +66,10 @@ final class ChannelFeed {
         let recorder = TimeshiftRecorder(ring: ring, request: request, reconnectSeconds: reconnectSeconds, previous: last, hls: hls)
         let feed = ChannelFeed(ring: ring, url: url.absoluteString, recorder: recorder)
         // Os avisos do gravador chegam de outra fila; uma ligação já fechada não avisa ninguém.
-        recorder.onReconnect = { [weak feed] attempt, wait in
+        recorder.onReconnect = { [weak feed] attempt, wait, dropped in
             Task { @MainActor in
                 guard let feed, !feed.isClosed else { return }
-                feed.onReconnect?(attempt, wait)
+                feed.onReconnect?(attempt, wait, dropped)
             }
         }
         recorder.onConnected = { [weak feed] in

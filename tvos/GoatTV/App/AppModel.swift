@@ -117,6 +117,8 @@ final class AppModel {
     let proHealth = ProHealth()
     /// No Modo TV Pro, a lista da fonte que falhou (o aviso "<lista> não responde").
     @ObservationIgnored var proFailedFrom: String?
+    /// A fonte do Modo TV Pro que falhou, à espera de saber se outra deu no lugar dela (ver proBackupPlaying).
+    @ObservationIgnored var proPendingDemote: (set: ProSet, member: PlaylistContent, channel: Channel)?
     @ObservationIgnored private var shownOptions: ContentView.Options?
 
     /// O programa a ver em catch-up (nil = em direto).

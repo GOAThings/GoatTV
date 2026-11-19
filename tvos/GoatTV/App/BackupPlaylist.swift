@@ -357,6 +357,7 @@ extension AppModel {
     /// Um failover começou a dar: o aviso ("<lista> não responde. A dar da <reserva>.", ou o canal da própria lista).
     func backupPlaying() {
         guard let content, let stream = failoverNow else { return }
+        proBackupPlaying()
         if stream.sameList {
             showToast(strings.r("backup_playing_channel", current?.name ?? "", stream.channel.name))
         } else {

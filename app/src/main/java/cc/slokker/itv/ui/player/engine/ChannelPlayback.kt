@@ -148,11 +148,13 @@ internal class ChannelPlayback(
 
     init {
         // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
-        timeshift?.onReconnect = { n, at, waitMs ->
+        timeshift?.onReconnect = { n, at, waitMs, dropped ->
             reconnects = n
             retryDelayMs = waitMs
             nextTryAt = at
-            onDrop()
+            // Só conta uma ligação que deu vídeo e caiu: uma recusa ao voltar a ligar (403, conta ocupada noutro
+            // aparelho) não diz nada desta fonte.
+            if (dropped) onDrop()
         }
         timeshift?.onConnected = {
             reconnects = 0

@@ -356,12 +356,14 @@ final class PlayerEngine: NSObject {
         vlc.delegate = self
         vlc.drawable = vlcView
         // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
-        timeshift.onReconnect = { [weak self] attempt, at, wait in
+        timeshift.onReconnect = { [weak self] attempt, at, wait, dropped in
             guard let self else { return }
             self.reconnects = attempt
             self.retryDelay = wait
             self.nextTryAt = at
-            self.dropped()
+            // Só conta uma ligação que deu vídeo e caiu: uma recusa ao voltar a ligar (403, a conta ocupada noutro
+            // aparelho) não diz nada desta fonte.
+            if dropped { self.dropped() }
         }
         timeshift.onConnected = { [weak self] in
             self?.reconnects = 0

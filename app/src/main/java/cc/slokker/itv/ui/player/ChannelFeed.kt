@@ -64,8 +64,11 @@ internal class ChannelFeed private constructor(
     @Volatile var notTs = false
         private set
 
-    /** A ligação caiu e volta a ligar (tentativa, quando — elapsedRealtime — e quanto espera). Na thread principal. */
-    @Volatile var onReconnect: ((attempt: Int, nextTryAt: Long, waitMs: Long) -> Unit)? = null
+    /**
+     * A ligação caiu e volta a ligar (tentativa, quando — elapsedRealtime — e quanto espera; [dropped]: a ligação que
+     * caiu chegou a dar vídeo, não foi uma recusa ao voltar a ligar). Na thread principal.
+     */
+    @Volatile var onReconnect: ((attempt: Int, nextTryAt: Long, waitMs: Long, dropped: Boolean) -> Unit)? = null
 
     /** A ligação voltou a dar dados. Na thread principal. */
     @Volatile var onConnected: (() -> Unit)? = null
@@ -155,12 +158,12 @@ internal class ChannelFeed private constructor(
             var reconnects = 0
             while (!closed) {
                 var error: IOException? = null
+                var gotData = false
                 val src = gated().createDataSource()
                 source = src
                 try {
                     Log.d(TAG, "A ligar (${ring.hashCode()})")
                     src.open(DataSpec(uri))
-                    var gotData = false
                     while (!closed) {
                         val n = src.read(buffer, 0, buffer.size)
                         if (n == C.RESULT_END_OF_INPUT) break
@@ -212,7 +215,8 @@ internal class ChannelFeed private constructor(
                 ring.endSegment(final = false)
                 reconnects++
                 val attempt = reconnects
-                main.post { onReconnect?.invoke(attempt, SystemClock.elapsedRealtime() + reconnectMs, reconnectMs) }
+                val dropped = gotData
+                main.post { onReconnect?.invoke(attempt, SystemClock.elapsedRealtime() + reconnectMs, reconnectMs, dropped) }
                 sleep(reconnectMs)
             }
         }

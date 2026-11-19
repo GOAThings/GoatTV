@@ -41,7 +41,7 @@ final class Timeshift {
     @ObservationIgnored var seeking = false
 
     /// A ligação caiu e o gravador volta a ligar (tentativa, quando, quanto espera).
-    @ObservationIgnored var onReconnect: ((_ attempt: Int, _ at: Date, _ wait: TimeInterval) -> Void)?
+    @ObservationIgnored var onReconnect: ((_ attempt: Int, _ at: Date, _ wait: TimeInterval, _ dropped: Bool) -> Void)?
     /// A ligação voltou a dar dados.
     @ObservationIgnored var onConnected: (() -> Void)?
     /// Afinal não é TS: o gravador já largou a ligação, o leitor abre o stream ele próprio.
@@ -109,9 +109,9 @@ final class Timeshift {
         generation += 1
         let id = generation
         // Os avisos da ligação (um leitor antigo já não conta).
-        feed.onReconnect = { [weak self] attempt, wait in
+        feed.onReconnect = { [weak self] attempt, wait, dropped in
             guard let self, self.session?.id == id else { return }
-            self.onReconnect?(attempt, Date().addingTimeInterval(wait), wait)
+            self.onReconnect?(attempt, Date().addingTimeInterval(wait), wait, dropped)
         }
         feed.onConnected = { [weak self] in
             guard let self, self.session?.id == id else { return }
@@ -353,8 +353,9 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
     private var reconnects = 0
     private var refused: Int?
 
-    /// A ligação caiu e volta a ligar daqui a [wait] s (tentativa [attempt]). Chamados na fila da ligação.
-    var onReconnect: (@Sendable (_ attempt: Int, _ wait: TimeInterval) -> Void)?
+    /// A ligação caiu e volta a ligar daqui a [wait] s (tentativa [attempt]; [dropped]: a ligação que caiu chegou a dar
+    /// vídeo, não foi uma recusa ao voltar a ligar). Chamados na fila da ligação.
+    var onReconnect: (@Sendable (_ attempt: Int, _ wait: TimeInterval, _ dropped: Bool) -> Void)?
     var onConnected: (@Sendable () -> Void)?
     var onNotTs: (@Sendable () -> Void)?
 
@@ -608,7 +609,7 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         reconnects += 1
         let wait = Double(reconnectSeconds)
         DebugLog.add("Timeshift: connection dropped, reconnecting in \(reconnectSeconds) s (\(reconnects))")
-        onReconnect?(reconnects, wait)
+        onReconnect?(reconnects, wait, gotData)
         retry(after: wait)
     }
 }

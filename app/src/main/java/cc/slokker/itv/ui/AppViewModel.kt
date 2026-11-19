@@ -44,6 +44,7 @@ import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.data.entry
 import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.data.ProContent
+import cc.slokker.itv.data.ProSet
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
@@ -977,6 +978,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 ?: playlists.value.firstOrNull { it.id == (profile.lastPlaylistId ?: c.session.lastPlaylist()) } ?: playlists.value.firstOrNull() ?: return@launch
             loadPlaylist(target, resume = true)
         }
+    }
+
+    /** A fonte do Modo TV Pro que falhou, à espera de saber se outra deu no lugar dela (ver [backupStreams]). */
+    private var proPendingDemote: Triple<ProSet, PlaylistContent, Channel>? = null
+
+    /** Um failover começou a dar: no Modo TV Pro, a fonte que falhou passa para o fim (ver ProHealth). */
+    fun proBackupPlaying() {
+        val (pro, member, channel) = proPendingDemote ?: return
+        proPendingDemote = null
+        pro.demote(member, channel)
     }
 
     /** Uma fonte de um canal do Modo TV Pro (ver [proSources]): [down] se a lista dela esteve em baixo há pouco. */
@@ -1923,8 +1934,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // [chosen] (o painel das fontes: o índice de uma), a partir dessa e depois as outras.
         main.pro?.let { pro ->
             val all = pro.resolve(channel.key)
-            // Sem escolha no painel, é porque a fonte que dava falhou: fica para o fim nas próximas vezes.
-            if (chosen == null) all.firstOrNull()?.let { (m, c) -> pro.demote(m, c) }
+            // Sem escolha no painel, é porque a fonte que dava falhou: se outra der no lugar dela ([proBackupPlaying]),
+            // fica para o fim nas próximas vezes. Se nenhuma der (a conta toda recusa), não é culpa desta fonte.
+            proPendingDemote = if (chosen == null) all.firstOrNull()?.let { (m, c) -> Triple(pro, m, c) } else null
             val start = chosen?.firstOrNull()?.toIntOrNull()?.coerceIn(0, (all.size - 1).coerceAtLeast(0))
             // Escolhida no painel: a pessoa quer essa, mesmo que tenha falhado antes (se voltar a cair, volta para o fim).
             start?.let { all.getOrNull(it) }?.let { (m, c) -> pro.promote(m, c) }

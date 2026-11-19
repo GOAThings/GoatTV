@@ -89,7 +89,7 @@ internal class Timeshift(context: Context) {
     private var lastProgrammeStart: (Long) -> Long? = { null }
 
     /** A ligação caiu e o gravador volta a ligar (tentativa, quando — elapsedRealtime — e quanto espera). */
-    var onReconnect: ((attempt: Int, nextTryAt: Long, waitMs: Long) -> Unit)? = null
+    var onReconnect: ((attempt: Int, nextTryAt: Long, waitMs: Long, dropped: Boolean) -> Unit)? = null
 
     /** A ligação voltou a dar dados. */
     var onConnected: (() -> Unit)? = null
@@ -139,7 +139,7 @@ internal class Timeshift(context: Context) {
         val source = if (candidate.isHls) cc.slokker.itv.ui.player.goatcore.HlsDataSource.Factory(direct) else direct
         val reused = ChannelFeed.find(candidate.url)?.takeIf { it.hold(ChannelFeed.Holder.PLAYER) }
         val feed = reused ?: ChannelFeed.open(dir, candidate.url, source, gate, reconnectMs, ChannelFeed.Holder.PLAYER, hls = candidate.isHls) ?: return null
-        feed.onReconnect = { n, at, waitMs -> onReconnect?.invoke(n, at, waitMs) }
+        feed.onReconnect = { n, at, waitMs, dropped -> onReconnect?.invoke(n, at, waitMs, dropped) }
         feed.onConnected = { onConnected?.invoke() }
         val s = Session(feed, extractors)
         session = s
