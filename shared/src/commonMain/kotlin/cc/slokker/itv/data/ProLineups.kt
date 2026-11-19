@@ -21,6 +21,13 @@ internal object ProLineups {
 
     val GROUPS = listOf(GENERAL, NEWS, ENTERTAINMENT, MOVIES, SPORTS, KIDS, DOCS, MUSIC, INTERNATIONAL)
 
+    /**
+     * Um canal de uma tabela: o número, o nome a mostrar, o grupo, os outros nomes por que aparece nas listas
+     * (separados por `|`) e se é estrangeiro (ver [Slot.foreign]).
+     */
+    fun slot(number: Int, name: String, group: String, aka: String = "", foreign: Boolean = false) =
+        Slot(number, name, group, aka.split('|').map { it.trim() }.filter { it.isNotEmpty() }, foreign)
+
     /** Os canais sem número na tabela começam aqui (depois de todos os outros). */
     const val EXTRA_FROM = 300
 

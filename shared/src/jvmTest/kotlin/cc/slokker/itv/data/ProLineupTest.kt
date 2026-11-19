@@ -60,7 +60,9 @@ class ProLineupTest {
         )
         val more = r.channels.filter { it.group == ProLineup.MORE }
         assertEquals(listOf("Canal Teste"), more.map { it.name })
-        assertEquals(ProLineup.MORE_FROM, more.single().number)
+        // Depois de todos os da tabela (a de Portugal vai até aos 300 e tal): nenhum número repetido.
+        assertEquals(400, more.single().number)
+        assertTrue(ProLineups.PT.slots.all { it.number < more.single().number })
         assertEquals(listOf(Ref("a", "a-0", Quality.HD), Ref("b", "b-0", Quality.SD)), more.single().sources)
         assertEquals(listOf(ProLineup.MORE), r.groups)
     }
@@ -110,9 +112,35 @@ class ProLineupTest {
     }
 
     @Test
+    fun everyTableFindsItsOwnChannels() {
+        // Cada canal de cada tabela, como vem numa lista do país ("ES| La 1 HD" no grupo "ES | Generalistas"), vai
+        // para o lugar dele.
+        for (lineup in ProLineup.LINEUPS) {
+            val tag = lineup.country.uppercase().let { if (it == "GB") "UK" else it }
+            val named = lineup.slots.filter { ChannelMatch.parse(it.name).base.length >= 2 }
+            val input = named.mapIndexed { i, slot -> ProLineup.Input("k$i", "$tag| ${slot.name} HD", "$tag | TV") }
+            val r = ProLineup.build(lineup, lineup.country, listOf(ProLineup.Source("a", input)))
+            val got = r.channels.filter { it.group != ProLineup.MORE }.map { it.number }.toSet()
+            val lost = named.filter { it.number !in got }.map { it.name }
+            assertTrue(lost.isEmpty(), "${lineup.id}: não encontrou $lost")
+        }
+    }
+
+    @Test
     fun everyTableIsClean() {
         for (lineup in ProLineup.LINEUPS) {
             assertEquals(lineup.slots.size, lineup.slots.map { it.number }.toSet().size, "${lineup.id}: números repetidos")
+            // Dois canais da tabela com o mesmo nome (já normalizado): o segundo nunca recebia fontes.
+            val owner = HashMap<String, String>()
+            for (slot in lineup.slots) {
+                // Os nomes de uma letra ("E!") não contam (ver ProLineup.build): tem de haver outro.
+                val names = (listOf(slot.name) + slot.aliases).filter { ChannelMatch.parse(it).base.length >= 2 }
+                assertTrue(names.isNotEmpty(), "${lineup.id}: \"${slot.name}\" fica sem nome")
+                for (n in names) {
+                    val other = owner.putIfAbsent(ChannelMatch.parse(n).base, slot.name)
+                    assertTrue(other == null || other == slot.name, "${lineup.id}: \"$n\" é de \"$other\" e de \"${slot.name}\"")
+                }
+            }
         }
     }
 }

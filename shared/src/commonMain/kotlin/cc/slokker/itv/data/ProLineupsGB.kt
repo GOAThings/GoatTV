@@ -1,0 +1,205 @@
+package cc.slokker.itv.data
+
+import cc.slokker.itv.data.ProLineup.Lineup
+import cc.slokker.itv.data.ProLineups.DOCS
+import cc.slokker.itv.data.ProLineups.ENTERTAINMENT
+import cc.slokker.itv.data.ProLineups.GENERAL
+import cc.slokker.itv.data.ProLineups.INTERNATIONAL
+import cc.slokker.itv.data.ProLineups.KIDS
+import cc.slokker.itv.data.ProLineups.MOVIES
+import cc.slokker.itv.data.ProLineups.MUSIC
+import cc.slokker.itv.data.ProLineups.NEWS
+import cc.slokker.itv.data.ProLineups.SPORTS
+import cc.slokker.itv.data.ProLineups.slot
+
+/**
+ * Reino Unido: a grelha da Sky por satélite (Sky Q, Inglaterra; lista da RXTV revista em junho de 2026, com as mudanças
+ * de janeiro de 2026), sem os +1 nem as variantes regionais. Os da Irlanda (RTÉ, TG4) não têm número fixo na Inglaterra:
+ * ficam em números livres no fim dos internacionais.
+ */
+internal object ProLineupsGB {
+    val GB: Lineup = Lineup("gb", "gb", "Sky", ProLineups.GROUPS, listOf(
+        // Generalistas e entretenimento (101–199).
+        slot(101, "BBC One", GENERAL, "BBC 1"),
+        slot(102, "BBC Two", GENERAL, "BBC 2"),
+        slot(103, "ITV1", GENERAL, "ITV|STV|UTV"),
+        slot(104, "Channel 4", GENERAL, "C4"),
+        slot(105, "Channel 5", GENERAL, "Five|Channel Five"),
+        // A Sky Showcase voltou a chamar-se Sky One; a Sky Max deixou de existir à parte.
+        slot(106, "Sky One", ENTERTAINMENT, "Sky 1|Sky Showcase|Sky Max"),
+        slot(107, "Sky Witness", ENTERTAINMENT, "Sky Living"),
+        slot(108, "Sky Atlantic", ENTERTAINMENT),
+        slot(109, "U&Alibi", ENTERTAINMENT, "Alibi|UKTV Alibi"),
+        slot(110, "U&Gold", ENTERTAINMENT, "Gold|UKTV Gold"),
+        slot(111, "U&Dave", ENTERTAINMENT, "Dave|UKTV Dave"),
+        slot(112, "Comedy Central", ENTERTAINMENT),
+        slot(113, "Sky Comedy", ENTERTAINMENT),
+        slot(114, "Sky Documentaries", DOCS, "Sky Docs"),
+        slot(115, "BBC Three", GENERAL, "BBC 3"),
+        slot(116, "BBC Four", GENERAL, "BBC 4"),
+        slot(118, "ITV2", ENTERTAINMENT),
+        slot(119, "ITV3", ENTERTAINMENT),
+        slot(120, "ITV4", ENTERTAINMENT),
+        slot(121, "Sky Crime", ENTERTAINMENT),
+        slot(122, "Sky Arts", ENTERTAINMENT),
+        slot(123, "Sky History", DOCS, "History|History Channel"),
+        slot(124, "Sky Nature", DOCS),
+        slot(125, "Discovery", DOCS, "Discovery Channel"),
+        slot(126, "MTV", ENTERTAINMENT, "MTV UK"),
+        slot(127, "Comedy Central Extra", ENTERTAINMENT, "Comedy Central Xtra"),
+        slot(128, "5Star", ENTERTAINMENT, "Five Star"),
+        slot(129, "National Geographic", DOCS, "Nat Geo"),
+        slot(130, "Challenge", ENTERTAINMENT, "Challenge TV"),
+        slot(131, "ITV Quiz", ENTERTAINMENT),
+        slot(132, "U&W", ENTERTAINMENT, "W Channel|UKTV W|Watch"),
+        slot(133, "TLC", ENTERTAINMENT),
+        slot(134, "S4C", GENERAL),
+        slot(135, "E4", ENTERTAINMENT),
+        slot(136, "More4", ENTERTAINMENT),
+        slot(137, "4seven", ENTERTAINMENT),
+        slot(138, "E4 Extra", ENTERTAINMENT),
+        slot(139, "Crime+Investigation", DOCS, "Crime and Investigation|Crime Investigation Network"),
+        slot(140, "Quest", ENTERTAINMENT, "Quest TV"),
+        slot(141, "5USA", ENTERTAINMENT, "Five USA"),
+        slot(142, "Really", ENTERTAINMENT, "Really TV"),
+        slot(143, "U&Drama", ENTERTAINMENT, "Drama|UKTV Drama"),
+        slot(144, "Food Network", ENTERTAINMENT),
+        slot(145, "Sky Sci-Fi", ENTERTAINMENT),
+        slot(146, "True Crime", ENTERTAINMENT),
+        slot(147, "True Crime Xtra", ENTERTAINMENT, "True Crime Extra"),
+        slot(148, "Legend", ENTERTAINMENT, "Legend TV"),
+        slot(149, "Quest Red", ENTERTAINMENT),
+        slot(150, "5Action", ENTERTAINMENT, "Five Action"),
+        slot(151, "Sky Mix", ENTERTAINMENT),
+        slot(153, "5Select", ENTERTAINMENT, "Five Select"),
+        slot(154, "Investigation Discovery", ENTERTAINMENT, "ID"),
+        slot(155, "U&Yesterday", DOCS, "Yesterday|UKTV Yesterday"),
+        slot(156, "Blaze", DOCS),
+        slot(157, "Great! TV", MOVIES, "Great Movies"),
+        slot(158, "Discovery Turbo", DOCS),
+        slot(159, "DMAX", ENTERTAINMENT),
+        slot(161, "Discovery History", DOCS),
+        slot(162, "Animal Planet", DOCS),
+        slot(163, "Sky History 2", DOCS, "H2"),
+        slot(165, "Nat Geo Wild", DOCS, "National Geographic Wild"),
+        slot(166, "U&Eden", DOCS, "Eden|UKTV Eden"),
+        slot(167, "Discovery Science", DOCS, "Disc Science|Discovery Sci"),
+        slot(169, "BBC Alba", GENERAL),
+        slot(170, "Together TV", ENTERTAINMENT),
+        slot(171, "That's TV", ENTERTAINMENT),
+        slot(173, "PBS America", DOCS),
+        slot(176, "Court TV", ENTERTAINMENT, "Court TV UK"),
+        slot(178, "Travelxp", DOCS),
+        slot(180, "BBC Scotland", GENERAL),
+        slot(182, "Rewind TV", ENTERTAINMENT),
+
+        // Filmes (301–324). Os Sky Cinema mudam de nome em temporadas: os nomes de agora e os de antes.
+        slot(301, "Sky Cinema Premiere", MOVIES, "Sky Premiere"),
+        slot(302, "Sky Cinema Select", MOVIES, "Sky Cinema Feel Good|Sky Cinema Blockbusters"),
+        slot(303, "Sky Cinema Hits", MOVIES, "Sky Cinema Transformers"),
+        slot(304, "Sky Cinema Family", MOVIES),
+        slot(305, "Disney+ Cinema", MOVIES, "Disney Plus Cinema|Sky Cinema Disney"),
+        slot(306, "Sky Cinema Action", MOVIES),
+        slot(307, "Sky Cinema Greats", MOVIES),
+        slot(308, "Sky Cinema Comedy", MOVIES),
+        slot(309, "Sky Cinema Thriller", MOVIES),
+        slot(310, "Sky Cinema Drama", MOVIES, "Sky Cinema Drama Romance"),
+        slot(311, "Sky Cinema Sci-Fi/Horror", MOVIES, "Sky Cinema Horror|Sky Cinema Sci-Fi"),
+        slot(312, "Sky Cinema Animation", MOVIES),
+        slot(313, "Film4", MOVIES),
+        // O Movies 24 está no 312 com o Sky Cinema Animation (aparece um ou outro): fica no 314, livre sem o Film4+1.
+        slot(314, "Movies 24", MOVIES),
+        slot(316, "Legend Xtra", MOVIES, "Legend Extra"),
+        slot(318, "Great! Action", MOVIES, "Great Movies Action"),
+        slot(320, "Great! Mystery", MOVIES),
+        slot(322, "Great! Romance", MOVIES),
+        slot(324, "Talking Pictures TV", MOVIES, "Talking Pictures|TPTV"),
+
+        // Música (354–358).
+        slot(354, "Clubland TV", MUSIC, "Clubland"),
+        slot(355, "NOW 70s", MUSIC, "NOW 70|NOW Seventies"),
+        slot(356, "NOW 80s", MUSIC, "NOW 80|NOW Eighties"),
+        slot(357, "NOW 90s & 00s", MUSIC, "NOW 90s|NOW 90s and 00s|NOW 90"),
+        slot(358, "NOW Rock", MUSIC),
+
+        // Desporto (401–495).
+        slot(401, "Sky Sports Main Event", SPORTS, "Sky Main Event"),
+        slot(402, "Sky Sports Premier League", SPORTS, "Sky Sports PL|Sky Premier League"),
+        slot(403, "Sky Sports Football", SPORTS, "Sky Football"),
+        // Era a Sky Sports Arena; "Sky Sports+" dá a mesma base que "Sky Sports", que não é nenhum canal.
+        slot(404, "Sky Sports Plus", SPORTS, "Sky Sports+|Sky Sports Arena"),
+        slot(405, "Sky Sports Cricket", SPORTS, "Sky Cricket"),
+        slot(406, "Sky Sports Golf", SPORTS, "Sky Golf"),
+        slot(407, "Sky Sports F1", SPORTS, "Sky Sports Formula 1|Sky F1|Sky Sports Darts"),
+        slot(408, "Sky Sports Tennis", SPORTS, "Sky Tennis"),
+        slot(409, "Sky Sports News", SPORTS),
+        slot(410, "TNT Sports 1", SPORTS, "BT Sport 1|TNT Sport 1"),
+        slot(411, "TNT Sports 2", SPORTS, "BT Sport 2|TNT Sport 2"),
+        slot(412, "Sky Sports Action", SPORTS, "Sky Sports NFL|Sky Action"),
+        slot(413, "TNT Sports 3", SPORTS, "BT Sport 3|TNT Sport 3"),
+        slot(414, "TNT Sports 4", SPORTS, "BT Sport 4|TNT Sport 4"),
+        slot(415, "Sky Sports Racing", SPORTS, "Sky Racing"),
+        slot(416, "Sky Sports Mix", SPORTS),
+        slot(418, "MUTV", SPORTS, "Man United TV|Manchester United TV"),
+        slot(419, "Premier Sports 1", SPORTS),
+        slot(420, "Premier Sports 2", SPORTS),
+        slot(423, "LFCTV", SPORTS, "Liverpool TV"),
+        slot(424, "Racing TV", SPORTS),
+        slot(490, "TNT Sports Box Office", SPORTS, "BT Sport Box Office"),
+        slot(491, "Sky Sports Box Office", SPORTS),
+        slot(493, "TNT Sports Ultimate", SPORTS, "BT Sport Ultimate"),
+
+        // Informação (501–522).
+        slot(501, "Sky News", NEWS),
+        slot(502, "Bloomberg", NEWS, "Bloomberg TV", foreign = true),
+        slot(503, "BBC News", NEWS, "BBC News Channel|BBC World News"),
+        slot(504, "BBC Parliament", NEWS),
+        slot(505, "CNBC", NEWS, "CNBC Europe", foreign = true),
+        slot(506, "CNN", NEWS, "CNN International", foreign = true),
+        slot(507, "NHK World", NEWS, "NHK World Japan", foreign = true),
+        slot(508, "Euronews", NEWS, "Euronews English", foreign = true),
+        slot(509, "NDTV World", NEWS, "NDTV 24x7", foreign = true),
+        slot(510, "France 24", NEWS, "France 24 English", foreign = true),
+        slot(511, "Al Jazeera English", NEWS, "Al Jazeera", foreign = true),
+        slot(512, "GB News", NEWS),
+        slot(513, "TRT World", NEWS, foreign = true),
+        slot(515, "Channels 24", NEWS, "Channels TV", foreign = true),
+        slot(516, "Arise News", NEWS),
+        slot(518, "Arirang TV", NEWS, "Arirang", foreign = true),
+
+        // Infantis (601–623).
+        slot(601, "Cartoon Network", KIDS),
+        slot(603, "Boomerang", KIDS),
+        slot(604, "Nickelodeon", KIDS, "Nick"),
+        slot(605, "Nicktoons", KIDS),
+        slot(606, "Nick Jr", KIDS, "Nick Junior"),
+        slot(607, "CBBC", KIDS),
+        slot(608, "CBeebies", KIDS),
+        slot(609, "Sky Kids", KIDS),
+        slot(610, "Cartoonito", KIDS),
+        slot(612, "Nick Jr Too", KIDS, "Nick Junior Too|Nick Jr Peppa|Nick Jr Paw Patrol"),
+        slot(613, "Disney Junior", KIDS, "Disney Jr"),
+        slot(623, "Baby TV", KIDS),
+
+        // Internacionais (701–790), os que as listas costumam ter.
+        slot(701, "B4U Movies", INTERNATIONAL, foreign = true),
+        slot(702, "B4U Music", INTERNATIONAL, foreign = true),
+        slot(703, "Sony TV", INTERNATIONAL, "Sony TV Asia|Sony Entertainment Television", foreign = true),
+        slot(706, "Colors", INTERNATIONAL, "Colors TV", foreign = true),
+        slot(707, "Zee TV", INTERNATIONAL, foreign = true),
+        slot(708, "Zee Cinema", INTERNATIONAL, foreign = true),
+        slot(710, "Aaj Tak", INTERNATIONAL, foreign = true),
+        slot(714, "Sony Max", INTERNATIONAL, foreign = true),
+        slot(716, "Sony SAB", INTERNATIONAL, "SAB TV", foreign = true),
+        slot(734, "Geo News", INTERNATIONAL, foreign = true),
+        slot(736, "Islam Channel", INTERNATIONAL),
+        slot(737, "Geo TV", INTERNATIONAL, "Geo Entertainment", foreign = true),
+        slot(748, "ARY Digital", INTERNATIONAL, foreign = true),
+        slot(760, "PTC Punjabi", INTERNATIONAL, foreign = true),
+        slot(788, "Sky News Arabia", INTERNATIONAL, foreign = true),
+        // Irlanda: na Sky só na Irlanda do Norte (161–163, ocupados aqui pelos de Inglaterra); números livres.
+        slot(795, "RTÉ One", INTERNATIONAL, "RTE 1", foreign = true),
+        slot(796, "RTÉ2", INTERNATIONAL, foreign = true),
+        slot(797, "TG4", INTERNATIONAL, foreign = true),
+    ))
+}

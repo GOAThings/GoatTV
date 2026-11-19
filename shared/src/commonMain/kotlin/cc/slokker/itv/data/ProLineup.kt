@@ -40,11 +40,23 @@ object ProLineup {
     /** O grupo dos canais do país que não estão na tabela. */
     const val MORE = "more"
 
-    /** Os "Mais canais" começam aqui (como os canais acima dos principais numa box). */
+    /**
+     * Os "Mais canais" começam aqui, ou na centena a seguir ao número mais alto da tabela (como os canais acima dos
+     * principais numa box): nunca têm o número de um canal da tabela.
+     */
     const val MORE_FROM = 200
 
+    /** Onde começam os "Mais canais" de [lineup]. */
+    fun moreFrom(lineup: Lineup?): Int {
+        val top = lineup?.slots?.maxOfOrNull { it.number } ?: return MORE_FROM
+        return maxOf(MORE_FROM, (top / 100 + 1) * 100)
+    }
+
     /** As tabelas que se podem escolher, pela ordem do menu. */
-    val LINEUPS: List<Lineup> get() = listOf(ProLineups.PT)
+    val LINEUPS: List<Lineup> get() = listOf(
+        ProLineups.PT, ProLineupsES.ES, ProLineupsFR.FR, ProLineupsIT.IT, ProLineupsDE.DE, ProLineupsGB.GB, ProLineupsNL.NL,
+        ProLineupsBR.BR, ProLineupsUS.US,
+    )
 
     /** O id da lista Pro da tabela [lineupId] (não é uma lista da pessoa: não se guarda em cache nem vai para a conta). */
     fun playlistId(lineupId: String) = "$PREFIX$lineupId"
@@ -98,7 +110,7 @@ object ProLineup {
             val hits = bySlot[slot.number] ?: return@forEach
             channels += Channel("pro:$cc:${ChannelMatch.parse(slot.name).base}", slot.number, slot.name, slot.group, hits.sortedWith(best).map { it.ref }.distinct())
         }
-        var n = MORE_FROM
+        var n = moreFrom(lineup)
         more.entries.sortedBy { moreName[it.key]?.lowercase() }.forEach { (id, hits) ->
             channels += Channel("pro:$cc:more:$id", n++, moreName.getValue(id), MORE, hits.sortedWith(best).map { it.ref }.distinct())
         }
