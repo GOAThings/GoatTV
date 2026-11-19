@@ -141,13 +141,16 @@ final class AppModel {
         }
     }
 
-    /// As escolhas do Modo TV Pro: as tabelas, e depois os países sem tabela das listas da pessoa, pelo nome (o que
-    /// está escolhido fica sempre).
+    /// As escolhas do Modo TV Pro: o país do aparelho, as tabelas, e depois os países sem tabela das listas da pessoa,
+    /// pelo nome (o que está escolhido fica sempre).
     func proLineupChoices() -> [String] {
         let tables = ProLineup.lineupIds
         var others: [String] = []
         for c in proCountries + [prefs.proLineup].compactMap({ $0 }) where !tables.contains(c) && !others.contains(c) { others.append(c) }
-        return tables + others.sorted { ProContent.lineupName($0, strings).lowercased() < ProContent.lineupName($1, strings).lowercased() }
+        let all = tables + others.sorted { ProContent.lineupName($0, strings).lowercased() < ProContent.lineupName($1, strings).lowercased() }
+        // O país das definições do aparelho vem primeiro (se houver canais dele).
+        let home = Locale.current.region?.identifier.lowercased()
+        return all.filter { $0 == home } + all.filter { $0 != home }
     }
     @ObservationIgnored private var shownOptions: ContentView.Options?
 

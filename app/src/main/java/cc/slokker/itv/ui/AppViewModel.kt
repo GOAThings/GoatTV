@@ -979,13 +979,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * As escolhas do Modo TV Pro: as tabelas, e depois os países sem tabela das listas da pessoa, pelo nome (o que está
-     * escolhido fica sempre, mesmo que a lista dele já não esteja em cache).
+     * As escolhas do Modo TV Pro: o país do aparelho, as tabelas, e depois os países sem tabela das listas da pessoa,
+     * pelo nome (o que está escolhido fica sempre, mesmo que a lista dele já não esteja em cache).
      */
     fun proLineupChoices(countries: List<String>): List<String> {
         val tables = ProLineup.LINEUPS.map { it.id }
         val others = (countries + listOfNotNull(prefs.value.proLineup)).distinct().filter { it !in tables }
-        return tables + others.sortedBy { ProContent.lineupName(it).lowercase() }
+        val all = tables + others.sortedBy { ProContent.lineupName(it).lowercase() }
+        // O país das definições do aparelho vem primeiro (se houver canais dele).
+        val home = java.util.Locale.getDefault().country.lowercase()
+        return all.filter { it == home } + all.filter { it != home }
     }
 
     fun setProLineup(lineup: String?) {
