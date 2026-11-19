@@ -118,12 +118,13 @@ struct ErrorScreen: View {
                 .disabled(settings != nil)
             }
             if let page = settings {
+                // À esquerda, como no player, em todos os temas.
                 HStack {
-                    Spacer()
                     SettingsPanel(start: page) {
                         settings = nil
                     }
                     .id(page)
+                    Spacer()
                 }
                 .padding(40)
                 .ignoresSafeArea()
