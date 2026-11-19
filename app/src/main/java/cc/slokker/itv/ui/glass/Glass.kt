@@ -125,7 +125,7 @@ private val ShadowCard = Color(0xEB121317)
 
 /**
  * O Modo TV Pro: dois pretos translúcidos sobre o vídeo, a moldura mais fechada (e mais escura em baixo) e o interior,
- * de cantos quase retos, um pouco mais aberto.
+ * com os mesmos cantos, um pouco mais aberto.
  */
 private val SolidFrameTop = Color(0xE61C2026)
 private val SolidFrameBottom = Color(0xF0121519)
@@ -146,7 +146,8 @@ fun Modifier.glass(
         return@composed drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
             val inset = 14.dp.toPx()
-            val inner = RoundedCornerShape(4.dp).createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
+            // O interior com os mesmos cantos da moldura.
+            val inner = shape.createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
             val frame = Brush.verticalGradient(listOf(SolidFrameTop, SolidFrameBottom))
             val stroke = Stroke(width = 1.dp.toPx())
             onDrawBehind {
