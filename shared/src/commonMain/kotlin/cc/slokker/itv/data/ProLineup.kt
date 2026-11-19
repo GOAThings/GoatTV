@@ -104,7 +104,7 @@ object ProLineup {
         val cc = country.lowercase()
         // O nome normalizado de cada nome da tabela → o canal da tabela.
         val slotOf = HashMap<String, Slot>()
-        lineup?.slots?.forEach { slot -> (listOf(slot.name) + slot.aliases).forEach { n -> slotOf.putIfAbsent(ChannelMatch.parse(n).base, slot) } }
+        lineup?.slots?.forEach { slot -> (listOf(slot.name) + slot.aliases).forEach { n -> slotOf.getOrPut(ChannelMatch.parse(n).base) { slot } } }
 
         class Hit(val ref: Ref, val explicit: Boolean, val order: Int)
         val bySlot = HashMap<Int, MutableList<Hit>>()
@@ -128,7 +128,7 @@ object ProLineup {
                     explicit -> {
                         val id = if (p.shift == 0) p.base else "${p.base}+${p.shift}"
                         more.getOrPut(id) { mutableListOf() } += Hit(ref, true, order)
-                        moreName.putIfAbsent(id, cleanName(c.name))
+                        moreName.getOrPut(id) { cleanName(c.name) }
                     }
                 }
             }
