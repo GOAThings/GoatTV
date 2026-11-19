@@ -12,6 +12,9 @@ class ProSet(val members: Map<String, PlaylistContent>, private val sources: Map
         members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { m to it } }
     }
 
+    /** A qualidade (pelo nome) da melhor fonte do canal [key] (ChannelMatch.Quality), ou null. */
+    fun quality(key: String): Int? = sources[key]?.firstOrNull()?.quality
+
     /** Quantas fontes tem o canal [key]. */
     fun count(key: String): Int = sources[key]?.size ?: 0
 }

@@ -33,6 +33,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.ui.text.font.FontWeight
+import cc.slokker.itv.data.ChannelMatch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +67,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import androidx.tv.material3.LocalContentColor
@@ -434,10 +438,12 @@ private fun ChannelList(
                     } else {
                         null
                     },
-                    trailing = if (ch.key in favoriteKeys || isPlaying) {
+                    // Modo TV Pro: a qualidade da melhor fonte, como na box ("FHD").
+                    trailing = if (ch.key in favoriteKeys || isPlaying || data.pro != null) {
                         {
                             if (ch.key in favoriteKeys) Text("★", color = GoatPalette.Warning)
                             if (isPlaying) LiveDot()
+                            data.pro?.quality(ch.key)?.let { QualityBadge(it) }
                         }
                     } else {
                         null
@@ -839,4 +845,28 @@ internal fun PinDialog(title: String, error: String?, onDone: (String) -> Unit, 
     ) {
         PinPad(title = title, message = error, onDone = onDone, modifier = Modifier.fillMaxWidth())
     }
+}
+
+/** A etiqueta da qualidade ("FHD") à direita de um canal do Modo TV Pro; nada se o nome não diz. */
+@Composable
+private fun QualityBadge(quality: Int) {
+    val label = when (quality) {
+        ChannelMatch.Quality.SD -> "SD"
+        ChannelMatch.Quality.HD -> "HD"
+        ChannelMatch.Quality.FHD -> "FHD"
+        ChannelMatch.Quality.UHD -> "4K"
+        ChannelMatch.Quality.Q8K -> "8K"
+        else -> return
+    }
+    val color = LocalContentColor.current
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 0.6.sp),
+        fontWeight = FontWeight.ExtraBold,
+        color = color.copy(alpha = 0.8f),
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(5.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+    )
 }

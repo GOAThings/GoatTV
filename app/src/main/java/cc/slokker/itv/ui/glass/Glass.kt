@@ -123,9 +123,13 @@ val ShadowFocusFill = Color.White.copy(alpha = 0.22f)
 /** As caixas no estilo Sombra: um cartão escuro, sem vidro. */
 private val ShadowCard = Color(0xEB121317)
 
-/** O Modo TV Pro: a moldura e o interior, dois pretos sólidos (o mais escuro por dentro). */
-private val SolidFrame = Color(0xF51E2228)
-private val SolidInner = Color(0xFF14171B)
+/**
+ * O Modo TV Pro: dois pretos translúcidos sobre o vídeo, a moldura mais fechada (e mais escura em baixo) e o interior,
+ * de cantos quase retos, um pouco mais aberto.
+ */
+private val SolidFrameTop = Color(0xE61C2026)
+private val SolidFrameBottom = Color(0xF0121519)
+private val SolidInner = Color(0x12FFFFFF)
 
 /**
  * Vidro líquido: fundo desfocado, véu escuro, reflexo de luz no topo e contorno fino.
@@ -142,12 +146,13 @@ fun Modifier.glass(
         return@composed drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
             val inset = 14.dp.toPx()
-            val inner = RoundedCornerShape(18.dp).createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
+            val inner = RoundedCornerShape(4.dp).createOutline(Size(size.width - 2 * inset, size.height - 2 * inset), layoutDirection, this)
+            val frame = Brush.verticalGradient(listOf(SolidFrameTop, SolidFrameBottom))
             val stroke = Stroke(width = 1.dp.toPx())
             onDrawBehind {
-                drawOutline(outline, SolidFrame)
+                drawOutline(outline, frame)
                 translate(inset, inset) { drawOutline(inner, SolidInner) }
-                drawOutline(outline, Color.White.copy(alpha = 0.08f), style = stroke)
+                drawOutline(outline, Color.White.copy(alpha = 0.12f), style = stroke)
             }
         }
     }
