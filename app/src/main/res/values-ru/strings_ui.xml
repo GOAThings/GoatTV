@@ -387,7 +387,7 @@
     <string name="panel_style_glass_sub">Оригинал</string>
     <string name="panel_style_shadow_sub">Без панели, поверх тени слева</string>
     <string name="panel_style_solid">Сплошная</string>
-    <string name="panel_style_solid_sub">Чёрные двухтонные панели, как в режиме TV Pro</string>
+    <string name="panel_style_solid_sub">Чёрные двухтонные панели</string>
     <string name="white_selector_sub">Выбранная строка становится белой с тёмным текстом</string>
     <string name="outline_accent">Акцентный цвет</string>
     <string name="color_white">Белый</string>

@@ -387,7 +387,7 @@
     <string name="panel_style_glass_sub">मूल</string>
     <string name="panel_style_shadow_sub">बिना पैनल, बाईं ओर छाया पर</string>
     <string name="panel_style_solid">सॉलिड</string>
-    <string name="panel_style_solid_sub">TV Pro मोड की तरह दो रंगों वाले काले पैनल</string>
+    <string name="panel_style_solid_sub">दो रंगों वाले काले पैनल</string>
     <string name="white_selector_sub">फ़ोकस वाली पंक्ति गहरे टेक्स्ट के साथ सफ़ेद हो जाती है</string>
     <string name="outline_accent">एक्सेंट रंग</string>
     <string name="color_white">सफ़ेद</string>

@@ -387,7 +387,7 @@
     <string name="panel_style_glass_sub">L\'originale</string>
     <string name="panel_style_shadow_sub">Senza pannello, su un\'ombra a sinistra</string>
     <string name="panel_style_solid">Solido</string>
-    <string name="panel_style_solid_sub">Pannelli neri in due toni, come nella modalità TV Pro</string>
+    <string name="panel_style_solid_sub">Pannelli neri in due toni</string>
     <string name="white_selector_sub">La riga selezionata diventa bianca con testo scuro</string>
     <string name="outline_accent">Colore di risalto</string>
     <string name="color_white">Bianco</string>

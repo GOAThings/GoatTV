@@ -387,7 +387,7 @@
     <string name="panel_style_glass_sub">L\'original</string>
     <string name="panel_style_shadow_sub">Sans panneau, sur une ombre à gauche</string>
     <string name="panel_style_solid">Opaque</string>
-    <string name="panel_style_solid_sub">Panneaux noirs bicolores, comme en mode TV Pro</string>
+    <string name="panel_style_solid_sub">Panneaux noirs bicolores</string>
     <string name="white_selector_sub">La ligne sélectionnée devient blanche, texte foncé</string>
     <string name="outline_accent">Couleur d\'accent</string>
     <string name="color_white">Blanc</string>

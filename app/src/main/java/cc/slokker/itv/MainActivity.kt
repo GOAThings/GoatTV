@@ -198,7 +198,6 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
     val screen by vm.screen.collectAsStateWithLifecycle()
     val toast by vm.toast.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
-    val content by vm.content.collectAsStateWithLifecycle()
     val strings by vm.strings.collectAsStateWithLifecycle()
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val channelLogos by vm.channelLogos.collectAsStateWithLifecycle()
@@ -227,8 +226,8 @@ private fun ItvRoot(vm: AppViewModel = viewModel()) {
         LocalStrings provides strings,
         LocalAccent provides Accent.byId(prefs.accent),
         LocalOutlineBrush provides outlineBrush(prefs.outlineColor, Accent.byId(prefs.accent)),
-        // O Modo TV Pro tem o seu aspeto: painéis pretos sólidos.
-        cc.slokker.itv.ui.theme.LocalPanelStyle provides if (content?.pro != null) cc.slokker.itv.data.Prefs.PanelStyles.SOLID else prefs.panelLook,
+        // O Modo TV Pro segue o tema escolhido, como as listas normais.
+        cc.slokker.itv.ui.theme.LocalPanelStyle provides prefs.panelLook,
         LocalDensity provides scaled,
         LocalChannelLogos provides channelLogos,
     ) {

@@ -387,7 +387,7 @@
     <string name="panel_style_glass_sub">원래 디자인</string>
     <string name="panel_style_shadow_sub">패널 없이 왼쪽 그림자 위에 표시</string>
     <string name="panel_style_solid">솔리드</string>
-    <string name="panel_style_solid_sub">TV Pro 모드처럼 두 가지 톤의 검은색 패널</string>
+    <string name="panel_style_solid_sub">두 가지 톤의 검은색 패널</string>
     <string name="white_selector_sub">선택한 줄이 흰색 배경에 어두운 글자로 바뀝니다</string>
     <string name="outline_accent">강조 색</string>
     <string name="color_white">흰색</string>

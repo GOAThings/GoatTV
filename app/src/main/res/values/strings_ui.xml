@@ -388,7 +388,7 @@
     <string name="panel_style_glass_sub">The original</string>
     <string name="panel_style_shadow_sub">No panel, over a shadow on the left</string>
     <string name="panel_style_solid">Solid</string>
-    <string name="panel_style_solid_sub">Two-tone black panels, as in TV Pro mode</string>
+    <string name="panel_style_solid_sub">Two-tone black panels</string>
     <string name="white_selector_sub">The focused row turns white with dark text</string>
     <string name="outline_accent">Accent colour</string>
     <string name="color_white">White</string>
