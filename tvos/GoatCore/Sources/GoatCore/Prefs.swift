@@ -94,6 +94,10 @@ public struct Prefs: Equatable, Sendable {
     public var backupChannels: [String: [String]] = [:]
     /// Como se escolhe o canal da reserva (`backup_mode`: playlistId → "manual"; sem entrada = automático).
     public var backupMode: [String: String] = [:]
+    /// Modo TV Pro (`pro_lineup`): a tabela do país ("pt") da lista única feita com todas as listas; nil = desligado.
+    public var proLineup: String?
+    /// As listas que não entram no Modo TV Pro (`pro_skip`).
+    public var proSkip: Set<String> = []
     public var outlineColor = "white"
     /// O tema dos painéis (`panel_style`): "glass" (o vidro original) ou "shadow" (sem painel, sobre uma sombra).
     public var panelStyle = PanelLook.glass
@@ -132,9 +136,12 @@ public struct Prefs: Equatable, Sendable {
     /// O aspeto dos painéis: o tema e, no Sombra, com ou sem o seletor branco (como Prefs.panelLook no Android).
     public enum PanelLook {
         public static let glass = "glass", shadow = "shadow", shadowWhite = "shadow_white"
+        /// Os painéis pretos em dois tons do Modo TV Pro (não se grava: vale enquanto ele está ligado).
+        public static let solid = "solid"
     }
 
     public var panelLook: String {
+        if proLineup != nil { return PanelLook.solid }
         if panelStyle == PanelLook.glass { return PanelLook.glass }
         return whiteSelector ? PanelLook.shadowWhite : PanelLook.shadow
     }
@@ -264,6 +271,8 @@ public struct Prefs: Equatable, Sendable {
         backupPlaylist = p.backupPlaylist
         backupChannels = p.backupChannels
         backupMode = p.backupMode
+        proLineup = p.proLineup
+        proSkip = p.proSkip
         outlineColor = p.outlineColor
         panelStyle = p.panelStyle
         whiteSelector = p.whiteSelector

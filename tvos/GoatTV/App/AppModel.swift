@@ -111,6 +111,12 @@ final class AppModel {
     /// A lista aberta como veio do fornecedor: o [content] é ela com as opções da lista (nomes limpos, versões juntas;
     /// ver ContentView), feitas com [shownOptions]. A cache e o índice da conta ficam com os canais como vieram.
     @ObservationIgnored private var rawContent: PlaylistContent?
+    /// Modo TV Pro: as fontes de cada canal da lista única (nil fora dele; ver ProMode.swift).
+    @ObservationIgnored var proSet: ProSet?
+    /// As fontes do Modo TV Pro que falharam há pouco (só nesta TV).
+    let proHealth = ProHealth()
+    /// No Modo TV Pro, a lista da fonte que falhou (o aviso "<lista> não responde").
+    @ObservationIgnored var proFailedFrom: String?
     @ObservationIgnored private var shownOptions: ContentView.Options?
 
     /// O programa a ver em catch-up (nil = em direto).
@@ -257,7 +263,7 @@ final class AppModel {
         guard let content else { return }
         playbackError = ErrorInfo(title: strings.r("cant_open_channel").trimmingCharacters(in: CharacterSet(charactersIn: ".")))
         playbackStatus = strings.r("analysing_error")
-        let playlist = content.playlist
+        let playlist = current.flatMap { streamSource($0)?.content.playlist } ?? content.playlist
         let loader = self.loader
         let retrying = player.state == .failed && player.retries > 0 && player.retries <= PlayerEngine.maxStartRetries && prefs.reconnectSeconds > 0
         let retries = player.retries
@@ -419,7 +425,9 @@ final class AppModel {
         playlists.removeAll { $0.id == playlist.id }
         cache.remove("content-\(playlist.id)")
         if isLocal { persistLocal() }
-        if content?.playlist.id == playlist.id {
+        if let lineup = prefs.proLineup, proMode {
+            Task { await loadPro(lineup, resume: false, quiet: true) }
+        } else if content?.playlist.id == playlist.id {
             if let next = playlists.first {
                 open(next)
             } else {
@@ -436,6 +444,12 @@ final class AppModel {
 
     /// Passa a ver [playlist] (a lista nova, ou a editada em uso, com os dados novos).
     private func open(_ playlist: Playlist) {
+        // Modo TV Pro: a lista criada ou alterada entra na lista única, que se refaz.
+        if let lineup = prefs.proLineup {
+            cache.remove("content-\(playlist.id)")
+            Task { await loadPro(lineup, resume: false, quiet: content != nil) }
+            return
+        }
         if content == nil || screen != .player { screen = .loading(playlist.name) }
         settings["last_playlist"] = .string(playlist.id)
         session.lastPlaylist = playlist.id
@@ -534,6 +548,7 @@ final class AppModel {
             guard generation == sessionGeneration else { return }
             cache.save(config.raw, as: "config")
             let previousPlaylist = content?.playlist
+            let playlistsBefore = playlists
             let locksBefore = (prefs.pinHash, prefs.lockedGroups)
             apply(config)
             adoptLocalProfile()
@@ -547,6 +562,9 @@ final class AppModel {
             }
             if previousPlaylist != playlist || content == nil {
                 await load(playlist, resume: true)
+            } else if ProLineup.isPro(playlist.id), playlistsBefore != playlists {
+                // Modo TV Pro: mudaram as listas por trás da lista única.
+                await load(playlist, resume: false, quiet: true)
             } else if isDue(prefs.playlistRefreshHours, since: content?.fetchedAt) {
                 await load(playlist, resume: true, quiet: true)
             }
@@ -883,6 +901,10 @@ final class AppModel {
 
     private func startPlaylist() -> Playlist? {
         adoptNewerLastChannel()
+        if let lineup = prefs.proLineup, !playlists.isEmpty, pendingOpen.map({ ProLineup.isPro($0.playlist) }) ?? true {
+            // Modo TV Pro: abre sempre a lista única (as listas da pessoa ficam por trás dela).
+            return ProContent.playlist(lineup, strings)
+        }
         let lastId = pendingOpen?.playlist ?? settings["last_playlist"]?.text ?? session.lastPlaylist
         return playlists.first { $0.id == lastId } ?? playlists.first
     }
@@ -1031,7 +1053,13 @@ final class AppModel {
 
     // MARK: Listas
 
-    func switchPlaylist(_ playlist: Playlist) {
+    /// Abre [playlist]. Com o Modo TV Pro ligado, só [leavePro] (a pessoa escolheu "Usar esta lista") o desliga; as
+    /// outras vezes a lista única refaz-se.
+    func switchPlaylist(_ playlist: Playlist, leavePro: Bool = false) {
+        if prefs.proLineup != nil, !ProLineup.isPro(playlist.id) {
+            guard leavePro else { return reloadPlaylist() }
+            setPref("pro_lineup", nil)
+        }
         guard playlist.id != content?.playlist.id else { return }
         // Outra lista abre outro canal: com uma gravação a decorrer, pergunta primeiro.
         if guardRecording(nil, { [weak self] in self?.switchPlaylistNow(playlist) }) { return }
@@ -1039,9 +1067,12 @@ final class AppModel {
     }
 
     private func switchPlaylistNow(_ playlist: Playlist) {
-        settings["last_playlist"] = .string(playlist.id)
-        session.lastPlaylist = playlist.id
-        saveSettings()
+        // A lista única não é a "última lista": desligar o Modo TV Pro volta à última da pessoa.
+        if !ProLineup.isPro(playlist.id) {
+            settings["last_playlist"] = .string(playlist.id)
+            session.lastPlaylist = playlist.id
+            saveSettings()
+        }
         if let cached = cachedContent(for: playlist) {
             show(cached, resume: true)
             if isDue(prefs.playlistRefreshHours, since: cached.fetchedAt) {
@@ -1054,6 +1085,9 @@ final class AppModel {
 
     /// Descarrega a lista. [quiet]: já há canais no ecrã, só se trocam quando chegar a nova.
     private func load(_ playlist: Playlist, resume: Bool, quiet: Bool = false) async {
+        if ProLineup.isPro(playlist.id) {
+            return await loadPro(ProLineup.lineupId(of: playlist.id), resume: resume, quiet: quiet, fresh: quiet)
+        }
         let generation = sessionGeneration
         if !quiet || content == nil { screen = .loading(playlist.name) }
         DebugLog.add("Playlist \(playlist.type.rawValue) loading\(quiet ? " (quiet)" : "")")
@@ -1074,6 +1108,75 @@ final class AppModel {
             DebugLog.add("Playlist failed: \(error)")
             if content == nil || !quiet { screen = .error(strings.explainPlaylistError(playlist.name, error)) }
         }
+    }
+
+    /// Modo TV Pro: abre a lista única da tabela [lineupId], feita com as listas da pessoa (as da cache, as outras
+    /// descarregadas; com [fresh], todas descarregadas de novo, e a cache só se a descarga falhar).
+    private func loadPro(_ lineupId: String, resume: Bool, quiet: Bool = false, fresh: Bool = false) async {
+        let generation = sessionGeneration
+        let target = ProContent.playlist(lineupId, strings)
+        if !quiet || content == nil { screen = .loading(target.name) }
+        let members = playlists.filter { !prefs.proSkip.contains($0.id) && !ProLineup.isPro($0.id) }
+        let cached = members.map { cachedContent(for: $0) }
+        let loader = self.loader
+        DebugLog.add("Pro: building \(lineupId) from \(members.count) playlists\(fresh ? " (fresh)" : "")")
+        let results: [(content: PlaylistContent?, downloaded: Bool)] = await withTaskGroup(of: (Int, PlaylistContent?, Bool).self) { group in
+            for (i, m) in members.enumerated() {
+                let old = cached[i]
+                if let old, !fresh {
+                    group.addTask { (i, Optional(old), false) }
+                } else {
+                    group.addTask {
+                        if let c = try? await loader.load(m), !c.channels.isEmpty { return (i, Optional(c), true) }
+                        return (i, old, false)
+                    }
+                }
+            }
+            var out = [(content: PlaylistContent?, downloaded: Bool)](repeating: (nil, false), count: members.count)
+            for await (i, c, d) in group { out[i] = (c, d) }
+            return out
+        }
+        guard generation == sessionGeneration else { return }
+        for r in results where r.downloaded {
+            if let c = r.content { cache.save(c, as: "content-\(c.playlist.id)") }
+        }
+        let ok = results.compactMap { $0.content }
+        guard !ok.isEmpty else {
+            if content == nil || !quiet { screen = .error(strings.errPlaylistEmpty(target.name)) }
+            return
+        }
+        // Cada lista com as opções dela (nomes limpos, versões juntas), como apareceria sozinha.
+        let viewed = ok.map { ContentView.apply($0, ContentView.options(prefs, playlistId: $0.playlist.id)) }
+        let result = await Task.detached(priority: .userInitiated) { ProLineup.build(lineupId, members: viewed) }.value
+        guard generation == sessionGeneration, prefs.proLineup == lineupId else { return }
+        let built = ProContent.build(lineupId, members: viewed, result: result, health: proHealth, strings: strings)
+        DebugLog.add("Pro: \(built.content.channels.count) channels in \(built.content.categories.count) groups")
+        if built.content.channels.isEmpty {
+            if content == nil || !quiet { screen = .error(strings.errPlaylistEmpty(target.name)) }
+            return
+        }
+        proSet = built.set
+        show(built.content, resume: resume && !(quiet && content?.playlist.id == target.id))
+    }
+
+    /// Modo TV Pro: liga com a tabela [lineup] ("pt": abre a lista única) ou desliga (nil: volta à última lista da pessoa).
+    func setProLineup(_ lineup: String?) {
+        guard prefs.proLineup != lineup else { return }
+        setPref("pro_lineup", lineup.map { JSON.string($0) })
+        if let lineup {
+            switchPlaylistNow(ProContent.playlist(lineup, strings))
+        } else if let playlist = startPlaylist() {
+            switchPlaylistNow(playlist)
+        }
+    }
+
+    /// A lista [playlistId] entra ([on]) ou não na lista única do Modo TV Pro; com ele ligado, a lista única refaz-se.
+    func setProMember(_ playlistId: String, _ on: Bool) {
+        var skip = prefs.proSkip
+        guard skip.contains(playlistId) == on else { return }
+        if on { skip.remove(playlistId) } else { skip.insert(playlistId) }
+        setPref("pro_skip", .array(skip.sorted().map { JSON.string($0) }))
+        if let lineup = prefs.proLineup, proMode { Task { await loadPro(lineup, resume: false, quiet: true) } }
     }
 
     /// Manda à conta o índice de grupos e canais (para o site o poder organizar), se for diferente do que ela tem.
@@ -1097,6 +1200,7 @@ final class AppModel {
         let options = ContentView.options(prefs, playlistId: raw.playlist.id)
         let loaded = ContentView.apply(raw, options)
         let samePlaylist = content?.playlist.id == loaded.playlist.id
+        if !ProLineup.isPro(loaded.playlist.id) { proSet = nil }
         // A lista principal passou a ser a da conta de canais extra: ficam só os que cabem no plano dela.
         if let limit = loaded.account?.maxConnections, limit > 0 {
             var users = 1
@@ -1181,14 +1285,18 @@ final class AppModel {
         playingSince = Date()
         zapCount += 1
         if opening {
-            let candidates = streamCandidates(playlist: content.playlist, channel: channel, preferred: prefs.streamFormat,
-                                              allowedFormats: content.account?.allowedFormats ?? [])
+            // Modo TV Pro: dá a melhor fonte (a lista dela), com o nome e o número da lista única.
+            let src = streamSource(channel) ?? (content: content, channel: channel)
+            if proMode { DebugLog.add("Pro: \(channel.name) from \(src.content.playlist.name)") }
+            let candidates = streamCandidates(playlist: src.content.playlist, channel: src.channel, preferred: prefs.streamFormat,
+                                              allowedFormats: src.content.account?.allowedFormats ?? [])
             let stalker = loader.stalker
-            let playlist = content.playlist
+            let playlist = src.content.playlist
+            let source = src.channel
             defer { updateWatching() }
-            player.play(candidates, channelKey: channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,
-                        referrer: channel.referrer, pausable: true,
-                        linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
+            player.play(candidates, channelKey: channel.key, live: true, userAgent: source.userAgent ?? prefs.userAgent,
+                        referrer: source.referrer, pausable: true,
+                        linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: source) } : nil)
         }
         saveLast(channel, watched: false)
         watchTask?.cancel()
@@ -1255,8 +1363,8 @@ final class AppModel {
     // MARK: Catch-up
 
     func canCatchup(_ channel: Channel, _ entry: EpgEntry) -> Bool {
-        guard let content else { return false }
-        return Catchup.available(playlist: content.playlist, channel: channel, entry: entry)
+        guard let src = streamSource(channel) else { return false }
+        return Catchup.available(playlist: src.content.playlist, channel: src.channel, entry: entry)
     }
 
     /// Vê [entry] em catch-up, desde o início (ou desde [positionMs]).
@@ -1266,7 +1374,10 @@ final class AppModel {
         let cu = Catchup(channel: channel, title: entry.title, startMs: entry.startMs, endMs: entry.endMs, positionMs: max(0, positionMs))
         if current?.key != channel.key {
             // Abrir o direto e logo a seguir o catch-up gastava duas ligações à conta.
-            let opens = content.map { $0.playlist.type == .stalker } == true || content.flatMap { catchupCandidates(playlist: $0.playlist, catchup: cu, timezone: $0.account?.timezone,
+            let src = streamSource(channel)
+            var srcCu = cu
+            if let src { srcCu.channel = src.channel }
+            let opens = src.map { $0.content.playlist.type == .stalker } == true || src.flatMap { catchupCandidates(playlist: $0.content.playlist, catchup: srcCu, timezone: $0.content.account?.timezone,
                                                             correctionMin: prefs.catchupOffsetMin) } != nil
             play(channel, from: groupFor(channel), opening: !opens, force: true)
         }
@@ -1283,33 +1394,38 @@ final class AppModel {
                         referrer: nil, startMs: cu.positionMs)
             return
         }
-        if content?.playlist.type == .stalker { return startStalkerCatchup(cu) }
-        guard let content, let start = catchupCandidates(playlist: content.playlist, catchup: cu, timezone: content.account?.timezone,
-                                                         correctionMin: prefs.catchupOffsetMin) else { return }
+        // Modo TV Pro: o catch-up da melhor fonte (a lista dela).
+        guard let src = streamSource(cu.channel) else { return }
+        if src.content.playlist.type == .stalker { return startStalkerCatchup(cu) }
+        var srcCu = cu
+        srcCu.channel = src.channel
+        guard let start = catchupCandidates(playlist: src.content.playlist, catchup: srcCu, timezone: src.content.account?.timezone,
+                                            correctionMin: prefs.catchupOffsetMin) else { return }
         catchup = cu
         catchupBase = start.startMs
-        player.play(start.candidates, channelKey: cu.channel.key, live: false, userAgent: cu.channel.userAgent ?? prefs.userAgent,
-                    referrer: cu.channel.referrer)
+        player.play(start.candidates, channelKey: cu.channel.key, live: false, userAgent: srcCu.channel.userAgent ?? prefs.userAgent,
+                    referrer: srcCu.channel.referrer)
     }
 
     /// Stalker: o portal dá a gravação do programa todo (pela tabela do dia, ver StalkerClient.archive): abre-se nela, já
     /// no ponto pedido. Sem gravação, o cartão de erro do catch-up (sem voltar a tentar sozinho).
     private func startStalkerCatchup(_ cu: Catchup) {
-        guard let content else { return }
+        guard let src = streamSource(cu.channel) else { return }
         catchup = cu
         catchupBase = cu.startMs
-        let playlist = content.playlist
+        let playlist = src.content.playlist
+        let sourceChannel = src.channel
         let stalker = loader.stalker
         let wanted = cu.startMs + cu.positionMs
         let generation = sessionGeneration
         stalkerArchiveTask?.cancel()
         stalkerArchiveTask = Task { [weak self] in
-            let recording = await stalker.archive(playlist, channel: cu.channel, wantedMs: wanted, startMs: cu.startMs, endMs: cu.endMs)
+            let recording = await stalker.archive(playlist, channel: sourceChannel, wantedMs: wanted, startMs: cu.startMs, endMs: cu.endMs)
             guard !Task.isCancelled, let self, self.sessionGeneration == generation, self.catchup == cu else { return }
             if let recording {
                 self.catchupBase = recording.startMs
-                self.player.play([recording.candidate], channelKey: cu.channel.key, live: false, userAgent: cu.channel.userAgent ?? Stalker.userAgent,
-                                 referrer: cu.channel.referrer, startMs: max(0, wanted - recording.startMs))
+                self.player.play([recording.candidate], channelKey: cu.channel.key, live: false, userAgent: sourceChannel.userAgent ?? Stalker.userAgent,
+                                 referrer: sourceChannel.referrer, startMs: max(0, wanted - recording.startMs))
             } else {
                 DebugLog.add("Catch-up: the portal has no recording of this programme")
                 self.player.play([], channelKey: cu.channel.key, live: false, userAgent: nil, referrer: nil)
@@ -1564,14 +1680,16 @@ final class AppModel {
         let v = extras[slot]
         let engine = extraPlayers[v.engine]
         extraFailovers[v.engine] = nil
-        let candidates = streamCandidates(playlist: v.content.playlist, channel: v.channel, preferred: prefs.streamFormat,
-                                          allowedFormats: v.content.account?.allowedFormats ?? [])
+        // Um canal da lista única do Modo TV Pro dá da melhor fonte (como o principal).
+        let src = streamSource(v.channel, in: v.content) ?? (content: v.content, channel: v.channel)
+        let candidates = streamCandidates(playlist: src.content.playlist, channel: src.channel, preferred: prefs.streamFormat,
+                                          allowedFormats: src.content.account?.allowedFormats ?? [])
         engine.reconnectSeconds = prefs.reconnectSeconds
         engine.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
         let stalker = loader.stalker
-        let playlist = v.content.playlist, channel = v.channel
-        engine.play(candidates, channelKey: v.channel.key, live: true, userAgent: v.channel.userAgent ?? prefs.userAgent,
-                    referrer: v.channel.referrer,
+        let playlist = src.content.playlist, channel = src.channel
+        engine.play(candidates, channelKey: v.channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,
+                    referrer: channel.referrer,
                     linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
     }
 
@@ -2697,17 +2815,18 @@ extension AppModel {
 
     /// A marcada de [entry] em [channel] (com as tentativas do canal e o User-Agent).
     private func scheduledRecording(_ channel: Channel, _ entry: EpgEntry, seriesId: String? = nil) -> ScheduledRecording? {
-        guard let content else { return nil }
+        guard let content, let src = streamSource(channel) else { return nil }
         let playlist = content.playlist
         // O Stalker dá o link na hora (e caduca): não dá para guardar para depois.
-        guard playlist.type != .stalker else { return nil }
-        let candidates = streamCandidates(playlist: playlist, channel: channel, preferred: prefs.streamFormat,
-                                          allowedFormats: content.account?.allowedFormats ?? [])
-        let agent = SafeInput.stripControl(channel.userAgent ?? prefs.userAgent)
+        guard src.content.playlist.type != .stalker else { return nil }
+        // Modo TV Pro: grava da melhor fonte (a gravação fica na lista única, como o canal).
+        let candidates = streamCandidates(playlist: src.content.playlist, channel: src.channel, preferred: prefs.streamFormat,
+                                          allowedFormats: src.content.account?.allowedFormats ?? [])
+        let agent = SafeInput.stripControl(src.channel.userAgent ?? prefs.userAgent)
         return ScheduledRecording(id: "s-\(entry.startMs)-" + UUID().uuidString.prefix(6).lowercased(), playlistId: playlist.id,
                                   channelKey: channel.key, channelName: channel.name, logo: logoString(channel), title: entry.title,
                                   startMs: entry.startMs, endMs: entry.endMs, candidates: candidates,
-                                  userAgent: agent.isEmpty ? iptvUserAgent : agent, referrer: channel.referrer, seriesId: seriesId)
+                                  userAgent: agent.isEmpty ? iptvUserAgent : agent, referrer: src.channel.referrer, seriesId: seriesId)
     }
 
     fileprivate func seriesInstance(_ rule: SeriesRule, _ entry: EpgEntry) -> ScheduledRecording? {

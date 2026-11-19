@@ -1082,9 +1082,14 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva.
+    /// O nome do botão: no Modo TV Pro, o canal de reserva são as fontes do canal.
+    @MainActor func title(_ model: AppModel) -> String {
+        self == .backup && model.proMode ? model.strings.r("pro_sources") : model.strings.r(key)
+    }
+
+    /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva (ou, no Modo TV Pro, as fontes).
     @MainActor static func shown(_ model: AppModel) -> [PlayerOption] {
-        let backup = model.catchup == nil && model.content.flatMap { model.backupOf($0.playlist.id) } != nil
+        let backup = model.catchup == nil && (model.proMode || model.content.flatMap { model.backupOf($0.playlist.id) } != nil)
         return allCases.filter { $0 != .backup || backup }
     }
 }
@@ -1098,7 +1103,11 @@ struct PlayerOptionsSheet: View {
 
     var body: some View {
         if option == .backup, let channel = model.current {
-            NavigationStack { PhoneBackupChannelSheet(channel: channel) }
+            if model.proMode {
+                NavigationStack { PhoneProSourcesSheet(channel: channel) }
+            } else {
+                NavigationStack { PhoneBackupChannelSheet(channel: channel) }
+            }
         } else {
             options
         }
@@ -1130,7 +1139,7 @@ struct PlayerOptionsSheet: View {
                     }
                 }
             }
-            .navigationTitle(option == .sleep ? model.sleepAt.map { s.r("sleep_remaining", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.r("sleep_timer") : s.r(option.key))
+            .navigationTitle(option == .sleep ? model.sleepAt.map { s.r("sleep_remaining", "\(Int($0.timeIntervalSinceNow / 60) + 1)") } ?? s.r("sleep_timer") : option.title(model))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { dismiss() } } }
         }
@@ -1638,7 +1647,8 @@ private struct MenuTab: View {
             NavigationStack {
                 List(pick.options.indices, id: \.self) { i in
                     Button {
-                        model.setPref(pick.id, pick.options[i].0)
+                        // O Modo TV Pro abre (ou fecha) a lista única: não é só gravar a definição.
+                        if pick.id == "pro_lineup" { model.setProLineup(pick.options[i].0?.text) } else { model.setPref(pick.id, pick.options[i].0) }
                         picking = nil
                     } label: {
                         HStack {
@@ -1656,7 +1666,12 @@ private struct MenuTab: View {
         .sheet(isPresented: $pickingGuideCountry) { PhoneEpgCountries(logo: false) { pickingGuideCountry = false } }
         .confirmationDialog(openedPlaylist?.name ?? "", isPresented: Binding(get: { openedPlaylist != nil }, set: { if !$0 { openedPlaylist = nil } }), titleVisibility: .visible, presenting: openedPlaylist) { pl in
             let current = pl.id == model.content?.playlist.id
-            if !current { Button(s.r("use_playlist")) { model.switchPlaylist(pl) } }
+            // No Modo TV Pro, "Usar esta lista" desliga-o.
+            if !current { Button(s.r("use_playlist")) { model.switchPlaylist(pl, leavePro: true) } }
+            if model.prefs.proLineup != nil {
+                let used = !model.prefs.proSkip.contains(pl.id)
+                Button(s.r("pro_use_list") + ": " + (used ? s.t("On", "Ligado") : s.t("Off", "Desligado"))) { model.setProMember(pl.id, !used) }
+            }
             Button(s.r("reload_channels")) { if current { model.reloadPlaylist() } else { model.switchPlaylist(pl) } }
             // A lista de reserva (como na TV): o mesmo canal de outra lista quando um canal em direto não abre nesta.
             if model.playlists.count > 1 {
@@ -1821,12 +1836,16 @@ private struct MenuTab: View {
             .padding(16)
             .background(LinearGradient(colors: [Theme.hex(0x1D2236), Theme.hex(0x12151D)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .contentShape(Rectangle())
-            .onTapGesture { openedPlaylist = content.playlist }
+            // A lista única do Modo TV Pro não é uma lista da pessoa: não se edita nem se apaga.
+            .onTapGesture { if !model.proMode { openedPlaylist = content.playlist } }
             .padding(.horizontal, 12)
         }
         // Como na TV: cada lista abre-se (usar, recarregar, editar, remover) e há sempre "Adicionar lista".
         let others = model.playlists.filter { $0.id != model.content?.playlist.id }
         section(s.r("playlists")) {
+            // Modo TV Pro: uma lista só, feita com todas estas (como na TV).
+            pick(s.r("pro_mode"), "pro_lineup", p.proLineup.map { JSON.string($0) },
+                 [(nil, s.r("off"))] + ProLineup.lineupIds.map { (JSON.string($0), ProContent.lineupName($0, s)) })
             ForEach(others, id: \.id) { pl in
                 Button { openedPlaylist = pl } label: { MenuRowLabel(title: pl.name, value: playlistTypeName(pl.type), icon: "list.bullet", chevron: true) }.buttonStyle(.plain)
             }
@@ -2390,6 +2409,43 @@ private struct PhoneGroupCountries: View {
             }
         }
         .navigationTitle(s.r("countries"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Modo TV Pro: as fontes do canal a ver (como o painel da TV, ver ProSourcesPanel), da melhor para a pior. Tocar numa
+/// abre-a já (e as seguintes ficam como failovers dela).
+private struct PhoneProSourcesSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let channel: Channel
+
+    var body: some View {
+        let s = model.strings
+        List {
+            Section {
+                ForEach(model.proSources(channel)) { src in
+                    Button {
+                        model.tryProSource(src.index)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("\(src.index + 1)").font(.headline.monospacedDigit()).foregroundStyle(Theme.textFaint).frame(width: 24, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text([AppModel.qualityLabel(src.quality), src.playlistName].compactMap { $0 }.joined(separator: " · "))
+                                    .foregroundStyle(Theme.text).lineLimit(1)
+                                Text(src.channelName).font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            if src.down { Text(s.r("pro_source_down")).font(.footnote).foregroundStyle(Color(red: 1, green: 0.42, blue: 0.42)) }
+                        }
+                    }
+                }
+            } footer: {
+                Text(s.r("pro_sources_intro"))
+            }
+        }
+        .navigationTitle("\(channel.name) · \(s.r("pro_sources"))")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -14,7 +14,7 @@ struct ChannelRow: View {
     var body: some View {
         let prefs = model.prefs
         // Seletor branco: a linha com foco tem a placa branca, e o texto e a barra ficam escuros.
-        let onPlate = focused && look == Prefs.PanelLook.shadowWhite
+        let onPlate = focused && (look == Prefs.PanelLook.shadowWhite || look == Prefs.PanelLook.solid)
         let playing = model.current?.key == channel.key
         let programme = prefs.epgInList ? Guide.nowNext(model.programmes(for: channel), now: now).now : nil
         HStack(spacing: 18) {
@@ -44,6 +44,15 @@ struct ChannelRow: View {
             }
             if playing {
                 Circle().fill(Theme.sky).frame(width: 12, height: 12)
+            }
+            // Modo TV Pro: a qualidade da fonte que vai dar, como na box ("FHD").
+            if let quality = model.proQualityLabel(channel) {
+                Text(quality)
+                    .font(.system(size: 17 * Fonts.scale, weight: .semibold))
+                    .foregroundStyle(onPlate ? Color.black.opacity(0.7) : Theme.textDim)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(onPlate ? Color.black.opacity(0.4) : Color.white.opacity(0.35), lineWidth: 1.5))
             }
         }
         .frame(height: prefs.epgInList ? 76 : 52)

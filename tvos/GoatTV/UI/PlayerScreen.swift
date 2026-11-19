@@ -313,10 +313,20 @@ struct PlayerScreen: View {
 
             if panel == .backup, let channel = model.current {
                 HStack {
-                    BackupChannelPanel(channel: channel) { target in
-                        closePanel()
-                        // Fecha a ligação à lista principal e abre a da reserva (o aviso aparece quando der).
-                        model.tryBackup(target)
+                    Group {
+                        if model.proMode {
+                            // Modo TV Pro: as fontes do canal, da melhor para a pior; OK abre uma.
+                            ProSourcesPanel(channel: channel) { index in
+                                closePanel()
+                                model.tryProSource(index)
+                            }
+                        } else {
+                            BackupChannelPanel(channel: channel) { target in
+                                closePanel()
+                                // Fecha a ligação à lista principal e abre a da reserva (o aviso aparece quando der).
+                                model.tryBackup(target)
+                            }
+                        }
                     }
                     .onExitCommand(perform: closePanel)
                     Spacer(minLength: 0)
@@ -959,8 +969,9 @@ struct PlayerScreen: View {
                     }
                 }
                 // O canal da lista de reserva para este canal (só no direto, numa lista com reserva).
-                if model.catchup == nil, let id = model.content?.playlist.id, model.backupOf(id) != nil {
-                    chip("backup", "arrow.left.arrow.right.circle", s.r("backup_channel")) {
+                // No Modo TV Pro, as fontes do canal (o mesmo canal nas várias listas).
+                if model.catchup == nil, let id = model.content?.playlist.id, model.proMode || model.backupOf(id) != nil {
+                    chip("backup", "arrow.left.arrow.right.circle", model.proMode ? s.r("pro_sources") : s.r("backup_channel")) {
                         hud = false
                         panel = .backup
                     }
@@ -1172,7 +1183,7 @@ struct PlayerScreen: View {
                         }
                         Group {
                             // Seletor branco: cada linha pinta a sua placa (não há destaque a deslizar).
-                            if look == Prefs.PanelLook.shadowWhite {
+                            if look == Prefs.PanelLook.shadowWhite || look == Prefs.PanelLook.solid {
                                 row.buttonStyle(FillRowStyle())
                             } else {
                                 row.buttonStyle(RowButtonStyle(outline: outline, sliding: true))
@@ -1225,7 +1236,8 @@ struct PlayerScreen: View {
     /// vermelho enquanto grava), o Sports Hub e ⚙ as Definições. Assim o título dos grupos não fica cortado.
     private var groupRail: some View {
         VStack(spacing: 18) {
-            if model.playlists.count > 1 {
+            // No Modo TV Pro não se troca de lista: a lista única já tem os canais de todas.
+            if model.playlists.count > 1, !model.proMode {
                 Button {
                     playlistMenu = true
                     if let id = model.content?.playlist.id { focusLater(.playlist(id)) }

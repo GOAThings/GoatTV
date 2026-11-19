@@ -26,6 +26,8 @@ struct SettingsPanel: View {
         case newPin
         case lockedGroups
         case lists
+        /// Modo TV Pro: desligado ou a tabela de um país.
+        case proLineup
         case playlist(String)
         case groups
         case channelGroups
@@ -628,6 +630,7 @@ struct SettingsPanel: View {
         case .newPin: return s.t("New PIN", "PIN novo")
         case .lockedGroups: return s.t("Locked groups", "Grupos bloqueados")
         case .lists: return s.playlists
+        case .proLineup: return s.r("pro_mode")
         case .playlist(let id): return model.playlists.first { $0.id == id }?.name ?? s.playlists
         case .groups: return s.groups
         case .groupCountries: return s.r("countries")
@@ -883,7 +886,12 @@ struct SettingsPanel: View {
             return list
 
         case .lists:
-            var list: [Item] = model.playlists.map { (p: Playlist) -> Item in
+            // Modo TV Pro: uma lista só, feita com todas estas (ver ProLineup).
+            var list: [Item] = [
+                .nav("pro", s.r("pro_mode"), value: prefs.proLineup.map { ProContent.lineupName($0, s) } ?? s.r("off"),
+                     subtitle: s.r("pro_mode_sub"), to: .proLineup),
+            ]
+            list += model.playlists.map { (p: Playlist) -> Item in
                 .nav("p:\(p.id)", p.name, value: p.id == model.content?.playlist.id ? s.t("In use", "Em uso") : nil,
                      subtitle: p.type == .xtream ? "Xtream Codes" : p.type.label, to: .playlist(p.id))
             }
@@ -899,14 +907,29 @@ struct SettingsPanel: View {
             ]
             return list
 
+        case .proLineup:
+            var list: [Item] = [
+                .check("pro_off", s.r("off"), prefs.proLineup == nil) { model.setProLineup(nil) },
+            ]
+            list += ProLineup.lineupIds.map { (id: String) -> Item in
+                .check("pro_\(id)", ProContent.lineupName(id, s), prefs.proLineup == id) { model.setProLineup(id) }
+            }
+            return list
+
         case .playlist(let id):
             guard let playlist = model.playlists.first(where: { $0.id == id }) else { return [] }
             let isCurrent = playlist.id == model.content?.playlist.id
             var list: [Item] = []
             if !isCurrent {
                 list.append(.action("use", s.t("Use this playlist", "Usar esta lista")) {
-                    model.switchPlaylist(playlist)
+                    // No Modo TV Pro, isto desliga-o (as outras mudanças de lista só refazem a lista única).
+                    model.switchPlaylist(playlist, leavePro: true)
                     onClose()
+                })
+            }
+            if prefs.proLineup != nil {
+                list.append(.toggle("pro_use", s.r("pro_use_list"), !prefs.proSkip.contains(id), subtitle: s.r("pro_use_list_sub")) {
+                    model.setProMember(id, $0)
                 })
             }
             list.append(.action("reload", s.t("Reload channels", "Recarregar canais"),

@@ -324,6 +324,11 @@ struct GuideView: View {
                 }
             }
             .scrollDisabled(true)
+            // Com muitos grupos (o Modo TV Pro), o último não fica cortado a direito junto ao relógio: desvanece.
+            .mask(HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 60)
+            })
             .onChange(of: group, initial: true) { _, id in
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .leading) }
             }

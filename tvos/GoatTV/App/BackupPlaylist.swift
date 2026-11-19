@@ -179,6 +179,10 @@ extension AppModel {
     /// ou quando abri-la passava o limite de ligações dela; os da própria lista, quando ela está em baixo (falhavam
     /// também).
     private func backupStreams(_ main: PlaylistContent, _ channel: Channel, chosen: [String]? = nil, tile: Int = 0) async -> [FailoverStream] {
+        // Modo TV Pro: as outras fontes do canal (com [chosen], o painel das fontes: o índice de uma).
+        if ProLineup.isPro(main.playlist.id), let pro = proSet {
+            return proStreams(pro, channel, start: chosen?.first.flatMap { Int($0) })
+        }
         let id = main.playlist.id
         // A mesma conta do fornecedor não ajuda (e contava como outra ligação).
         let backup = backupOf(id).flatMap { sameAccount($0, main.playlist) ? nil : $0 }
@@ -254,8 +258,12 @@ extension AppModel {
     func startFailover(status: Int?) -> Bool {
         // Sem lista de reserva, as outras versões do canal (com "Juntar versões") também são failovers.
         guard catchup == nil, let content, let channel = current,
-              backupOf(content.playlist.id) != nil || content.variants[channel.key] != nil else { return false }
-        if ProviderOutage.providerWide(status) { providerOutage.markDown(content.playlist.id, now: Self.uptimeMs()) }
+              proMode || backupOf(content.playlist.id) != nil || content.variants[channel.key] != nil else { return false }
+        if ProviderOutage.providerWide(status) {
+            // No Modo TV Pro, a lista em baixo é a da fonte que dava.
+            let down = proMode ? (proSet?.resolve(channel.key).first?.member.playlist.id ?? content.playlist.id) : content.playlist.id
+            providerOutage.markDown(down, now: Self.uptimeMs())
+        }
         Task { [weak self] in
             guard let self else { return }
             let streams = await self.backupStreams(content, channel)
@@ -352,7 +360,7 @@ extension AppModel {
         if stream.sameList {
             showToast(strings.r("backup_playing_channel", current?.name ?? "", stream.channel.name))
         } else {
-            showToast(strings.r("backup_playing", content.playlist.name, stream.playlist.name))
+            showToast(strings.r("backup_playing", (proMode ? proFailedFrom : nil) ?? content.playlist.name, stream.playlist.name))
         }
     }
 

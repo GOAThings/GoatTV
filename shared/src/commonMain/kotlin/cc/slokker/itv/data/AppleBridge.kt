@@ -165,6 +165,33 @@ object AppleBridge {
     /** O número do canal nos atributos, ou -1. */
     fun m3uChannelNumber(attrs: Map<String, String>): Int = M3uParser.channelNumber(attrs) ?: -1
 
+    // ---- Modo TV Pro (ProLineup, ProHealth) ----
+
+    /** Os ids das tabelas que se podem escolher ("pt"), pela ordem do menu. */
+    fun proLineupIds(): List<String> = ProLineup.LINEUPS.map { it.id }
+
+    /** O país da tabela [id] ("pt"), ou null se não existir. */
+    fun proLineupCountry(id: String): String? = ProLineup.lineup(id)?.country
+
+    /** A lista única da tabela [lineupId] feita com [sources] (as listas da pessoa, pela ordem: ver [AppleProSources]). */
+    fun proBuild(lineupId: String, sources: AppleProSources): AppleProResult {
+        val lineup = ProLineup.lineup(lineupId)
+        val r = ProLineup.build(lineup, lineup?.country ?: lineupId, sources.list.toList())
+        return AppleProResult(r.groups, r.channels.map { c ->
+            AppleProChannel(c.id, c.number, c.name, c.group, c.sources.map { it.playlistId }, c.sources.map { it.key }, c.sources.map { it.quality })
+        })
+    }
+
+    fun proPlaylistId(lineupId: String): String = ProLineup.playlistId(lineupId)
+
+    fun proIsPro(playlistId: String): Boolean = ProLineup.isPro(playlistId)
+
+    fun proLineupIdOf(playlistId: String): String = ProLineup.lineupIdOf(playlistId)
+
+    fun proMoreGroup(): String = ProLineup.MORE
+
+    fun proHealthDecode(text: String?, nowMs: Long): ProHealth = ProHealth.decode(text, nowMs)
+
     private fun zone(id: String): TimeZone = runCatching { TimeZone.of(id) }.getOrDefault(TimeZone.UTC)
 
     private val STATES = mapOf(
@@ -233,3 +260,34 @@ class ApplePruned(val recordingIds: List<String>, val handledKeys: List<String>)
 
 /** [RecordingCut.Range]. */
 class AppleCut(val startOffset: Long, val startMediaMs: Long, val endMediaMs: Long, val fileStartMs: Long, val late: Boolean)
+
+/** As listas da pessoa para o Modo TV Pro, juntas canal a canal (uma lista de objetos com nulos não passa direita). */
+class AppleProSources {
+    internal val list = ArrayList<ProLineup.Source>()
+    private var current: ArrayList<ProLineup.Input>? = null
+
+    /** Começa a lista [playlistId] (as seguintes [channel] são dela). */
+    fun playlist(playlistId: String) {
+        val inputs = ArrayList<ProLineup.Input>()
+        current = inputs
+        list += ProLineup.Source(playlistId, inputs)
+    }
+
+    fun channel(key: String, name: String, group: String?) {
+        current?.add(ProLineup.Input(key, name, group))
+    }
+}
+
+/** [ProLineup.Result]. */
+class AppleProResult(val groups: List<String>, val channels: List<AppleProChannel>)
+
+/** [ProLineup.Channel]: as fontes em três listas paralelas (lista, chave do canal nela, qualidade), da melhor para a pior. */
+class AppleProChannel(
+    val id: String,
+    val number: Int,
+    val name: String,
+    val group: String,
+    val sourcePlaylists: List<String>,
+    val sourceKeys: List<String>,
+    val sourceQualities: List<Int>,
+)

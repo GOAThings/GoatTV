@@ -194,6 +194,10 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var stallTask: Task<Void, Never>?
     /// As vezes que o direto deste canal ficou preso (à segunda em pouco tempo, vai-se aos failovers).
     @ObservationIgnored private let stalls = StallCounter()
+    /// Quando a ligação do canal caiu (uptime, ms), no último minuto (ver [dropped]).
+    @ObservationIgnored private var drops: [Int64] = []
+    static let dropWindowMs: Int64 = 60_000
+    static let dropsToFailOver = 3
     /// Como foi a última falha: "sem resposta", e se a tentativa tinha chegado a dar (para decidir outra vez quando a
     /// procura dos failovers não der nada; ver [backupUnavailable]).
     @ObservationIgnored private var lastNoAnswer = false
@@ -357,6 +361,7 @@ final class PlayerEngine: NSObject {
             self.reconnects = attempt
             self.retryDelay = wait
             self.nextTryAt = at
+            self.dropped()
         }
         timeshift.onConnected = { [weak self] in
             self?.reconnects = 0
@@ -424,6 +429,7 @@ final class PlayerEngine: NSObject {
             manualSubtitle = nil
             stalls.clear()
         }
+        drops.removeAll()
         afr.newChannel()
         afrTask?.cancel()
         self.linkResolver = linkResolver
@@ -833,6 +839,32 @@ final class PlayerEngine: NSObject {
             }
         }
         afterFailure(started: true)
+    }
+
+    /// A ligação caiu e o gravador vai voltar a ligar. Um canal que dá um segundo e cai, sempre, nunca chega a falhar
+    /// (cada religação dá vídeo): à terceira queda num minuto vai-se aos failovers, como num direto preso (como no Android).
+    private func dropped() {
+        guard openedLive, !onBackup, !backupAsked, let ask = onStartFailed else { return }
+        let now = Self.uptimeMs()
+        drops.append(now)
+        drops.removeAll { now - $0 > Self.dropWindowMs }
+        guard drops.count >= Self.dropsToFailOver else { return }
+        drops.removeAll()
+        DebugLog.add("Player: connection dropped \(Self.dropsToFailOver) times in \(Self.dropWindowMs / 1000) s (failovers)")
+        // Fora do aviso do gravador: parar o gravador lá dentro era pará-lo a meio do que ele está a fazer.
+        let key = openedKey
+        Task { @MainActor [weak self] in
+            guard let self, self.openedKey == key, self.openedLive, !self.onBackup, !self.backupAsked else { return }
+            self.stopBackends()
+            self.backupAsked = true
+            self.lastNoAnswer = false
+            self.lastStarted = true
+            if ask(nil) {
+                self.state = .opening
+            } else {
+                self.afterFailure(started: true)
+            }
+        }
     }
 
     /// Nenhuma forma abriu ou caiu a meio (ver [afterFailure]).

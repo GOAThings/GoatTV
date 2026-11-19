@@ -19,6 +19,10 @@ enum Theme {
     static let shadowFocus = Color.white.opacity(0.22)
     /// Tema Sombra: as caixas são um cartão escuro, sem vidro.
     static let shadowCard = hex(0x121317).opacity(0.92)
+    /// Modo TV Pro (como no Android): o preto translúcido dos painéis, mais escuro em baixo, e o cartão de cada linha.
+    static let solidFrameTop = hex(0x1C2026).opacity(0.9)
+    static let solidFrameBottom = hex(0x121519).opacity(0.94)
+    static let solidRow = Color.white.opacity(0.08)
     /// Tema Sombra: a sombra à esquerda do ecrã por baixo das listas e das Definições (some antes do meio).
     static let panelShadow = LinearGradient(
         stops: [
@@ -79,7 +83,12 @@ struct Glass: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        if look != Prefs.PanelLook.glass {
+        if look == Prefs.PanelLook.solid {
+            // Modo TV Pro: um preto translúcido sobre o vídeo, mais escuro em baixo (como no Android).
+            content
+                .background(LinearGradient(colors: [Theme.solidFrameTop, Theme.solidFrameBottom], startPoint: .top, endPoint: .bottom), in: shape)
+                .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+        } else if look != Prefs.PanelLook.glass {
             content
                 .background(Theme.shadowCard, in: shape)
                 .overlay(shape.strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
@@ -99,7 +108,7 @@ struct PanelBackground: ViewModifier {
     @Environment(\.panelLook) private var look
 
     func body(content: Content) -> some View {
-        if look == Prefs.PanelLook.glass {
+        if look == Prefs.PanelLook.glass || look == Prefs.PanelLook.solid {
             content.glass()
         } else {
             content.shadow(color: .black.opacity(0.5), radius: 2, y: 1)
@@ -135,6 +144,8 @@ struct RowButtonStyle: ButtonStyle {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Modo TV Pro: cada linha num cartão cinzento.
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(look == Prefs.PanelLook.solid ? Theme.solidRow : .clear))
                     .contentShape(Rectangle())
                     .rowFocusAnchor(focused)
             } else {
@@ -150,7 +161,8 @@ struct RowButtonStyle: ButtonStyle {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white.opacity(0.12)) : Color.white.opacity(configuration.isPressed ? 0.2 : 0))
+                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white.opacity(0.12))
+                              : (configuration.isPressed ? Color.white.opacity(0.2) : (look == Prefs.PanelLook.solid ? Theme.solidRow : .clear)))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -278,7 +290,8 @@ struct FillRowStyle: ButtonStyle {
                     .padding(.vertical, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(selected && !focused && !soft ? 0.16 : 0))
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(selected && !focused && !soft ? Color.white.opacity(0.16) : (look == Prefs.PanelLook.solid ? Theme.solidRow : .clear))
                     )
                     .contentShape(Rectangle())
                     .rowFocusAnchor(focused)
@@ -295,7 +308,8 @@ struct FillRowStyle: ButtonStyle {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white) : Color.white.opacity(selected && !soft ? 0.16 : 0))
+                        .fill(focused ? (soft ? Theme.shadowFocus : Color.white)
+                              : (selected && !soft ? Color.white.opacity(0.16) : (look == Prefs.PanelLook.solid ? Theme.solidRow : .clear)))
                 )
                 // No tema Sombra as linhas não crescem com o foco: só muda a cor.
                 .scaleEffect(focused && look == Prefs.PanelLook.glass ? 1.02 : 1)
@@ -498,7 +512,8 @@ struct SlidingHighlight: ViewModifier {
                     }
                     .allowsHitTesting(false)
                 }
-        } else if plate {
+        } else if plate || look == Prefs.PanelLook.solid {
+            // A placa branca (no Modo TV Pro, sempre: como o seletor branco do Android).
             content
                 .overlayPreferenceValue(RowFocusKey.self) { anchor in
                     GeometryReader { geo in
