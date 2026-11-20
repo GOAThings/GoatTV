@@ -37,6 +37,8 @@ public struct Prefs: Equatable, Sendable {
     public var afrFallback = AfrFallback.none
     /// "auto" (HDR quando o canal é HDR) ou "sdr".
     public var hdr = "auto"
+    /// A qualidade dos canais HLS com várias: "auto", "best", "data_saver" ou "lowest" (ver HlsQualityControl).
+    public var hlsQuality = "auto"
     /// Desentrelaçar no VLC (só tvOS): "yadif2x", "yadif" ou "off".
     public var deinterlace = "yadif2x"
     /// Passthrough de áudio (Dolby/DTS para o recetor ou a TV).
@@ -242,6 +244,7 @@ public struct Prefs: Equatable, Sendable {
         afrMode = p.afrMode
         afrFallback = p.afrFallback
         hdr = p.hdr
+        hlsQuality = p.hlsQuality
         deinterlace = p.deinterlace
         audioPassthrough = p.audioPassthrough
         freezeFrame = p.freezeFrame

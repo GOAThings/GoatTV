@@ -172,6 +172,8 @@ final class GoatCorePlayback: NSObject {
     private var reportedPlaying = false
     private var reportedEnd = false
     private var userRate: Float = 1
+    /// O leitor do canal principal: o HLS dele tem o menu da qualidade (ver HlsQualityControl); o segundo canal não.
+    var primary = false
     private var pip: AVPictureInPictureController?
     /// O canal está (ou vai ficar) no Picture in Picture: ao sair da app, o vídeo continua.
     private(set) var pipActive = false
@@ -216,6 +218,7 @@ final class GoatCorePlayback: NSObject {
         pip = nil
         let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer)
         s.rate = userRate
+        s.primary = primary
         selectedAudio = nil
         selectedText = nil
         s.onEvent = { [weak self] event in
@@ -503,6 +506,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     var onEvent: ((Event) -> Void)?
+    /// Ver GoatCorePlayback.primary.
+    var primary = false
     /// A velocidade pedida (o catch-up pode andar mais depressa); só se aplica depois de arrancar.
     var rate: Float = 1 {
         didSet { queue.async { if self.running { self.synchronizer.setRate(self.rate, time: self.synchronizer.currentTime()) } } }
@@ -630,6 +635,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         guard !closed else { return }
         let reader = HlsReader(url: url, headers: headers)
         reader.startMs = startMs
+        reader.primary = primary
         reader.onStart = { [weak self] ms in self?.onEvent?(.offset(ms)) }
         let hold = self.hold
         reader.shouldWait = { hold.withLock { $0 } }

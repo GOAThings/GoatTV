@@ -4,7 +4,8 @@ import GoatShared
 import os
 
 /// Um canal HLS lido como um só stream para o motor GoatCore, como o HlsInputStream do Android:
-/// - a playlist (a principal escolhe a qualidade mais alta) e os segmentos, um atrás do outro, uma ligação de cada vez;
+/// - a playlist (a principal escolhe a qualidade pelo HlsQualityControl) e os segmentos, um atrás do outro, uma ligação
+///   de cada vez;
 /// - num direto começa três segmentos antes do fim e vai relendo a playlist;
 /// - os segmentos cifrados com AES-128 decifram-se aqui;
 /// - nos fMP4, o segmento de inicialização vai à frente sempre que muda.
@@ -35,6 +36,8 @@ public final class HlsReader: @unchecked Sendable {
     public var onStart: ((Int64) -> Void)?
     /// Num VOD (catch-up em HLS), o ponto onde começar: o segmento que o tem.
     public var startMs: Int64 = 0
+    /// O canal principal: tem o menu da qualidade e a escolha à mão (ver HlsQualityControl); o segundo canal não.
+    public var primary = false
 
     private let url: URL
     private let headers: [String: String]
@@ -56,6 +59,7 @@ public final class HlsReader: @unchecked Sendable {
     }
 
     public func stop() {
+        HlsQualityControl.shared.closed(owner: self)
         stopped.withLock { $0 = true }
         session.invalidateAndCancel()
     }
@@ -112,6 +116,9 @@ public final class HlsReader: @unchecked Sendable {
     /// As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
     private var variants: [HlsVariant] = []
     private var level = -1
+    /// O plano da qualidade (ver HlsQualityControl.plan) e a versão do controlo com que se fez.
+    private var plan: HlsQualityPlan?
+    private var planVersion = -1
     private var slow = 0
     private var fast = 0
 
@@ -180,6 +187,8 @@ public final class HlsReader: @unchecked Sendable {
                 try reload(lane)
                 continue
             }
+            // A definição ou a escolha à mão mudaram: refaz-se o plano (pode mudar já de qualidade).
+            if lane.main, replan() { continue }
             let segment = lane.pending.removeFirst()
             lane.nextSequence = segment.sequence + 1
             // O moov antes dos segmentos que o usam.
@@ -209,17 +218,18 @@ public final class HlsReader: @unchecked Sendable {
     /// Um segmento de [duration] s chegou em [seconds]: a rede não chega (mais do que dura, ou mais de 80 % duas
     /// vezes) → a qualidade que caiba; folga grande quatro vezes seguidas → uma acima. Como no Android.
     private func measured(bytes: Int, seconds: Double, duration: Double) {
-        guard variants.count > 1, duration > 0 else { return }
+        guard variants.count > 1, duration > 0, let plan, !plan.fixed else { return }
+        let lowest = Int(plan.lowest), highest = Int(plan.highest)
         let ratio = seconds / duration
         let bps = Double(bytes) * 8 / max(seconds, 0.001)
         if ratio > 0.8 { slow += 1 }
         if ratio > 1.0 || (ratio > 0.8 && slow >= 2) {
-            let fits = max(0, variants.lastIndex(where: { Double($0.bandwidth) <= bps * 0.7 }) ?? 0)
+            let fits = min(max(lowest, variants.lastIndex(where: { Double($0.bandwidth) <= bps * 0.7 }) ?? 0), highest)
             if fits < level { switchTo(fits) } else { slow = 0 }
             return
         }
         if ratio <= 0.8 { slow = 0 }
-        if level < variants.count - 1, ratio < 0.3, bps > Double(variants[level + 1].bandwidth) * 1.5 {
+        if level < highest, ratio < 0.3, bps > Double(variants[level + 1].bandwidth) * 1.5 {
             fast += 1
             if fast >= 4 { switchTo(level + 1) }
         } else {
@@ -227,8 +237,25 @@ public final class HlsReader: @unchecked Sendable {
         }
     }
 
+    /// Com a versão do HlsQualityControl mudada: o plano novo e, se a qualidade a ler ficou de fora (ou a escolha à mão
+    /// é outra), muda para a do início dele. true se mudou (os segmentos pendentes saíram). Como no Android.
+    private func replan() -> Bool {
+        let control = HlsQualityControl.shared
+        let v = control.version
+        guard v != planVersion, !variants.isEmpty else { return false }
+        planVersion = v
+        let p = control.plan(url: url.absoluteString, variants: variants, primary: primary)
+        plan = p
+        if primary { control.publish(owner: self, url: url.absoluteString, variants: variants, level: level) }
+        let start = Int(p.start)
+        if (Int(p.lowest)...Int(p.highest)).contains(level), !(p.fixed && level != start) { return false }
+        switchTo(start)
+        return true
+    }
+
     private func switchTo(_ next: Int) {
         level = next
+        if primary { HlsQualityControl.shared.publish(owner: self, url: url.absoluteString, variants: variants, level: level) }
         video.mediaUrl = variants[next].uri
         slow = 0
         fast = 0
@@ -247,10 +274,16 @@ public final class HlsReader: @unchecked Sendable {
         var playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
         if playlist.isMaster {
             if let why = playlist.unsupported { throw Failure.unsupported(why) }
-            // Começa na qualidade mais alta (uma TV, ou um telemóvel na Wi-Fi de casa); desce e sobe com a rede.
-            variants = playlist.variants.sorted { $0.bandwidth < $1.bandwidth }
+            // Começa onde o plano diz (no Automático, a mais alta: uma TV, ou um telemóvel na Wi-Fi de casa); desce e
+            // sobe com a rede.
+            variants = HlsQuality.shared.ordered(variants: playlist.variants)
             guard !variants.isEmpty else { throw Failure.unsupported("empty master") }
-            level = variants.count - 1
+            let control = HlsQualityControl.shared
+            planVersion = control.version
+            let p = control.plan(url: url.absoluteString, variants: variants, primary: primary)
+            plan = p
+            level = min(max(0, Int(p.start)), variants.count - 1)
+            if primary { control.publish(owner: self, url: url.absoluteString, variants: variants, level: level) }
             base = variants[level].uri
             // O áudio à parte: as línguas todas (até [maxAudio]), para o menu do áudio as ter como num TS.
             let v = variants[level]

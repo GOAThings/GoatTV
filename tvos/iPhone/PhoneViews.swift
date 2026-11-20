@@ -1062,13 +1062,14 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, backup, sleep
+    case audio, subtitles, quality, backup, sleep
 
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .audio: "music.note"
         case .subtitles: "captions.bubble"
+        case .quality: "slider.horizontal.3"
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
         }
@@ -1077,6 +1078,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         switch self {
         case .audio: "audio"
         case .subtitles: "subtitles"
+        case .quality: "hls_quality"
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
         }
@@ -1087,10 +1089,12 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         self == .backup && model.proMode ? model.strings.r("pro_sources") : model.strings.r(key)
     }
 
-    /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva (ou, no Modo TV Pro, as fontes).
+    /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva (ou, no Modo TV Pro, as fontes); a
+    /// qualidade só num HLS com mais de uma.
     @MainActor static func shown(_ model: AppModel) -> [PlayerOption] {
         let backup = model.catchup == nil && (model.proMode || model.content.flatMap { model.backupOf($0.playlist.id) } != nil)
-        return allCases.filter { $0 != .backup || backup }
+        let quality = model.player.hlsQuality.map { !$0.options.isEmpty } ?? false
+        return allCases.filter { ($0 != .backup || backup) && ($0 != .quality || quality) }
     }
 }
 
@@ -1129,6 +1133,28 @@ struct PlayerOptionsSheet: View {
                     if tracks.isEmpty { Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint) }
                     ForEach(tracks, id: \.id) { track in
                         row(track.id < 0 ? s.r("subtitles_off") : track.name, track.id == player.currentSubtitle) { player.selectSubtitle(track.id) }
+                    }
+                case .quality:
+                    // Automático (a definição) ou uma qualidade fixa até mudar de canal; por baixo do Automático, a que dá.
+                    if let q = player.hlsQuality, !q.options.isEmpty {
+                        Button {
+                            player.selectHlsQuality(-1)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(s.r("auto")).foregroundStyle(Theme.text)
+                                    if let now = q.label { Text(now).font(.caption).foregroundStyle(Theme.textFaint) }
+                                }
+                                Spacer()
+                                if q.selected < 0 { Image(systemName: "checkmark").foregroundStyle(Theme.sky) }
+                            }
+                        }
+                        ForEach(q.options, id: \.index) { o in
+                            row(o.label, o.index == q.selected) { player.selectHlsQuality(o.index) }
+                        }
+                    } else {
+                        Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint)
                     }
                 case .backup:
                     EmptyView()
@@ -1931,6 +1957,8 @@ private struct MenuTab: View {
             }
             section(s.t("Connection", "Ligação")) {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)
+                pick(s.r("hls_quality_title"), "hls_quality", p.hlsQuality,
+                     [("auto", s.r("auto")), ("best", s.r("hls_quality_best")), ("data_saver", s.r("hls_quality_data_saver")), ("lowest", s.r("hls_quality_lowest"))])
                 pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
                 toggle(s.r("timeshift"), "timeshift", p.timeshift)
                 toggle(s.r("protect_paused"), "protect_paused", p.protectPaused)
