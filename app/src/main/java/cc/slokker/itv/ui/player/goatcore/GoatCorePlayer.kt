@@ -36,6 +36,7 @@ import cc.slokker.itv.media.ToneMapping
 import cc.slokker.itv.media.Upscaling
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
+import cc.slokker.itv.media.ErrorConcealment
 import cc.slokker.itv.media.WebVtt
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
@@ -132,6 +133,8 @@ class GoatCorePlayer(
         @Volatile var codecOutputs = 0
         @Volatile var codecFormatChanges = 0
         @Volatile var configured = false
+        /** Ver [ErrorConcealment.dropped]. */
+        @Volatile var concealed = 0
     }
 
     val stats = Stats()
@@ -254,6 +257,14 @@ class GoatCorePlayer(
     val selectedAudio: Int get() = audioPid
     private val videoClock = TsClock()
     private val videoStart = VideoStart()
+    /** Faltaram dados: fica a última imagem boa até à próxima imagem-chave (ver [ErrorConcealment]). Sempre ligado. */
+    private val conceal = ErrorConcealment()
+
+    /** O stream é um MP4 fragmentado (num MP4, a [TsSample.discontinuity] é um moov novo: recomeça numa imagem-chave). */
+    @Volatile private var mp4Input = false
+
+    /** Imagens que não foram para o descodificador por faltarem dados (para o painel das estatísticas). */
+    val concealedFrames: Int get() = stats.concealed
 
     /** Os conjuntos de parâmetros da última imagem-chave (Annex B), para configurar o descodificador. */
     @Volatile private var csd: List<ByteArray> = emptyList()
@@ -347,7 +358,7 @@ class GoatCorePlayer(
     fun stop() {
         if (running) {
             Log.i(TAG, "stop after ${SystemClock.elapsedRealtime() - openedAt} ms: units=${stats.videoUnits} shown=${stats.framesRendered} " +
-                "late=${stats.framesLate} audio=${stats.audioFrames} jumps=${stats.jumps} decoderErrors=${stats.decoderErrors} " +
+                "late=${stats.framesLate} audio=${stats.audioFrames} jumps=${stats.jumps} concealed=${stats.concealed} decoderErrors=${stats.decoderErrors} " +
                 "configured=${stats.configured} in=${stats.codecInputs} out=${stats.codecOutputs} formats=${stats.codecFormatChanges} " +
                 "video=${threads.getOrNull(1)?.state}" +
                 nal?.let { " interlaced=${it.interlaced} frames=${it.frames} fieldPairs=${it.fieldPairs} loneFields=${it.loneFields}" }.orEmpty())
@@ -383,6 +394,7 @@ class GoatCorePlayer(
                         captured += n
                     }
                     demuxer.feed(buf, 0, n)
+                    mp4Input = demuxer.isMp4
                     demuxer.unsupported?.let { throw UnsupportedStream(it) }
                 }
             }
@@ -506,20 +518,24 @@ class GoatCorePlayer(
             recentText.clear()
             videoStart.restart()
         }
-        if (sample.discontinuity) videoStart.restart()
+        // Faltaram dados (não um salto marcado pelo fornecedor, que se descodifica na mesma): ver [ErrorConcealment].
+        if (sample.corrupt) conceal.lost(sample.lostNonReference)
+        if (sample.discontinuity && !sample.corrupt && mp4Input) videoStart.restart()
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com o tempo do primeiro).
         if (mpeg2 != null) {
             captions(sample.data, samplePts, mpeg2 = true)
             // MPEG-2: a imagem vai como vem; o cabeçalho da sequência é o csd-0.
             val unit = mpeg2.next(sample.data, samplePts, samplePts)
             if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
-            if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) return
+            if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts) || !concealed(unit.keyframe, unit.pts)) return
             stats.videoUnits++
             interlacedVideo = mpeg2.interlaced
             queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit)))
             return
         }
         captions(sample.data, samplePts)
+        // Um canal com intra refresh (sem imagens I) só diz por onde se pode voltar com o SEI recovery point.
+        val recovery = conceal.concealing && ErrorConcealment.recoveryPoint(hevc, sample.data)
         val unit = reader!!.next(sample.data, samplePts, samplePts) ?: return
         // Os parâmetros mudaram a meio (outra qualidade do HLS, o canal mudou de resolução): o descodificador já está
         // configurado com os antigos, por isso os novos vão dentro desta imagem-chave e ele reconfigura-se sozinho.
@@ -533,11 +549,22 @@ class GoatCorePlayer(
         }
         if (csd.isEmpty()) return
         val pts = unit.pts
-        if (!videoStart.pass(unit.keyframe, pts)) return
+        if (!videoStart.pass(unit.keyframe, pts) || !concealed(unit.keyframe || recovery, pts)) return
         stats.videoUnits++
         interlacedVideo = reader.interlaced
         val data = avccToAnnexB(unit.data)
         queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit)))
+    }
+
+    /** [ErrorConcealment.pass], com o contador para as estatísticas e, nas versões de testes, o registo de cada espera. */
+    private fun concealed(keyframe: Boolean, pts: Long): Boolean {
+        val waiting = conceal.concealing
+        val pass = conceal.pass(keyframe, pts)
+        stats.concealed = conceal.dropped
+        if (waiting && !conceal.concealing && cc.slokker.itv.BuildConfig.DEBUG) {
+            Log.d(CONCEAL_TAG, "held ${conceal.lastRun} frames, resumed on ${if (keyframe) "keyframe" else "cap"}; dropped=${conceal.dropped} capped=${conceal.capped}")
+        }
+        return pass
     }
 
     /** O canal é entrelaçado (pelo SPS ou pelo cabeçalho da sequência do MPEG-2), na última imagem lida. */
@@ -1604,6 +1631,7 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+        private const val CONCEAL_TAG = "GoatConceal"
 
         /** O ganho do nivelamento de cada canal (pelo endereço), enquanto a app está aberta. */
         private val levelGains = java.util.concurrent.ConcurrentHashMap<String, Float>()
