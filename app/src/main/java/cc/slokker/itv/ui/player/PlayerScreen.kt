@@ -172,6 +172,11 @@ fun PlayerScreen(vm: AppViewModel) {
         vm.liveShifted = { timeshift.worthAsking }
         onDispose { vm.liveShifted = { false } }
     }
+    // "Informação do stream" (Canal atual) lê daqui as religações e a fonte que está a dar.
+    DisposableEffect(playback) {
+        vm.mainPlayback = playback
+        onDispose { if (vm.mainPlayback === playback) vm.mainPlayback = null }
+    }
     val backdrop = remember { GlassBackdrop() }
 
     var panel by remember { mutableStateOf(if (vm.consumeOpenPanelOnStart()) Panel.Channels else Panel.None) }

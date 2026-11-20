@@ -14,6 +14,8 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.player.probeListVerdict
 import cc.slokker.itv.ui.player.probeRows
 import cc.slokker.itv.ui.player.probeVerdictText
+import cc.slokker.itv.ui.player.rememberStreamStats
+import cc.slokker.itv.ui.player.statsTitle
 
 /** "Testar este canal" na folha de opções do player: começa sozinho ao abrir e mostra o veredicto e os números. */
 @Composable
@@ -39,6 +41,16 @@ internal fun ChannelTestSection(vm: AppViewModel, player: Player?, title: String
             vm.channelProbe.clear()
             vm.channelProbe.start(player)
         }
+    }
+}
+
+/** "Informação do stream" na folha de opções do player: os números do canal a dar, de segundo a segundo. */
+@Composable
+internal fun StreamInfoSection(vm: AppViewModel, player: Player?, title: String) {
+    val s = LocalStrings.current
+    val rows = rememberStreamStats(vm, player, s)
+    Section(title) {
+        rows.forEach { MenuRow(s.statsTitle(it.key), it.value) {} }
     }
 }
 

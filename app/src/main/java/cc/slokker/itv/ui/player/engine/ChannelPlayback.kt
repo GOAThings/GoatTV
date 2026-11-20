@@ -79,6 +79,13 @@ internal class ChannelPlayback(
     var reconnects by mutableIntStateOf(0)
         private set
 
+    /**
+     * As ligações que caíram e voltaram a abrir desde que se abriu o canal (não volta a 0 quando dá, como [reconnects]):
+     * "Informação do stream". Os failovers do mesmo canal continuam a conta.
+     */
+    var sessionReconnects = 0
+        private set
+
     /** Quando é a próxima tentativa (elapsedRealtime; 0 = a tentar agora) e quanto se esperou por ela. */
     var nextTryAt by mutableLongStateOf(0L)
         private set
@@ -157,6 +164,7 @@ internal class ChannelPlayback(
     init {
         // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
         timeshift?.onReconnect = { n, at, waitMs, dropped ->
+            if (n == 1) sessionReconnects++
             reconnects = n
             retryDelayMs = waitMs
             nextTryAt = at
@@ -293,6 +301,7 @@ internal class ChannelPlayback(
         // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
         onBackup = null
         reconnects = 0
+        sessionReconnects = 0
         nextTryAt = 0L
         // A lista principal esteve em baixo há pouco (ver ProviderOutage): vai-se logo aos failovers, sem esperar pelas
         // tentativas de sempre. Sem nenhum (os da própria lista não contam: falhavam também), tenta-se a principal.
@@ -634,6 +643,7 @@ internal class ChannelPlayback(
     /** Caiu a meio: volta a ligar daqui a [delayMs], outra vez pelo primeiro formato (a cápsula conta as tentativas). */
     private fun reconnectIn(delayMs: Long) {
         reconnects++
+        sessionReconnects++
         retryDelayMs = delayMs
         nextTryAt = now() + delayMs
         retryLater {

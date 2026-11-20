@@ -36,6 +36,8 @@ class VideoInfoTest {
         assertEquals(listOf(9, 16, 9), listOf(v.primaries, v.transfer, v.matrix))
         assertTrue(v.isHdr10)
         assertFalse(v.fullRange)
+        // Main 10, nível 4 (general_level_idc = 30 × 4).
+        assertEquals(listOf(2, 120), listOf(v.profile, v.level))
     }
 
     @Test
@@ -46,6 +48,8 @@ class VideoInfoTest {
         assertEquals(50f, v.fps)
         assertEquals(listOf(9, 18, 9), listOf(v.primaries, v.transfer, v.matrix))
         assertTrue(v.isHlg)
+        // Baseline, nível 4.2.
+        assertEquals(listOf(66, 42), listOf(v.profile, v.level))
     }
 
     @Test

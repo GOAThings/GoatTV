@@ -1003,4 +1003,21 @@
     <string name="mobile_data_quality_sub">En données mobiles, les chaînes HLS à plusieurs qualités utilisent Économie de données (jusqu\'à 720p) pour préserver votre forfait. Sur le Wi-Fi, la qualité habituelle revient. Les chaînes TS simples ne changent pas</string>
     <string name="mobile_data_quality_auto">Économiser les données</string>
     <string name="mobile_data_quality_same">Comme en Wi-Fi</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">Codecs, débit, tampon et images perdues, mis à jour chaque seconde</string>
+    <string name="stats_engine">Moteur du lecteur</string>
+    <string name="stats_source">Source</string>
+    <string name="stats_frame_rate">Fréquence d’images</string>
+    <string name="stats_scan">Balayage</string>
+    <string name="stats_processing">Traitement de l’image</string>
+    <string name="stats_audio_track">Piste audio</string>
+    <string name="stats_decode_errors">Erreurs du décodeur</string>
+    <string name="stats_concealed">Images masquées</string>
+    <string name="stats_progressive">Progressif</string>
+    <string name="stats_interlaced">Entrelacé</string>
+    <string name="stats_deinterlacing">Désentrelacement</string>
+    <string name="stats_upscaling">Mise à l’échelle</string>
+    <string name="stats_tone_mapping">HDR vers SDR</string>
+    <string name="stats_fallback">secours</string>
+    <string name="stats_failover">failover</string>
 </resources>

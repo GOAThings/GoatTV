@@ -96,6 +96,11 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         if (latestPrefs.freezeFrame) viewState.value?.capture(FREEZE_WIDTH, FREEZE_HEIGHT)?.asImageBitmap() else null
     }
     val playback = remember(core) { MobilePlayback(core, viewState) }
+    // "Informação do stream" (nas opções do player) lê daqui as religações e a fonte que está a dar.
+    DisposableEffect(core) {
+        vm.mainPlayback = core
+        onDispose { if (vm.mainPlayback === core) vm.mainPlayback = null }
+    }
     val player = playback.player
 
     val catchup by vm.catchup.collectAsStateWithLifecycle()

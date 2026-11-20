@@ -998,4 +998,21 @@
     <string name="mobile_data_quality_sub">モバイルデータでは、複数の画質があるHLSチャンネルはデータ節約（最大720p）を使い、通信量を抑えます。Wi-Fiに戻ると通常の画質に戻ります。通常のTSチャンネルは変わりません</string>
     <string name="mobile_data_quality_auto">データ節約</string>
     <string name="mobile_data_quality_same">Wi-Fiと同じ</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">コーデック、ビットレート、バッファ、ドロップしたフレーム(毎秒更新)</string>
+    <string name="stats_engine">プレーヤーエンジン</string>
+    <string name="stats_source">ソース</string>
+    <string name="stats_frame_rate">フレームレート</string>
+    <string name="stats_scan">走査方式</string>
+    <string name="stats_processing">映像処理</string>
+    <string name="stats_audio_track">音声トラック</string>
+    <string name="stats_decode_errors">デコーダーエラー</string>
+    <string name="stats_concealed">補間したフレーム</string>
+    <string name="stats_progressive">プログレッシブ</string>
+    <string name="stats_interlaced">インターレース</string>
+    <string name="stats_deinterlacing">インターレース解除</string>
+    <string name="stats_upscaling">アップスケール</string>
+    <string name="stats_tone_mapping">HDRからSDR</string>
+    <string name="stats_fallback">フォールバック</string>
+    <string name="stats_failover">フェイルオーバー</string>
 </resources>

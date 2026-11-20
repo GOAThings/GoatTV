@@ -132,6 +132,8 @@ class GoatCorePlayer(
         @Volatile var codecOutputs = 0
         @Volatile var codecFormatChanges = 0
         @Volatile var configured = false
+        /** Os bytes que chegaram do stream (a rede, o HLS ou o anel da pausa): o débito de "Informação do stream". */
+        @Volatile var bytesRead = 0L
     }
 
     val stats = Stats()
@@ -378,6 +380,7 @@ class GoatCorePlayer(
                 while (running) {
                     val n = stream.read(buf)
                     if (n < 0) break
+                    stats.bytesRead += n
                     if (out != null && captured < 12L * 1024 * 1024) {
                         out.write(buf, 0, n)
                         captured += n
@@ -855,6 +858,7 @@ class GoatCorePlayer(
             else -> "the decoder cannot be asked (Android ${android.os.Build.VERSION.SDK_INT})"
         }
         Log.i(TAG, "hdr: transfer=${info.transfer} to SDR, $why")
+        decoderToneMaps = converted
         if (mode == ToneMapping.NONE) return
         // A superfície do ecrã fica livre antes de o EGL do estágio se ligar a ela.
         c.reset()
@@ -870,6 +874,43 @@ class GoatCorePlayer(
             Log.i(TAG, "hdr: tone mapping ${ToneMapping.name(mode)} on the GPU (BT.2390 to ${ToneMapping.TARGET_PEAK.toInt()} nits, BT.2020 to BT.709)")
         }
         c.configure(format, stage?.input ?: surface, null, 0)
+    }
+
+    /** O descodificador desentrelaça ele próprio (o da NVIDIA) / converte o HDR para SDR: para "Informação do stream". */
+    @Volatile private var decoderDeinterlaces = false
+    @Volatile private var decoderToneMaps = false
+
+    /**
+     * Imagens remendadas pelo descodificador (dados que faltavam). Gancho para o contador de ocultação, que ainda não
+     * existe: até lá, 0.
+     */
+    val concealedFrames: Int get() = 0
+
+    /** Os números do motor agora, para "Informação do stream" (de qualquer thread; cada campo lê-se de uma vez). */
+    fun snapshot(): GoatCoreSnapshot {
+        val stage = deinterlacer
+        val queued = lastQueuedPtsUs
+        return GoatCoreSnapshot(
+            videoCodec = when {
+                videoPid < 0 -> ""
+                videoMime == MediaFormat.MIMETYPE_VIDEO_HEVC -> "HEVC"
+                videoMime == MediaFormat.MIMETYPE_VIDEO_MPEG2 -> "MPEG2_VIDEO"
+                else -> "H264"
+            },
+            video = videoInfo,
+            interlaced = interlacedVideo,
+            audio = audioFormat,
+            bytesRead = stats.bytesRead,
+            mediaMs = if (queued == Long.MIN_VALUE) -1 else queued / 1000,
+            bufferedMs = bufferedMs,
+            framesRendered = stats.framesRendered,
+            framesLate = stats.framesLate,
+            decoderErrors = stats.decoderErrors,
+            concealedFrames = concealedFrames,
+            deinterlacing = stage?.deinterlacingNow == true || (decoderDeinterlaces && interlacedVideo),
+            upscaling = stage?.upscalingNow == true,
+            toneMapping = stage?.toneMapping == true || decoderToneMaps,
+        )
     }
 
     /** Como foi captada cada imagem que entrou no descodificador, pelo tempo dela (para o [deinterlacer]). */
@@ -889,9 +930,11 @@ class GoatCorePlayer(
         val hdr = info?.isHdr == true
         var mode = Deinterlacing.mode(deinterlace, interlacedVideo || forceInterlaced, bitDepth, hdr)
         val known = Deinterlacing.decoder(decoder)
+        decoderDeinterlaces = false
         if (mode != Deinterlacing.NONE && known == Deinterlacing.DECODER_DEINTERLACES) {
             Log.i(TAG, "interlaced: $decoder deinterlaces by itself")
             mode = Deinterlacing.NONE
+            decoderDeinterlaces = true
         }
         val look = picture()
         val adjust = look.applies(bitDepth, hdr)
@@ -1719,3 +1762,25 @@ class GoatCorePlayer(
         }
     }
 }
+
+/**
+ * Os números do [GoatCorePlayer] num instante (ver [GoatCorePlayer.snapshot]): o codec pelo nome do núcleo partilhado
+ * ("H264", "HEVC", "MPEG2_VIDEO", "" sem vídeo), o SPS e o formato do som, os contadores e o que a GPU (ou o
+ * descodificador) está a fazer à imagem. [mediaMs]: o tempo do último vídeo recebido, ou -1.
+ */
+data class GoatCoreSnapshot(
+    val videoCodec: String,
+    val video: VideoInfo?,
+    val interlaced: Boolean,
+    val audio: cc.slokker.itv.media.AudioFormat?,
+    val bytesRead: Long,
+    val mediaMs: Long,
+    val bufferedMs: Long,
+    val framesRendered: Int,
+    val framesLate: Int,
+    val decoderErrors: Int,
+    val concealedFrames: Int,
+    val deinterlacing: Boolean,
+    val upscaling: Boolean,
+    val toneMapping: Boolean,
+)

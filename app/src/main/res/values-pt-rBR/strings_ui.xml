@@ -1003,4 +1003,21 @@
     <string name="mobile_data_quality_sub">Com dados móveis, os canais HLS com várias qualidades usam Poupar dados (até 720p) para não gastar o teu plano. Na Wi-Fi volta a qualidade de sempre. Os canais TS simples não mudam</string>
     <string name="mobile_data_quality_auto">Poupar dados</string>
     <string name="mobile_data_quality_same">Igual à Wi-Fi</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">Codecs, débito, buffer e imagens perdidas, atualizados a cada segundo</string>
+    <string name="stats_engine">Motor do player</string>
+    <string name="stats_source">Fonte</string>
+    <string name="stats_frame_rate">Cadência</string>
+    <string name="stats_scan">Varrimento</string>
+    <string name="stats_processing">Tratamento da imagem</string>
+    <string name="stats_audio_track">Faixa de áudio</string>
+    <string name="stats_decode_errors">Erros do descodificador</string>
+    <string name="stats_concealed">Imagens remendadas</string>
+    <string name="stats_progressive">Progressivo</string>
+    <string name="stats_interlaced">Entrelaçado</string>
+    <string name="stats_deinterlacing">Desentrelaçar</string>
+    <string name="stats_upscaling">Aumentar a imagem</string>
+    <string name="stats_tone_mapping">HDR para SDR</string>
+    <string name="stats_fallback">reserva</string>
+    <string name="stats_failover">failover</string>
 </resources>

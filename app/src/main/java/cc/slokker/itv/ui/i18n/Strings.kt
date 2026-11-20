@@ -1327,6 +1327,24 @@ class Strings(context: Context) {
     val probeLvUnreachable get() = s(R.string.probe_lv_unreachable)
     val probeLvEmpty get() = s(R.string.probe_lv_empty)
     val probeListPortal get() = s(R.string.probe_list_portal)
+
+    // Informação do stream (o painel com os números do canal a dar)
+    val statsInfoSub get() = s(R.string.stats_info_sub)
+    val statsEngine get() = s(R.string.stats_engine)
+    val statsSource get() = s(R.string.stats_source)
+    val statsFrameRate get() = s(R.string.stats_frame_rate)
+    val statsScan get() = s(R.string.stats_scan)
+    val statsProcessing get() = s(R.string.stats_processing)
+    val statsAudioTrack get() = s(R.string.stats_audio_track)
+    val statsDecodeErrors get() = s(R.string.stats_decode_errors)
+    val statsConcealed get() = s(R.string.stats_concealed)
+    val statsProgressive get() = s(R.string.stats_progressive)
+    val statsInterlaced get() = s(R.string.stats_interlaced)
+    val statsDeinterlacing get() = s(R.string.stats_deinterlacing)
+    val statsUpscaling get() = s(R.string.stats_upscaling)
+    val statsToneMapping get() = s(R.string.stats_tone_mapping)
+    val statsFallback get() = s(R.string.stats_fallback)
+    val statsFailover get() = s(R.string.stats_failover)
 }
 
 /** Textos atuais, para código fora do Compose (ViewModel, fontes de listas). Iniciado no ItvApp. */

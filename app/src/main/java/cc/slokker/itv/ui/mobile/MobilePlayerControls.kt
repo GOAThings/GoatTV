@@ -666,7 +666,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), SEND_TV(ItvIcons.Tv), TEST(ItvIcons.Info) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), SEND_TV(ItvIcons.Tv), INFO(ItvIcons.Graph), TEST(ItvIcons.Info) }
 
 /** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
 @Composable
@@ -683,6 +683,7 @@ private fun PlayerOption.label(): String {
         PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
         PlayerOption.SEND_TV -> s.sendToTv
+        PlayerOption.INFO -> s.streamInfo
         PlayerOption.TEST -> s.probeTestChannel
     }
 }
@@ -787,6 +788,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                     }
                 }
                 PlayerOption.SEND_TV -> SendToTvSection(vm, onSent, onClose)
+                PlayerOption.INFO -> StreamInfoSection(vm, playback.player, option.label())
                 PlayerOption.TEST -> ChannelTestSection(vm, playback.player, option.label())
             }
         }

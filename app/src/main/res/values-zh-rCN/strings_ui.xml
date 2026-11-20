@@ -998,4 +998,21 @@
     <string name="mobile_data_quality_sub">使用移动数据时，有多种画质的 HLS 频道会采用省流量（最高 720p），以节省你的流量套餐。回到 Wi-Fi 后恢复通常画质。普通 TS 频道不受影响</string>
     <string name="mobile_data_quality_auto">省流量</string>
     <string name="mobile_data_quality_same">与 Wi-Fi 相同</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">编解码器、码率、缓冲和丢帧,每秒更新</string>
+    <string name="stats_engine">播放引擎</string>
+    <string name="stats_source">来源</string>
+    <string name="stats_frame_rate">帧率</string>
+    <string name="stats_scan">扫描方式</string>
+    <string name="stats_processing">画面处理</string>
+    <string name="stats_audio_track">音轨</string>
+    <string name="stats_decode_errors">解码错误</string>
+    <string name="stats_concealed">修补的帧</string>
+    <string name="stats_progressive">逐行</string>
+    <string name="stats_interlaced">隔行</string>
+    <string name="stats_deinterlacing">去隔行</string>
+    <string name="stats_upscaling">画面放大</string>
+    <string name="stats_tone_mapping">HDR 转 SDR</string>
+    <string name="stats_fallback">备用</string>
+    <string name="stats_failover">故障转移</string>
 </resources>

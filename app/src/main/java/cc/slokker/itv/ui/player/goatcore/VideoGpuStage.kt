@@ -165,6 +165,13 @@ internal class VideoGpuStage(
     @Volatile var passedThrough = 0L
         private set
 
+    /** O que se fez à última imagem (para "Informação do stream"): desentrelaçada, aumentada; e se converte o HDR. */
+    @Volatile var deinterlacingNow = false
+        private set
+    @Volatile var upscalingNow = false
+        private set
+    val toneMapping: Boolean get() = toneMap != ToneMapping.NONE
+
     init {
         val ready = CountDownLatch(1)
         var error: Throwable? = null
@@ -281,6 +288,7 @@ internal class VideoGpuStage(
                 pictureW = w
                 pictureH = h
                 passedThrough++
+                deinterlacingNow = false
                 present(look, fromDecoder = true, at, Upscaling.OFF)
                 return
             }
@@ -289,9 +297,11 @@ internal class VideoGpuStage(
             val progressive = frame?.progressive == true
             if (mode == Deinterlacing.NONE || !verdict.deinterlace || progressive) {
                 passedThrough++
+                deinterlacingNow = false
                 draw(MODE_COPY, 0f, at, look, up)
             } else {
                 deinterlaced++
+                deinterlacingNow = true
                 if (mode == Deinterlacing.FIELDS) {
                     val first = if (frame?.bottomFirst == true) 1f else 0f
                     draw(MODE_FIELD, first, at, look, up)
@@ -429,6 +439,7 @@ internal class VideoGpuStage(
                 upMode = governor?.mode ?: Upscaling.OFF
             }
         }
+        upscalingNow = upMode != Upscaling.OFF
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
         GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
         if (upMode == Upscaling.SHARP) {
@@ -439,6 +450,7 @@ internal class VideoGpuStage(
             } catch (e: Throwable) {
                 upscaleFailed(Upscaling.SHARP, e)
                 upMode = Upscaling.OFF
+                upscalingNow = false
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
                 GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
             }

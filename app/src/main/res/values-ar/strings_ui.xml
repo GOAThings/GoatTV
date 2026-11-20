@@ -1009,4 +1009,21 @@
     <string name="mobile_data_quality_sub">على بيانات الجوال، تستخدم قنوات HLS ذات الجودات المتعددة توفير البيانات (حتى 720p) للحفاظ على باقتك. عند العودة إلى Wi-Fi تعود الجودة المعتادة. قنوات TS العادية لا تتغير</string>
     <string name="mobile_data_quality_auto">توفير البيانات</string>
     <string name="mobile_data_quality_same">مثل Wi-Fi</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">الترميز ومعدل البت والتخزين المؤقت والإطارات المفقودة، يتحدث كل ثانية</string>
+    <string name="stats_engine">محرك المشغل</string>
+    <string name="stats_source">المصدر</string>
+    <string name="stats_frame_rate">معدل الإطارات</string>
+    <string name="stats_scan">المسح</string>
+    <string name="stats_processing">معالجة الصورة</string>
+    <string name="stats_audio_track">المسار الصوتي</string>
+    <string name="stats_decode_errors">أخطاء فك الترميز</string>
+    <string name="stats_concealed">الإطارات المرممة</string>
+    <string name="stats_progressive">تدريجي</string>
+    <string name="stats_interlaced">متشابك</string>
+    <string name="stats_deinterlacing">إزالة التشابك</string>
+    <string name="stats_upscaling">تكبير الصورة</string>
+    <string name="stats_tone_mapping">HDR إلى SDR</string>
+    <string name="stats_fallback">احتياطي</string>
+    <string name="stats_failover">تجاوز الفشل</string>
 </resources>
