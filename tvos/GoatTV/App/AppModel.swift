@@ -1680,7 +1680,6 @@ final class AppModel {
 
     // MARK: Parar se ninguém estiver a ver
 
-    private static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     /// Liga a contagem do idle_stop e a escuta dos comandos (na raiz das duas apps, ver NowPlayingBridge) e da rede
     /// (mobile_data_quality). Só a primeira vez faz alguma coisa.
@@ -1705,12 +1704,12 @@ final class AppModel {
         } else {
             active = false
         }
-        idleWatch.tick(Self.nowMs(), limitMs: IdleWatch.limitMs(prefs.idleStop), active: active)
+        idleWatch.tick(nowMs(), limitMs: IdleWatch.limitMs(prefs.idleStop), active: active)
         publishIdle()
     }
 
     private func publishIdle() {
-        let left = idleWatch.secondsLeft(Self.nowMs())
+        let left = idleWatch.secondsLeft(nowMs())
         if left != idleSecondsLeft { idleSecondsLeft = left }
         let phase = idleWatch.phase
         guard phase != idlePhase else { return }
@@ -1738,14 +1737,14 @@ final class AppModel {
     @discardableResult
     func noteInput() -> Bool {
         let prompt = idlePhase == .prompt
-        idleWatch.onInput(Self.nowMs())
+        idleWatch.onInput(nowMs())
         if idlePhase != .watching { publishIdle() }
         return prompt
     }
 
     /// Escolheu-se um canal, ou "continuar" no ecrã bloqueado: sai do ecrã de parado e recomeça a contagem.
     func idleWatchAgain() {
-        idleWatch.watchAgain(Self.nowMs())
+        idleWatch.watchAgain(nowMs())
         if idlePhase != .watching { publishIdle() }
     }
 
