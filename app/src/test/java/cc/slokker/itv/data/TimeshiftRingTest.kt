@@ -206,15 +206,16 @@ class TimeshiftRingTest {
     }
 
     @Test
-    fun pcrJumpUsesWallClock() {
+    fun pcrJumpContinuesTheClock() {
         val r = ring()
         r.beginSegment()
         r.writeAll(stream(0, 2))
         val before = r.liveMediaMs
-        // O relógio do emissor salta uma hora para trás (outra fonte no servidor); passaram 3 s reais.
+        // O relógio do emissor salta uma hora para trás (outra fonte no servidor); passaram 3 s reais sem nada: o
+        // tempo continua logo a seguir (um passo de PCR, 100 ms), como o player o vê (TsClock).
         now += 3_000
         r.writeAll(stream(-3_600_000L + 7_200_000L, 1))
-        assertEquals(before + 3_000 + 900, r.liveMediaMs)
+        assertEquals(before + 100 + 900, r.liveMediaMs)
     }
 
     @Test
@@ -265,10 +266,73 @@ class TimeshiftRingTest {
         assertEquals(1, r.segmentAt(a.size.toLong()))
         val next = r.entryFrom(a.size.toLong())!!
         assertEquals(a.size.toLong(), next.offset)
-        // O tempo do segundo segmento continua o do primeiro mais a espera.
-        assertEquals(1_900L + 5_000, next.mediaMs)
+        // O tempo do segundo segmento continua logo o do primeiro (mais um passo de PCR): a espera não foi gravada.
+        assertEquals(1_900L + 100, next.mediaMs)
         val (backB, _) = r.readAll(next.offset, r.segmentAt(next.offset), b.size)
         assertArrayEquals(b, backB)
+    }
+
+    /**
+     * Um fornecedor que fecha cada ligação ~1 s depois de abrir (visto num SHIELD): o gravador volta a ligar de 5 em
+     * 5 s, e cada ligação começa noutro PCR qualquer. Contava-se o tempo sem ligação: "30 min guardados" com um
+     * quinto disso no anel, e recuar caía nos buracos (imagem preta).
+     */
+    @Test
+    fun flakyProviderSavesOnlyTheRecordedTime() {
+        val r = ring(capacity = 64L shl 20)
+        val random = kotlin.random.Random(7)
+        val connections = 200
+        val starts = mutableListOf<Long>()
+        repeat(connections) {
+            r.beginSegment()
+            starts += r.writtenBytes
+            // 1 s de vídeo (10 PCR de 100 em 100 ms), que chega ao longo de 1 s real.
+            val base = random.nextLong(0, (1L shl 33) / 90 - 10_000)
+            val data = stream(base, 1)
+            val chunk = data.size / 10
+            for (i in 0 until 10) {
+                val from = i * chunk
+                val to = if (i == 9) data.size else from + chunk
+                r.write(data, from, to - from)
+                now += 100
+            }
+            r.endSegment(final = false)
+            // 4 s até voltar a ligar.
+            now += 4_000
+        }
+        val recorded = connections * 1_000L
+        val saved = r.liveMediaMs - r.oldest!!.mediaMs
+        assertTrue("guardado $saved ms, gravado $recorded ms", saved in recorded - 1_000..recorded)
+        // Sem ligação o direto não anda: não fica à frente do que há.
+        assertTrue("direto ${r.liveEdgeMs} para ${r.liveMediaMs}", r.liveEdgeMs - r.liveMediaMs <= 1_000)
+        // Recuar para qualquer ponto cai dentro do que foi gravado: no máximo um segmento antes do pedido.
+        var target = r.oldest!!.mediaMs
+        while (target <= r.liveMediaMs) {
+            val e = r.entryAtOrBefore(target)!!
+            assertTrue("recuar para $target dá ${e.mediaMs}", target - e.mediaMs in 0 until 1_000)
+            val segment = r.segmentAt(e.offset)
+            val end = starts.getOrNull(segment + 1) ?: r.writtenBytes
+            assertTrue(e.offset in starts[segment] until end)
+            target += 250
+        }
+    }
+
+    @Test
+    fun liveEdgeStopsWhileDisconnected() {
+        val r = ring()
+        r.beginSegment()
+        r.writeAll(stream(0, 4))
+        now += 1_000
+        val edge = r.liveEdgeMs
+        r.endSegment(final = false)
+        // 10 s sem ligação: o direto fica onde estava.
+        now += 10_000
+        assertEquals(edge, r.liveEdgeMs)
+        r.beginSegment()
+        r.writeAll(stream(900_000, 1))
+        // Continua de onde estava, sem saltar para trás nem contar a espera.
+        assertTrue(r.liveEdgeMs >= edge)
+        assertTrue(r.liveEdgeMs <= edge + 1_000)
     }
 
     @Test

@@ -203,17 +203,18 @@ extension CoreTests {
         try expect(r.media(at: e.offset + 10), 4_000)
     }
 
-    static func ringPcrJumpUsesWallClock() throws {
+    static func ringPcrJumpContinuesTheClock() throws {
         let clock = TestClock()
         let (r, _) = try makeRing(clock)
         defer { r.close() }
         r.beginSegment()
         try writeAll(r, tsStream(0, 2))
         let before = r.liveMediaMs
-        // O relógio do emissor salta (outra fonte no servidor); passaram 3 s reais.
+        // O relógio do emissor salta (outra fonte no servidor); passaram 3 s reais sem nada: o tempo continua logo a
+        // seguir (um passo de PCR, 100 ms), como o player o vê (TsClock).
         clock.now += 3_000
         try writeAll(r, tsStream(-3_600_000 + 7_200_000, 1))
-        try expect(r.liveMediaMs, before + 3_000 + 900)
+        try expect(r.liveMediaMs, before + 100 + 900)
     }
 
     static func ringBurstsWithoutPcrAtTheStartAreNotCountedTwice() throws {
@@ -266,10 +267,74 @@ extension CoreTests {
         try expect(r.segment(at: Int64(a.count)), 1)
         guard let next = r.entry(from: Int64(a.count)) else { throw Failure(description: "sem ponto no segmento novo") }
         try expect(next.offset, Int64(a.count))
-        // O tempo do segundo segmento continua o do primeiro mais a espera.
-        try expect(next.mediaMs, 1_900 + 5_000)
+        // O tempo do segundo segmento continua logo o do primeiro (mais um passo de PCR): a espera não foi gravada.
+        try expect(next.mediaMs, 1_900 + 100)
         let (backB, _) = try readAll(r, from: next.offset, segment: r.segment(at: next.offset), max: b.count)
         try expect(backB, b)
+    }
+
+    /// Um fornecedor que fecha cada ligação ~1 s depois de abrir (visto num SHIELD): volta-se a ligar de 5 em 5 s, e
+    /// cada ligação começa noutro PCR qualquer. Contava-se o tempo sem ligação: "30 min guardados" com um quinto disso
+    /// no anel, e recuar caía nos buracos (imagem preta).
+    static func ringFlakyProviderSavesOnlyTheRecordedTime() throws {
+        let clock = TestClock()
+        let (r, _) = try makeRing(clock, capacity: 64 << 20)
+        defer { r.close() }
+        var seed: UInt64 = 7
+        let connections = 200
+        var starts: [Int64] = []
+        for _ in 0..<connections {
+            r.beginSegment()
+            starts.append(r.writtenBytes)
+            // 1 s de vídeo (10 PCR de 100 em 100 ms), que chega ao longo de 1 s real.
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            let base = Int64(seed >> 33) % ((Int64(1) << 33) / 90 - 10_000)
+            let data = tsStream(base, 1)
+            let chunk = data.count / 10
+            for i in 0..<10 {
+                let from = i * chunk
+                let to = i == 9 ? data.count : from + chunk
+                try r.write(Array(data[from..<to]))
+                clock.now += 100
+            }
+            r.endSegment(final: false)
+            // 4 s até voltar a ligar.
+            clock.now += 4_000
+        }
+        let recorded = Int64(connections) * 1_000
+        guard let oldest = r.oldest else { throw Failure(description: "sem índice") }
+        let saved = r.liveMediaMs - oldest.mediaMs
+        try expect((recorded - 1_000...recorded).contains(saved), true, "guardado \(saved) ms, gravado \(recorded) ms")
+        // Sem ligação o direto não anda: não fica à frente do que há.
+        try expect(r.liveEdgeMs - r.liveMediaMs <= 1_000, true, "direto \(r.liveEdgeMs) para \(r.liveMediaMs)")
+        // Recuar para qualquer ponto cai dentro do que foi gravado: no máximo um segmento antes do pedido.
+        var target = oldest.mediaMs
+        while target <= r.liveMediaMs {
+            guard let e = r.entry(atOrBefore: target) else { throw Failure(description: "sem ponto para \(target)") }
+            try expect((0..<1_000).contains(target - e.mediaMs), true, "recuar para \(target) dá \(e.mediaMs)")
+            let segment = r.segment(at: e.offset)
+            let end = segment + 1 < starts.count ? starts[segment + 1] : r.writtenBytes
+            try expect((starts[segment]..<end).contains(e.offset), true)
+            target += 250
+        }
+    }
+
+    static func ringLiveEdgeStopsWhileDisconnected() throws {
+        let clock = TestClock()
+        let (r, _) = try makeRing(clock)
+        defer { r.close() }
+        r.beginSegment()
+        try writeAll(r, tsStream(0, 4))
+        clock.now += 1_000
+        let edge = r.liveEdgeMs
+        r.endSegment(final: false)
+        // 10 s sem ligação: o direto fica onde estava.
+        clock.now += 10_000
+        try expect(r.liveEdgeMs, edge)
+        r.beginSegment()
+        try writeAll(r, tsStream(900_000, 1))
+        // Continua de onde estava, sem saltar para trás nem contar a espera.
+        try expect(r.liveEdgeMs >= edge && r.liveEdgeMs <= edge + 1_000, true)
     }
 
     private struct Dropped: Error, Equatable {
