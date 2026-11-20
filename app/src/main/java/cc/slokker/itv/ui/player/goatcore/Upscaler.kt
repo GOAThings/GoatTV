@@ -107,7 +107,7 @@ internal class Upscaler(private val es3: Boolean) {
     }
 
     /** As passagens e a junção (o Y da rede com a cor de [source]) para a textura [out], 2× maior. */
-    private fun run(list: List<AiPass>, source: Int, w: Int, h: Int, quad: (Int) -> Unit) {
+    private fun run(list: List<AiPass>, source: Int, w: Int, h: Int, quad: (Int) -> Unit, probe: Boolean = false) {
         if (w != lowW || h != lowH) allocate(list, w, h)
         GLES20.glDisable(GLES20.GL_DITHER)
         for (p in list) {
@@ -121,6 +121,12 @@ internal class Upscaler(private val es3: Boolean) {
             }
             GLES30.glUniform2i(p.lim, w - 1, h - 1)
             quad(p.program)
+            if (probe) {
+                val px = ByteBuffer.allocateDirect(16).order(java.nio.ByteOrder.nativeOrder())
+                GLES20.glReadPixels(w / 2, h / 2, 1, 1, GLES20.GL_RGBA, GLES20.GL_FLOAT, px)
+                val fb = px.asFloatBuffer()
+                android.util.Log.i("GoatCore", "upscale: probe ${p.save} = %.4f %.4f %.4f %.4f (gl %d)".format(fb[0], fb[1], fb[2], fb[3], GLES20.glGetError()))
+            }
         }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outFbo)
         GLES20.glViewport(0, 0, w * 2, h * 2)
@@ -155,7 +161,7 @@ internal class Upscaler(private val es3: Boolean) {
                 floatType = type
                 val ok = runCatching {
                     freeTextures()
-                    run(list, image, size, size, quad)
+                    run(list, image, size, size, quad, probe = cc.slokker.itv.BuildConfig.DEBUG && format == GLES30.GL_RGBA32F)
                     result.clear()
                     GLES20.glReadPixels(0, 0, size * 2, size * 2, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, result)
                     check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
@@ -165,6 +171,7 @@ internal class Upscaler(private val es3: Boolean) {
                         val v = result.get((y * size * 2 + x) * 4).toInt() and 0xFF
                         worst = maxOf(worst, kotlin.math.abs(v - grey))
                     }
+                    android.util.Log.i("GoatCore", "upscale: self-test centre ${result.get((size * size * 2 + size) * 4).toInt() and 0xFF} (want $grey), worst off by $worst")
                     worst <= 3
                 }.getOrDefault(false)
                 android.util.Log.i("GoatCore", "upscale: ai self-test with ${if (format == GLES30.GL_RGBA16F) "RGBA16F" else "RGBA32F"}: ${if (ok) "ok" else "wrong picture"}")
@@ -228,9 +235,13 @@ internal class Upscaler(private val es3: Boolean) {
         var samplers = IntArray(0)
         var lim = -1
 
-        /** O shader em GLSL ES 3.00: cada píxel é um do vídeo (gl_FragCoord), e cada leitura um texelFetch preso à borda. */
+        /**
+         * O shader em GLSL ES 3.00: cada píxel é um do vídeo (gl_FragCoord), e cada leitura um texelFetch preso à borda.
+         * Em highp: na SHIELD (Tegra X1) o mediump deu valores errados num canal do primeiro mapa (pesos de ±0,5 que se
+         * anulam), e a imagem saía lavada e com uma grelha; o teste de arranque ([selfTest]) apanha-o noutras GPU.
+         */
         fun source(): String = buildString {
-            append("#version 300 es\nprecision mediump float;\nprecision highp int;\n")
+            append("#version 300 es\nprecision highp float;\nprecision highp int;\n")
             binds.forEach { append("uniform mediump sampler2D $it;\n") }
             append("uniform ivec2 lim;\nout vec4 fragOut;\nivec2 P;\n")
             // O y do original cresce para baixo; nas texturas daqui, para cima.
