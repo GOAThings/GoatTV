@@ -195,36 +195,17 @@ internal class GoatCoreMediaPlayer(
     }
 
     /**
-     * Com o aumento da imagem ligado, a superfície da SurfaceView fica do tamanho do ecrã a sério: nas boxes 4K a
-     * interface é 1080p e a superfície seria também 1080p (o sistema estica-a para o ecrã depois, e o aumento ficava
-     * por aí). O tamanho segue o da vista ([fitSurface]); nunca mais do que 3840×2160.
+     * A superfície do vídeo fica sempre do tamanho da vista (1080p nas boxes 4K, cuja interface é 1080p): o aumento
+     * da imagem vai até aí, e o sistema estica para o ecrã. Chegou a pedir-se o ecrã a sério (3840×2160), mas na SHIELD
+     * (2026-11-20) nem o "Nítido" aguentou um canal 1080i para 4K; se a box mais forte não aguenta, nenhuma aguenta.
      */
     private val surfaceLayout = android.view.View.OnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> fitSurface(v as SurfaceView) }
 
     private fun fitSurface(v: SurfaceView) {
-        val w = v.width
-        val h = v.height
-        if (w <= 0 || h <= 0) return
-        val display = v.display ?: return
-        val metrics = android.util.DisplayMetrics()
-        @Suppress("DEPRECATION")
-        display.getRealMetrics(metrics)
-        val mode = display.mode
-        val logical = maxOf(metrics.widthPixels, metrics.heightPixels)
-        val physical = maxOf(mode.physicalWidth, mode.physicalHeight)
-        val k = if (logical > 0) physical.toFloat() / logical else 1f
-        if (k < 1.05f) {
-            v.holder.setSizeFromLayout()
-            return
-        }
-        val s = minOf(k, cc.slokker.itv.media.Upscaling.MAX_WIDTH.toFloat() / w, cc.slokker.itv.media.Upscaling.MAX_HEIGHT.toFloat() / h).coerceAtLeast(1f)
-        val fw = (w * s).toInt() and 1.inv()
-        val fh = (h * s).toInt() and 1.inv()
-        if (fixedSize[0] == fw && fixedSize[1] == fh) return
-        fixedSize[0] = fw
-        fixedSize[1] = fh
-        android.util.Log.i("GoatCore", "upscale: video surface ${fw}x$fh for a ${w}x$h view (display ${mode.physicalWidth}x${mode.physicalHeight}, interface ${metrics.widthPixels}x${metrics.heightPixels})")
-        v.holder.setFixedSize(fw, fh)
+        if (fixedSize[0] == 0 && fixedSize[1] == 0) return
+        fixedSize[0] = 0
+        fixedSize[1] = 0
+        v.holder.setSizeFromLayout()
     }
 
     private val fixedSize = IntArray(2)
