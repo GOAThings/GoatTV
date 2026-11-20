@@ -18,6 +18,7 @@ import cc.slokker.itv.data.Prefs
  * O vídeo HDR vai para a TV tal como vem; a TV muda sozinha para HDR (na box, "Ajustar à gama dinâmica").
  * Quando a TV não aceita o tipo do canal (ou com "Converter para SDR"), pede-se ao descodificador
  * que converta para SDR (Android 13+), para as cores não ficarem lavadas.
+ * Sem isso (Android 12 ou mais antigo, ou um descodificador que recusa), o GoatCore converte na GPU (media/ToneMapping).
  */
 enum class HdrType(val label: String, val displayType: Int) {
     HDR10("HDR10", Display.HdrCapabilities.HDR_TYPE_HDR10),

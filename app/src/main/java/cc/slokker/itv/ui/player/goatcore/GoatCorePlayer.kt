@@ -32,6 +32,7 @@ import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.media.ToneMapping
 import cc.slokker.itv.media.Upscaling
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
@@ -724,7 +725,7 @@ class GoatCorePlayer(
                 if (transfer > 0) format.setInteger(MediaFormat.KEY_COLOR_TRANSFER, transfer)
                 if (standard > 0) format.setInteger(MediaFormat.KEY_COLOR_RANGE, if (info.fullRange) MediaFormat.COLOR_RANGE_FULL else MediaFormat.COLOR_RANGE_LIMITED)
                 // A TV não aceita este HDR (ou pediu-se SDR): o descodificador converte (Android 13+).
-                if (info.isHdr && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && needsSdr(info)) {
+                if (info.isHdr && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && !forceToneMap && needsSdr(info)) {
                     format.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
                 }
             }
@@ -732,6 +733,7 @@ class GoatCorePlayer(
             codec = c
             deinterlacer = gpuStageFor(c.name)
             c.configure(format, deinterlacer?.input ?: surface, null, 0)
+            hdrToSdr(c, format)
             c.start()
             stats.configured = true
             var pending: VideoUnit? = first
@@ -767,6 +769,9 @@ class GoatCorePlayer(
                     val w = if (f.containsKey("crop-right")) f.getInteger("crop-right") - f.getInteger("crop-left") + 1 else f.getInteger(MediaFormat.KEY_WIDTH)
                     val h = if (f.containsKey("crop-bottom")) f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1 else f.getInteger(MediaFormat.KEY_HEIGHT)
                     Log.i(TAG, "video ${w}x$h ${c.name}")
+                    if (videoInfo?.isHdr == true && f.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) {
+                        Log.i(TAG, "hdr: decoder output transfer ${f.getInteger(MediaFormat.KEY_COLOR_TRANSFER)} (${MediaFormat.COLOR_TRANSFER_SDR_VIDEO} = SDR)")
+                    }
                     deinterlacer?.setSize(w, h)
                     listener.onVideoSize(w, h, mpeg2?.pixelRatio ?: videoInfo?.pixelRatio ?: 1f)
                 }
@@ -803,6 +808,58 @@ class GoatCorePlayer(
         cc.slokker.itv.BuildConfig.DEBUG && runCatching {
             Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.interlaced")).inputStream.bufferedReader().readText().trim() == "1"
         }.getOrDefault(false)
+    }
+
+    /**
+     * Testes: `adb shell setprop debug.goattv.tonemap 1` converte qualquer canal HDR para SDR na GPU (sem pedir ao
+     * descodificador), e um canal SDR como se fosse PQ (escuro, mas vê-se o caminho no emulador). Só nas versões de testes.
+     */
+    private val forceToneMap: Boolean by lazy {
+        cc.slokker.itv.BuildConfig.DEBUG && runCatching {
+            Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.tonemap")).inputStream.bufferedReader().readText().trim() == "1"
+        }.getOrDefault(false)
+    }
+
+    /**
+     * O HDR numa TV que não o mostra (HdrType.needsSdr): o descodificador [c] (já configurado com [format]) converte
+     * para SDR quando o Android 13+ lho pede e ele aceita (o formato de entrada fica com o pedido). Senão (Android 12
+     * ou mais antigo, como a SHIELD, ou um descodificador que recusa), configura-se de novo para um [VideoGpuStage]
+     * que converte (ver media/ToneMapping); se a GPU não o fizer, fica como antes (lavado).
+     */
+    private fun hdrToSdr(c: MediaCodec, format: MediaFormat) {
+        val info = videoInfo ?: return
+        val sdr = info.isHdr && needsSdr(info)
+        if (!sdr && !forceToneMap) return
+        val api33 = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+        val requested = api33 && format.containsKey(MediaFormat.KEY_COLOR_TRANSFER_REQUEST)
+        val converted = requested && runCatching {
+            val f = c.inputFormat
+            f.containsKey(MediaFormat.KEY_COLOR_TRANSFER_REQUEST) &&
+                f.getInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST) == MediaFormat.COLOR_TRANSFER_SDR_VIDEO
+        }.getOrDefault(false)
+        val mode = ToneMapping.mode(info.transfer, sdr, converted, forceToneMap)
+        val why = when {
+            forceToneMap -> "forced (debug.goattv.tonemap)"
+            converted -> "the decoder ${c.name} converts"
+            requested -> "the decoder ${c.name} refused the request"
+            else -> "the decoder cannot be asked (Android ${android.os.Build.VERSION.SDK_INT})"
+        }
+        Log.i(TAG, "hdr: transfer=${info.transfer} to SDR, $why")
+        if (mode == ToneMapping.NONE) return
+        // A superfície do ecrã fica livre antes de o EGL do estágio se ligar a ela.
+        c.reset()
+        deinterlacer?.let { runCatching { it.release() } }
+        deinterlacer = null
+        val stage = runCatching {
+            VideoGpuStage(surface, Deinterlacing.NONE, InterlaceVerdict(), pictureLook = picture, toneMap = mode)
+        }.onFailure { Log.w(TAG, "hdr: no tone mapping on the GPU (${it.javaClass.simpleName} ${it.message}), the picture stays washed out") }
+            .getOrNull()
+        if (stage != null) {
+            deinterlacer = stage
+            if (requested) format.removeKey(MediaFormat.KEY_COLOR_TRANSFER_REQUEST)
+            Log.i(TAG, "hdr: tone mapping ${ToneMapping.name(mode)} on the GPU (BT.2390 to ${ToneMapping.TARGET_PEAK.toInt()} nits, BT.2020 to BT.709)")
+        }
+        c.configure(format, stage?.input ?: surface, null, 0)
     }
 
     /** Como foi captada cada imagem que entrou no descodificador, pelo tempo dela (para o [deinterlacer]). */

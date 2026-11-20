@@ -16,6 +16,7 @@ import android.view.Surface
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.media.ToneMapping
 import cc.slokker.itv.media.UpscaleGovernor
 import cc.slokker.itv.media.UpscaleMemory
 import cc.slokker.itv.media.Upscaling
@@ -27,8 +28,14 @@ import java.util.concurrent.CountDownLatch
  * O vídeo que passa pela GPU antes do ecrã: o descodificador desenha numa textura ([input]) e cada imagem vai para o
  * ecrã ([output]) desentrelaçada e/ou com os ajustes da imagem. Só existe quando há alguma coisa a fazer (um canal
  * entrelaçado com Definições → Desentrelaçar ligado, ou algum ajuste de Definições → Imagem fora do 0): com tudo no
- * padrão o descodificador desenha direto no ecrã, como sempre. O HDR e os 10 bits nunca passam por aqui (isto é GLES2
- * de 8 bits).
+ * padrão o descodificador desenha direto no ecrã, como sempre. O HDR e os 10 bits só passam por aqui para o
+ * [toneMap] (o resto é GLES2 de 8 bits).
+ *
+ * HDR numa TV SDR ([toneMap], ver media/ToneMapping): quando o descodificador não converte o HDR10/HLG para SDR, a
+ * última passagem faz a conversão (uma passagem, do descodificador para o ecrã, em highp; sem highp nos fragment
+ * shaders a compilação falha logo ao criar o estágio, e o vídeo vai direto como antes). Assume-se que a textura do
+ * descodificador dá o RGB do BT.2020 ainda com a curva do sinal (PQ ou HLG): o amostrador externo só faz o YUV → RGB.
+ * Só os ajustes de cor se somam (depois da conversão); sem desentrelaçar, sem aumentar e sem a nitidez.
  *
  * Desentrelaçar: os canais SD de cabo e satélite e o 1080i saem sem o "pente" (as duas metades, captadas com 1/50 s
  * de diferença, mostradas juntas).
@@ -77,6 +84,8 @@ internal class VideoGpuStage(
     private val upscale: String = cc.slokker.itv.data.Prefs.Upscale.OFF,
     /** O que cada resolução aguentou nesta sessão (sincroniza-se nela). */
     private val upscaleMemory: UpscaleMemory = UpscaleMemory(),
+    /** [ToneMapping]: PQ ou HLG para converter o HDR para SDR aqui, ou NONE. */
+    private val toneMap: Int = ToneMapping.NONE,
 ) : SurfaceTexture.OnFrameAvailableListener {
     private val thread = HandlerThread("goatcore-video-gpu").apply { start() }
     private val handler = Handler(thread.looper)
@@ -213,6 +222,11 @@ internal class VideoGpuStage(
         combFbo = framebuffer(combTexture)
 
         deinterlace = program(VERTEX_DEINTERLACE, FRAGMENT_DEINTERLACE)
+        // As duas variantes da conversão do HDR já aqui: se a GPU não as compilar (sem highp), não há estágio.
+        if (toneMap != ToneMapping.NONE) {
+            finalProgram(true, LEVEL_COPY)
+            finalProgram(true, LEVEL_COLOUR)
+        }
         comb = program(VERTEX_COMB, FRAGMENT_COMB)
 
         texture2d = SurfaceTexture(external)
@@ -429,7 +443,7 @@ internal class VideoGpuStage(
                 GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
             }
         }
-        val level = if (look.neutral) LEVEL_COPY else if (look.sharpness == 0) LEVEL_COLOUR else LEVEL_SHARP
+        val level = if (look.neutral) LEVEL_COPY else if (look.sharpness == 0 || toneMap != ToneMapping.NONE) LEVEL_COLOUR else LEVEL_SHARP
         val program = finalProgram(fromDecoder, level)
         GLES20.glUseProgram(program)
         if (fromDecoder) {
@@ -465,7 +479,9 @@ internal class VideoGpuStage(
 
     /** A variante da última passagem: de onde lê ([fromDecoder] ou a imagem de fora) e o que faz ([level]). */
     private fun finalProgram(fromDecoder: Boolean, level: Int): Int =
-        finals.getOrPut(level * 2 + if (fromDecoder) 1 else 0) { program(VERTEX_FINAL, fragmentFinal(fromDecoder, level)) }
+        finals.getOrPut(level * 2 + if (fromDecoder) 1 else 0) {
+            program(VERTEX_FINAL, fragmentFinal(fromDecoder, level, if (fromDecoder) toneMap else ToneMapping.NONE))
+        }
 
     /** A textura do descodificador na unidade 0, com a transformação dela e o tamanho de uma linha e de uma coluna. */
     private fun bindExternal(program: Int) {
@@ -724,16 +740,21 @@ internal class VideoGpuStage(
         /**
          * O fragment shader da última passagem, só com o que a variante usa: a nitidez (a imagem mais [sharp] vezes a
          * diferença para a média dos quatro vizinhos) e a cor (`colour · rgb + bias`, ver [PictureLook.rgbMatrix]).
+         * Com [toneMap] (PQ ou HLG; só da textura do descodificador, sem a nitidez): o HDR → SDR antes da cor, tudo em
+         * highp (as curvas do PQ em mediump saíam erradas na Tegra).
          */
-        fun fragmentFinal(fromDecoder: Boolean, level: Int): String = buildString {
+        fun fragmentFinal(fromDecoder: Boolean, level: Int, toneMap: Int = ToneMapping.NONE): String = buildString {
             if (fromDecoder) append("#extension GL_OES_EGL_image_external : require\n")
-            append("precision mediump float;\n")
-            append(if (fromDecoder) "uniform samplerExternalOES tex;\n" else "uniform sampler2D tex;\n")
+            append(if (toneMap != ToneMapping.NONE) "precision highp float;\n" else "precision mediump float;\n")
+            if (toneMap != ToneMapping.NONE) append(ToneMapping.glsl(toneMap))
+            // O amostrador externo é lowp por omissão: na conversão do HDR pede-se highp, para não perder os 10 bits.
+            append(if (!fromDecoder) "uniform sampler2D tex;\n" else if (toneMap != ToneMapping.NONE) "uniform highp samplerExternalOES tex;\n" else "uniform samplerExternalOES tex;\n")
             if (level >= LEVEL_COLOUR) append("uniform mat3 colour;\nuniform float bias;\n")
             if (level >= LEVEL_SHARP) append("uniform float sharp;\nvarying vec2 n;\nvarying vec2 s;\nvarying vec2 w;\nvarying vec2 e;\n")
             append("varying vec2 c;\nvoid main() {\n")
             append("vec3 p = texture2D(tex, c).rgb;\n")
-            if (level >= LEVEL_SHARP) {
+            if (toneMap != ToneMapping.NONE) append("p = toneMap(p);\n")
+            if (level >= LEVEL_SHARP && toneMap == ToneMapping.NONE) {
                 append("vec3 a = 0.25 * (texture2D(tex, n).rgb + texture2D(tex, s).rgb + texture2D(tex, w).rgb + texture2D(tex, e).rgb);\n")
                 append("p = clamp(p + sharp * (p - a), 0.0, 1.0);\n")
             }
