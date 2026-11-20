@@ -37,14 +37,22 @@ public struct TrackInfo: Equatable, Sendable {
     public var selected: Bool
     /// Legendas "forçadas": só as falas noutra língua, não o programa todo.
     public var forced: Bool
+    /// O formato, num nome curto igual ao do Android ("aac", "ac3", "eac3", "mp2", "dvb", "teletext", "webvtt", "cc"),
+    /// se o leitor o disser. Só para a memória do canal (ver [TrackMemory]).
+    public var codec: String?
+    /// O que distingue duas faixas da mesma língua e formato: a página do teletexto, o papel da faixa.
+    public var detail: String?
 
-    public init(language: String?, label: String? = nil, channels: Int = 2, supported: Bool = true, selected: Bool = false, forced: Bool = false) {
+    public init(language: String?, label: String? = nil, channels: Int = 2, supported: Bool = true, selected: Bool = false, forced: Bool = false,
+                codec: String? = nil, detail: String? = nil) {
         self.language = language
         self.label = label
         self.channels = channels
         self.supported = supported
         self.selected = selected
         self.forced = forced
+        self.codec = codec
+        self.detail = detail
     }
 
     /// A língua em ISO 639-1: a do campo da língua ou, sem ela, a que a etiqueta diz.
@@ -52,7 +60,7 @@ public struct TrackInfo: Equatable, Sendable {
 
     var shared: GoatShared.TrackInfo {
         GoatShared.TrackInfo(language: language, label: label, channels: Int32(clamping: channels), supported: supported,
-                             selected: selected, forced: forced)
+                             selected: selected, forced: forced, codec: codec, detail: detail)
     }
 }
 
@@ -69,6 +77,31 @@ public enum TrackPick {
     /// legendas nessa língua. Entre as dessa língua, as completas antes das forçadas.
     public static func text(_ tracks: [TrackInfo], language: String?) -> Int? {
         GoatShared.TrackPick.shared.text(tracks: tracks.map(\.shared), language: language).map { Int($0.int32Value) }
+    }
+}
+
+/// A memória das faixas do canal (a regra é a do núcleo partilhado com o Android: TrackMemory em ChannelMemory.kt): o
+/// que se guarda de uma faixa escolhida à mão (a língua, o formato, o detalhe; os ids e os PID mudam entre sessões) e,
+/// noutro dia, qual das faixas do canal é essa.
+public enum TrackMemory {
+    /// As legendas desligadas à mão.
+    public static let off: String = GoatShared.TrackMemory.shared.OFF
+
+    /// A faixa de [tracks] (o índice) que corresponde a [memo], ou nil se hoje não há nenhuma (ou sem memória): aí
+    /// valem as regras de sempre ([TrackPick]) e a memória fica.
+    public static func find(_ tracks: [TrackInfo], memo: String) -> Int? {
+        GoatShared.TrackMemory.shared.find(tracks: tracks.map(\.shared), memo: memo).map { Int($0.int32Value) }
+    }
+
+    /// O que guardar quando a pessoa escolhe a faixa de áudio [index]: "" se é a que as regras de sempre escolhiam
+    /// (escolher essa outra vez limpa a memória do canal).
+    public static func audioChoice(_ tracks: [TrackInfo], index: Int, language: String?, surround: Bool) -> String {
+        GoatShared.TrackMemory.shared.audioChoice(tracks: tracks.map(\.shared), index: Int32(clamping: index), language: language, surround: surround)
+    }
+
+    /// O mesmo para as legendas ([index] < 0: desligadas): "" se é o que a língua preferida [language] dava.
+    public static func textChoice(_ tracks: [TrackInfo], index: Int, language: String?) -> String {
+        GoatShared.TrackMemory.shared.textChoice(tracks: tracks.map(\.shared), index: Int32(clamping: index), language: language)
     }
 }
 
@@ -92,6 +125,9 @@ public struct TrackChoice: @unchecked Sendable {
     public mutating func onOpen(_ channelKey: String) { core.onOpen(channelKey: channelKey) }
 
     public mutating func onManual(_ kind: Kind) { core.onManual(type: kind.shared) }
+
+    /// A pessoa voltou à faixa que as regras de sempre escolhem: deixa de ser uma escolha à mão.
+    public mutating func onAuto(_ kind: Kind) { core.onAuto(type: kind.shared) }
 
     public func isManual(_ kind: Kind) -> Bool { core.isManual(type: kind.shared) }
 

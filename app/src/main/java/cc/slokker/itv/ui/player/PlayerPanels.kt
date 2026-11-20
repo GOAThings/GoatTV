@@ -814,7 +814,7 @@ internal fun SettingsSheet(
     startAtEpg: Boolean = false,
     startAtConnection: Boolean = false,
     startAtNewPlaylist: Boolean = false,
-    onManualTrack: (Int) -> Unit = {},
+    onManualTrack: OnManualTrack = { _, _, _ -> },
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     // À esquerda em todos os temas, com a margem das listas (ver PlayerScreen); no Sombra sem painel, por cima da

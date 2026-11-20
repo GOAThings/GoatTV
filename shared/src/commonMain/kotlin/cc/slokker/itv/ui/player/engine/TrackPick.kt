@@ -17,6 +17,13 @@ data class TrackInfo(
     val selected: Boolean = false,
     /** Legendas "forçadas": só as falas noutra língua, não o programa todo. */
     val forced: Boolean = false,
+    /**
+     * O formato, num nome curto igual em todas as plataformas ("aac", "ac3", "eac3", "mp2", "dvb", "teletext",
+     * "webvtt", "cc"), se o player o disser. Só para a memória do canal (ver TrackMemory).
+     */
+    val codec: String? = null,
+    /** O que distingue duas faixas da mesma língua e formato: a página do teletexto, o papel da faixa. */
+    val detail: String? = null,
 ) {
     /** A língua em ISO 639-1: a do campo da língua ou, sem ela, a que a etiqueta diz. */
     val code: String? get() = Languages.code(language) ?: Languages.code(label)
@@ -33,6 +40,9 @@ data class TrackWish(
     /** Decidir o áudio / as legendas agora (já decididos, ou escolhidos à mão neste canal, ficam). */
     val audio: Boolean = true,
     val text: Boolean = true,
+    /** O áudio e as legendas escolhidos à mão neste canal noutra vez (ver TrackMemory); "" = sem memória. Ganham às línguas. */
+    val audioMemo: String = "",
+    val textMemo: String = "",
 )
 
 object TrackPick {
@@ -91,7 +101,15 @@ class TrackChoice {
         manual += type
     }
 
+    /** A pessoa voltou à faixa que as regras de sempre escolhem: deixa de ser uma escolha à mão. */
+    fun onAuto(type: Int) {
+        manual -= type
+    }
+
     fun isManual(type: Int): Boolean = type in manual
+
+    /** Ainda não se decidiu [type] nesta abertura (mesmo que tenha sido escolhido à mão antes). */
+    fun undecided(type: Int): Boolean = type !in decided
 
     fun pending(type: Int): Boolean = type !in decided && type !in manual
 

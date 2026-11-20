@@ -664,9 +664,9 @@ internal class GoatCoreMediaPlayer(
         return Futures.immediateVoidFuture()
     }
 
-    private companion object {
+    companion object {
         /** Sem imagem há mais do que isto, a dar, é uma paragem à espera de dados. */
-        const val STARVED_MS = 700L
+        private const val STARVED_MS = 700L
 
         /** O Media3 não tem tipo para o teletexto: "text/…" basta para ser uma faixa de legendas. */
         const val TELETEXT_MIME = "text/x-dvb-teletext"

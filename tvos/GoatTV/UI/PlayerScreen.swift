@@ -917,8 +917,9 @@ struct PlayerScreen: View {
     private func hudView(_ channel: Channel) -> some View {
         let s = model.strings
         let favorite = model.isFavorite(channel)
+        // A proporção deste canal: o botão muda-a só nele (fica na memória do canal, ver ChannelMemory).
         let aspectLabel: String
-        switch model.prefs.aspect {
+        switch model.channelAspect {
         case Prefs.Aspect.zoom: aspectLabel = s.t("Zoom", "Zoom")
         case Prefs.Aspect.fill: aspectLabel = s.t("Stretch", "Esticar")
         default: aspectLabel = s.t("Fit", "Ajustar")
@@ -945,12 +946,12 @@ struct PlayerScreen: View {
                 chip("subtitles", "captions.bubble.fill", s.t("Subtitles", "Legendas")) { openSettings(.subtitles) }
                 chip("aspect", "aspectratio", aspectLabel) {
                     let next: String
-                    switch model.prefs.aspect {
+                    switch model.channelAspect {
                     case Prefs.Aspect.fit: next = Prefs.Aspect.zoom
                     case Prefs.Aspect.zoom: next = Prefs.Aspect.fill
                     default: next = Prefs.Aspect.fit
                     }
-                    model.setPref("aspect", .string(next))
+                    model.setChannelAspect(next)
                 }
                 // Pausar o direto é na barra de progresso, por cima (OK nela), ou com Play/Pausa no comando.
                 // Gravar o programa a dar (do anel da pausa do direto), ou parar a gravação deste canal.

@@ -10,6 +10,7 @@ import cc.slokker.itv.data.recording.ScheduledRecording
 import cc.slokker.itv.data.recording.SeriesRule
 import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.playback.PictureName
+import cc.slokker.itv.playback.ChannelMemory
 import cc.slokker.itv.playback.SubtitleLook
 import cc.slokker.itv.playback.SubtitleRect
 import kotlinx.datetime.TimeZone
@@ -229,6 +230,11 @@ object AppleBridge {
     fun proMoreGroup(): String = ProLineup.MORE
 
     fun proHealthDecode(text: String?, nowMs: Long): ProHealth = ProHealth.decode(text, nowMs)
+
+    // ---- A memória por canal (ChannelMemory) ----
+
+    /** A memória dos canais guardada neste aparelho ([text] é o que o `encode` deu; null = vazia). */
+    fun channelMemoryDecode(text: String?): ChannelMemory = ChannelMemory.decode(text)
 
     private fun zone(id: String): TimeZone = runCatching { TimeZone.of(id) }.getOrDefault(TimeZone.UTC)
 

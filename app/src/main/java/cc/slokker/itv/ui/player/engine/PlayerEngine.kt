@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -22,6 +23,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
@@ -227,4 +229,15 @@ internal object DebugEngine {
             Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.capture")).inputStream.bufferedReader().readText().trim() == "1"
         }.getOrDefault(false)
     }
+}
+
+/**
+ * A proporção da imagem do canal [channelKey] da lista [playlistId]: a escolhida à mão nele (ver ChannelMemory) ou,
+ * sem nenhuma, a das definições ([global]).
+ */
+@Composable
+internal fun rememberChannelAspect(vm: AppViewModel, playlistId: String, channelKey: String, global: String): String {
+    val store = vm.channelMemory
+    val changes by store.changes.collectAsStateWithLifecycle()
+    return remember(changes, playlistId, channelKey, global) { store.aspect(playlistId, channelKey, global) }
 }

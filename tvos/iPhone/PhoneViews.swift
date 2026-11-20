@@ -1082,13 +1082,14 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, quality, backup, sleep
+    case audio, subtitles, aspect, quality, backup, sleep
 
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .audio: "music.note"
         case .subtitles: "captions.bubble"
+        case .aspect: "aspectratio"
         case .quality: "slider.horizontal.3"
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
@@ -1098,6 +1099,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         switch self {
         case .audio: "audio"
         case .subtitles: "subtitles"
+        case .aspect: "aspect"
         case .quality: "hls_quality"
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
@@ -1159,6 +1161,12 @@ struct PlayerOptionsSheet: View {
                         lookRow("subtitle_size", model.prefs.subtitleSize)
                         lookRow("subtitle_style", model.prefs.subtitleStyle)
                         lookRow("subtitle_position", model.prefs.subtitlePosition)
+                    }
+                case .aspect:
+                    // A proporção da imagem só neste canal (fica na memória dele, ver ChannelMemory); a de todos é nas
+                    // Definições, e escolher essa outra vez limpa a do canal.
+                    ForEach([Prefs.Aspect.fit, Prefs.Aspect.zoom, Prefs.Aspect.fill], id: \.self) { aspect in
+                        row(s.r("aspect_\(aspect)"), aspect == model.channelAspect) { model.setChannelAspect(aspect) }
                     }
                 case .quality:
                     // Automático (a definição) ou uma qualidade fixa até mudar de canal; por baixo do Automático, a que dá.

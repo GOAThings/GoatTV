@@ -1952,6 +1952,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** As listas em baixo há pouco (os canais delas vão logo à reserva). */
+    /** O que se escolheu à mão em cada canal (áudio, legendas, proporção): só neste aparelho (ver ChannelMemory). */
+    internal val channelMemory get() = c.channelMemory
+
     internal val providerOutage = ProviderOutage { android.os.SystemClock.elapsedRealtime() }
 
     /**

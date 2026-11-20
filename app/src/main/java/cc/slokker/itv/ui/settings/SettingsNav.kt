@@ -2,6 +2,7 @@ package cc.slokker.itv.ui.settings
 
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.data.ChannelMatch
+import cc.slokker.itv.ui.player.OnManualTrack
 import cc.slokker.itv.ui.player.NetVerdictCard
 import cc.slokker.itv.ui.player.BackupChannelBody
 import cc.slokker.itv.ui.player.BackupAddBody
@@ -204,7 +205,7 @@ fun SettingsContent(
     startAtEpgFor: Channel? = null,
     startAtConnection: Boolean = false,
     /** Uma faixa escolhida à mão (Canal atual → Áudio/Legendas): ganha à língua preferida até mudar de canal. */
-    onManualTrack: (Int) -> Unit = {},
+    onManualTrack: OnManualTrack = { _, _, _ -> },
 ) {
     // Com "Proteger Definições", pede o PIN antes de mostrar qualquer página.
     var stack by remember {

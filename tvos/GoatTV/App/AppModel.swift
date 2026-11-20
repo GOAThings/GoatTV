@@ -122,6 +122,10 @@ final class AppModel {
     @ObservationIgnored var proSet: ProSet?
     /// As fontes do Modo TV Pro que falharam há pouco (só nesta TV).
     let proHealth = ProHealth()
+    /// O que se escolheu à mão em cada canal (o áudio, as legendas e a proporção), só neste aparelho (ver ChannelMemory).
+    let channelMemory = ChannelMemory()
+    /// A proporção da imagem do canal a dar: a escolhida à mão nele ou, sem nenhuma, a das definições.
+    private(set) var channelAspect = Prefs.Aspect.fit
     /// No Modo TV Pro, a lista da fonte que falhou (o aviso "<lista> não responde").
     @ObservationIgnored var proFailedFrom: String?
     /// A fonte do Modo TV Pro que falhou, à espera de saber se outra deu no lugar dela (ver proBackupPlaying).
@@ -256,6 +260,17 @@ final class AppModel {
         // Os nomes das línguas (para ler as faixas) montam-se uma vez, fora do ecrã: o primeiro canal já os encontra prontos.
         Task.detached(priority: .utility) { _ = Languages.code("English") }
         player.onFailed = { [weak self] in self?.explainPlaybackFailure() }
+        // A memória do canal: o leitor pergunta-a ao abrir e guarda nela o que se escolhe à mão (pela lista aberta: no
+        // Modo TV Pro, a lista única, seja qual for a fonte a dar).
+        player.channelMemory = { [weak self] key in
+            guard let self, let list = self.content?.playlist.id else { return ("", "") }
+            self.channelMemory.touch(list, key)
+            return (self.channelMemory.audio(list, key), self.channelMemory.text(list, key))
+        }
+        player.onRememberTrack = { [weak self] key, kind, memo in
+            guard let self, let list = self.content?.playlist.id else { return }
+            if kind == .audio { self.channelMemory.setAudio(list, key, memo) } else { self.channelMemory.setText(list, key, memo) }
+        }
         // A lista principal desistiu do canal: o mesmo canal na lista de reserva (ver BackupPlaylist.swift).
         player.onStartFailed = { [weak self] status in self?.startFailover(status: status) ?? false }
         player.skipMain = { [weak self] in self?.skipToBackup() ?? false }
@@ -683,7 +698,7 @@ final class AppModel {
         strings = Strings(language: prefs.language)
         player.reconnectSeconds = prefs.reconnectSeconds
         player.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
-        player.aspect = prefs.aspect
+        refreshChannelAspect()
         for engine in [player] + extraPlayers {
             engine.zapDelayMs = prefs.zapDelayMs
             engine.audioLanguage = prefs.audioLanguage
@@ -720,6 +735,22 @@ final class AppModel {
         Fonts.scale = CGFloat(Prefs.TextSize.scale(prefs.textSize)) * CGFloat(prefs.uiScale) / 100
         // Juntar versões, regras ou nomes da lista aberta mudaram (aqui ou noutro sítio): ela refaz-se.
         reapplyContentOptions()
+    }
+
+    /// A proporção da imagem só no canal a dar (o botão do leitor): fica na memória dele, neste aparelho. Escolher a
+    /// das Definições outra vez limpa-a.
+    func setChannelAspect(_ aspect: String) {
+        guard let list = content?.playlist.id, let key = current?.key else { return }
+        channelMemory.setAspect(list, key, aspect, global: prefs.aspect)
+        refreshChannelAspect()
+    }
+
+    /// Põe no leitor a proporção do canal a dar (a dele ou, sem nenhuma, a das Definições).
+    private func refreshChannelAspect() {
+        var aspect = prefs.aspect
+        if let list = content?.playlist.id, let key = current?.key { aspect = channelMemory.aspect(list, key, global: prefs.aspect) }
+        if aspect != channelAspect { channelAspect = aspect }
+        player.aspect = aspect
     }
 
     /// Muda uma definição da conta (nil repõe o padrão) e grava-a; vale também para as outras TVs.
@@ -1332,6 +1363,7 @@ final class AppModel {
         }
         flushWatched()
         current = channel
+        refreshChannelAspect()
         playingSince = Date()
         zapCount += 1
         if opening {

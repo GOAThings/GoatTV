@@ -31,6 +31,7 @@ import cc.slokker.itv.ui.player.engine.PlaybackFailure
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.aspectOrNull
+import cc.slokker.itv.ui.player.engine.rememberChannelAspect
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.PlayerMediaSession
@@ -113,8 +114,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     if (catchup == null && playback.timeshift.atLive && playback.speed != 1f) playback.speed = 1f
     LaunchedEffect(player, playback.speed) { player.setPlaybackSpeed(playback.speed) }
 
-    LaunchedEffect(playback.view, prefs.aspect) {
-        playback.view?.setResizeMode(resizeModeFor(prefs.aspect))
+    // A proporção deste canal: a escolhida à mão nele ou, sem nenhuma, a das definições.
+    val aspect = rememberChannelAspect(vm, data.playlist.id, channel.key, prefs.aspect)
+    LaunchedEffect(playback.view, aspect) {
+        playback.view?.setResizeMode(resizeModeFor(aspect))
     }
 
     LaunchedEffect(playback.view, prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition) {
