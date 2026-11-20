@@ -262,6 +262,12 @@ class GoatCorePlayer(
     /** Já saiu a primeira imagem (ou o primeiro som, sem vídeo). */
     val started: Boolean get() = lastOutputAt > 0
 
+    /** O canal tem vídeo (o [bufferedMs] conta pelo vídeo: num canal só de som fica a 0). */
+    val hasVideo: Boolean get() = videoPid >= 0
+
+    /** O som vai em bruto para a TV ou o recetor (passthrough): fora de 1× cala-se (ver [setSpeed]). */
+    val bitstreaming: Boolean get() = bitstreamTrack != null
+
     /** O tempo do relógio agora (µs), ou Long.MIN_VALUE antes de começar: as legendas acertam-se por ele. */
     val nowUs: Long get() = videoNowUs()
 

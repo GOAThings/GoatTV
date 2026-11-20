@@ -332,11 +332,15 @@ internal fun Player.loadStream(
     startMs: Long = 0L,
     audioLanguage: String? = null,
     textLanguage: String? = null,
+    adaptive: Boolean = false,
 ) {
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is GoatCoreMediaPlayer -> {
             connection = gate?.probe
+            // O buffer automático no direto: o nível aprendido é do fornecedor deste endereço (não do anel).
+            adaptiveUrl = candidate.url.takeIf { adaptive }
+            adaptiveDips = !candidate.isHls
             if (candidate.isLocal) return setStream(candidate.url, FileDataSource.Factory(), hls = false, startMs = startMs)
             val scheme = candidate.url.substringBefore("://", "").lowercase()
             // As listas das operadoras (multicast): o TS vem em pacotes UDP ou RTP.

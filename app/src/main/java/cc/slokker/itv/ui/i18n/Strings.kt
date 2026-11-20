@@ -1327,6 +1327,9 @@ class Strings(context: Context) {
     val probeLvUnreachable get() = s(R.string.probe_lv_unreachable)
     val probeLvEmpty get() = s(R.string.probe_lv_empty)
     val probeListPortal get() = s(R.string.probe_list_portal)
+
+    // Buffer automático
+    val bufferAuto get() = s(R.string.buffer_auto)
 }
 
 /** Textos atuais, para código fora do Compose (ViewModel, fontes de listas). Iniciado no ItvApp. */

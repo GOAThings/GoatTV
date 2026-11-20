@@ -154,6 +154,31 @@ internal class GoatCoreMediaPlayer(
     /** A velocidade pedida (fica para o motor seguinte, ao mudar de ponto ou de canal). */
     private var speed = 1f
 
+    /**
+     * O buffer automático (Prefs.Buffer.AUTO, só no direto): o endereço do canal no fornecedor (a memória do nível é
+     * por fornecedor), ou null com um dos buffers fixos. Fica ao mudar de ponto no anel; quem abre o canal põe-no.
+     */
+    var adaptiveUrl: String? = null
+
+    /** A ver o direto (não em pausa nem atrás dele no anel): só aí o buffer automático aprende e acelera. */
+    var atLive: () -> Boolean = { true }
+
+    /** O que está à frente diz se a ligação acompanha (não num HLS, que chega aos segmentos; ver AdaptiveBuffer.onPlaying). */
+    var adaptiveDips = true
+
+    /** O buffer automático do motor a dar (ver [adapt]); novo em cada motor. */
+    private var adaptive: cc.slokker.itv.playback.AdaptiveBuffer? = null
+
+    /** Parado depois de uma paragem à espera de ter o alvo do [adaptive] à frente (desde quando, elapsedRealtime). */
+    private var holding = false
+    private var holdingSince = 0L
+
+    /** No quarto de segundo anterior estava a sair imagem: só então uma imagem que falta é uma paragem (não ao sair da pausa). */
+    private var wasOutputting = false
+
+    /** A velocidade a mais para gastar o que está à frente (1 = nenhuma; ver [adapt]). */
+    private var drain = 1f
+
     /** Onde começar dentro do ficheiro (as gravações e o catch-up do Stalker; ver [TsSeek]); 0 = do início. */
     private var startMs = 0L
 
@@ -330,6 +355,13 @@ internal class GoatCoreMediaPlayer(
             override fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) = showCues(g, atUs, cues, durationUs)
         })
         core = player
+        adaptive = adaptiveUrl?.let { url ->
+            val key = cc.slokker.itv.playback.AdaptiveBuffer.providerKey(url)
+            cc.slokker.itv.playback.AdaptiveBuffer(adaptiveMemory.startLevel(key)).also { adaptiveKey = key }
+        }
+        holding = false
+        wasOutputting = false
+        drain = 1f
         main.removeCallbacks(starvation)
         main.postDelayed(starvation, 250)
         player.setVolume(effectiveVolume())
@@ -365,8 +397,59 @@ internal class GoatCoreMediaPlayer(
                     invalidateState()
                 }
             }
+            adapt(c)
             main.postDelayed(this, 250)
         }
+    }
+
+    private var adaptiveKey = ""
+
+    /**
+     * O buffer automático, de quarto em quarto de segundo (ver AdaptiveBuffer): numa paragem a meio, o motor fica em
+     * pausa até ter o alvo à frente (no máximo [HOLD_MAX_MS]), em vez de dar aos soluços; a dar, aprende com o que
+     * está à frente e, depois de descer de nível, gasta o que está a mais a tocar um pouco mais depressa (o som PCM
+     * mantém o tom; em passthrough não se acelera). O motor mostra a primeira imagem logo, como sempre.
+     */
+    private fun adapt(c: GoatCorePlayer) {
+        val a = adaptive ?: return
+        if (!c.started || !playWhenReady || !c.hasVideo) {
+            wasOutputting = false
+            return
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        val lead = c.bufferedMs
+        if (holding) {
+            if (lead >= a.targetMs() || now - holdingSince > HOLD_MAX_MS) {
+                holding = false
+                wasOutputting = false
+                c.setPaused(false)
+            }
+            return
+        }
+        val live = atLive()
+        val outputting = c.starvedMs <= STARVED_MS
+        val stalled = wasOutputting && !outputting
+        wasOutputting = outputting
+        if (stalled) {
+            if (live && a.onStall(now)) adaptiveMemory.remember(adaptiveKey, a.level)
+            setDrain(c, 1f)
+            holding = true
+            holdingSince = now
+            c.setPaused(true)
+            return
+        }
+        var want = 1f
+        if (live && speed == 1f) {
+            if (a.onPlaying(now, lead, dips = adaptiveDips)) adaptiveMemory.remember(adaptiveKey, a.level)
+            want = a.rate(lead, canDrain = !c.bitstreaming)
+        }
+        setDrain(c, want)
+    }
+
+    private fun setDrain(c: GoatCorePlayer, rate: Float) {
+        if (rate == drain) return
+        drain = rate
+        c.setSpeed(speed * rate)
     }
 
     /** Legendas à espera da hora delas no relógio do motor: o motor lê adiantado (até ~20 s) e chegam antes. */
@@ -635,7 +718,8 @@ internal class GoatCoreMediaPlayer(
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         this.playWhenReady = playWhenReady
-        core?.setPaused(!playWhenReady)
+        // À espera do alvo do buffer automático: continua parado até lá (ver [adapt]).
+        core?.setPaused(!playWhenReady || holding)
         return Futures.immediateVoidFuture()
     }
 
@@ -710,6 +794,7 @@ internal class GoatCoreMediaPlayer(
 
     override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
         speed = playbackParameters.speed
+        drain = 1f
         core?.setSpeed(speed)
         return Futures.immediateVoidFuture()
     }
@@ -746,6 +831,12 @@ internal class GoatCoreMediaPlayer(
     companion object {
         /** Sem imagem há mais do que isto, a dar, é uma paragem à espera de dados. */
         private const val STARVED_MS = 700L
+
+        /** Parado à espera do alvo do buffer automático no máximo isto; depois dá com o que houver. */
+        private const val HOLD_MAX_MS = 8_000L
+
+        /** O nível do buffer automático aprendido por fornecedor (só na thread principal, como os players). */
+        private val adaptiveMemory = cc.slokker.itv.playback.AdaptiveBufferMemory()
 
         /** O Media3 não tem tipo para o teletexto: "text/…" basta para ser uma faixa de legendas. */
         const val TELETEXT_MIME = "text/x-dvb-teletext"

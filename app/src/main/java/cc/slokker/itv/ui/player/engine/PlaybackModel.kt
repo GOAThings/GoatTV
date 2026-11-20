@@ -313,6 +313,8 @@ internal data class OpenOptions(
     /** As línguas preferidas, para o VLC escolher ao abrir (null = as do stream; ver [StreamEngine.chooseTracks]). */
     val audioLanguage: String? = null,
     val textLanguage: String? = null,
+    /** O buffer automático (Prefs.Buffer.AUTO) num direto: no GoatCore (ver AdaptiveBuffer); os outros ficam no normal. */
+    val adaptiveBuffer: Boolean = false,
 )
 
 /**

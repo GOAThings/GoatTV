@@ -125,6 +125,9 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var reconnectSeconds = 5
     /// Buffer de rede em ms.
     @ObservationIgnored var cachingMs = 1500
+    /// O buffer automático (Prefs.Buffer.auto): no GoatCore, no direto (ver AdaptiveBuffer); os outros motores ficam
+    /// com o [cachingMs] do normal.
+    @ObservationIgnored var adaptiveBuffer = false
     /// Dolby/DTS seguem tal como vêm para o recetor ou a TV (no VLC; o da Apple trata disso sozinho).
     @ObservationIgnored var passthrough = true
     /// "exo" (o normal: o da Apple nos HLS, o VLC no resto) ou "vlc" (sempre o VLC). As mesmas chaves do Android.
@@ -1339,7 +1342,8 @@ final class PlayerEngine: NSObject {
         a.open(r)
     }
 
-    private func startGoatCore(_ url: URL, ring: Bool = false) {
+    /// [atLive]: no anel, abre no direto (e não atrás dele, ao recuar na pausa do direto).
+    private func startGoatCore(_ url: URL, ring: Bool = false, atLive: Bool = true) {
         var headers: [String: String] = [:]
         if !ring {
             headers["User-Agent"] = userAgent
@@ -1357,6 +1361,9 @@ final class PlayerEngine: NSObject {
         g.deinterlace = deinterlace
         g.picture = controlsDisplay ? picture : PictureAdjust()
         g.upscale = controlsDisplay ? upscale : "off"
+        g.adaptiveBuffer = adaptiveBuffer && openedLive
+        g.adaptiveAtLive = atLive
+        g.adaptiveDips = !(attempts.indices.contains(index) && attempts[index].candidate.isHLS)
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil
@@ -2175,7 +2182,7 @@ extension PlayerEngine {
             paused = false
             positionValid = false
             hasPicture = false
-            startGoatCore(url, ring: true)
+            startGoatCore(url, ring: true, atLive: live)
             resetTrackChoice()
             scheduleTrackChoice()
             watchdog = Task { [weak self] in

@@ -1001,4 +1001,6 @@
     <string name="mobile_data_quality_sub">मोबाइल डेटा पर, कई गुणवत्ता वाले HLS चैनल आपका प्लान बचाने के लिए डेटा सेवर (अधिकतम 720p) इस्तेमाल करते हैं। Wi-Fi पर लौटने पर सामान्य गुणवत्ता वापस आ जाती है। सादे TS चैनल नहीं बदलते</string>
     <string name="mobile_data_quality_auto">डेटा बचाएँ</string>
     <string name="mobile_data_quality_same">Wi-Fi जैसी ही</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">स्वचालित (कनेक्शन के अनुसार ढलता है)</string>
 </resources>

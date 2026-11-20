@@ -1001,4 +1001,6 @@
     <string name="mobile_data_quality_sub">Bei mobilen Daten nutzen HLS-Sender mit mehreren Qualitäten Datensparen (bis 720p), um dein Datenvolumen zu schonen. Im WLAN gilt wieder die übliche Qualität. Einfache TS-Sender bleiben unverändert</string>
     <string name="mobile_data_quality_auto">Daten sparen</string>
     <string name="mobile_data_quality_same">Wie im WLAN</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Automatisch (passt sich der Verbindung an)</string>
 </resources>

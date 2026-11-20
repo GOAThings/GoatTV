@@ -1677,7 +1677,7 @@ private struct MenuTab: View {
 
     private var bufferOptions: [(String, String)] {
         let s = model.strings
-        return [("live", s.r("buffer_live")), ("small", s.r("buffer_small")), ("normal", s.r("buffer_normal")), ("large", s.r("buffer_large"))]
+        return [("auto", s.r("buffer_auto")), ("live", s.r("buffer_live")), ("small", s.r("buffer_small")), ("normal", s.r("buffer_normal")), ("large", s.r("buffer_large"))]
     }
 
     private var startupOptions: [(String, String)] {

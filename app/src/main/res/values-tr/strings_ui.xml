@@ -1001,4 +1001,6 @@
     <string name="mobile_data_quality_sub">Mobil veride, birden çok kalitesi olan HLS kanalları paketinizi korumak için Veri tasarrufu (en fazla 720p) kullanır. Wi-Fi\'ye dönünce olağan kalite geri gelir. Düz TS kanalları değişmez</string>
     <string name="mobile_data_quality_auto">Veri tasarrufu</string>
     <string name="mobile_data_quality_same">Wi-Fi ile aynı</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Otomatik (bağlantıya uyum sağlar)</string>
 </resources>

@@ -1003,4 +1003,6 @@
     <string name="mobile_data_quality_sub">En données mobiles, les chaînes HLS à plusieurs qualités utilisent Économie de données (jusqu\'à 720p) pour préserver votre forfait. Sur le Wi-Fi, la qualité habituelle revient. Les chaînes TS simples ne changent pas</string>
     <string name="mobile_data_quality_auto">Économiser les données</string>
     <string name="mobile_data_quality_same">Comme en Wi-Fi</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Automatique (s\'adapte à la connexion)</string>
 </resources>
