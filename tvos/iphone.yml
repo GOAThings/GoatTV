@@ -20,8 +20,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.19.1"
-    CURRENT_PROJECT_VERSION: "68"
+    MARKETING_VERSION: "0.20.0"
+    CURRENT_PROJECT_VERSION: "69"
 targets:
   GoatTV:
     type: application
