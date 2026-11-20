@@ -64,6 +64,19 @@ class HlsPlaylist(
     val isMaster: Boolean get() = variants.isNotEmpty()
 
     companion object {
+        /** Quantos bytes chegam para saber se a resposta é uma playlist (ver [looksLikePlaylist]). */
+        const val SNIFF_BYTES = 64
+
+        /** O início de uma playlist HLS: "#EXTM3U", depois de um BOM ou de espaços. Uma rádio ou um TS não o têm. */
+        fun looksLikePlaylist(head: ByteArray): Boolean {
+            var i = 0
+            if (head.size >= 3 && head[0] == 0xEF.toByte() && head[1] == 0xBB.toByte() && head[2] == 0xBF.toByte()) i = 3
+            while (i < head.size && (head[i] == ' '.code.toByte() || head[i] == '\t'.code.toByte() || head[i] == '\r'.code.toByte() || head[i] == '\n'.code.toByte())) i++
+            val tag = "#EXTM3U"
+            if (head.size - i < tag.length) return false
+            return tag.indices.all { head[i + it] == tag[it].code.toByte() }
+        }
+
         /** Lê [text] (a playlist em [base], para os endereços relativos). */
         fun parse(text: String, base: String): HlsPlaylist {
             val variants = ArrayList<HlsVariant>()

@@ -764,6 +764,16 @@ class GoatCorePlayer(
     /** Nos canais entrelaçados: entre o descodificador e o ecrã (ver [deinterlacerFor]). */
     @Volatile private var deinterlacer: Deinterlacer? = null
 
+    /**
+     * Testes: `adb shell setprop debug.goattv.interlaced 1` trata qualquer canal como entrelaçado (o emulador não
+     * descodifica canais entrelaçados, e assim vê-se o caminho da GPU num canal progressivo). Só nas versões de testes.
+     */
+    private val forceInterlaced: Boolean by lazy {
+        cc.slokker.itv.BuildConfig.DEBUG && runCatching {
+            Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.interlaced")).inputStream.bufferedReader().readText().trim() == "1"
+        }.getOrDefault(false)
+    }
+
     /** Como foi captada cada imagem que entrou no descodificador, pelo tempo dela (para o [deinterlacer]). */
     private val scans = java.util.TreeMap<Long, Int>()
 
@@ -775,7 +785,7 @@ class GoatCorePlayer(
      */
     private fun deinterlacerFor(decoder: String): Deinterlacer? {
         val info = videoInfo
-        val mode = Deinterlacing.mode(deinterlace, interlacedVideo, info?.bitDepth ?: 8, info?.isHdr == true)
+        val mode = Deinterlacing.mode(deinterlace, interlacedVideo || forceInterlaced, info?.bitDepth ?: 8, info?.isHdr == true)
         if (mode == Deinterlacing.NONE) return null
         val known = Deinterlacing.decoder(decoder)
         if (known == Deinterlacing.DECODER_DEINTERLACES) {
@@ -845,7 +855,7 @@ class GoatCorePlayer(
         // Sem registo (não devia acontecer): entrelaçada, o campo de cima primeiro (o habitual).
         val scan = scans[ptsUs] ?: 0
         scans.headMap(ptsUs, true).clear()
-        d.frame(stampNs, progressive = scan and SCAN_PROGRESSIVE != 0, bottomFirst = scan and SCAN_BOTTOM_FIRST != 0)
+        d.frame(stampNs, progressive = scan and SCAN_PROGRESSIVE != 0 && !forceInterlaced, bottomFirst = scan and SCAN_BOTTOM_FIRST != 0)
     }
 
     /** O tempo do relógio; sem ele ainda, começa o do sistema nesta imagem se não houver som (ou não vier a tempo). */

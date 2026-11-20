@@ -112,7 +112,9 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
         errors = mutableListOf()
         if (current.startsWith("exo:")) return playExo(current.removePrefix("exo:"))
         val emulator = android.os.Build.HARDWARE in setOf("ranchu", "goldfish") && !intent.getBooleanExtra("hw", false)
-        val p = GoatCorePlayer(surfaceView.holder.surface, softwareVideo = emulator, passthrough = intent.getBooleanExtra("passthrough", false), listener = object : GoatCorePlayer.Listener {
+        val p = GoatCorePlayer(surfaceView.holder.surface, softwareVideo = emulator, passthrough = intent.getBooleanExtra("passthrough", false),
+            deinterlace = intent.getStringExtra("deint") ?: cc.slokker.itv.data.Prefs.Deinterlace.OFF,
+            audioLevel = intent.getStringExtra("level") ?: cc.slokker.itv.data.Prefs.AudioLevel.OFF, levelKey = current, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) {
                 firstMs = ms
             }

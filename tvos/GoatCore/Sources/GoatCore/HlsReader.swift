@@ -353,8 +353,56 @@ public final class HlsReader: @unchecked Sendable {
         return bytes
     }
 
+    /// Uma playlist. Se os primeiros bytes não são "#EXTM3U" (uma rádio MP3/AAC sem extensão, um TS…) desiste-se
+    /// logo, em vez de esperar pelo fim de um direto que não acaba; o canal passa ao formato seguinte.
     private func text(_ uri: String) throws -> String {
-        String(decoding: try fetch(uri, offset: 0, length: -1), as: UTF8.self)
+        guard let u = URL(string: uri) else { throw Failure.network("bad URL") }
+        var request = URLRequest(url: u)
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+        let req = request
+        let session = self.session
+        let done = DispatchSemaphore(value: 0)
+        let box = OSAllocatedUnfairLock<Result<Data, Error>?>(initialState: nil)
+        let task = Task {
+            let result: Result<Data, Error>
+            do {
+                let (bytes, response) = try await session.bytes(for: req)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    throw Failure.http(http.statusCode)
+                }
+                var data = Data()
+                for try await byte in bytes {
+                    data.append(byte)
+                    if data.count == HlsReader.sniffBytes, !HlsReader.looksLikePlaylist(data) {
+                        throw Failure.network("not an HLS playlist")
+                    }
+                    if data.count > HlsReader.maxPlaylistBytes { throw Failure.network("HLS playlist too big") }
+                }
+                guard HlsReader.looksLikePlaylist(data) else { throw Failure.network("not an HLS playlist") }
+                result = .success(data)
+            } catch let failure as Failure {
+                result = .failure(failure)
+            } catch {
+                result = .failure(Failure.network(error.localizedDescription))
+            }
+            box.withLock { $0 = result }
+            done.signal()
+        }
+        done.wait()
+        task.cancel()
+        guard let result = box.withLock({ $0 }) else { throw Failure.network("no answer") }
+        return String(decoding: try result.get(), as: UTF8.self)
+    }
+
+    static let sniffBytes = 64
+    static let maxPlaylistBytes = 8 << 20
+
+    /// O início de uma playlist HLS: "#EXTM3U", depois de um BOM ou de espaços (o mesmo que HlsPlaylist.looksLikePlaylist).
+    static func looksLikePlaylist(_ data: Data) -> Bool {
+        var bytes = [UInt8](data.prefix(sniffBytes + 16))
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes.removeFirst(3) }
+        while let first = bytes.first, first == 0x20 || first == 0x09 || first == 0x0D || first == 0x0A { bytes.removeFirst() }
+        return bytes.starts(with: Array("#EXTM3U".utf8))
     }
 
     /// [uri] inteiro, ou [length] bytes a partir de [offset] ([length] -1 = até ao fim), à espera da resposta.

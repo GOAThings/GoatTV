@@ -244,6 +244,8 @@ internal class GoatCoreMediaPlayer(
 
             override fun onError(why: String, unsupported: Boolean, cause: Throwable?) = post(g) {
                 val code = when {
+                    // Pediu-se como HLS e não é: o outro formato (ts ⇄ m3u8) no GoatCore, não o VLC.
+                    cause is cc.slokker.itv.ui.player.goatcore.NotHlsPlaylist -> PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED
                     unsupported -> PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
                     cause is HttpDataSource.InvalidResponseCodeException -> PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                     cause is IOException -> PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED

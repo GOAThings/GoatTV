@@ -26,7 +26,10 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /** Um stream que este motor não toca (o leitor passa a outro). */
-class UnsupportedStream(why: String) : IOException(why)
+open class UnsupportedStream(why: String) : IOException(why)
+
+/** A resposta não é uma playlist HLS (uma rádio, um TS…): o canal passa logo ao formato seguinte, não a outro motor. */
+class NotHlsPlaylist : UnsupportedStream("not an HLS playlist")
 
 /**
  * Um canal HLS lido como um só stream: a playlist (a principal escolhe a qualidade pelo [HlsQualityControl]) e os segmentos, um
@@ -76,7 +79,29 @@ class HlsInputStream(
         return DataSourceInputStream(source.createDataSource(), spec).also { it.open() }
     }
 
-    private fun fetch(u: String): String = fetchBytes(u).decodeToString()
+    /**
+     * Uma playlist: se os primeiros bytes não são "#EXTM3U" (uma rádio MP3/AAC sem extensão, um TS…) desiste-se logo,
+     * em vez de ler um direto sem fim até o tempo de abrir acabar; o canal passa ao formato seguinte.
+     */
+    private fun fetch(u: String): String =
+        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { input ->
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(16 * 1024)
+            var checked = false
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                if (!checked && out.size() >= HlsPlaylist.SNIFF_BYTES) {
+                    if (!HlsPlaylist.looksLikePlaylist(out.toByteArray())) throw NotHlsPlaylist()
+                    checked = true
+                }
+                if (out.size() > MAX_PLAYLIST_BYTES) throw java.io.IOException("HLS playlist too big")
+            }
+            val bytes = out.toByteArray()
+            if (!HlsPlaylist.looksLikePlaylist(bytes)) throw NotHlsPlaylist()
+            bytes.decodeToString()
+        }
 
     private fun keyFor(uri: String): ByteArray {
         if (uri != keyUri) {
@@ -334,6 +359,8 @@ class HlsInputStream(
     }
 
     private companion object {
+        /** Uma playlist maior do que isto não é uma playlist (é um ficheiro de vídeo servido como tal). */
+        const val MAX_PLAYLIST_BYTES = 8 shl 20
         /** Mais línguas à parte seriam mais pedidos por segmento, na única ligação. */
         const val MAX_AUDIO = 4
         const val MAX_SUBTITLES = 4
