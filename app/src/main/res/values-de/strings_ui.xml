@@ -1020,4 +1020,8 @@
     <string name="stats_tone_mapping">HDR zu SDR</string>
     <string name="stats_fallback">Ersatz</string>
     <string name="stats_failover">Failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Schwarze Balken entfernen</string>
+    <string name="auto_crop_sub">Vergrößert nur so weit wie nötig, um schwarze Balken im Bild auszublenden (4:3-Sendungen, Filme mit Balken). Nur mit Seitenverhältnis Einpassen</string>
 </resources>

@@ -29,6 +29,11 @@ data class Prefs(
     /** Desentrelaçar no VLC (no ExoPlayer é a TV que o faz). */
     val deinterlace: String = Deinterlace.SMOOTH,
     val aspect: String = Aspect.FIT,
+    /**
+     * Cortar as barras pretas que vêm na imagem (o 4:3 dentro do 16:9, os filmes com barras): aumenta só o preciso para
+     * a imagem encher o ecrã, e só no modo Ajustar (ver media/AutoCrop).
+     */
+    val autoCrop: Boolean = false,
     val freezeFrame: Boolean = true,
     /** Segundos até voltar a ligar quando a stream falha (0 = não tentar). */
     val reconnectSeconds: Int = 5,
@@ -259,6 +264,7 @@ data class Prefs(
         const val DECODER = "decoder"
         const val DEINTERLACE = "deinterlace"
         const val ASPECT = "aspect"
+        const val AUTO_CROP = "auto_crop"
         const val FREEZE_FRAME = "freeze_frame"
         const val RECONNECT_SECONDS = "reconnect_seconds"
         const val AFR = "afr"
@@ -609,6 +615,7 @@ data class Prefs(
                 decoder = str(Key.DECODER, d.decoder, Decoder.ALL),
                 deinterlace = str(Key.DEINTERLACE, d.deinterlace, Deinterlace.ALL),
                 aspect = str(Key.ASPECT, d.aspect, Aspect.ALL),
+                autoCrop = bool(Key.AUTO_CROP, d.autoCrop),
                 freezeFrame = bool(Key.FREEZE_FRAME, d.freezeFrame),
                 reconnectSeconds = int(Key.RECONNECT_SECONDS, d.reconnectSeconds).coerceIn(0, 120),
                 afr = bool(Key.AFR, d.afr),

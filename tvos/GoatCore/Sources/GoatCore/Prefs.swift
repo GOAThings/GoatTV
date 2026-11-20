@@ -22,6 +22,9 @@ public struct Prefs: Equatable, Sendable {
     /// `stream_format`: "ts", "m3u8" ou nil (automático).
     public var streamFormat: String?
     public var aspect = Aspect.fit
+    /// Cortar as barras pretas que vêm na imagem (o 4:3 dentro do 16:9, os filmes com barras): só no modo Ajustar e na
+    /// imagem principal (ver AutoCrop.swift e o núcleo partilhado, media/AutoCrop.kt).
+    public var autoCrop = false
     /// O buffer do direto; o padrão é o automático (ver AdaptiveBuffer), e quem escolheu outro fica com ele.
     public var buffer = Buffer.auto
     /// O motor: "exo" (o normal; no Apple TV, o leitor da Apple nos HLS e o VLC no resto), "vlc" ou "aether" (o
@@ -293,6 +296,7 @@ public struct Prefs: Equatable, Sendable {
         reconnectSeconds = Int(p.reconnectSeconds)
         streamFormat = p.streamFormat
         aspect = p.aspect
+        autoCrop = p.autoCrop
         buffer = p.buffer
         engine = p.engine
         decoder = p.decoder

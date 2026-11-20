@@ -1017,4 +1017,8 @@
     <string name="stats_tone_mapping">HDR을 SDR로</string>
     <string name="stats_fallback">대체</string>
     <string name="stats_failover">페일오버</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">검은 띠 제거</string>
+    <string name="auto_crop_sub">화면에 들어 있는 검은 띠(4:3 프로그램, 레터박스 영화)가 사라질 만큼만 확대합니다. 화면 비율이 맞춤일 때만</string>
 </resources>

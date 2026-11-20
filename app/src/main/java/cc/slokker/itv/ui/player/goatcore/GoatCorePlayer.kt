@@ -11,7 +11,11 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.media.Afd
 import cc.slokker.itv.media.AudioFrameReader
+import cc.slokker.itv.media.AutoCrop
+import cc.slokker.itv.media.BlackBars
+import cc.slokker.itv.media.CropRect
 import cc.slokker.itv.media.AudioLeveler
 import cc.slokker.itv.media.OutputLatency
 import cc.slokker.itv.media.VoiceDownmix
@@ -104,6 +108,12 @@ class GoatCorePlayer(
     private val upscale: String = Prefs.Upscale.OFF,
     /** O tamanho da superfície do vídeo agora (largura, altura), para saber logo se vale a pena aumentar; null sem ela. */
     private val surfaceSize: () -> IntArray? = { null },
+    /**
+     * Cortar as barras pretas (Prefs.autoCrop; ver media/AutoCrop): o vídeo de 8 bits SDR passa pela GPU, que mede as
+     * barras e mostra só o [crop]; o AFD do canal lê-se de cada imagem. Quem mostra decide o [crop] (o modo Ajustar, o
+     * tamanho do ecrã) pelo [Listener.onActiveArea].
+     */
+    private val autoCrop: Boolean = false,
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -122,6 +132,28 @@ class GoatCorePlayer(
 
         /** Legendas a mostrar às [atUs] (o relógio do motor, ver [nowUs]), durante [durationUs] (ou até às seguintes). */
         fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) {}
+
+        /** Cortar as barras pretas: a parte do quadro com imagem mudou (a imagem toda quando deixa de haver barras). */
+        fun onActiveArea(area: CropRect) {}
+    }
+
+    /**
+     * Cortar as barras pretas: o rectângulo do quadro a mostrar (ver [Listener.onActiveArea]); muda com o canal a dar e
+     * vale na imagem seguinte.
+     */
+    @Volatile var crop: CropRect = CropRect.FULL
+
+    /** Quando mudar o corte (só com [autoCrop]); usa-se sincronizado nele (a thread do vídeo e a da GPU). */
+    private val cropper: AutoCrop? = if (autoCrop) AutoCrop() else null
+
+    /** O AFD de cada imagem que entrou no descodificador, pelo tempo dela (só na thread do vídeo). */
+    private val afds = java.util.TreeMap<Long, Int>()
+
+    private fun cropChanged(change: AutoCrop.() -> Boolean) {
+        val c = cropper ?: return
+        val area = synchronized(c) { if (c.change()) c.active else null } ?: return
+        Log.i(TAG, "auto crop: picture area ${area.left} ${area.top} ${area.right} ${area.bottom}")
+        listener.onActiveArea(area)
     }
 
     /** Números para o laboratório e para o registo. */
@@ -156,7 +188,7 @@ class GoatCorePlayer(
     }
 
     /** [scan]: como foi captada ([SCAN_PROGRESSIVE], [SCAN_BOTTOM_FIRST]; 0 = entrelaçada, o campo de cima primeiro). */
-    private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean, val scan: Int = SCAN_PROGRESSIVE)
+    private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean, val scan: Int = SCAN_PROGRESSIVE, val afd: Int = Afd.NONE)
     /** Um bloco de som para o descodificador, com o formato da faixa; [MARK] diz "mudou a faixa". */
     private class AudioUnit(val data: ByteArray, val ptsUs: Long, val format: cc.slokker.itv.media.AudioFormat?)
 
@@ -577,7 +609,7 @@ class GoatCorePlayer(
             if (!concealed(unit.keyframe, unit.pts)) return
             stats.videoUnits++
             interlacedVideo = mpeg2.interlaced
-            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit)).also(::firstKey))
+            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit), afdOf(unit.data)).also(::firstKey))
             return
         }
         captions(sample.data, samplePts)
@@ -603,7 +635,7 @@ class GoatCorePlayer(
         stats.videoUnits++
         interlacedVideo = reader.interlaced
         val data = avccToAnnexB(unit.data)
-        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit)).also(::firstKey))
+        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit), afdOf(data)).also(::firstKey))
     }
 
     /** O PMT já disse o formato do vídeo e há com que o ler ([videoMime] certo): o descodificador pode criar-se. */
@@ -619,6 +651,9 @@ class GoatCorePlayer(
         }
         return pass
     }
+
+    /** O AFD da imagem [data] (ver media/AutoCrop), só a cortar as barras pretas. */
+    private fun afdOf(data: ByteArray): Int = if (cropper != null) Afd.code(data) else Afd.NONE
 
     /** O canal é entrelaçado (pelo SPS ou pelo cabeçalho da sequência do MPEG-2), na última imagem lida. */
     @Volatile private var interlacedVideo = false
@@ -865,6 +900,10 @@ class GoatCorePlayer(
                             // Sem saída para estas (descodificador parado, imagens que não sai): não cresce sem fim.
                             if (scans.size > 64) scans.pollFirstEntry()
                         }
+                        if (cropper != null) {
+                            afds[unit.ptsUs] = unit.afd
+                            if (afds.size > 64) afds.pollFirstEntry()
+                        }
                         stats.codecInputs++
                         pending = null
                     } else {
@@ -886,7 +925,9 @@ class GoatCorePlayer(
                         Log.i(TAG, "hdr: decoder output transfer ${f.getInteger(MediaFormat.KEY_COLOR_TRANSFER)} (${MediaFormat.COLOR_TRANSFER_SDR_VIDEO} = SDR)")
                     }
                     deinterlacer?.setSize(w, h)
-                    listener.onVideoSize(w, h, mpeg2?.pixelRatio ?: videoInfo?.pixelRatio ?: 1f)
+                    val ratio = mpeg2?.pixelRatio ?: videoInfo?.pixelRatio ?: 1f
+                    listener.onVideoSize(w, h, ratio)
+                    cropChanged { frame(w, h, ratio) }
                 }
             }
         } catch (e: InterruptedException) {
@@ -965,7 +1006,8 @@ class GoatCorePlayer(
         deinterlacer?.let { runCatching { it.release() } }
         deinterlacer = null
         val stage = runCatching {
-            VideoGpuStage(surface, Deinterlacing.NONE, InterlaceVerdict(), pictureLook = picture, toneMap = mode)
+            VideoGpuStage(surface, Deinterlacing.NONE, InterlaceVerdict(), pictureLook = picture, toneMap = mode,
+                crop = if (cropper != null) ({ crop }) else null, onLuma = if (cropper != null) ::measureBars else null)
         }.onFailure { Log.w(TAG, "hdr: no tone mapping on the GPU (${it.javaClass.simpleName} ${it.message}), the picture stays washed out") }
             .getOrNull()
         if (stage != null) {
@@ -1039,10 +1081,14 @@ class GoatCorePlayer(
         val adjust = look.applies(bitDepth, hdr)
         if (!look.neutral && !adjust) Log.i(TAG, "picture: not applied to this video (bitDepth=$bitDepth hdr=$hdr)")
         val up = upscaleFor(info)
-        if (mode == Deinterlacing.NONE && !adjust && up == Prefs.Upscale.OFF) return null
+        // Cortar as barras pretas: só no 8 bits SDR (o resto da GPU é GLES2 de 8 bits; o HDR que a TV mostra em HDR fica direto).
+        val cropping = cropper != null && bitDepth == 8 && !hdr
+        if (cropper != null && !cropping) Log.i(TAG, "auto crop: only on 8-bit SDR or HDR tone mapped on the GPU (bitDepth=$bitDepth hdr=$hdr)")
+        if (mode == Deinterlacing.NONE && !adjust && up == Prefs.Upscale.OFF && !cropping) return null
         val verdict = InterlaceVerdict(woven = known == Deinterlacing.DECODER_WOVEN || decoder in wovenDecoders)
         return runCatching {
-            VideoGpuStage(surface, mode, verdict, pictureLook = picture, onWoven = { wovenDecoders += decoder }, upscale = up, upscaleMemory = upscaleMemory)
+            VideoGpuStage(surface, mode, verdict, pictureLook = picture, onWoven = { wovenDecoders += decoder }, upscale = up, upscaleMemory = upscaleMemory,
+                crop = if (cropping) ({ crop }) else null, onLuma = if (cropping) ::measureBars else null)
         }
             .onSuccess {
                 if (mode != Deinterlacing.NONE) Log.i(TAG, "interlaced: deinterlacing ($deinterlace) on the GPU, decoder $decoder woven=${verdict.woven}")
@@ -1079,6 +1125,7 @@ class GoatCorePlayer(
 
     /** Mostra a imagem na hora dela pelo relógio (o som, ou o do sistema); atrasada mais de 50 ms, salta-se. */
     private fun render(c: MediaCodec, index: Int, ptsUs: Long) {
+        if (cropper != null) shownAfd(ptsUs)
         // A primeira imagem mostra-se logo que está descodificada (como o ExoPlayer): mudar de canal parece mais rápido,
         // e o som e as imagens seguintes acertam-se pelo relógio a partir daí.
         if (!firstFrameReported) {
@@ -1123,6 +1170,19 @@ class GoatCorePlayer(
             lastShownPtsUs = ptsUs
             if (!firstFrameReported) firstFrame()
         }
+    }
+
+    /** O AFD da imagem [ptsUs], que está a sair agora, para o [cropper] (as anteriores já saíram ou não saem). */
+    private fun shownAfd(ptsUs: Long) {
+        val code = afds[ptsUs] ?: return
+        afds.headMap(ptsUs, true).clear()
+        cropChanged { afd(code, SystemClock.elapsedRealtime()) }
+    }
+
+    /** A grelha do brilho de uma imagem que foi para o ecrã agora (da thread da GPU, ver [VideoGpuStage.onLuma]). */
+    private fun measureBars(luma: ByteArray) {
+        val m = BlackBars.measure(luma, AutoCrop.GRID_COLS, AutoCrop.GRID_ROWS)
+        cropChanged { bars(m, SystemClock.elapsedRealtime()) }
     }
 
     /** Diz ao [deinterlacer] como foi captada a imagem [ptsUs], que vai sair com a hora [stampNs]. */

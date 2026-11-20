@@ -1017,4 +1017,8 @@
     <string name="stats_tone_mapping">HDR 转 SDR</string>
     <string name="stats_fallback">备用</string>
     <string name="stats_failover">故障转移</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">去除黑边</string>
+    <string name="auto_crop_sub">仅放大到恰好隐藏画面中自带的黑边（4:3 节目、带黑边的电影）。仅在画面比例为“适应”时生效</string>
 </resources>

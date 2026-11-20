@@ -1022,4 +1022,8 @@
     <string name="stats_tone_mapping">Da HDR a SDR</string>
     <string name="stats_fallback">riserva</string>
     <string name="stats_failover">failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Rimuovi bande nere</string>
+    <string name="auto_crop_sub">Ingrandisce solo quanto basta per nascondere le bande nere presenti nell\'immagine (programmi 4:3, film con bande). Solo con Formato immagine su Adatta</string>
 </resources>

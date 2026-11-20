@@ -1021,4 +1021,8 @@
     <string name="stats_tone_mapping">HDR to SDR</string>
     <string name="stats_fallback">fallback</string>
     <string name="stats_failover">failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Remove black bars</string>
+    <string name="auto_crop_sub">Zooms in just enough to hide black bars that are part of the picture (4:3 programmes, letterboxed films). Only with Aspect ratio set to Fit</string>
 </resources>

@@ -1022,4 +1022,8 @@
     <string name="stats_tone_mapping">HDR vers SDR</string>
     <string name="stats_fallback">secours</string>
     <string name="stats_failover">failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Supprimer les bandes noires</string>
+    <string name="auto_crop_sub">Agrandit juste assez pour masquer les bandes noires présentes dans l\'image (programmes 4:3, films au format cinéma). Uniquement avec le format d\'image sur Ajuster</string>
 </resources>

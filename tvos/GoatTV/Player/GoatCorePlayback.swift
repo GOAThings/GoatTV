@@ -9,7 +9,11 @@ import os
 final class GoatCoreView: UIView {
     private(set) var displayLayer = AVSampleBufferDisplayLayer()
     var gravity: AVLayerVideoGravity = .resizeAspect {
-        didSet { displayLayer.videoGravity = gravity }
+        didSet {
+            displayLayer.videoGravity = gravity
+            // O corte das barras pretas só vale no modo Ajustar.
+            setNeedsLayout()
+        }
     }
 
     /// As legendas (teletexto) por cima do vídeo, em baixo e ao centro, como numa TV.
@@ -60,8 +64,50 @@ final class GoatCoreView: UIView {
         didSet { if videoSize != oldValue { setNeedsLayout() } }
     }
 
+    /// Cortar as barras pretas (Definições → Cortar barras pretas): ligado neste canal. Só vale no modo Ajustar.
+    var autoCrop = false {
+        didSet { if autoCrop != oldValue { setNeedsLayout() } }
+    }
+
+    /// A parte do quadro com imagem (ver BlackBarDetector): muda com um movimento curto da camada.
+    var activeArea: VideoCrop = .full {
+        didSet {
+            guard activeArea != oldValue else { return }
+            cropMoves = true
+            setNeedsLayout()
+        }
+    }
+    private var cropMoves = false
+
+    /// O que se mostra do quadro: só no modo Ajustar, o mínimo para a parte com imagem encher a vista (ver
+    /// VideoCrop.window); a imagem toda sem corte.
+    private var cropWindow: VideoCrop {
+        guard autoCrop, gravity == .resizeAspect, videoSize.width > 0, videoSize.height > 0, bounds.width > 0, bounds.height > 0 else {
+            return .full
+        }
+        return activeArea.window(frameAspect: Double(videoSize.width / videoSize.height), screenAspect: Double(bounds.width / bounds.height))
+    }
+
+    /// Onde fica, na vista, o que se mostra do quadro com o corte [w].
+    private func shownRect(_ w: VideoCrop) -> CGRect {
+        AVMakeRect(aspectRatio: CGSize(width: videoSize.width * CGFloat(w.width), height: videoSize.height * CGFloat(w.height)), insideRect: bounds)
+    }
+
+    /// A camada do vídeo com o corte [w]: o quadro todo, maior do que a vista e deslocado para o rectângulo [w] cair
+    /// no [shownRect]; a vista corta o resto (clipsToBounds).
+    private func layerFrame(_ w: VideoCrop) -> CGRect {
+        guard !w.isFull else { return bounds }
+        let shown = shownRect(w)
+        let fullWidth = shown.width / CGFloat(w.width)
+        let fullHeight = shown.height / CGFloat(w.height)
+        return CGRect(x: shown.minX - CGFloat(w.left) * fullWidth, y: shown.minY - CGFloat(w.top) * fullHeight,
+                      width: fullWidth, height: fullHeight)
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // A camada fica maior do que a vista ao cortar as barras pretas.
+        clipsToBounds = true
         layer.addSublayer(displayLayer)
         imageLayer.isUserInteractionEnabled = false
         addSubview(imageLayer)
@@ -98,7 +144,10 @@ final class GoatCoreView: UIView {
             let scale = max(bounds.width / videoSize.width, bounds.height / videoSize.height)
             let w = videoSize.width * scale, h = videoSize.height * scale
             return CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
-        default: return AVMakeRect(aspectRatio: videoSize, insideRect: bounds)
+        default:
+            // Com as barras cortadas, as legendas vão para cima do que se vê (como no Android).
+            let w = cropWindow
+            return w.isFull ? AVMakeRect(aspectRatio: videoSize, insideRect: bounds) : shownRect(w)
         }
     }
 
@@ -124,8 +173,14 @@ final class GoatCoreView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        displayLayer.frame = bounds
+        if cropMoves {
+            // O corte das barras pretas muda devagar (um terço de segundo); o resto (rodar, PiP) muda já.
+            cropMoves = false
+            CATransaction.setAnimationDuration(0.35)
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        displayLayer.frame = layerFrame(cropWindow)
         CATransaction.commit()
         // O tamanho da letra acompanha o do vídeo (no ecrã inteiro e no Picture in Picture da app).
         subtitle.font = .systemFont(ofSize: max(12, bounds.height / 22 * CGFloat(Prefs.SubtitleSize.scale(subtitleSize))), weight: .medium)
@@ -251,6 +306,9 @@ final class GoatCorePlayback: NSObject {
     var adaptiveBuffer = false
     var adaptiveAtLive = true
     var adaptiveDips = true
+    /// Cortar as barras pretas (Prefs.autoCrop; ver BlackBarDetector e GoatCoreView.activeArea). Só na imagem principal;
+    /// vale no canal seguinte.
+    var autoCrop = false
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem"); nil se não houver vídeo. A resposta vem
     /// noutra thread.
@@ -284,6 +342,9 @@ final class GoatCorePlayback: NSObject {
         firstPts = nil
         offsetMs = 0
         clearSubtitles()
+        // As barras medem-se de novo em cada canal.
+        view.autoCrop = autoCrop
+        view.activeArea = .full
         // Tudo novo: a ligação anterior pode ainda entregar uma imagem antes de fechar, e ia parar ao leitor deste canal
         // (com outro relógio, a camada deixava de mostrar e só o som continuava).
         let display = view.freshLayer()
@@ -297,7 +358,7 @@ final class GoatCorePlayback: NSObject {
         let bounds = (view.window?.screen ?? UIScreen.main).nativeBounds.size
         let screen = (width: Int(max(bounds.width, bounds.height)), height: Int(min(bounds.width, bounds.height)))
         let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace, picture: picture,
-                              upscale: upscale, screen: screen)
+                              upscale: upscale, screen: screen, autoCrop: autoCrop)
         s.rate = userRate
         // As vozes mais claras só misturam o som com canal central quando a saída é estéreo (a TV sem recetor, uns
         // auscultadores); a que leva mais canais fica com eles.
@@ -364,6 +425,20 @@ final class GoatCorePlayback: NSObject {
             addSubtitle(time, .text(text))
         case .images(let time, let page):
             addSubtitle(time, .images(page))
+        case .crop(let time, let area):
+            // Muda quando a imagem dessa hora chegar ao ecrã (a camada tem as imagens à frente do relógio).
+            let now = synchronizer.currentTime()
+            let wait = now.isValid && startTime != nil && time.isValid ? (time - now).seconds : 0
+            guard wait.isFinite, wait > 0.02 else {
+                view.activeArea = area
+                return
+            }
+            Timer.scheduledTimer(withTimeInterval: min(wait, 10), repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.generation == g else { return }
+                    self.view.activeArea = area
+                }
+            }
         case .failed(let why):
             guard !reportedEnd else { return }
             reportedEnd = true
@@ -623,6 +698,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         case text(CMTime, String)
         /// As imagens das legendas DVB escolhidas mudam a este tempo.
         case images(CMTime, SubtitleImages)
+        /// Cortar as barras pretas: a parte do quadro com imagem a partir deste tempo.
+        case crop(CMTime, VideoCrop)
         case httpStatus(Int)
         case failed(String)
         case ended
@@ -722,8 +799,9 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer,
-         deinterlace: String, picture: PictureAdjust, upscale: String, screen: (width: Int, height: Int)) {
+         deinterlace: String, picture: PictureAdjust, upscale: String, screen: (width: Int, height: Int), autoCrop: Bool = false) {
         self.display = display
+        cropper = autoCrop ? BlackBarDetector() : nil
         self.audio = audio
         self.synchronizer = synchronizer
         self.deinterlace = deinterlace
@@ -744,7 +822,12 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         // O H.264 entrelaçado passa pelo desentrelaçador (ver [interlacedVideo]); desligado, vai como o resto. Com
         // ajustes da imagem, o vídeo de 8 bits SDR vai pelo mesmo caminho (ver MediaPipeline.adjustVideo).
         pipeline.deinterlaceVideo = deinterlace != "off"
-        pipeline.adjustVideo = !picture.neutral
+        // Cortar as barras pretas: o vídeo de 8 bits SDR até 1080 linhas vai também pela GPU (para se ver a imagem), e o
+        // AFD lê-se de todo o vídeo (o resto, o 4K e o HDR, só pelo AFD).
+        pipeline.adjustVideo = !picture.neutral || autoCrop
+        if autoCrop {
+            pipeline.onAfd = { [weak self] pts, code in self?.afd(code, pts: pts) }
+        }
         pipeline.onInterlacedVideo = { [weak self] b, bottomFirst, progressive in
             self?.interlacedVideo(b, bottomFirst: bottomFirst, progressive: progressive)
         }
@@ -1061,8 +1144,24 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         queue.async {
             self.picture = picture
             self.interlaced?.picture = picture
-            self.pipeline.adjustVideo = !picture.neutral
+            self.pipeline.adjustVideo = !picture.neutral || self.cropper != nil
         }
+    }
+
+    /// Cortar as barras pretas (nil = desligado; só na fila, ver BlackBarDetector).
+    private let cropper: BlackBarDetector?
+
+    /// O AFD de uma imagem ([pts]: 90 kHz).
+    private func afd(_ code: Int, pts: Int64) {
+        guard let cropper, !closed, cropper.afd(code, ms: pts / 90) else { return }
+        onEvent?(.crop(CMTime(value: pts, timescale: 90_000), cropper.active))
+    }
+
+    /// Uma imagem já descodificada que vai para a camada: as barras medem-se nela (uma por segundo de vídeo).
+    private func measureBars(_ b: CMSampleBuffer, pts: CMTime) {
+        guard let cropper, pts.isValid, let image = CMSampleBufferGetImageBuffer(b) else { return }
+        let ms = Int64(pts.seconds * 1000)
+        if cropper.measure(image, ms: ms) { onEvent?(.crop(pts, cropper.active)) }
     }
 
     /// O vídeo comprimido, direto para a camada. Se até aqui passava pela GPU (os ajustes voltaram ao 0), primeiro
@@ -1192,10 +1291,14 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             // Com a proporção do píxel (1440×1080 com píxeis 4:3 é 16:9): sem ela a imagem saía apertada, com barras.
             let d = CMVideoFormatDescriptionGetPresentationDimensions(f, usePixelAspectRatio: true, useCleanAperture: false)
             onEvent?(.videoSize(width: Int(d.width.rounded()), height: Int(d.height.rounded())))
+            if let cropper, cropper.frame(width: Int(d.width.rounded()), height: Int(d.height.rounded())) {
+                onEvent?(.crop(CMSampleBufferGetPresentationTimeStamp(b), cropper.active))
+            }
         }
         display.enqueue(b)
         remember(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
+        if cropper != nil { measureBars(b, pts: pts) }
         if pts.isValid, !lastVideo.isValid || pts > lastVideo { lastVideo = pts }
         if startTime == nil, pts.isValid { begin(at: pts) }
     }

@@ -1022,4 +1022,8 @@
     <string name="stats_tone_mapping">HDR a SDR</string>
     <string name="stats_fallback">respaldo</string>
     <string name="stats_failover">failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Quitar barras negras</string>
+    <string name="auto_crop_sub">Amplía solo lo necesario para ocultar las barras negras que vienen en la imagen (programas 4:3, películas con bandas). Solo con la relación de aspecto en Ajustar</string>
 </resources>

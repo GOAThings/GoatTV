@@ -1241,6 +1241,10 @@ class Strings(context: Context) {
     val mobileDataQualityAuto get() = s(R.string.mobile_data_quality_auto)
     val mobileDataQualitySame get() = s(R.string.mobile_data_quality_same)
 
+    // ---- Cortar barras pretas ----
+    val autoCrop get() = s(R.string.auto_crop)
+    val autoCropSub get() = s(R.string.auto_crop_sub)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

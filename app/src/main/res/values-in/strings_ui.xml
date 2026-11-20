@@ -1018,4 +1018,8 @@
     <string name="stats_tone_mapping">HDR ke SDR</string>
     <string name="stats_fallback">cadangan</string>
     <string name="stats_failover">failover</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Hapus bilah hitam</string>
+    <string name="auto_crop_sub">Memperbesar secukupnya untuk menyembunyikan bilah hitam yang ada di gambar (acara 4:3, film dengan bilah). Hanya jika Rasio aspek diatur ke Pas</string>
 </resources>

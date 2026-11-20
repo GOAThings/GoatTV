@@ -229,6 +229,7 @@ class PersistedFormatTest {
         "keyBlue" to (Prefs.Key.KEY_BLUE to Prefs.KeyAction.SLEEP),
         "aspect" to (Prefs.Key.ASPECT to Prefs.Aspect.ZOOM),
         "freezeFrame" to (Prefs.Key.FREEZE_FRAME to false),
+        "autoCrop" to (Prefs.Key.AUTO_CROP to true),
         "reconnectSeconds" to (Prefs.Key.RECONNECT_SECONDS to 10),
         "afr" to (Prefs.Key.AFR to true),
         "afrMode" to (Prefs.Key.AFR_MODE to Prefs.AfrMode.START),

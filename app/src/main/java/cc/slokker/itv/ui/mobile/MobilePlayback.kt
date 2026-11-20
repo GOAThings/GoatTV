@@ -20,6 +20,7 @@ import androidx.media3.common.text.CueGroup
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VideoView
@@ -125,6 +126,8 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
     LaunchedEffect(playback.view, aspect) {
         playback.view?.setResizeMode(resizeModeFor(aspect))
     }
+    // As barras pretas só se cortam no modo Ajustar (ver GoatCoreMediaPlayer.fitMode).
+    LaunchedEffect(aspect, player) { (player as? GoatCoreMediaPlayer)?.fitMode = aspect == Prefs.Aspect.FIT }
 
     LaunchedEffect(playback.view, prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition) {
         playback.view?.setSubtitleLook(prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition)

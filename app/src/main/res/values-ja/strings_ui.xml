@@ -1017,4 +1017,8 @@
     <string name="stats_tone_mapping">HDRからSDR</string>
     <string name="stats_fallback">フォールバック</string>
     <string name="stats_failover">フェイルオーバー</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">黒帯を除去</string>
+    <string name="auto_crop_sub">映像に含まれる黒帯（4:3 の番組、レターボックスの映画）が隠れるだけ拡大します。アスペクト比が「フィット」のときのみ</string>
 </resources>

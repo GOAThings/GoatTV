@@ -133,6 +133,9 @@ public final class MediaPipeline {
     /// Com true, o H.264/HEVC de 8 bits SDR até [PictureAdjust.maxHeight] linhas vai também para [onInterlacedVideo]
     /// (como os ajustes); decide-se em cada imagem-chave, por isso o vídeo volta direto à camada se deixar de valer.
     public var upscaleVideo: ((Int, Int) -> Bool)?
+    /// Cortar as barras pretas: o AFD de cada imagem (-1 sem ele; ver AutoCrop.swift), com o tempo dela (90 kHz, no
+    /// relógio do vídeo). nil = não se lê.
+    public var onAfd: ((Int64, Int) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -419,6 +422,7 @@ public final class MediaPipeline {
         // Um canal com intra refresh (sem imagens I) só diz por onde se pode voltar com o SEI recovery point.
         let recovery = conceal.concealing && ErrorConcealment.companion.recoveryPoint(
             hevc: videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC", d: sample.data)
+        if let onAfd { onAfd(samplePts, Int(GoatShared.Afd.shared.code(data: sample.data))) }
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com os tempos do primeiro).
         guard let unit = nal.next(annexB: sample.data, pts: samplePts, dts: sampleDts) else { return }
         if !unit.parameterSets.isEmpty {
@@ -482,6 +486,7 @@ public final class MediaPipeline {
         let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
         let cc = ClosedCaptions.shared.ccData(data: sample.data, hevc: false, mpeg2: true)
         if cc.size > 0 || !captionQueue.isEmpty { queueCaptions(cc, pts: samplePts) }
+        if let onAfd { onAfd(samplePts, Int(GoatShared.Afd.shared.code(data: sample.data))) }
         let unit = mpeg2.next(data: sample.data, pts: samplePts, dts: sampleDts)
         guard let header = mpeg2.sequenceHeader, videoStart.pass(keyframe: unit.keyframe, pts: unit.pts),
               concealed(keyframe: unit.keyframe, pts: unit.pts) else { return }

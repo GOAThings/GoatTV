@@ -1020,4 +1020,8 @@
     <string name="stats_tone_mapping">HDR से SDR</string>
     <string name="stats_fallback">बैकअप</string>
     <string name="stats_failover">फ़ेलओवर</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">काली पट्टियाँ हटाएँ</string>
+    <string name="auto_crop_sub">तस्वीर में आने वाली काली पट्टियाँ छिपाने के लिए बस उतना ही ज़ूम करता है (4:3 कार्यक्रम, पट्टियों वाली फ़िल्में)। केवल आस्पेक्ट रेशियो फ़िट पर होने पर</string>
 </resources>
