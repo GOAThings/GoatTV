@@ -48,50 +48,50 @@ class PackedAudioDemuxer(private val listener: TsListener) {
         }
     }
 
-    /** O PRIV com o tempo do TS dentro das frames ID3 de [from, to) (versão [version] da etiqueta). */
-    private fun timestamp(d: ByteArray, from: Int, to: Int, version: Int): Long? {
-        var i = from
-        while (i + 10 <= to) {
-            val id = d.decodeToString(i, i + 4)
-            if (id[0] == '\u0000') return null
-            val size = if (version >= 4) syncsafe(d, i + 4) else u32(d, i + 4)
-            val body = i + 10
-            val end = (body + size).coerceAtMost(to)
-            if (id == "PRIV") {
-                val owner = "com.apple.streaming.transportStreamTimestamp"
-                val zero = (body until end).firstOrNull { d[it].toInt() == 0 } ?: return null
-                if (d.decodeToString(body, zero) == owner && zero + 9 <= end) {
-                    var v = 0L
-                    for (k in 1..8) v = (v shl 8) or (d[zero + k].toLong() and 0xFF)
-                    return v and MASK_33
-                }
-            }
-            i = end
-        }
-        return null
-    }
-
-    private fun codecAt(d: ByteArray, at: Int): Codec? {
-        if (at + 6 > d.size) return null
-        val a = d[at].toInt() and 0xFF
-        val b = d[at + 1].toInt() and 0xFF
-        return when {
-            a == 0xFF && (b and 0xF6) == 0xF0 -> Codec.AAC_ADTS
-            a == 0x0B && b == 0x77 -> if ((d[at + 5].toInt() and 0xFF) shr 3 > 10) Codec.EAC3 else Codec.AC3
-            a == 0xFF && (b and 0xE0) == 0xE0 -> Codec.MPEG_AUDIO
-            else -> null
-        }
-    }
-
-    private fun syncsafe(d: ByteArray, at: Int): Int =
-        ((d[at].toInt() and 0x7F) shl 21) or ((d[at + 1].toInt() and 0x7F) shl 14) or ((d[at + 2].toInt() and 0x7F) shl 7) or (d[at + 3].toInt() and 0x7F)
-
-    private fun u32(d: ByteArray, at: Int): Int =
-        ((d[at].toInt() and 0xFF) shl 24) or ((d[at + 1].toInt() and 0xFF) shl 16) or ((d[at + 2].toInt() and 0xFF) shl 8) or (d[at + 3].toInt() and 0xFF)
-
     companion object {
-        private const val MASK_33 = (1L shl 33) - 1
-        private val STREAM_TYPES = mapOf(Codec.AAC_ADTS to 0x0F, Codec.AC3 to 0x81, Codec.EAC3 to 0x87, Codec.MPEG_AUDIO to 0x03)
+        /** O PRIV com o tempo do TS dentro das frames ID3 de [from, to) (versão [version] da etiqueta). */
+        internal fun timestamp(d: ByteArray, from: Int, to: Int, version: Int): Long? {
+            var i = from
+            while (i + 10 <= to) {
+                val id = d.decodeToString(i, i + 4)
+                if (id[0] == '\u0000') return null
+                val size = if (version >= 4) syncsafe(d, i + 4) else u32(d, i + 4)
+                val body = i + 10
+                val end = (body + size).coerceAtMost(to)
+                if (id == "PRIV") {
+                    val owner = "com.apple.streaming.transportStreamTimestamp"
+                    val zero = (body until end).firstOrNull { d[it].toInt() == 0 } ?: return null
+                    if (d.decodeToString(body, zero) == owner && zero + 9 <= end) {
+                        var v = 0L
+                        for (k in 1..8) v = (v shl 8) or (d[zero + k].toLong() and 0xFF)
+                        return v and MASK_33
+                    }
+                }
+                i = end
+            }
+            return null
+        }
+
+        internal fun codecAt(d: ByteArray, at: Int): Codec? {
+            if (at + 6 > d.size) return null
+            val a = d[at].toInt() and 0xFF
+            val b = d[at + 1].toInt() and 0xFF
+            return when {
+                a == 0xFF && (b and 0xF6) == 0xF0 -> Codec.AAC_ADTS
+                a == 0x0B && b == 0x77 -> if ((d[at + 5].toInt() and 0xFF) shr 3 > 10) Codec.EAC3 else Codec.AC3
+                a == 0xFF && (b and 0xE0) == 0xE0 -> Codec.MPEG_AUDIO
+                else -> null
+            }
+        }
+
+        internal fun syncsafe(d: ByteArray, at: Int): Int =
+            ((d[at].toInt() and 0x7F) shl 21) or ((d[at + 1].toInt() and 0x7F) shl 14) or ((d[at + 2].toInt() and 0x7F) shl 7) or (d[at + 3].toInt() and 0x7F)
+
+        private fun u32(d: ByteArray, at: Int): Int =
+            ((d[at].toInt() and 0xFF) shl 24) or ((d[at + 1].toInt() and 0xFF) shl 16) or ((d[at + 2].toInt() and 0xFF) shl 8) or (d[at + 3].toInt() and 0xFF)
+
+        internal const val MASK_33 = (1L shl 33) - 1
+        internal val STREAM_TYPES = mapOf(Codec.AAC_ADTS to 0x0F, Codec.AC3 to 0x81, Codec.EAC3 to 0x87, Codec.MPEG_AUDIO to 0x03)
 
         /** Parece áudio empacotado (uma etiqueta ID3, ou logo um bloco de áudio)? */
         fun looksLike(d: ByteArray): Boolean {

@@ -62,13 +62,15 @@ extension Channel {
     var shared: GoatShared.Channel {
         GoatShared.Channel(uid: Int32(clamping: uid), key: key, num: Int32(clamping: num), name: name, logo: logo, categoryId: categoryId,
                            streamId: streamId, url: url, userAgent: userAgent, referrer: referrer, epgId: epgId,
-                           archiveDays: Int32(clamping: archiveDays), catchupType: catchupType, catchupSource: catchupSource)
+                           archiveDays: Int32(clamping: archiveDays), catchupType: catchupType, catchupSource: catchupSource,
+                           radio: radio == true ? KotlinBoolean(bool: true) : nil)
     }
 
     /// Um canal que o núcleo partilhado devolveu.
     init(_ c: GoatShared.Channel) {
         self.init(uid: Int(c.uid), key: c.key, num: Int(c.num), name: c.name, logo: c.logo, categoryId: c.categoryId,
                   streamId: c.streamId, url: c.url, userAgent: c.userAgent, referrer: c.referrer, epgId: c.epgId,
-                  archiveDays: Int(c.archiveDays), catchupType: c.catchupType, catchupSource: c.catchupSource)
+                  archiveDays: Int(c.archiveDays), catchupType: c.catchupType, catchupSource: c.catchupSource,
+                  radio: c.radio?.boolValue == true ? true : nil)
     }
 }

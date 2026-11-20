@@ -110,12 +110,16 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
     /// desta versão, que o ganham na próxima atualização da lista).
     public var catchupType: String?
     public var catchupSource: String?
+    /// A lista diz que é rádio (M3U `radio="true"`, Xtream `radio_streams`; ver RadioRules); nil nas listas
+    /// guardadas antes desta versão.
+    public var radio: Bool?
 
     public var id: Int { uid }
 
     public init(uid: Int, key: String, num: Int, name: String, logo: String?, categoryId: String,
                 streamId: String? = nil, url: String? = nil, userAgent: String? = nil, referrer: String? = nil,
-                epgId: String? = nil, archiveDays: Int = 0, catchupType: String? = nil, catchupSource: String? = nil) {
+                epgId: String? = nil, archiveDays: Int = 0, catchupType: String? = nil, catchupSource: String? = nil,
+                radio: Bool? = nil) {
         self.uid = uid
         self.key = key
         self.num = num
@@ -130,6 +134,7 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
         self.archiveDays = archiveDays
         self.catchupType = catchupType
         self.catchupSource = catchupSource
+        self.radio = radio
     }
 }
 

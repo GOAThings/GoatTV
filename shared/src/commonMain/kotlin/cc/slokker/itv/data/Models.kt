@@ -36,6 +36,12 @@ data class Channel(
     val catchupType: String? = null,
     /** M3U: o modelo do URL do catch-up (`catchup-source`, do canal ou do `#EXTM3U`), nos tipos default e append. */
     val catchupSource: String? = null,
+    /**
+     * A lista diz que é rádio (M3U `radio="true"`, Xtream `radio_streams`; ver RadioRules): o ecrã da rádio aparece
+     * logo, antes de o stream dizer as faixas. true ou null (null não vai para o ficheiro da lista guardada, que fica
+     * igual nos canais de TV; e nas listas guardadas antes desta versão).
+     */
+    val radio: Boolean? = null,
 )
 
 /** Uma forma de abrir um canal. O player tenta-as por ordem (fallback ts ⇄ m3u8). */

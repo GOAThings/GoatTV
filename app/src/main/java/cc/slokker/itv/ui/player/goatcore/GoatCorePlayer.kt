@@ -942,7 +942,8 @@ class GoatCorePlayer(
      */
     private fun session(firstUnit: AudioUnit, f: cc.slokker.itv.media.AudioFormat, initial: Boolean): Boolean {
         if (passthrough) encodingOf(f.codec)?.takeIf { directSupported(it, f.sampleRate) }?.let { return bitstream(firstUnit, f, it) }
-        val mime = mimeOf(f.codec) ?: return true
+        // O MP3 (as rádios) tem descodificador próprio; o MP2 (a TV) é o "audio/mpeg-L2".
+        val mime = (if (f.codec == Codec.MPEG_AUDIO && f.mpegLayer == 3) MediaFormat.MIMETYPE_AUDIO_MPEG else mimeOf(f.codec)) ?: return true
         // Sem descodificador no aparelho (a SHIELD não tem AC-3), o FFmpeg da app (o mesmo do ExoPlayer).
         if (!hasDecoder(mime) && GoatCoreFfmpegAudio.supports(mime)) return ffmpegSession(firstUnit, f, mime, initial)
         val format = MediaFormat.createAudioFormat(mime, f.sampleRate, f.channels)

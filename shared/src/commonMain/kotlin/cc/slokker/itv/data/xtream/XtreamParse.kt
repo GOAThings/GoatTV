@@ -7,6 +7,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.EpgEntry
 import cc.slokker.itv.data.InputRules
 import cc.slokker.itv.data.JsonRows
+import cc.slokker.itv.playback.RadioRules
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -31,7 +32,7 @@ class XtreamLoginInfo(
  */
 object XtreamParse {
     private val CATEGORY_KEYS = setOf("category_id", "category_name")
-    private val STREAM_KEYS = setOf("num", "name", "stream_id", "stream_icon", "category_id", "epg_channel_id", "tv_archive", "tv_archive_duration")
+    private val STREAM_KEYS = setOf("num", "name", "stream_id", "stream_icon", "category_id", "epg_channel_id", "tv_archive", "tv_archive_duration", "stream_type")
 
     /** `get_live_categories`. Sem id não é um grupo; sem nome fica o id. */
     @Throws(BadJson::class)
@@ -58,6 +59,7 @@ object XtreamParse {
                 streamId = id,
                 epgId = s["epg_channel_id"]?.trim()?.takeIf { it.isNotEmpty() },
                 archiveDays = CatchupRules.xtreamArchiveDays(s["tv_archive"], s["tv_archive_duration"]),
+                radio = RadioRules.xtreamHint(s["stream_type"]).takeIf { it },
             )
         }
         return out

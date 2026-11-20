@@ -12,10 +12,12 @@ internal class RawAudioFrame(val offset: Int, val size: Int, val samples: Int, v
 /**
  * O formato de uma faixa de áudio, tirado dos próprios blocos (o PMT não diz a frequência nem os canais).
  * [config] é o AudioSpecificConfig do AAC (o que o AudioToolbox e o MediaCodec pedem), vazio nos outros.
+ * [mpegLayer]: no MPEG áudio, a camada (1, 2 ou 3: o MP2 da TV, o MP3 das rádios); 0 nos outros.
  */
-data class AudioFormat(val codec: Codec, val sampleRate: Int, val channels: Int, val config: ByteArray) {
+data class AudioFormat(val codec: Codec, val sampleRate: Int, val channels: Int, val config: ByteArray, val mpegLayer: Int = 0) {
     override fun equals(other: Any?): Boolean =
-        other is AudioFormat && codec == other.codec && sampleRate == other.sampleRate && channels == other.channels && config.contentEquals(other.config)
+        other is AudioFormat && codec == other.codec && sampleRate == other.sampleRate && channels == other.channels &&
+            config.contentEquals(other.config) && mpegLayer == other.mpegLayer
 
     override fun hashCode(): Int = (codec.hashCode() * 31 + sampleRate) * 31 + channels
 }
@@ -318,7 +320,7 @@ class AudioFrameReader(private val codec: Codec) {
         }
         val size = if (layer == 3) (12 * kbps * 1000 / rate + padding) * 4 else samples / 8 * kbps * 1000 / rate + padding
         if (size < 4) return null
-        return Header(size, 0, samples, AudioFormat(Codec.MPEG_AUDIO, rate, if (mode == 3) 1 else 2, ByteArray(0)))
+        return Header(size, 0, samples, AudioFormat(Codec.MPEG_AUDIO, rate, if (mode == 3) 1 else 2, ByteArray(0), mpegLayer = 4 - layer))
     }
 
     private class BitReader(private val d: ByteArray, private var byte: Int) {
