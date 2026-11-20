@@ -908,4 +908,16 @@
     <string name="hls_quality_lowest">الأدنى</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">راديو</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">الصورة</string>
+    <string name="picture_brightness">السطوع</string>
+    <string name="picture_contrast">التباين</string>
+    <string name="picture_saturation">اللون</string>
+    <string name="picture_sharpness">الحدة</string>
+    <string name="picture_sub">لا ينطبق على فيديو HDR أو 10 بت</string>
+    <string name="picture_sub_apple">لا ينطبق على فيديو HDR أو 10 بت أو 4K</string>
+    <string name="picture_reset">إعادة ضبط الصورة</string>
+    <string name="save_picture">حفظ الصورة</string>
+    <string name="picture_saved">تم حفظ الصورة</string>
+    <string name="picture_save_failed">تعذّر حفظ الصورة</string>
 </resources>

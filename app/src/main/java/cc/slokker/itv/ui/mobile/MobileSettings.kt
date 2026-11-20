@@ -225,6 +225,11 @@ fun MobileMenu(vm: AppViewModel) {
                             MenuRow(s.userAgent, prefs.userAgent.ifBlank { s.userAgentDefault }, chevron = true) { editingAgent = true }
                             true
                         }
+                        // Põe os quatro ajustes da imagem no 0.
+                        SettingsCatalog.PICTURE_RESET -> {
+                            MenuRow(s.pictureReset, null) { vm.setPrefs(Prefs.Picture.KEYS.associateWith { 0 }) }
+                            true
+                        }
                         else -> false
                     }
                 }

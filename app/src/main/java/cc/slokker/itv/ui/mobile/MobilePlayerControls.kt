@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -90,6 +91,7 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.player.TuningPill
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.PictureSaver
 import cc.slokker.itv.ui.player.RadioView
 import androidx.media3.common.Player
 import cc.slokker.itv.ui.player.PlaybackSpeed
@@ -813,6 +815,14 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
             ActionPill(option.icon, label, tint = if (option == PlayerOption.SLEEP && sleepAt != null) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
+        }
+        // A imagem do canal (sem os botões nem as legendas da app) para as Imagens do telemóvel.
+        if (!playback.radio) {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            ActionPill(ItvIcons.Camera, s.savePicture) {
+                scope.launch { vm.showToast(if (PictureSaver.save(context, playback.view, playback.player, channel.name)) s.pictureSaved else s.pictureSaveFailed) }
+            }
         }
         onPip?.let { ActionPill(ItvIcons.Pip, "PiP", onClick = it) }
     }

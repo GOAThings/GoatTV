@@ -904,4 +904,16 @@
     <string name="hls_quality_lowest">Самое низкое</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Радио</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Изображение</string>
+    <string name="picture_brightness">Яркость</string>
+    <string name="picture_contrast">Контрастность</string>
+    <string name="picture_saturation">Цвет</string>
+    <string name="picture_sharpness">Резкость</string>
+    <string name="picture_sub">Не применяется к видео HDR и 10 бит</string>
+    <string name="picture_sub_apple">Не применяется к видео HDR, 10 бит и 4K</string>
+    <string name="picture_reset">Сбросить изображение</string>
+    <string name="save_picture">Сохранить кадр</string>
+    <string name="picture_saved">Кадр сохранён</string>
+    <string name="picture_save_failed">Не удалось сохранить кадр</string>
 </resources>

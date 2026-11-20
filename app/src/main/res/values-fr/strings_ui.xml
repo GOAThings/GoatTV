@@ -902,4 +902,16 @@
     <string name="hls_quality_lowest">La plus basse</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radio</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Image</string>
+    <string name="picture_brightness">Luminosité</string>
+    <string name="picture_contrast">Contraste</string>
+    <string name="picture_saturation">Couleur</string>
+    <string name="picture_sharpness">Netteté</string>
+    <string name="picture_sub">Ne s\'applique pas à la vidéo HDR ou 10 bits</string>
+    <string name="picture_sub_apple">Ne s\'applique pas à la vidéo HDR, 10 bits ou 4K</string>
+    <string name="picture_reset">Réinitialiser l\'image</string>
+    <string name="save_picture">Enregistrer l\'image</string>
+    <string name="picture_saved">Image enregistrée</string>
+    <string name="picture_save_failed">Impossible d\'enregistrer l\'image</string>
 </resources>

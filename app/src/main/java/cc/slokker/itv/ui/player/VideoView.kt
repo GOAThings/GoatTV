@@ -33,7 +33,8 @@ import kotlin.coroutines.resume
 
 /**
  * SurfaceView centrada e com a proporção do vídeo. Permite copiar o frame atual
- * (PixelCopy, Android 7+) para o vidro desfocado e para manter a imagem ao mudar de canal.
+ * (PixelCopy, Android 7+) para o vidro desfocado, para manter a imagem ao mudar de canal e para a guardar
+ * ("Guardar imagem", ver PictureSaver).
  * Com [rounded] usa uma TextureView: desenha-se com o resto da janela, por isso dá para lhe arredondar os cantos
  * ([cornerRadius]) por cima de outro vídeo (as imagens pequenas da imagem na imagem).
  */
@@ -153,12 +154,12 @@ class VideoView(context: Context, overlay: Boolean = false, rounded: Boolean = f
      * Copia o frame atual reduzido a [width]×[height] (para [into], se for dado, evitando alocações);
      * null se não houver imagem ou se demorar demasiado.
      */
-    suspend fun capture(width: Int, height: Int, into: Bitmap? = null): Bitmap? {
+    suspend fun capture(width: Int, height: Int, into: Bitmap? = null, timeoutMs: Long = 250): Bitmap? {
         textureView?.let { tv -> return if (tv.isAvailable) tv.getBitmap(into?.takeIf { it.width == width && it.height == height } ?: createBitmap(width, height)) else null }
         val surfaceView = surfaceView ?: return null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
         if (surfaceView.width == 0 || !surfaceView.holder.surface.isValid) return null
-        return withTimeoutOrNull(250) {
+        return withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine { cont ->
                 val bitmap = into?.takeIf { it.width == width && it.height == height } ?: createBitmap(width, height)
                 try {

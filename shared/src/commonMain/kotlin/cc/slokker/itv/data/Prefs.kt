@@ -61,6 +61,11 @@ data class Prefs(
     val hdr: String = Hdr.AUTO,
     /** A qualidade dos canais HLS com várias ([HlsQuality]): automática, a melhor, poupar dados ou a mais baixa. */
     val hlsQuality: String = HlsQuality.AUTO,
+    /** A imagem (ver media/PictureLook): o brilho, o contraste e a saturação de −5 a +5, a nitidez de 0 a 5; 0 = como vem. */
+    val pictureBrightness: Int = 0,
+    val pictureContrast: Int = 0,
+    val pictureSaturation: Int = 0,
+    val pictureSharpness: Int = 0,
     /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
     val netGraph: Boolean = false,
     /** Avisar quando o canal está sempre a parar, com a causa e o que experimentar. */
@@ -248,6 +253,10 @@ data class Prefs(
         const val AUDIO_LEVEL = "audio_level"
         const val HDR = "hdr"
         const val HLS_QUALITY = "hls_quality"
+        const val PICTURE_BRIGHTNESS = "picture_brightness"
+        const val PICTURE_CONTRAST = "picture_contrast"
+        const val PICTURE_SATURATION = "picture_saturation"
+        const val PICTURE_SHARPNESS = "picture_sharpness"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
         const val TIMESHIFT = "timeshift"
@@ -336,6 +345,13 @@ data class Prefs(
     /** Atraso do som (as opções das definições vão de −300 a +500). */
     object AudioDelay {
         const val MAX_MS = 1_000
+    }
+
+    /** Os ajustes da imagem (ver media/PictureLook): cada um de −[MAX] a +[MAX] (a nitidez de 0 a [MAX]); 0 = como vem. */
+    object Picture {
+        const val MAX = 5
+        /** As quatro chaves, para as repor todas de uma vez ("Repor a imagem"). */
+        val KEYS = listOf(Key.PICTURE_BRIGHTNESS, Key.PICTURE_CONTRAST, Key.PICTURE_SATURATION, Key.PICTURE_SHARPNESS)
     }
 
     /** Nivelar o volume (ver media/AudioLeveler): desligado, nivelar, ou nivelar e comprimir (modo noite). */
@@ -558,6 +574,10 @@ data class Prefs(
                 audioLevel = str(Key.AUDIO_LEVEL, d.audioLevel, AudioLevel.ALL),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 hlsQuality = str(Key.HLS_QUALITY, d.hlsQuality, HlsQuality.ALL),
+                pictureBrightness = int(Key.PICTURE_BRIGHTNESS, d.pictureBrightness).coerceIn(-Picture.MAX, Picture.MAX),
+                pictureContrast = int(Key.PICTURE_CONTRAST, d.pictureContrast).coerceIn(-Picture.MAX, Picture.MAX),
+                pictureSaturation = int(Key.PICTURE_SATURATION, d.pictureSaturation).coerceIn(-Picture.MAX, Picture.MAX),
+                pictureSharpness = int(Key.PICTURE_SHARPNESS, d.pictureSharpness).coerceIn(0, Picture.MAX),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),

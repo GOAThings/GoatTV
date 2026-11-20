@@ -43,6 +43,8 @@ internal data class PlaybackPolicy(
     val subtitleLanguage: Boolean,
     /** Um canal em direto que não abre passa para os failovers dele, pela ordem (ver [PlaybackHost.backupsFor]). */
     val failover: Boolean,
+    /** Os ajustes da imagem (Definições → Imagem): só na imagem principal (os canais extra vão como vêm). */
+    val picture: Boolean = true,
 ) {
     companion object {
         val TV = PlaybackPolicy(
@@ -62,7 +64,7 @@ internal data class PlaybackPolicy(
         val SECOND = PlaybackPolicy(
             maxStartRetries = Int.MAX_VALUE, reconnectFloorMs = 3_000L, alwaysRetry = true, timeshift = false,
             vlcFallback = false, learnFormat = false, diagnostics = false, passthrough = false,
-            surroundDefault = false, subtitleLanguage = false, failover = true,
+            surroundDefault = false, subtitleLanguage = false, failover = true, picture = false,
         )
     }
 }
@@ -312,6 +314,11 @@ internal data class PlayerBuild(
     val deinterlace: String,
     val audioDelayMs: Int,
     val audioLevel: String,
+    /**
+     * Há ajustes da imagem (Definições → Imagem) fora do 0: o vídeo passa pela GPU, o que se decide ao abrir o canal.
+     * Os valores em si mudam sem recriar o player (ver GoatCoreMediaPlayer.picture).
+     */
+    val picture: Boolean = false,
 ) {
     /** As definições com que se cria o player ([buildPlayer] lê só estas). */
     fun applyTo(prefs: Prefs): Prefs = prefs.copy(
@@ -320,9 +327,9 @@ internal data class PlayerBuild(
     )
 
     companion object {
-        fun of(prefs: Prefs, engine: String, passthrough: Boolean) = PlayerBuild(
+        fun of(prefs: Prefs, engine: String, passthrough: Boolean, picture: Boolean = false) = PlayerBuild(
             engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough && passthrough, prefs.hdr, prefs.deinterlace, prefs.audioDelayMs,
-            prefs.audioLevel,
+            prefs.audioLevel, picture,
         )
     }
 }

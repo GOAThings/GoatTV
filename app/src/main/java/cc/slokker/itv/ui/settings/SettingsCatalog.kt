@@ -232,6 +232,19 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 27, TvSection.AUDIO),
         phone = Place(PhonePage.PLAYBACK, 37, PhoneSection.PICTURE_SOUND),
     )
+    // ---- Imagem (ver media/PictureLook): não se aplica ao HDR nem aos 10 bits; só na imagem principal ----
+
+    val PICTURE_BRIGHTNESS = pictureChoice(Prefs.Key.PICTURE_BRIGHTNESS, { it.pictureBrightness }, { it.prefs.pictureBrightness }, 10)
+    val PICTURE_CONTRAST = pictureChoice(Prefs.Key.PICTURE_CONTRAST, { it.pictureContrast }, { it.prefs.pictureContrast }, 20)
+    val PICTURE_SATURATION = pictureChoice(Prefs.Key.PICTURE_SATURATION, { it.pictureSaturation }, { it.prefs.pictureSaturation }, 30)
+    val PICTURE_SHARPNESS = pictureChoice(Prefs.Key.PICTURE_SHARPNESS, { it.pictureSharpness }, { it.prefs.pictureSharpness }, 40, from = 0)
+    /** "Repor a imagem": põe as quatro no 0 (cada plataforma desenha a linha). */
+    val PICTURE_RESET = Setting.Custom(
+        "picture_reset",
+        tv = Place(TvPage.PLAYBACK, 50, TvSection.PICTURE),
+        phone = Place(PhonePage.PLAYBACK, 50, PhoneSection.PICTURE),
+    )
+
     /** Telemóvel: só aparece quando o aparelho tem janela pequena (o telemóvel esconde-a sem ela). */
     val PIP = Setting.Toggle(
         Prefs.Key.PIP_ENABLED, { it.pictureInPicture },
@@ -460,7 +473,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, HLS_QUALITY, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LEVEL, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LEVEL, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, PICTURE_BRIGHTNESS, PICTURE_CONTRAST, PICTURE_SATURATION, PICTURE_SHARPNESS, PICTURE_RESET, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
@@ -477,6 +490,22 @@ object SettingsCatalog {
     private fun <P, S : Enum<S>> layout(placed: List<Pair<Setting, Place<P, S>>>): List<Pair<S, List<Setting>>> =
         placed.groupBy { it.second.section }.toSortedMap(compareBy { it.ordinal })
             .map { (section, rows) -> section to rows.sortedBy { it.second.order }.map { it.first } }
+
+    /** Um ajuste da imagem: de [from] a +5, com o 0 a dizer que não mexe ("+2", "−3"). */
+    private fun pictureChoice(key: String, title: (Strings) -> String, read: (SettingValues) -> Any?, order: Int, from: Int = -Prefs.Picture.MAX) = Setting.Choice(
+        key, title,
+        options = { s -> (from..Prefs.Picture.MAX).map { it to pictureLabel(it, s) } },
+        read = read,
+        subtitle = { it.pictureSub },
+        tv = Place(TvPage.PLAYBACK, order, TvSection.PICTURE),
+        phone = Place(PhonePage.PLAYBACK, order, PhoneSection.PICTURE),
+    )
+
+    fun pictureLabel(value: Int, s: Strings): String = when {
+        value == 0 -> s.off
+        value > 0 -> "+$value"
+        else -> "−${abs(value)}"
+    }
 
     private val AUDIO_DELAYS = listOf(-300, -200, -150, -100, -50, 0, 50, 100, 150, 200, 300, 400, 500)
 
@@ -560,6 +589,7 @@ enum class TvPage { PLAYBACK, GENERAL, ZAPPING, APPEARANCE, GUIDE }
 /** As secções de uma página da TV, por esta ordem; [MAIN] não tem título. */
 enum class TvSection(val headerKey: String?, val title: ((Strings) -> String)?) {
     MAIN(null, null),
+    PICTURE("hpicture", { it.pictureSection }),
     AUDIO("audio", { it.audioSection }),
     SUBTITLES("hsubs", { it.subtitles }),
     LANGUAGE_TEXT("hlang", { it.sectionLanguageText }),
@@ -575,6 +605,7 @@ enum class PhonePage { PLAYBACK, CHANNELS, GUIDE, APPEARANCE }
 enum class PhoneSection(val title: ((Strings) -> String)?) {
     MAIN(null),
     PICTURE_SOUND({ it.settingsPictureSound }),
+    PICTURE({ it.pictureSection }),
     SUBTITLES({ it.subtitles }),
     CONNECTION({ it.settingsConnection }),
     ADVANCED({ it.settingsAdvanced }),

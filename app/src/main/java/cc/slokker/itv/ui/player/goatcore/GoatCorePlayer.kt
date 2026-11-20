@@ -28,6 +28,7 @@ import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
+import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
 import cc.slokker.itv.media.WebVtt
@@ -66,8 +67,13 @@ class GoatCorePlayer(
     private val audioLevel: String = Prefs.AudioLevel.OFF,
     /** O canal, para começar no ganho com que ele ficou da última vez (ver [levelGains]). */
     private val levelKey: String = "",
-    /** Definições → Desentrelaçar (Prefs.Deinterlace): nos canais entrelaçados, a GPU tira o "pente" (ver [Deinterlacer]). */
+    /** Definições → Desentrelaçar (Prefs.Deinterlace): nos canais entrelaçados, a GPU tira o "pente" (ver [VideoGpuStage]). */
     private val deinterlace: String = cc.slokker.itv.data.Prefs.Deinterlace.OFF,
+    /**
+     * Definições → Imagem (o brilho, o contraste, a saturação e a nitidez), lido a cada imagem: com algum fora do 0
+     * ao abrir, o vídeo de 8 bits SDR passa pela GPU (ver [VideoGpuStage]), e a partir daí mudam sem reabrir o canal.
+     */
+    private val picture: () -> PictureLook = { PictureLook() },
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -699,7 +705,7 @@ class GoatCorePlayer(
             }
             val c = decoderFor(mime, softwareVideo)
             codec = c
-            deinterlacer = deinterlacerFor(c.name)
+            deinterlacer = gpuStageFor(c.name)
             c.configure(format, deinterlacer?.input ?: surface, null, 0)
             c.start()
             stats.configured = true
@@ -754,15 +760,15 @@ class GoatCorePlayer(
             runCatching { codec?.release() }
             // Depois do descodificador: a superfície do ecrã fica livre para o canal seguinte.
             deinterlacer?.let { d ->
-                Log.i(TAG, "deinterlace: ${d.deinterlaced} deinterlaced, ${d.passedThrough} as is")
+                Log.i(TAG, "video gpu: ${d.deinterlaced} deinterlaced, ${d.passedThrough} as is")
                 runCatching { d.release() }
             }
             deinterlacer = null
         }
     }
 
-    /** Nos canais entrelaçados: entre o descodificador e o ecrã (ver [deinterlacerFor]). */
-    @Volatile private var deinterlacer: Deinterlacer? = null
+    /** Entre o descodificador e o ecrã, nos canais entrelaçados e com ajustes da imagem (ver [gpuStageFor]). */
+    @Volatile private var deinterlacer: VideoGpuStage? = null
 
     /**
      * Testes: `adb shell setprop debug.goattv.interlaced 1` trata qualquer canal como entrelaçado (o emulador não
@@ -778,24 +784,34 @@ class GoatCorePlayer(
     private val scans = java.util.TreeMap<Long, Int>()
 
     /**
-     * O desentrelaçador para este canal e o descodificador [decoder], ou null para o vídeo ir direto ao ecrã: só num
-     * canal entrelaçado de 8 bits (ver Deinterlacing.mode), com a definição ligada, e num descodificador que não o faça
-     * já (o da NVIDIA da SHIELD desentrelaça ele próprio). Nos outros, a GPU desentrelaça e mede se é preciso
-     * (InterlaceVerdict); o que se aprende de cada descodificador fica para os canais seguintes.
+     * A passagem pela GPU para este canal e o descodificador [decoder], ou null para o vídeo ir direto ao ecrã (com
+     * tudo no padrão, é sempre assim). Só no vídeo de 8 bits SDR, e por uma de duas razões:
+     * - desentrelaçar: um canal entrelaçado (ver Deinterlacing.mode), com a definição ligada, e num descodificador que
+     *   não o faça já (o da NVIDIA da SHIELD desentrelaça ele próprio). Nos outros, a GPU desentrelaça e mede se é
+     *   preciso (InterlaceVerdict); o que se aprende de cada descodificador fica para os canais seguintes;
+     * - os ajustes da imagem (Definições → Imagem) com algum fora do 0 (ver [PictureLook.applies]).
      */
-    private fun deinterlacerFor(decoder: String): Deinterlacer? {
+    private fun gpuStageFor(decoder: String): VideoGpuStage? {
         val info = videoInfo
-        val mode = Deinterlacing.mode(deinterlace, interlacedVideo || forceInterlaced, info?.bitDepth ?: 8, info?.isHdr == true)
-        if (mode == Deinterlacing.NONE) return null
+        val bitDepth = info?.bitDepth ?: 8
+        val hdr = info?.isHdr == true
+        var mode = Deinterlacing.mode(deinterlace, interlacedVideo || forceInterlaced, bitDepth, hdr)
         val known = Deinterlacing.decoder(decoder)
-        if (known == Deinterlacing.DECODER_DEINTERLACES) {
+        if (mode != Deinterlacing.NONE && known == Deinterlacing.DECODER_DEINTERLACES) {
             Log.i(TAG, "interlaced: $decoder deinterlaces by itself")
-            return null
+            mode = Deinterlacing.NONE
         }
+        val look = picture()
+        val adjust = look.applies(bitDepth, hdr)
+        if (!look.neutral && !adjust) Log.i(TAG, "picture: not applied to this video (bitDepth=$bitDepth hdr=$hdr)")
+        if (mode == Deinterlacing.NONE && !adjust) return null
         val verdict = InterlaceVerdict(woven = known == Deinterlacing.DECODER_WOVEN || decoder in wovenDecoders)
-        return runCatching { Deinterlacer(surface, mode, verdict, onWoven = { wovenDecoders += decoder }) }
-            .onSuccess { Log.i(TAG, "interlaced: deinterlacing ($deinterlace) on the GPU, decoder $decoder woven=${verdict.woven}") }
-            .onFailure { Log.w(TAG, "interlaced: no deinterlacer: ${it.message}") }
+        return runCatching { VideoGpuStage(surface, mode, verdict, pictureLook = picture, onWoven = { wovenDecoders += decoder }) }
+            .onSuccess {
+                if (mode != Deinterlacing.NONE) Log.i(TAG, "interlaced: deinterlacing ($deinterlace) on the GPU, decoder $decoder woven=${verdict.woven}")
+                if (adjust) Log.i(TAG, "picture: adjusting on the GPU ($look)")
+            }
+            .onFailure { Log.w(TAG, "video gpu: no stage: ${it.message}") }
             .getOrNull()
     }
 

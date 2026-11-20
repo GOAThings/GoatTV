@@ -897,4 +897,16 @@
     <string name="hls_quality_lowest">최저</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">라디오</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">화질</string>
+    <string name="picture_brightness">밝기</string>
+    <string name="picture_contrast">명암</string>
+    <string name="picture_saturation">색 농도</string>
+    <string name="picture_sharpness">선명도</string>
+    <string name="picture_sub">HDR 또는 10비트 영상에는 적용되지 않습니다</string>
+    <string name="picture_sub_apple">HDR, 10비트 또는 4K 영상에는 적용되지 않습니다</string>
+    <string name="picture_reset">화질 초기화</string>
+    <string name="save_picture">화면 저장</string>
+    <string name="picture_saved">화면을 저장했습니다</string>
+    <string name="picture_save_failed">화면을 저장할 수 없습니다</string>
 </resources>

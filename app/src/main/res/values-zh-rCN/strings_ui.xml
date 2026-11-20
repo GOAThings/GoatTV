@@ -897,4 +897,16 @@
     <string name="hls_quality_lowest">最低</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">电台</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">画面</string>
+    <string name="picture_brightness">亮度</string>
+    <string name="picture_contrast">对比度</string>
+    <string name="picture_saturation">色彩</string>
+    <string name="picture_sharpness">锐度</string>
+    <string name="picture_sub">不适用于 HDR 或 10 位视频</string>
+    <string name="picture_sub_apple">不适用于 HDR、10 位或 4K 视频</string>
+    <string name="picture_reset">重置画面</string>
+    <string name="save_picture">保存画面</string>
+    <string name="picture_saved">画面已保存</string>
+    <string name="picture_save_failed">无法保存画面</string>
 </resources>

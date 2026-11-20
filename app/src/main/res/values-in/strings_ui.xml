@@ -898,4 +898,16 @@
     <string name="hls_quality_lowest">Terendah</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radio</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Gambar</string>
+    <string name="picture_brightness">Kecerahan</string>
+    <string name="picture_contrast">Kontras</string>
+    <string name="picture_saturation">Warna</string>
+    <string name="picture_sharpness">Ketajaman</string>
+    <string name="picture_sub">Tidak berlaku untuk video HDR atau 10-bit</string>
+    <string name="picture_sub_apple">Tidak berlaku untuk video HDR, 10-bit, atau 4K</string>
+    <string name="picture_reset">Atur ulang gambar</string>
+    <string name="save_picture">Simpan gambar</string>
+    <string name="picture_saved">Gambar disimpan</string>
+    <string name="picture_save_failed">Gambar tidak dapat disimpan</string>
 </resources>

@@ -37,7 +37,7 @@ class SettingsCatalogTest {
     fun `keys are real Prefs keys`() {
         val prefKeys = Prefs.Key::class.java.declaredFields.filter { it.type == String::class.java }.map { it.get(null) as String }.toSet()
         // "format" é o formato preferido (fora das Prefs); "visible_groups" é só uma linha que abre outra página.
-        val others = setOf(SettingsCatalog.STREAM_FORMAT.key, SettingsCatalog.VISIBLE_GROUPS.key)
+        val others = setOf(SettingsCatalog.STREAM_FORMAT.key, SettingsCatalog.VISIBLE_GROUPS.key, SettingsCatalog.PICTURE_RESET.key)
         SettingsCatalog.ALL.filter { it.key !in others }.forEach { assertTrue("${it.key} não é uma Prefs.Key", it.key in prefKeys) }
     }
 
@@ -56,6 +56,7 @@ class SettingsCatalogTest {
         assertEquals(
             listOf(
                 TvSection.MAIN to listOf("format", k.BUFFER, k.HLS_QUALITY, k.DECODER, k.DEINTERLACE, k.ASPECT, k.FREEZE_FRAME, k.TIMESHIFT, k.PROTECT_PAUSED, k.RECONNECT_SECONDS, k.AFR, k.AFR_FALLBACK, k.HDR),
+                TvSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, "picture_reset"),
                 TvSection.AUDIO to listOf(k.AUDIO_LANGUAGE, k.AUDIO_PASSTHROUGH, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_LEVEL, k.AUDIO_DECODER),
                 TvSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
                 TvSection.RECORDINGS to listOf(k.RECORD_PADDING_BEFORE, k.RECORD_PADDING_AFTER),
@@ -81,6 +82,7 @@ class SettingsCatalogTest {
         assertEquals(
             listOf(
                 PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_LEVEL),
+                PhoneSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, "picture_reset"),
                 PhoneSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
                 PhoneSection.CONNECTION to listOf(k.BUFFER, k.HLS_QUALITY, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY),
                 PhoneSection.ADVANCED to listOf("format", k.DECODER, k.DEINTERLACE, k.AUDIO_DECODER, k.USER_AGENT),

@@ -8,6 +8,8 @@ import cc.slokker.itv.data.recording.RecordingSpace
 import cc.slokker.itv.data.recording.Schedule
 import cc.slokker.itv.data.recording.ScheduledRecording
 import cc.slokker.itv.data.recording.SeriesRule
+import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.playback.PictureName
 import cc.slokker.itv.playback.SubtitleLook
 import cc.slokker.itv.playback.SubtitleRect
 import kotlinx.datetime.TimeZone
@@ -89,6 +91,18 @@ object AppleBridge {
     /** [SubtitleLook.place], tudo em fração do ecrã do emissor. */
     fun subtitlePlace(x: Double, y: Double, width: Double, height: Double, size: String, position: String): SubtitleRect =
         SubtitleLook.place(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), size, position)
+
+    // ---- Os ajustes da imagem ([PictureLook]) -----------------------------------------------------
+
+    fun pictureLook(brightness: Int, contrast: Int, saturation: Int, sharpness: Int): PictureLook =
+        PictureLook(brightness, contrast, saturation, sharpness)
+
+    /** [PictureLook.applies]: este vídeo passa pelos ajustes (8 bits, SDR, e na Apple até [PictureLook.APPLE_MAX_HEIGHT]). */
+    fun pictureApplies(look: PictureLook, bitDepth: Int, hdr: Boolean, height: Int): Boolean =
+        look.applies(bitDepth, hdr, height, PictureLook.APPLE_MAX_HEIGHT)
+
+    /** [PictureName.of]: o nome (sem extensão) de uma imagem guardada do canal, com a hora [epochMs]. */
+    fun pictureName(channel: String, epochMs: Long): String = PictureName.of(channel, epochMs)
 
     private fun obj(json: String): JsonObject =
         runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())

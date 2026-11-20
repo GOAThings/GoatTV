@@ -32,7 +32,7 @@ import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.engine.ChannelPlayback
 
 /** Os botões da barra completa que mexem no ecrã do player (abrir um painel, trocar os canais...). */
-internal enum class HudAction { AUDIO, SUBTITLES, RECORD, SECOND_CHANNEL, ADD_CHANNEL, CLOSE_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP }
+internal enum class HudAction { AUDIO, SUBTITLES, RECORD, SECOND_CHANNEL, ADD_CHANNEL, CLOSE_CHANNEL, SWAP, LAYOUT, SEARCH, GUIDE, RECORDINGS, EPG_CHANNEL, BACKUP, SLEEP, SAVE_PICTURE }
 
 /**
  * Os botões da barra completa (OK no vídeo). O que é só pedir ao ViewModel (imagem, favorito, ver do início,
@@ -58,6 +58,8 @@ internal fun HudButtons(
     /** Modo TV Pro: o botão da reserva abre as fontes do canal. */
     pro: Boolean = false,
     dualLayout: DualLayout,
+    /** O canal tem imagem (não é uma rádio): o botão "Guardar imagem". */
+    savePicture: Boolean = true,
     /** O foco ao abrir, quando não vai para a barra de progresso (sem pausa do direto). */
     firstFocus: FocusRequester?,
     onAction: (HudAction) -> Unit,
@@ -138,6 +140,7 @@ internal fun HudButtons(
         if (live != null && vm.canCatchup(channel, live)) {
             GlassChipButton(ItvIcons.Replay, s.startOver, { vm.playCatchup(channel, live) })
         }
+        if (savePicture) GlassChipButton(ItvIcons.Camera, s.savePicture, { onAction(HudAction.SAVE_PICTURE) })
         GlassChipButton(
             ItvIcons.Sleep,
             sleepAt?.let { s.sleepRemaining(minutesLeft(it, System.currentTimeMillis())) } ?: s.sleepTimer,

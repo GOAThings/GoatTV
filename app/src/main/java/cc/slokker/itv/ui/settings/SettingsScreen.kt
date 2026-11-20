@@ -584,6 +584,8 @@ private fun prefPageItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                         SettingsCatalog.HDR, values, s,
                         subtitle = if (displayHdr.isEmpty()) s.hdrTvNone else s.hdrTvSupports(displayHdr.joinToString(", ") { it.label }),
                     )
+                    // Põe os quatro ajustes da imagem no 0.
+                    SettingsCatalog.PICTURE_RESET -> Item.Action(setting.key, s.pictureReset) { vm.setPrefs(Prefs.Picture.KEYS.associateWith { 0 }) }
                     else -> null
                 }
             }
