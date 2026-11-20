@@ -1163,9 +1163,11 @@ fun PlayerScreen(vm: AppViewModel) {
                         second = extras.isNotEmpty(), canAddChannel = extras.size < PlaybackState.MAX_EXTRAS,
                         backup = catchup == null && (data.pro != null || vm.backupOf(data.playlist.id) != null),
                         pro = data.pro != null,
-                        dualLayout = dualLayout, firstFocus = if (pausable) null else hudFocus,
+                        dualLayout = dualLayout, savePicture = !radio, firstFocus = if (pausable) null else hudFocus,
                     ) { action ->
                         when (action) {
+                            // A imagem principal, sem os painéis nem as legendas da app.
+                            HudAction.SAVE_PICTURE -> scope.launch { vm.showToast(if (PictureSaver.save(context, videoView, player, current.name)) cc.slokker.itv.ui.i18n.I18n.s.pictureSaved else cc.slokker.itv.ui.i18n.I18n.s.pictureSaveFailed) }
                             HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO
                             HudAction.SUBTITLES -> trackPicker = C.TRACK_TYPE_TEXT
                             HudAction.RECORD -> {

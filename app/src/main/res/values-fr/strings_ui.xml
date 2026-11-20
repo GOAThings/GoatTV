@@ -907,4 +907,16 @@
     <string name="audio_delay_auto_sub">Garde l\'image et le son ensemble en Bluetooth et sur les autres sorties lentes. Le décalage manuel s\'y ajoute</string>
     <string name="audio_voices">Voix plus claires</string>
     <string name="audio_voices_sub">Avec des haut-parleurs stéréo, le son surround est mixé avec des dialogues plus forts. Sans effet sur le Dolby en passthrough</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Image</string>
+    <string name="picture_brightness">Luminosité</string>
+    <string name="picture_contrast">Contraste</string>
+    <string name="picture_saturation">Couleur</string>
+    <string name="picture_sharpness">Netteté</string>
+    <string name="picture_sub">Ne s\'applique pas à la vidéo HDR ou 10 bits</string>
+    <string name="picture_sub_apple">Ne s\'applique pas à la vidéo HDR, 10 bits ou 4K</string>
+    <string name="picture_reset">Réinitialiser l\'image</string>
+    <string name="save_picture">Enregistrer l\'image</string>
+    <string name="picture_saved">Image enregistrée</string>
+    <string name="picture_save_failed">Impossible d\'enregistrer l\'image</string>
 </resources>

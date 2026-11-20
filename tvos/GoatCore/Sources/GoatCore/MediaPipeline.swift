@@ -108,6 +108,13 @@ public final class MediaPipeline {
     /// primeiro e se a imagem é progressiva: o AVSampleBufferDisplayLayer não desentrelaça, quem usa o pipeline
     /// descodifica-o e desentrelaça-o. Sem quem o faça (a definição desligada), vai para [onVideo] como o resto.
     public var onInterlacedVideo: ((CMSampleBuffer, _ bottomFirst: Bool, _ progressive: Bool) -> Void)?
+    /// Os canais entrelaçados vão para [onInterlacedVideo] para serem desentrelaçados (Definições → Desentrelaçar).
+    /// Desligado, só lá vai o vídeo com ajustes da imagem ([adjustVideo]), e sempre como progressivo.
+    public var deinterlaceVideo = true
+    /// Há ajustes da imagem (Definições → Imagem): o H.264/HEVC de 8 bits SDR até [PictureAdjust.maxHeight] linhas
+    /// vai também para [onInterlacedVideo] (como progressivo, se não for para desentrelaçar), para quem usa o pipeline
+    /// o descodificar e ajustar. Pode mudar com o canal a dar: o caminho só troca numa imagem-chave.
+    public var adjustVideo = false
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -124,6 +131,10 @@ public final class MediaPipeline {
     private var videoFormat: CMVideoFormatDescription?
     /// O vídeo é HDR ou de mais de 8 bits: nunca vai para o desentrelaçador (não há emissões entrelaçadas assim).
     private var videoDeep = false
+    /// As linhas do vídeo, pelo SPS (os ajustes da imagem têm um limite, ver [adjustVideo]).
+    private var videoLines = 0
+    /// O vídeo está a ir para [onInterlacedVideo] por causa dos ajustes da imagem (decide-se em cada imagem-chave).
+    private var adjusting = false
     private var videoClock = TsClock()
     /// Só se manda vídeo a partir de uma imagem-chave, sem as imagens que dependem de antes dela (o verde e os borrões).
     private let videoStart = VideoStart()
@@ -205,6 +216,8 @@ public final class MediaPipeline {
         mpeg2 = nil
         videoFormat = nil
         videoDeep = false
+        videoLines = 0
+        adjusting = false
         videoClock.reset()
         videoStart.restart()
         audio = nil
@@ -385,6 +398,7 @@ public final class MediaPipeline {
                 videoFormat = f
                 if changed, let info = AppleMedia.shared.videoInfo(sets: unit.parameterSets, hevc: hevc) {
                     videoDeep = info.bitDepth > 8 || info.isHdr
+                    videoLines = Int(info.height)
                     onVideoDetails?(VideoDetails(width: Int(info.width), height: Int(info.height), fps: Double(info.fps),
                                                  hdr10: info.isHdr10, hlg: info.isHlg, format: f, interlaced: info.interlaced))
                 }
@@ -394,6 +408,16 @@ public final class MediaPipeline {
         guard let format = videoFormat else { return }
         let pts = unit.pts
         let dts = unit.dts
+        let deinterlacing = nal.interlaced && deinterlaceVideo && onInterlacedVideo != nil
+        if unit.keyframe {
+            let adjust = adjustVideo && onInterlacedVideo != nil && !videoDeep && videoLines <= PictureAdjust.maxHeight
+            if adjust != adjusting {
+                adjusting = adjust
+                // O vídeo muda de descodificador (o da app ou o da camada), que começa nesta imagem-chave: as imagens
+                // que dependem de antes dela não passam (ver VideoStart).
+                if !deinterlacing { videoStart.restart() }
+            }
+        }
         guard videoStart.pass(keyframe: unit.keyframe, pts: pts) else { return }
         let data = AppleMedia.shared.data(bytes: unit.data) as Data
         guard let buffer = Self.sampleBuffer(data, format: format, pts: pts, dts: dts, duration: .invalid, samples: 1, packetSizes: nil) else { return }
@@ -402,8 +426,9 @@ public final class MediaPipeline {
             attachments.first?[kCMSampleAttachmentKey_DependsOnOthers] = true
         }
         // Entrelaçado: todas as imagens do canal vão para o desentrelaçador (as referências de umas são as outras).
-        if let interlaced = onInterlacedVideo, nal.interlaced, !videoDeep {
-            interlaced(buffer, unit.bottomFirst, unit.progressive)
+        // Com ajustes da imagem vai o vídeo todo, e o que não é para desentrelaçar vai como progressivo.
+        if let interlaced = onInterlacedVideo, !videoDeep, deinterlacing || adjusting {
+            interlaced(buffer, unit.bottomFirst, deinterlacing ? unit.progressive : true)
             return
         }
         onVideo?(buffer)

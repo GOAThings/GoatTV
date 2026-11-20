@@ -905,4 +905,16 @@
     <string name="audio_delay_auto_sub">ब्लूटूथ और दूसरे धीमे आउटपुट पर तस्वीर और आवाज़ को साथ रखता है। मैन्युअल देरी इसके ऊपर जुड़ती है</string>
     <string name="audio_voices">ज़्यादा साफ़ संवाद</string>
     <string name="audio_voices_sub">स्टीरियो स्पीकर पर सराउंड साउंड को ऊँचे संवाद के साथ मिलाया जाता है। पासथ्रू से भेजे गए Dolby पर असर नहीं</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">तस्वीर</string>
+    <string name="picture_brightness">चमक</string>
+    <string name="picture_contrast">कंट्रास्ट</string>
+    <string name="picture_saturation">रंग</string>
+    <string name="picture_sharpness">शार्पनेस</string>
+    <string name="picture_sub">HDR या 10-बिट वीडियो पर लागू नहीं होता</string>
+    <string name="picture_sub_apple">HDR, 10-बिट या 4K वीडियो पर लागू नहीं होता</string>
+    <string name="picture_reset">तस्वीर रीसेट करें</string>
+    <string name="save_picture">तस्वीर सहेजें</string>
+    <string name="picture_saved">तस्वीर सहेजी गई</string>
+    <string name="picture_save_failed">तस्वीर सहेजी नहीं जा सकी</string>
 </resources>

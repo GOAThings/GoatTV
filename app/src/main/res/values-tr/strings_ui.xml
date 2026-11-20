@@ -905,4 +905,16 @@
     <string name="audio_delay_auto_sub">Bluetooth ve diğer yavaş çıkışlarda görüntü ile sesi bir arada tutar. Elle ayarlanan gecikme buna eklenir</string>
     <string name="audio_voices">Daha net konuşmalar</string>
     <string name="audio_voices_sub">Stereo hoparlörlerde surround ses, diyaloglar daha yüksek olacak şekilde karıştırılır. Ses geçişiyle (passthrough) giden Dolby\'yi etkilemez</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Görüntü</string>
+    <string name="picture_brightness">Parlaklık</string>
+    <string name="picture_contrast">Kontrast</string>
+    <string name="picture_saturation">Renk</string>
+    <string name="picture_sharpness">Keskinlik</string>
+    <string name="picture_sub">HDR veya 10 bit videoya uygulanmaz</string>
+    <string name="picture_sub_apple">HDR, 10 bit veya 4K videoya uygulanmaz</string>
+    <string name="picture_reset">Görüntüyü sıfırla</string>
+    <string name="save_picture">Görüntüyü kaydet</string>
+    <string name="picture_saved">Görüntü kaydedildi</string>
+    <string name="picture_save_failed">Görüntü kaydedilemedi</string>
 </resources>

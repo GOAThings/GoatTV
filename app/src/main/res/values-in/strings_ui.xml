@@ -903,4 +903,16 @@
     <string name="audio_delay_auto_sub">Menjaga gambar dan suara tetap selaras di Bluetooth dan keluaran lambat lainnya. Tunda manual ditambahkan di atasnya</string>
     <string name="audio_voices">Dialog lebih jelas</string>
     <string name="audio_voices_sub">Dengan speaker stereo, suara surround dicampur dengan dialog yang lebih keras. Tidak berpengaruh pada Dolby lewat passthrough</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Gambar</string>
+    <string name="picture_brightness">Kecerahan</string>
+    <string name="picture_contrast">Kontras</string>
+    <string name="picture_saturation">Warna</string>
+    <string name="picture_sharpness">Ketajaman</string>
+    <string name="picture_sub">Tidak berlaku untuk video HDR atau 10-bit</string>
+    <string name="picture_sub_apple">Tidak berlaku untuk video HDR, 10-bit, atau 4K</string>
+    <string name="picture_reset">Atur ulang gambar</string>
+    <string name="save_picture">Simpan gambar</string>
+    <string name="picture_saved">Gambar disimpan</string>
+    <string name="picture_save_failed">Gambar tidak dapat disimpan</string>
 </resources>

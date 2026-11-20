@@ -58,6 +58,14 @@ public struct Prefs: Equatable, Sendable {
     /// Vozes mais claras: "off" ou "on". Com a saída em estéreo, o som com canal central mistura-se na app com os
     /// diálogos mais altos (ver AudioLeveling). Só no som que a app descodifica.
     public var audioVoices = "off"
+    /// A imagem (`picture_brightness`, `picture_contrast`, `picture_saturation`: −5 a +5; `picture_sharpness`: 0 a 5);
+    /// 0 = como vem (ver [PictureAdjust]). Não se aplica ao HDR, aos 10 bits nem acima de 1080 linhas.
+    public var pictureBrightness = 0
+    public var pictureContrast = 0
+    public var pictureSaturation = 0
+    public var pictureSharpness = 0
+    /// As quatro chaves, para as repor todas de uma vez ("Repor a imagem").
+    public static let pictureKeys = ["picture_brightness", "picture_contrast", "picture_saturation", "picture_sharpness"]
     /// Faixa surround por defeito.
     public var surroundDefault = false
     /// A língua preferida do áudio (ISO 639-1); vazio = automático (a da app, quando o canal a tem).
@@ -291,6 +299,10 @@ public struct Prefs: Equatable, Sendable {
         audioDelayMs = Int(p.audioDelayMs)
         audioLevel = p.audioLevel
         audioVoices = p.audioVoices
+        pictureBrightness = Int(p.pictureBrightness)
+        pictureContrast = Int(p.pictureContrast)
+        pictureSaturation = Int(p.pictureSaturation)
+        pictureSharpness = Int(p.pictureSharpness)
         surroundDefault = p.surroundDefault
         audioLanguage = p.audioLanguage
         subtitleLanguage = p.subtitleLanguage

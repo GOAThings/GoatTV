@@ -68,6 +68,12 @@ internal class GoatCoreMediaPlayer(
     private val audioVoices: Boolean = false,
     private val stereoOutput: () -> Boolean = { true },
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
+    /**
+     * Definições → Imagem (ver [GoatCorePlayer.picture]): muda-se com o canal a dar. Passar de tudo no 0 para algum
+     * ajuste (ou voltar) só vale ao abrir o canal (quem cria o player recria-o, ver PlayerBuild.picture).
+     */
+    @Volatile var picture: cc.slokker.itv.media.PictureLook = cc.slokker.itv.media.PictureLook()
+
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
 
@@ -236,7 +242,7 @@ internal class GoatCoreMediaPlayer(
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
             audioLevel = audioLevel, levelKey = levelKey,
             audioDelayMs = audioDelayMs, audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, stereoOutput = stereoOutput,
-            deinterlace = deinterlace, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
+            deinterlace = deinterlace, picture = { picture }, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY

@@ -1,6 +1,7 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import GoatCore
 import Metal
 import VideoToolbox
 
@@ -12,13 +13,21 @@ import VideoToolbox
 /// [fieldRate] ("Suave"): cada campo passa a ser uma imagem (50 por segundo num canal de 25), com as linhas do outro
 /// campo interpoladas na direção da aresta (ELA, presa entre a linha de cima e a de baixo); senão ("Normal") os dois
 /// misturam-se numa (½ a linha, ¼ cada vizinha). As imagens que o canal diz progressivas vão como vêm. É o mesmo que o
-/// Android faz (ver Deinterlacer.kt); o VideoToolbox nunca desentrelaça, por isso não há nada a medir.
+/// Android faz (ver VideoGpuStage.kt); o VideoToolbox nunca desentrelaça, por isso não há nada a medir.
+///
+/// Os ajustes da imagem ([picture]: o brilho, o contraste, a saturação e a nitidez de Definições → Imagem) fazem-se
+/// aqui também, noutro compute shader sobre a imagem já desentrelaçada: com algum fora do 0, o vídeo progressivo de
+/// 8 bits SDR (H.264 ou HEVC, até 1080 linhas, ver PictureAdjust.maxHeight) passa por este caminho só para isso. As
+/// contas são as do Android (shared/…/media/PictureLook.kt), aqui sobre o Y e o CbCr.
 ///
 /// Não é seguro entre threads: quem usa chama tudo da mesma fila.
 final class InterlacedVideo {
     private let fieldRate: Bool
     private let commands: MTLCommandQueue
     private let kernel: MTLComputePipelineState
+    private let adjustKernel: MTLComputePipelineState
+    /// Os ajustes da imagem; mudam com o canal a dar (valem na imagem seguinte).
+    var picture = PictureAdjust()
     private let textureCache: CVMetalTextureCache
     private var session: VTDecompressionSession?
     private var sessionFormat: CMFormatDescription?
@@ -44,12 +53,15 @@ final class InterlacedVideo {
         guard let device = MTLCreateSystemDefaultDevice(), let commands = device.makeCommandQueue(),
               let library = try? device.makeLibrary(source: Self.shader, options: nil),
               let function = library.makeFunction(name: "deinterlace"),
-              let kernel = try? device.makeComputePipelineState(function: function) else { return nil }
+              let kernel = try? device.makeComputePipelineState(function: function),
+              let adjustFunction = library.makeFunction(name: "adjust"),
+              let adjustKernel = try? device.makeComputePipelineState(function: adjustFunction) else { return nil }
         var cache: CVMetalTextureCache?
         guard CVMetalTextureCacheCreate(nil, nil, device, nil, &cache) == kCVReturnSuccess, let cache else { return nil }
         self.fieldRate = fieldRate
         self.commands = commands
         self.kernel = kernel
+        self.adjustKernel = adjustKernel
         self.textureCache = cache
     }
 
@@ -84,6 +96,18 @@ final class InterlacedVideo {
             self.session = nil
         }
         return drain()
+    }
+
+    /// O vídeo deixa de passar por aqui (os ajustes da imagem voltaram ao 0): as imagens que estavam à espera saem
+    /// todas, por ordem, e o descodificador fecha (se voltar, começa de novo numa imagem-chave).
+    func finish() -> [CMSampleBuffer] {
+        if let session { VTDecompressionSessionWaitForAsynchronousFrames(session) }
+        let out = drain(all: true)
+        reset()
+        if let session { VTDecompressionSessionInvalidate(session) }
+        session = nil
+        sessionFormat = nil
+        return out
     }
 
     /// Outra ligação ou um salto: o que estava à espera já não serve.
@@ -122,7 +146,8 @@ final class InterlacedVideo {
     // MARK: Ordem
 
     /// Uma imagem sai quando é a seguinte da última (um intervalo depois), ou quando já há [reorder] à espera.
-    private func drain() -> [CMSampleBuffer] {
+    /// [all]: saem todas as que há (ver [finish]).
+    private func drain(all: Bool = false) -> [CMSampleBuffer] {
         decodedLock.lock()
         let fresh = decoded
         decoded = []
@@ -135,7 +160,7 @@ final class InterlacedVideo {
         while let first = pending.first {
             let t = Self.ticks(first.pts)
             let next = lastOut == .min || abs(t - (lastOut + frameTicks)) <= frameTicks / 4
-            guard next || pending.count > Self.reorder else { break }
+            guard all || next || pending.count > Self.reorder else { break }
             pending.removeFirst()
             let scan = scans.removeValue(forKey: t)
             // Chegou depois de uma mais à frente: já não tem lugar.
@@ -161,16 +186,58 @@ final class InterlacedVideo {
         let format = CVPixelBufferGetPixelFormatType(image)
         let nv12 = format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange || format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
         if scan?.progressive == true || !nv12 {
-            return [sampleBuffer(image, pts: pts, duration: whole)].compactMap { $0 }
+            let shown = nv12 ? adjusted([image])[0] : image
+            return [sampleBuffer(shown, pts: pts, duration: whole)].compactMap { $0 }
         }
         if fieldRate {
             let first: UInt32 = scan?.bottomFirst == true ? 1 : 0
-            let fields = render(image, passes: [(first, 0), (1 - first, 0)])
+            let fields = adjusted(render(image, passes: [(first, 0), (1 - first, 0)]))
             guard fields.count == 2 else { return [] }
             return [sampleBuffer(fields[0], pts: pts, duration: half), sampleBuffer(fields[1], pts: pts + half, duration: half)].compactMap { $0 }
         }
-        guard let blended = render(image, passes: [(0, 1)]).first else { return [] }
+        guard let blended = adjusted(render(image, passes: [(0, 1)])).first else { return [] }
         return [sampleBuffer(blended, pts: pts, duration: whole)].compactMap { $0 }
+    }
+
+    // MARK: Ajustes da imagem
+
+    /// As [images] com os ajustes de [picture] (cada uma numa imagem nova); com tudo no 0, ou se a GPU falhar, como vêm.
+    /// O Y leva a nitidez, o contraste e o brilho; o CbCr o contraste e a saturação, à volta do meio (128).
+    private func adjusted(_ images: [CVPixelBuffer]) -> [CVPixelBuffer] {
+        let look = picture
+        guard !look.neutral, let first = images.first, let pool = outputPool(for: first),
+              let command = commands.makeCommandBuffer() else { return images }
+        let full = CVPixelBufferGetPixelFormatType(first) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+        var keep: [CVMetalTexture] = []
+        var outputs: [CVPixelBuffer] = []
+        for image in images {
+            var created: CVPixelBuffer?
+            guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &created) == kCVReturnSuccess, let out = created,
+                  let srcY = texture(image, plane: 0, format: .r8Unorm, keep: &keep),
+                  let srcC = texture(image, plane: 1, format: .rg8Unorm, keep: &keep),
+                  let dstY = texture(out, plane: 0, format: .r8Unorm, keep: &keep),
+                  let dstC = texture(out, plane: 1, format: .rg8Unorm, keep: &keep),
+                  let encoder = command.makeComputeCommandEncoder() else { return images }
+            encoder.setComputePipelineState(adjustKernel)
+            // O ganho, a soma, o meio à volta do qual se multiplica, e a nitidez.
+            let luma: [Float] = [look.lumaGain, full ? look.lumaBiasFull : look.lumaBiasVideo, 0, look.sharpen]
+            let chroma: [Float] = [look.chromaGain, 0, 128.0 / 255.0, 0]
+            for (src, dst, values) in [(srcY, dstY, luma), (srcC, dstC, chroma)] {
+                var params = values
+                encoder.setTexture(src, index: 0)
+                encoder.setTexture(dst, index: 1)
+                encoder.setBytes(&params, length: MemoryLayout<Float>.stride * 4, index: 0)
+                let group = MTLSize(width: 16, height: 16, depth: 1)
+                let groups = MTLSize(width: (dst.width + 15) / 16, height: (dst.height + 15) / 16, depth: 1)
+                encoder.dispatchThreadgroups(groups, threadsPerThreadgroup: group)
+            }
+            encoder.endEncoding()
+            CVBufferPropagateAttachments(image, out)
+            outputs.append(out)
+        }
+        command.commit()
+        withExtendedLifetime(keep) { command.waitUntilCompleted() }
+        return command.status == .completed ? outputs : images
     }
 
     /// Cada passagem (o campo que fica, 0 = linhas pares; o modo, 0 = campo com ELA, 1 = mistura) numa imagem nova, as
@@ -305,6 +372,27 @@ final class InterlacedVideo {
             o = 0.5 * (a2 + b0);
         }
         dst.write(clamp(o, min(a1, b1), max(a1, b1)), gid);
+    }
+
+    // Os ajustes da imagem, num plano (o Y ou o CbCr). q.x: o ganho; q.y: o que se soma; q.z: o meio à volta do qual
+    // se multiplica (0 no Y, 128/255 no CbCr); q.w: a nitidez (a imagem mais q.w vezes a diferença para a média dos
+    // quatro vizinhos; 0 = sem ela). O que sai fica preso ao 0–1 pelo formato do destino.
+    kernel void adjust(texture2d<float, access::read> src [[texture(0)]],
+                       texture2d<float, access::write> dst [[texture(1)]],
+                       constant float4 &q [[buffer(0)]],
+                       uint2 gid [[thread_position_in_grid]]) {
+        uint w = dst.get_width();
+        uint h = dst.get_height();
+        if (gid.x >= w || gid.y >= h) return;
+        float4 c = src.read(gid);
+        if (q.w > 0.0) {
+            int x = int(gid.x);
+            int y = int(gid.y);
+            float4 a = src.read(uint2(uint(max(x - 1, 0)), gid.y)) + src.read(uint2(uint(min(x + 1, int(w) - 1)), gid.y))
+                     + src.read(uint2(gid.x, uint(max(y - 1, 0)))) + src.read(uint2(gid.x, uint(min(y + 1, int(h) - 1))));
+            c = clamp(c + q.w * (c - 0.25 * a), float4(0.0), float4(1.0));
+        }
+        dst.write((c - q.z) * q.x + q.z + q.y, gid);
     }
     """
 }

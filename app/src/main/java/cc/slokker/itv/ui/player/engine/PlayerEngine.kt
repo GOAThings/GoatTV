@@ -5,6 +5,7 @@ package cc.slokker.itv.ui.player.engine
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,6 +21,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
@@ -191,13 +193,17 @@ internal fun rememberChannelPlayback(
         chosen == Prefs.Engine.VLC -> Prefs.Engine.EXO
         else -> chosen
     }
-    val build = PlayerBuild.of(prefs, engineName, policy.passthrough)
+    // Os ajustes da imagem: só na imagem principal, e só o "há ou não há" obriga a outro player (os valores mudam com
+    // o canal a dar).
+    val look = if (policy.picture) PictureLook.of(prefs) else PictureLook()
+    val build = PlayerBuild.of(prefs, engineName, policy.passthrough, picture = !look.neutral)
     // Criado (e ligado ao controlador) já aqui, para o ecrã ter o player na mesma composição.
     val engine = remember(build, enabled) {
         if (!enabled) return@remember null
-        PlayerEngine(buildPlayer(context, build.applyTo(prefs)), playback, playback.timeshift, net.takeIf { policy.diagnostics }, scope)
+        PlayerEngine(buildPlayer(context, build.applyTo(prefs), look), playback, playback.timeshift, net.takeIf { policy.diagnostics }, scope)
             .also(playback::attach)
     }
+    SideEffect { (engine?.player as? GoatCoreMediaPlayer)?.picture = look }
     DisposableEffect(engine) { onDispose { engine?.let(playback::detach) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
     return playback

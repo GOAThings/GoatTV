@@ -906,4 +906,16 @@
     <string name="audio_delay_auto_sub">Keeps picture and sound together on Bluetooth and other slow outputs. The manual delay is added on top</string>
     <string name="audio_voices">Clearer voices</string>
     <string name="audio_voices_sub">With stereo speakers, surround sound is mixed with louder dialogue. No effect on Dolby sent by passthrough</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Picture</string>
+    <string name="picture_brightness">Brightness</string>
+    <string name="picture_contrast">Contrast</string>
+    <string name="picture_saturation">Colour</string>
+    <string name="picture_sharpness">Sharpness</string>
+    <string name="picture_sub">Does not apply to HDR or 10-bit video</string>
+    <string name="picture_sub_apple">Does not apply to HDR, 10-bit or 4K video</string>
+    <string name="picture_reset">Reset picture</string>
+    <string name="save_picture">Save picture</string>
+    <string name="picture_saved">Picture saved</string>
+    <string name="picture_save_failed">Could not save the picture</string>
 </resources>

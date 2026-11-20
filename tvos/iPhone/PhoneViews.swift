@@ -792,6 +792,10 @@ private struct VideoPane: View {
                         if let pip = model.player.pictureInPicture {
                             hudButton("pip.enter") { pip.startPictureInPicture(); touched += 1 }
                         }
+                        // A imagem do canal, sem os botões, para a fototeca.
+                        if !model.isRadio {
+                            hudButton("camera") { PhonePicture.save(model, channel: channel); touched += 1 }
+                        }
                         ForEach(PlayerOption.shown(model)) { o in
                             hudButton(o.symbol) { option = o; touched += 1 }
                         }
@@ -1991,6 +1995,16 @@ private struct MenuTab: View {
                 pick(s.r("audio_language"), "audio_language", .string(p.audioLanguage), [(.string(""), s.r("auto"))] + phoneLanguageOptions)
                 pick(s.r("audio_delay"), "audio_delay_ms", .number(Double(p.audioDelayMs)),
                      Prefs.audioDelayOptions.map { (.number(Double($0)), $0 == 0 ? s.r("off") : String(format: "%+d ms", $0)) })
+            }
+            // A imagem (como no Android): não se aplica ao HDR, aos 10 bits nem ao 4K.
+            section(s.r("picture_section")) {
+                ForEach(Prefs.pictureKeys, id: \.self) { key in
+                    pick(s.r(key), key, .number(Double(p.pictureValue(key))),
+                         s.pictureOptions(key).map { (o: (value: Int, label: String)) -> (JSON?, String) in (.number(Double(o.value)), o.label) })
+                }
+                MenuRow(s.r("picture_reset")) { model.setPrefs(Prefs.pictureReset) }
+                Text(s.r("picture_sub_apple")).font(.footnote).foregroundStyle(Theme.textFaint)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
             }
             // As legendas: a língua e o aspeto (como no Android, ver SettingsCatalog).
             section(s.r("subtitles")) {

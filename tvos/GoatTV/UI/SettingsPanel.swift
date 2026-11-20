@@ -807,6 +807,13 @@ struct SettingsPanel: View {
                 pickItem("afr", subtitle: afrHint),
                 pickItem("afr_fallback", subtitle: s.r("afr_fallback_sub")),
                 pickItem("hdr"),
+                // A imagem (as mesmas chaves do Android): não se aplica ao HDR, aos 10 bits nem ao 4K.
+                .header("hpicture", s.r("picture_section")),
+                pickItem("picture_brightness", subtitle: s.r("picture_sub_apple")),
+                pickItem("picture_contrast", subtitle: s.r("picture_sub_apple")),
+                pickItem("picture_saturation", subtitle: s.r("picture_sub_apple")),
+                pickItem("picture_sharpness", subtitle: s.r("picture_sub_apple")),
+                .action("picture_reset", s.r("picture_reset")) { model.setPrefs(Prefs.pictureReset) },
                 .header("audio", s.t("Audio", "Áudio")),
                 pickItem("audio_language", subtitle: s.r("audio_language_sub")),
                 .toggle("audio_passthrough", s.t("Audio passthrough", "Passthrough de áudio"), prefs.audioPassthrough,
@@ -1682,6 +1689,9 @@ struct SettingsPanel: View {
             let options = s.subtitleLookOptions(key)
             let current = key == "subtitle_size" ? p.subtitleSize : key == "subtitle_style" ? p.subtitleStyle : p.subtitlePosition
             return (s.r(key), options.map { o(.string($0.value), $0.label) }, .string(current))
+        // Os ajustes da imagem (as mesmas chaves e opções do Android, ver SettingsCatalog).
+        case "picture_brightness", "picture_contrast", "picture_saturation", "picture_sharpness":
+            return (s.r(key), s.pictureOptions(key).map { o(n($0.value), $0.label) }, n(p.pictureValue(key)))
         case "record_padding_before_min", "record_padding_after_min":
             let before = key == "record_padding_before_min"
             return (s.r(before ? "recording_padding_before" : "recording_padding_after"),

@@ -513,6 +513,15 @@ enum CoreTests {
         try expect(Prefs().audioVoices, "off")
         try expect(Prefs(settings: .object(["audio_voices": "on"])).audioVoices, "on")
         try expect(Prefs(settings: .object(["audio_voices": "loud"])).audioVoices, "off")
+        // Os ajustes da imagem: no 0 por defeito, presos aos limites, as contas do núcleo partilhado.
+        try expect(PictureAdjust(Prefs()).neutral, true)
+        let picture = Prefs(settings: .object(["picture_brightness": 2, "picture_contrast": -9, "picture_sharpness": 3]))
+        try expect(picture.pictureBrightness, 2)
+        try expect(picture.pictureContrast, -5)
+        try expect(picture.pictureSharpness, 3)
+        try expect(PictureAdjust(picture).neutral, false)
+        try expect(PictureAdjust(contrast: 5).chromaGain > 1.29, true)
+        try expect(PictureAdjust(sharpness: 4).sharpen > 0.59, true)
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
         // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.

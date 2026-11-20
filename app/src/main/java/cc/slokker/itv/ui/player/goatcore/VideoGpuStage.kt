@@ -15,14 +15,20 @@ import android.util.Log
 import android.view.Surface
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
+import cc.slokker.itv.media.PictureLook
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 
 /**
- * Desentrelaça na GPU o vídeo entrelaçado (os canais SD de cabo e satélite, o 1080i): o descodificador desenha numa
- * textura ([input]) e cada imagem vai para o ecrã ([output]) já sem o "pente" (as duas metades, captadas com 1/50 s de
- * diferença, mostradas juntas).
+ * O vídeo que passa pela GPU antes do ecrã: o descodificador desenha numa textura ([input]) e cada imagem vai para o
+ * ecrã ([output]) desentrelaçada e/ou com os ajustes da imagem. Só existe quando há alguma coisa a fazer (um canal
+ * entrelaçado com Definições → Desentrelaçar ligado, ou algum ajuste de Definições → Imagem fora do 0): com tudo no
+ * padrão o descodificador desenha direto no ecrã, como sempre. O HDR e os 10 bits nunca passam por aqui (isto é GLES2
+ * de 8 bits).
+ *
+ * Desentrelaçar: os canais SD de cabo e satélite e o 1080i saem sem o "pente" (as duas metades, captadas com 1/50 s
+ * de diferença, mostradas juntas).
  *
  * [mode] ([Deinterlacing]): FIELDS, cada campo passa a ser uma imagem (50 por segundo num canal de 25), com as linhas
  * do outro campo interpoladas na direção da aresta (ELA: das três direções, a de cima-esquerda/baixo-direita, a
@@ -37,17 +43,26 @@ import java.util.concurrent.CountDownLatch
  * O descodificador pode já ter desentrelaçado (ver [InterlaceVerdict]): uma imagem em cada [MEASURE_EVERY] mede-se o
  * pente numa grelha de [COMB_W]×[COMB_H] pontos, e sem pente nenhum durante muito tempo mostra-se como vem.
  *
+ * Os ajustes da imagem ([pictureLook], lido a cada imagem: mudam sem reabrir o canal) fazem-se na última passagem, a que
+ * desenha no ecrã: a nitidez (a diferença para a média dos quatro vizinhos, no tamanho do vídeo) e depois a cor (uma
+ * matriz e uma soma, ver [PictureLook]). Sem nada a desentrelaçar ([mode] NONE) é a única passagem: a textura do
+ * descodificador vai direta para o ecrã. Cada variante do shader só tem o que usa (sem ajustes, a passagem é a cópia
+ * de sempre), e as coordenadas dos vizinhos vêm também do vertex shader.
+ *
  * A hora de cada imagem é a que o descodificador lhe deu (releaseOutputBuffer com a hora): vai para o ecrã com
  * eglPresentationTimeANDROID, e o segundo campo meia imagem depois.
  */
-internal class Deinterlacer(
+internal class VideoGpuStage(
     private val output: Surface,
+    /** [Deinterlacing]: FIELDS, BLEND, ou NONE (só os ajustes da imagem). */
     private val mode: Int,
     private val verdict: InterlaceVerdict,
+    /** Os ajustes da imagem neste momento (Definições → Imagem). */
+    private val pictureLook: () -> PictureLook = { PictureLook() },
     /** Viu-se pente: o descodificador dá os campos juntos (para os canais seguintes já começarem a saber). */
     private val onWoven: () -> Unit = {},
 ) : SurfaceTexture.OnFrameAvailableListener {
-    private val thread = HandlerThread("goatcore-deinterlace").apply { start() }
+    private val thread = HandlerThread("goatcore-video-gpu").apply { start() }
     private val handler = Handler(thread.looper)
 
     private var display: EGLDisplay = EGL14.EGL_NO_DISPLAY
@@ -57,7 +72,8 @@ internal class Deinterlacer(
     private var parity = 0
     private var deinterlace = 0
     private var comb = 0
-    private var blit = 0
+    /** As variantes da última passagem já compiladas (ver [finalProgram]). */
+    private val finals = HashMap<Int, Int>()
     private var picture = 0
     private var pictureFbo = 0
     private var pictureW = 0
@@ -150,8 +166,9 @@ internal class Deinterlacer(
         check(EGL14.eglMakeCurrent(display, window, window, context)) { "eglMakeCurrent" }
 
         // A textura do descodificador: cada leitura dá uma linha inteira (NEAREST), nunca a mistura de duas (de campos
-        // diferentes); a interpolação para o ecrã é na segunda passagem.
-        external = texture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_NEAREST)
+        // diferentes); a interpolação para o ecrã é na segunda passagem. Sem desentrelaçar, vai direta para o ecrã e
+        // é ela que se interpola.
+        external = texture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, if (mode == Deinterlacing.NONE) GLES20.GL_LINEAR else GLES20.GL_NEAREST)
         // As linhas pares e ímpares: uma textura de 1×2 que se repete (0 numa linha, 1 na seguinte).
         parity = texture(GLES20.GL_TEXTURE_2D, GLES20.GL_NEAREST, GLES20.GL_REPEAT)
         GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
@@ -163,7 +180,6 @@ internal class Deinterlacer(
 
         deinterlace = program(VERTEX_DEINTERLACE, FRAGMENT_DEINTERLACE)
         comb = program(VERTEX_COMB, FRAGMENT_COMB)
-        blit = program(VERTEX_BLIT, FRAGMENT_BLIT)
 
         texture2d = SurfaceTexture(external)
         texture2d.setOnFrameAvailableListener(this, handler)
@@ -188,24 +204,33 @@ internal class Deinterlacer(
             lastStampNs = at
             val w = width.takeIf { it > 0 } ?: return
             val h = height.takeIf { it > 0 } ?: return
+            val look = pictureLook()
+            if (mode == Deinterlacing.NONE) {
+                // Só os ajustes: uma passagem, do descodificador para o ecrã.
+                pictureW = w
+                pictureH = h
+                passedThrough++
+                present(look, fromDecoder = true, at)
+                return
+            }
             if (w != pictureW || h != pictureH) resize(w, h)
             if (verdict.measuring && drawn++ % MEASURE_EVERY == 0L) measure()
             val progressive = frame?.progressive == true
             if (!verdict.deinterlace || progressive) {
                 passedThrough++
-                draw(MODE_COPY, 0f, at)
+                draw(MODE_COPY, 0f, at, look)
                 return
             }
             deinterlaced++
             if (mode == Deinterlacing.FIELDS) {
                 val first = if (frame?.bottomFirst == true) 1f else 0f
-                draw(MODE_FIELD, first, at)
-                draw(MODE_FIELD, 1f - first, at + fieldNs)
+                draw(MODE_FIELD, first, at, look)
+                draw(MODE_FIELD, 1f - first, at + fieldNs, look)
             } else {
-                draw(MODE_BLEND, 0f, at)
+                draw(MODE_BLEND, 0f, at, look)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "deinterlace: ${e.javaClass.simpleName} ${e.message}")
+            Log.w(TAG, "video gpu: ${e.javaClass.simpleName} ${e.message}")
         }
     }
 
@@ -247,7 +272,7 @@ internal class Deinterlacer(
     }
 
     /** [kind]: MODE_COPY, MODE_FIELD (o campo [field]: 0 = linhas pares, 1 = ímpares) ou MODE_BLEND; para o ecrã às [atNs]. */
-    private fun draw(kind: Float, field: Float, atNs: Long) {
+    private fun draw(kind: Float, field: Float, atNs: Long, look: PictureLook) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, pictureFbo)
         GLES20.glViewport(0, 0, pictureW, pictureH)
         GLES20.glUseProgram(deinterlace)
@@ -259,19 +284,44 @@ internal class Deinterlacer(
         GLES20.glUniform1f(GLES20.glGetUniformLocation(deinterlace, "mode"), kind)
         quad(deinterlace)
 
+        present(look, fromDecoder = false, atNs)
+    }
+
+    /**
+     * A última passagem: a imagem desentrelaçada (ou, com [fromDecoder], a textura do descodificador) para o ecrã às
+     * [atNs], com os ajustes [look] (a nitidez e a cor).
+     */
+    private fun present(look: PictureLook, fromDecoder: Boolean, atNs: Long) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
         val size = IntArray(2)
         EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, size, 0)
         EGL14.eglQuerySurface(display, window, EGL14.EGL_HEIGHT, size, 1)
         GLES20.glViewport(0, 0, size[0], size[1])
-        GLES20.glUseProgram(blit)
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, picture)
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(blit, "picture"), 0)
-        quad(blit)
+        val level = if (look.neutral) LEVEL_COPY else if (look.sharpness == 0) LEVEL_COLOUR else LEVEL_SHARP
+        val program = finalProgram(fromDecoder, level)
+        GLES20.glUseProgram(program)
+        if (fromDecoder) {
+            bindExternal(program)
+        } else {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, picture)
+            GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "tex"), 0)
+            GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "st"), 1, false, IDENTITY, 0)
+            GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "texel"), 1f / pictureW, 1f / pictureH)
+        }
+        if (level >= LEVEL_COLOUR) {
+            GLES20.glUniformMatrix3fv(GLES20.glGetUniformLocation(program, "colour"), 1, false, look.rgbMatrix(), 0)
+            GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "bias"), look.bias)
+        }
+        if (level >= LEVEL_SHARP) GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "sharp"), look.sharpen)
+        quad(program)
         EGLExt.eglPresentationTimeANDROID(display, window, atNs)
         EGL14.eglSwapBuffers(display, window)
     }
+
+    /** A variante da última passagem: de onde lê ([fromDecoder] ou a imagem de fora) e o que faz ([level]). */
+    private fun finalProgram(fromDecoder: Boolean, level: Int): Int =
+        finals.getOrPut(level * 2 + if (fromDecoder) 1 else 0) { program(VERTEX_FINAL, fragmentFinal(fromDecoder, level)) }
 
     /** A textura do descodificador na unidade 0, com a transformação dela e o tamanho de uma linha e de uma coluna. */
     private fun bindExternal(program: Int) {
@@ -316,6 +366,12 @@ internal class Deinterlacer(
 
     private companion object {
         const val TAG = "GoatCore"
+        val IDENTITY = floatArrayOf(1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f)
+
+        /** O que a última passagem faz: só copia, a cor, ou a nitidez e a cor. */
+        const val LEVEL_COPY = 0
+        const val LEVEL_COLOUR = 1
+        const val LEVEL_SHARP = 2
 
         const val MODE_COPY = 0f
         const val MODE_FIELD = 1f
@@ -495,23 +551,49 @@ internal class Deinterlacer(
             }
         """
 
-        const val VERTEX_BLIT = """
+        // A última passagem. uv: 0..1 na imagem; as coordenadas passam pela transformação da textura (a do
+        // descodificador, ou nenhuma na imagem de fora). n/s/w/e: os quatro vizinhos, a um píxel do vídeo (texel), só
+        // lidos pela variante com nitidez.
+        const val VERTEX_FINAL = """
             attribute vec2 position;
-            varying vec2 uv;
+            uniform mat4 st;
+            uniform vec2 texel;
+            varying vec2 c;
+            varying vec2 n;
+            varying vec2 s;
+            varying vec2 w;
+            varying vec2 e;
+            vec2 at(vec2 uv) { return (st * vec4(uv, 0.0, 1.0)).xy; }
             void main() {
-                uv = (position + 1.0) * 0.5;
+                vec2 uv = (position + 1.0) * 0.5;
+                c = at(uv);
+                n = at(uv + vec2(0.0, texel.y));
+                s = at(uv - vec2(0.0, texel.y));
+                w = at(uv - vec2(texel.x, 0.0));
+                e = at(uv + vec2(texel.x, 0.0));
                 gl_Position = vec4(position, 0.0, 1.0);
             }
         """
 
-        const val FRAGMENT_BLIT = """
-            precision mediump float;
-            uniform sampler2D picture;
-            varying vec2 uv;
-            void main() {
-                gl_FragColor = texture2D(picture, uv);
+        /**
+         * O fragment shader da última passagem, só com o que a variante usa: a nitidez (a imagem mais [sharp] vezes a
+         * diferença para a média dos quatro vizinhos) e a cor (`colour · rgb + bias`, ver [PictureLook.rgbMatrix]).
+         */
+        fun fragmentFinal(fromDecoder: Boolean, level: Int): String = buildString {
+            if (fromDecoder) append("#extension GL_OES_EGL_image_external : require\n")
+            append("precision mediump float;\n")
+            append(if (fromDecoder) "uniform samplerExternalOES tex;\n" else "uniform sampler2D tex;\n")
+            if (level >= LEVEL_COLOUR) append("uniform mat3 colour;\nuniform float bias;\n")
+            if (level >= LEVEL_SHARP) append("uniform float sharp;\nvarying vec2 n;\nvarying vec2 s;\nvarying vec2 w;\nvarying vec2 e;\n")
+            append("varying vec2 c;\nvoid main() {\n")
+            append("vec3 p = texture2D(tex, c).rgb;\n")
+            if (level >= LEVEL_SHARP) {
+                append("vec3 a = 0.25 * (texture2D(tex, n).rgb + texture2D(tex, s).rgb + texture2D(tex, w).rgb + texture2D(tex, e).rgb);\n")
+                append("p = clamp(p + sharp * (p - a), 0.0, 1.0);\n")
             }
-        """
+            if (level >= LEVEL_COLOUR) append("p = colour * p + bias;\n")
+            append("gl_FragColor = vec4(p, 1.0);\n}\n")
+        }
 
         fun program(vertex: String, fragment: String): Int {
             fun shader(type: Int, source: String): Int {

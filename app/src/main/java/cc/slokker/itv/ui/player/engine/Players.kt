@@ -49,6 +49,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.HdrType
 import cc.slokker.itv.ui.player.Timeshift
@@ -64,7 +65,7 @@ private const val NEAR_LIVE_OFFSET_MS = 4_000L
 private const val NORMAL_START_MS = 650
 
 /** O player das definições: o ExoPlayer, ou o [VlcPlayer] (Definições → Reprodução → Player). */
-internal fun buildPlayer(context: Context, prefs: Prefs): Player {
+internal fun buildPlayer(context: Context, prefs: Prefs, picture: PictureLook = PictureLook()): Player {
     val softwareVideo = isEmulator || prefs.decoder == Prefs.Decoder.SOFTWARE
     if (prefs.engine == Prefs.Engine.VLC) {
         val caching = when (prefs.buffer) {
@@ -89,7 +90,10 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
             udp = UdpTsDataSource.Factory(appContext), audioLevel = prefs.audioLevel, deinterlace = prefs.deinterlace,
             audioDelayMs = prefs.audioDelayMs, audioDelayAuto = prefs.audioDelayAuto,
             audioVoices = prefs.audioVoices == Prefs.AudioVoices.ON, stereoOutput = { AudioOutputs.stereoOnly(appContext) })
-            .apply { playWhenReady = true }
+            .apply {
+                this.picture = picture
+                playWhenReady = true
+            }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
     val renderers = ItvRenderersFactory(context, passthrough = prefs.audioPassthrough, hdr = prefs.hdr, ffmpegFirst = softwareAudio, audioDelayMs = prefs.audioDelayMs)

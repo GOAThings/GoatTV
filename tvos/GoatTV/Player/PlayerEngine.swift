@@ -130,6 +130,17 @@ final class PlayerEngine: NSObject {
     }
     /// Nivelar o volume (Prefs.audioLevel), no GoatCore (ver AudioLeveling).
     @ObservationIgnored var audioLevel = "off"
+    /// Os ajustes da imagem (Definições → Imagem), no GoatCore e só na imagem principal (os canais extra vão como vêm).
+    @ObservationIgnored var picture = PictureAdjust() {
+        didSet { if picture != oldValue, controlsDisplay { goatCorePlayback?.picture = picture } }
+    }
+
+    /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem", só no iPhone). nil se não houver, ou
+    /// noutro motor que não o GoatCore (o leitor da Apple e o VLC, a reserva automática). A resposta vem noutra thread.
+    func snapshot(_ completion: @escaping @Sendable (CGImage?) -> Void) {
+        guard backend == .goatcore, let goatCorePlayback else { return completion(nil) }
+        goatCorePlayback.snapshot(completion)
+    }
     /// A velocidade no catch-up e atrás do direto (1; 1,25; 1,5; 2): volta a 1 noutro canal e ao chegar ao direto.
     var speed: Float = 1 {
         didSet {
@@ -1273,6 +1284,7 @@ final class PlayerEngine: NSObject {
         g.audioDelayMs = audioDelayMs
         g.passthrough = passthrough
         g.deinterlace = deinterlace
+        g.picture = controlsDisplay ? picture : PictureAdjust()
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil

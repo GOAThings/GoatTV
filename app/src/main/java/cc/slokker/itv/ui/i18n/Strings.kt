@@ -1174,6 +1174,18 @@ class Strings(context: Context) {
     val audioVoices get() = s(R.string.audio_voices)
     val audioVoicesSub get() = s(R.string.audio_voices_sub)
 
+    // ---- Ajustes da imagem e guardar imagem ----
+    val pictureSection get() = s(R.string.picture_section)
+    val pictureBrightness get() = s(R.string.picture_brightness)
+    val pictureContrast get() = s(R.string.picture_contrast)
+    val pictureSaturation get() = s(R.string.picture_saturation)
+    val pictureSharpness get() = s(R.string.picture_sharpness)
+    val pictureSub get() = s(R.string.picture_sub)
+    val pictureReset get() = s(R.string.picture_reset)
+    val savePicture get() = s(R.string.save_picture)
+    val pictureSaved get() = s(R.string.picture_saved)
+    val pictureSaveFailed get() = s(R.string.picture_save_failed)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

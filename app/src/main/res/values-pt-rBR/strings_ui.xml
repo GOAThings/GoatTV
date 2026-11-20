@@ -907,4 +907,16 @@
     <string name="audio_delay_auto_sub">Acerta a imagem com o som no Bluetooth e noutras saídas lentas. O atraso manual soma-se a este</string>
     <string name="audio_voices">Vozes mais claras</string>
     <string name="audio_voices_sub">Em estéreo, o som surround é misturado com os diálogos mais altos. Sem efeito no Dolby em passthrough</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Imagem</string>
+    <string name="picture_brightness">Brilho</string>
+    <string name="picture_contrast">Contraste</string>
+    <string name="picture_saturation">Cor</string>
+    <string name="picture_sharpness">Nitidez</string>
+    <string name="picture_sub">Não se aplica ao vídeo HDR ou de 10 bits</string>
+    <string name="picture_sub_apple">Não se aplica ao vídeo HDR, de 10 bits ou 4K</string>
+    <string name="picture_reset">Repor a imagem</string>
+    <string name="save_picture">Guardar imagem</string>
+    <string name="picture_saved">Imagem guardada</string>
+    <string name="picture_save_failed">Não foi possível guardar a imagem</string>
 </resources>

@@ -902,4 +902,16 @@
     <string name="audio_delay_auto_sub">在蓝牙等较慢的输出上保持画面与声音同步。手动延迟会叠加在其上</string>
     <string name="audio_voices">人声更清晰</string>
     <string name="audio_voices_sub">使用立体声扬声器时，环绕声会以更响的对白混合。对音频直通输出的杜比无效</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">画面</string>
+    <string name="picture_brightness">亮度</string>
+    <string name="picture_contrast">对比度</string>
+    <string name="picture_saturation">色彩</string>
+    <string name="picture_sharpness">锐度</string>
+    <string name="picture_sub">不适用于 HDR 或 10 位视频</string>
+    <string name="picture_sub_apple">不适用于 HDR、10 位或 4K 视频</string>
+    <string name="picture_reset">重置画面</string>
+    <string name="save_picture">保存画面</string>
+    <string name="picture_saved">画面已保存</string>
+    <string name="picture_save_failed">无法保存画面</string>
 </resources>

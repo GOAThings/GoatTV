@@ -905,4 +905,16 @@
     <string name="audio_delay_auto_sub">Hält Bild und Ton bei Bluetooth und anderen langsamen Ausgängen synchron. Die manuelle Verzögerung kommt hinzu</string>
     <string name="audio_voices">Klarere Stimmen</string>
     <string name="audio_voices_sub">Bei Stereo-Lautsprechern wird Surround-Ton mit lauteren Dialogen gemischt. Keine Wirkung auf Dolby per Passthrough</string>
+    <!-- Ajustes da imagem e guardar imagem -->
+    <string name="picture_section">Bild</string>
+    <string name="picture_brightness">Helligkeit</string>
+    <string name="picture_contrast">Kontrast</string>
+    <string name="picture_saturation">Farbe</string>
+    <string name="picture_sharpness">Schärfe</string>
+    <string name="picture_sub">Gilt nicht für HDR- oder 10-Bit-Video</string>
+    <string name="picture_sub_apple">Gilt nicht für HDR-, 10-Bit- oder 4K-Video</string>
+    <string name="picture_reset">Bild zurücksetzen</string>
+    <string name="save_picture">Bild speichern</string>
+    <string name="picture_saved">Bild gespeichert</string>
+    <string name="picture_save_failed">Das Bild konnte nicht gespeichert werden</string>
 </resources>
