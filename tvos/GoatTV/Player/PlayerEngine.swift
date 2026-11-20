@@ -120,8 +120,10 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var softwareDecoder = false
     /// Desentrelaçar no VLC: "yadif2x" (50/60 imagens por segundo, mais suave), "yadif" ou "off".
     @ObservationIgnored var deinterlace = "yadif2x"
-    /// O atraso do som (Prefs.audioDelayMs), no VLC.
+    /// O atraso do som (Prefs.audioDelayMs), no GoatCore e no VLC.
     @ObservationIgnored var audioDelayMs = 0
+    /// Vozes mais claras (Prefs.audioVoices), no GoatCore (ver AudioLeveling).
+    @ObservationIgnored var audioVoices = false
     /// O aspeto das legendas do GoatCore (Prefs.subtitleSize, subtitleStyle e subtitlePosition).
     @ObservationIgnored var subtitleLook = (size: Prefs.SubtitleSize.normal, style: Prefs.SubtitleStyle.whiteBox, position: Prefs.SubtitlePosition.normal) {
         didSet { goatCorePlayback?.view.setSubtitleLook(size: subtitleLook.size, style: subtitleLook.style, position: subtitleLook.position) }
@@ -1267,6 +1269,8 @@ final class PlayerEngine: NSObject {
         g.setAspect(aspect)
         g.rate = speed
         g.audioLevel = audioLevel
+        g.audioVoices = audioVoices
+        g.audioDelayMs = audioDelayMs
         g.passthrough = passthrough
         g.deinterlace = deinterlace
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.

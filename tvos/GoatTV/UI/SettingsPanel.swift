@@ -818,6 +818,7 @@ struct SettingsPanel: View {
                 },
                 pickItem("audio_delay_ms", subtitle: s.r("audio_delay_sub")),
                 pickItem("audio_level", subtitle: s.r("audio_level_sub")),
+                pickItem("audio_voices", subtitle: s.r("audio_voices_sub")),
                 .header("hsubs", s.r("subtitles")),
                 pickItem("subtitle_language", subtitle: s.r("subtitle_language_sub")),
                 pickItem("subtitle_size"),
@@ -1604,6 +1605,8 @@ struct SettingsPanel: View {
             return (s.r("audio_level"),
                     [o("off", s.r("off")), o("level", s.r("audio_level_level")), o("night", s.r("audio_level_night"))],
                     .string(p.audioLevel))
+        case "audio_voices":
+            return (s.r("audio_voices"), [o("off", s.r("off")), o("on", s.r("on"))], .string(p.audioVoices))
         case "reconnect_seconds":
             return (s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"),
                     [o(n(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { o(n($0), after($0)) },

@@ -700,6 +700,7 @@ final class AppModel {
             engine.audioDelayMs = prefs.audioDelayMs
             engine.subtitleLook = (size: prefs.subtitleSize, style: prefs.subtitleStyle, position: prefs.subtitlePosition)
             engine.audioLevel = prefs.audioLevel
+            engine.audioVoices = prefs.audioVoices == "on"
             engine.hdr = prefs.hdr
         }
         // A qualidade dos HLS com várias (o leitor do canal principal também deixa escolher uma à mão).

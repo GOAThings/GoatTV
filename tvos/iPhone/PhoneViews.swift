@@ -1996,6 +1996,7 @@ private struct MenuTab: View {
             section(s.r("subtitles")) {
                 pick(s.r("audio_level"), "audio_level", p.audioLevel,
                      [("off", s.r("off")), ("level", s.r("audio_level_level")), ("night", s.r("audio_level_night"))])
+                pick(s.r("audio_voices"), "audio_voices", p.audioVoices, [("off", s.r("off")), ("on", s.r("on"))])
                 pick(s.r("subtitle_language"), "subtitle_language", .string(p.subtitleLanguage), [(.string(""), s.r("subtitles_off"))] + phoneLanguageOptions)
                 pick(s.r("subtitle_size"), "subtitle_size", p.subtitleSize, s.subtitleLookOptions("subtitle_size").map { ($0.value, $0.label) })
                 pick(s.r("subtitle_style"), "subtitle_style", p.subtitleStyle, s.subtitleLookOptions("subtitle_style").map { ($0.value, $0.label) })

@@ -229,6 +229,12 @@ final class GoatCorePlayback: NSObject {
     nonisolated(unsafe) private var pausedForPip = false
     /// Nivelar o volume (Prefs.audioLevel: "off", "level", "night"; ver AudioLeveling). Vale no canal seguinte.
     var audioLevel = "off"
+    /// Vozes mais claras (Prefs.audioVoices; ver AudioLeveling). Vale no canal seguinte.
+    var audioVoices = false
+    /// O atraso do som pedido nas definições (Prefs.audioDelayMs): + o som mais tarde, − mais cedo. Vale no canal
+    /// seguinte. A latência da saída (o HDMI, o Bluetooth, o AirPlay) não é para aqui: o relógio é o do
+    /// AVSampleBufferRenderSynchronizer, que já a desconta.
+    var audioDelayMs = 0
     /// O passthrough (Prefs.audioPassthrough): o AC-3/E-AC-3 não se nivela, segue para o recetor como vem.
     var passthrough = true
 
@@ -267,7 +273,12 @@ final class GoatCorePlayback: NSObject {
         pip = nil
         let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace)
         s.rate = userRate
-        s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough)
+        // As vozes mais claras só misturam o som com canal central quando a saída é estéreo (a TV sem recetor, uns
+        // auscultadores); a que leva mais canais fica com eles.
+        let stereoOutput = AVAudioSession.sharedInstance().maximumOutputNumberOfChannels <= 2
+        s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough,
+                                   voices: audioVoices, stereoOutput: stereoOutput)
+        s.audioDelay = CMTime(value: CMTimeValue(audioDelayMs), timescale: 1000)
         s.primary = primary
         selectedAudio = nil
         selectedText = nil
@@ -564,8 +575,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         didSet { queue.async { if self.running { self.synchronizer.setRate(self.rate, time: self.synchronizer.currentTime()) } } }
     }
 
-    /// Nivelar o volume (nil = desligado): definido antes de [start], depois só na fila.
+    /// Nivelar o volume e as vozes mais claras (nil = desligados): definido antes de [start], depois só na fila.
     var leveling: AudioLeveling?
+    /// O atraso do som pedido nas definições (ver GoatCorePlayback.audioDelayMs): definido antes de [start].
+    var audioDelay: CMTime = .zero
 
     private let display: AVSampleBufferDisplayLayer
     private let audio: AVSampleBufferAudioRenderer
@@ -968,11 +981,26 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             guard let levelled = leveling.process(b) else { return }
             b = levelled
         }
+        b = delayed(b)
         audio.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
         if pts.isValid, !lastAudio.isValid || pts > lastAudio { lastAudio = pts }
         // Um canal só de som (rádio): o relógio começa no primeiro som.
         if startTime == nil, !hasVideo, pts.isValid { begin(at: pts) }
+    }
+
+    /// O som com o atraso pedido nas definições: o mesmo bloco com o tempo dele mais [audioDelay] (o relógio é o
+    /// mesmo para a imagem e o som, por isso o som ouve-se esse tanto depois, ou antes, da imagem dele).
+    private func delayed(_ b: CMSampleBuffer) -> CMSampleBuffer {
+        guard audioDelay != .zero else { return b }
+        var timing = CMSampleTimingInfo()
+        guard CMSampleBufferGetSampleTimingInfo(b, at: 0, timingInfoOut: &timing) == noErr else { return b }
+        timing.presentationTimeStamp = timing.presentationTimeStamp + audioDelay
+        if timing.decodeTimeStamp.isValid { timing.decodeTimeStamp = timing.decodeTimeStamp + audioDelay }
+        var out: CMSampleBuffer?
+        guard CMSampleBufferCreateCopyWithNewTiming(allocator: kCFAllocatorDefault, sampleBuffer: b, sampleTimingEntryCount: 1,
+                                                    sampleTimingArray: &timing, sampleBufferOut: &out) == noErr, let out else { return b }
+        return out
     }
 
     /// O relógio começa no primeiro tempo que se pode mostrar: o vídeo na primeira imagem-chave (o pipeline só as
