@@ -1604,6 +1604,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun idleClock() = android.os.SystemClock.elapsedRealtime()
 
+    /**
+     * Testes: `adb shell setprop debug.goattv.idle <segundos>` põe o aviso ao fim desses segundos sem mexer (só nas
+     * versões de testes; lido ao abrir a app).
+     */
+    private val debugIdleLimitMs: Long? = if (!cc.slokker.itv.BuildConfig.DEBUG) null else runCatching {
+        Runtime.getRuntime().exec(arrayOf("getprop", "debug.goattv.idle")).inputStream.bufferedReader().readText().trim().toLong() * 1000
+    }.getOrNull()?.takeIf { it > 0 }
+
     private fun publishIdle() {
         val now = idleClock()
         val phase = idleWatch.phase()
@@ -1653,7 +1661,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 // Uma gravação a usar a ligação deste canal: a contagem espera (parar o canal não a deve tocar).
                 val recording = channel != null && activeRecordings.value.any { it.playlistId == content.value?.playlist?.id && it.channelKey == channel.key }
                 val active = channel != null && playerVisible && !recording
-                idleWatch.tick(idleClock(), IdleWatch.limitMs(prefs.value.idleStop), active)
+                idleWatch.tick(idleClock(), debugIdleLimitMs ?: IdleWatch.limitMs(prefs.value.idleStop), active)
                 publishIdle()
             }
         }
