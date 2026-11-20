@@ -152,6 +152,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A ligação do canal a tocar (página Ligação, gráfico no vídeo e aviso de paragens). */
     val net = NetMonitor(app)
 
+    /** "Testar este canal" e "Testar esta lista" (os painéis das definições, na TV e no telemóvel). */
+    val channelProbe = cc.slokker.itv.ui.player.ChannelProbe(viewModelScope, net)
+    val listProbe = cc.slokker.itv.data.ListProbe(viewModelScope, c.iptvHttp)
+
     private val _screen = MutableStateFlow<Screen>(Screen.Starting)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
 

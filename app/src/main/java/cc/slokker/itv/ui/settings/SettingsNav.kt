@@ -87,6 +87,8 @@ internal sealed interface Route {
     data object Subtitles : Route { override fun title(s: Strings) = s.subtitles }
     data object StreamInfo : Route { override fun title(s: Strings) = s.streamInfo }
     data object Connection : Route { override fun title(s: Strings) = s.connection }
+    data object ChannelTest : Route { override fun title(s: Strings) = s.probeTestChannel }
+    class ListTest(val id: String) : Route { override fun title(s: Strings) = s.probeTestList }
     data object General : Route { override fun title(s: Strings) = s.general }
     data object Playback : Route { override fun title(s: Strings) = s.playback }
     data object Licenses : Route { override fun title(s: Strings) = s.licenses }

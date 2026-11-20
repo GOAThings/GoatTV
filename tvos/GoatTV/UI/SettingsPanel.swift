@@ -14,6 +14,10 @@ struct SettingsPanel: View {
         /// A qualidade do HLS a dar: Automático ou uma fixa até mudar de canal (só com mais de uma).
         case hlsQuality
         case streamInfo
+        /// "Testar este canal" (observa o canal a dar uns segundos e diz de quem é o problema).
+        case channelTest
+        /// "Testar esta lista": a lista e o guia da lista [id] respondem?
+        case listTest(String)
         case general
         case playback
         case zapping
@@ -116,6 +120,8 @@ struct SettingsPanel: View {
     }
 
     @State private var stack: [Page] = []
+    @State private var channelProbe = ChannelProbe()
+    @State private var listProbe = ListProbe()
     /// A linha que abriu cada página, para o foco voltar a ela ao recuar.
     @State private var openedFrom: [String] = []
     @State private var pendingFocus: String?
@@ -624,6 +630,8 @@ struct SettingsPanel: View {
         case .subtitles: return s.t("Subtitles", "Legendas")
         case .hlsQuality: return s.r("hls_quality")
         case .streamInfo: return s.t("Stream info", "Informação do stream")
+        case .channelTest: return s.r("probe_test_channel")
+        case .listTest: return s.r("probe_test_list")
         case .general: return s.t("General", "Geral")
         case .playback: return s.t("Playback", "Reprodução")
         case .zapping: return s.t("Channel switching", "Mudança de canal")
@@ -668,6 +676,44 @@ struct SettingsPanel: View {
 
     // MARK: Páginas
 
+    /// O painel "Testar este canal": a frase do veredicto e os números dos 10 segundos (as chaves probe_* do Android).
+    private func channelTestItems() -> [Item] {
+        func again() -> Item {
+            .action("again", s.r("probe_again")) {
+                channelProbe.clear()
+                channelProbe.start(model.player, interlacedWord: s.r("probe_interlaced"), hdrWord: s.r("probe_hdr"))
+            }
+        }
+        switch channelProbe.phase {
+        case .idle:
+            return [again()]
+        case .unsupported:
+            return [.info("unsupported", s.r("probe_unsupported"), ""), again()]
+        case .running(let second):
+            return [.info("running", s.r("probe_testing", "\(second)"), "")]
+        case .done(let r):
+            let lines = ChannelProbe.lines(r, s)
+            var list: [Item] = [.info("verdict", lines.verdict, "")]
+            for (i, row) in lines.rows.enumerated() { list.append(.info("r\(i)", row.0, row.1)) }
+            list.append(again())
+            return list
+        }
+    }
+
+    /// O painel "Testar esta lista": uma lista e um guia, cada um com a resposta, o tempo, o tamanho e a contagem.
+    private func listTestItems() -> [Item] {
+        var list: [Item] = []
+        if listProbe.running && listProbe.rows.isEmpty { list.append(.info("running", s.r("probe_list_testing"), "")) }
+        if listProbe.portal { list.append(.info("portal", s.r("probe_list_portal"), "")) }
+        for row in listProbe.rows {
+            list.append(.header("h\(row.id)", row.title(s)))
+            list.append(.info("v\(row.id)", row.verdictText(s), row.host))
+            if let (detail, count) = row.detail(s) { list.append(.info("t\(row.id)", detail, count)) }
+        }
+        if listProbe.noGuide { list.append(.info("noguide", s.r("probe_list_no_guide"), "")) }
+        return list
+    }
+
     private func items(_ p: Page) -> [Item] {
         let prefs = model.prefs
         switch p {
@@ -708,6 +754,11 @@ struct SettingsPanel: View {
                 .nav("subs", s.t("Subtitles", "Legendas"), value: trackName(player.subtitleTracks, player.currentSubtitle), to: .subtitles),
                 pickItem("aspect"),
                 .nav("info", s.t("Stream info", "Informação do stream"), to: .streamInfo),
+                .action("probe", s.r("probe_test_channel"), subtitle: s.r("probe_test_channel_sub")) {
+                    channelProbe.clear()
+                    channelProbe.start(model.player, interlacedWord: s.r("probe_interlaced"), hdrWord: s.r("probe_hdr"))
+                    push(.channelTest, from: "probe")
+                },
             ]
             // Só num HLS com mais de uma qualidade (como no Android, a seguir às legendas).
             if let q = player.hlsQuality, !q.options.isEmpty {
@@ -773,6 +824,12 @@ struct SettingsPanel: View {
                 list.append(.info("d\(i)", title, detail.1))
             }
             return list
+
+        case .channelTest:
+            return channelTestItems()
+
+        case .listTest:
+            return listTestItems()
 
         case .general:
             return [
@@ -1000,6 +1057,11 @@ struct SettingsPanel: View {
                     list.append(.nav("backupchannels", s.r("backup_channels"), subtitle: s.r("backup_channels_sub"), to: .backupChannels(id)))
                 }
             }
+            list.append(.action("probe", s.r("probe_test_list"), subtitle: s.r("probe_test_list_sub")) {
+                listProbe.clear()
+                listProbe.start(playlist, knownGuideURL: isCurrent ? model.content?.guideUrl : nil)
+                push(.listTest(id), from: "probe")
+            })
             list.append(.header("horg", s.t("Organise", "Organizar")))
             list.append(.toggle("merge", s.r("merge_variants"), prefs.mergeVariants.contains(id), subtitle: s.r("merge_variants_sub")) { model.setMergeVariants(id, $0) })
             if let rules = prefs.nameRules[id] { list.append(.info("rules", s.r("name_rules"), "\(rules.count) · thegoat.systems")) }

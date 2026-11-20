@@ -339,6 +339,7 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
     var pickBackup by remember { mutableStateOf(false) }
     var pickMode by remember { mutableStateOf(false) }
     var reviewing by remember { mutableStateOf(false) }
+    var testing by remember { mutableStateOf(false) }
     val others = playlists.filter { it.id != playlist.id }
     val backup = vm.backupOf(playlist.id)
     val manual = vm.backupManual(playlist.id)
@@ -352,6 +353,12 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
         return PickPage(Picking(s.backupMode, options, manual) { v -> vm.setBackupManual(playlist.id, v == true) }) { pickMode = false }
     }
     if (reviewing) return BackupChannelsPage(vm, playlist.id) { reviewing = false }
+    if (testing) {
+        val guide = if (isCurrent) content?.guideUrl else null
+        LaunchedEffect(playlist.id) { vm.listProbe.clear(); vm.listProbe.start(playlist, guide) }
+        BackHandler { testing = false }
+        return SubPage(s.probeTestList, { testing = false }) { ListTestRows(vm) }
+    }
     BackHandler(onBack = onClose)
     SubPage(playlist.name, onClose) {
         if (!isCurrent) MenuRow(s.usePlaylist, null) { vm.switchPlaylist(playlist, leavePro = true); onClose() }
@@ -370,6 +377,7 @@ private fun PlaylistPage(vm: AppViewModel, playlist: Playlist, onEdit: () -> Uni
         }
         ToggleRow(s.mergeVariants, playlist.id in prefs.mergeVariants, s.mergeVariantsSub) { vm.setMergeVariants(playlist.id, it) }
         prefs.nameRules[playlist.id]?.let { rules -> MenuRow(s.nameRules, "${rules.size}", subtitle = s.nameRulesSub) {} }
+        MenuRow(s.probeTestList, null, chevron = true, subtitle = s.probeTestListSub) { testing = true }
         MenuRow(s.edit, null, chevron = true, onClick = onEdit)
         MenuRow(
             if (confirmDelete) s.removePlaylistConfirm else s.removePlaylist,

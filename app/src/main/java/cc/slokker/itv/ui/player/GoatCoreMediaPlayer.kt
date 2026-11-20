@@ -94,6 +94,13 @@ internal class GoatCoreMediaPlayer(
     private var hls = false
     private var mediaItem: MediaItem? = null
     private var core: GoatCorePlayer? = null
+
+    // Para "Testar este canal": o que se viu das ligações, as estatísticas do motor e a hora da primeira imagem.
+    internal var connection: cc.slokker.itv.ui.player.engine.ConnectionProbe? = null
+    internal val coreStats: GoatCorePlayer.Stats? get() = core?.stats
+    internal val isHls: Boolean get() = hls
+    internal val streamInfo: VideoInfo? get() = videoInfo
+    @Volatile internal var firstFrameMs = -1L
     private var generation = 0
 
     /** O motor anterior a fechar (ver [GoatCorePlayer.previous]). */
@@ -245,6 +252,7 @@ internal class GoatCoreMediaPlayer(
         this.hls = hls
         this.startMs = startMs
         firstPts = -1L
+        firstFrameMs = -1L
         offsetMs = 0L
         mediaItem = MediaItem.fromUri(url)
         chosenAudio = -1
@@ -275,6 +283,7 @@ internal class GoatCoreMediaPlayer(
             audioDelayMs = audioDelayMs, audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, stereoOutput = stereoOutput,
             deinterlace = deinterlace, picture = { picture }, upscale = upscale, surfaceSize = ::videoSurfaceSize, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
+                firstFrameMs = ms
                 firstFrame = true
                 playbackState = Player.STATE_READY
             }

@@ -1095,7 +1095,7 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, aspect, quality, backup, sleep, sendTv
+    case audio, subtitles, aspect, quality, backup, sleep, sendTv, test
 
     var id: String { rawValue }
     var symbol: String {
@@ -1107,6 +1107,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
         case .sendTv: "tv"
+        case .test: "stethoscope"
         }
     }
     var key: String {
@@ -1118,6 +1119,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
         case .sendTv: "send_to_tv"
+        case .test: "probe_test_channel"
         }
     }
 
@@ -1151,6 +1153,8 @@ struct PlayerOptionsSheet: View {
             }
         } else if option == .sendTv {
             PhoneSendToTvSheet()
+        } else if option == .test {
+            PhoneChannelTestSheet(player: player)
         } else {
             options
         }
@@ -1207,7 +1211,7 @@ struct PlayerOptionsSheet: View {
                     } else {
                         Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint)
                     }
-                case .backup, .sendTv:
+                case .backup, .sendTv, .test:
                     EmptyView()
                 case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }
@@ -1639,6 +1643,7 @@ private struct MenuTab: View {
     /// A lista cuja lista de reserva se está a escolher.
     @State private var backupPlaylistFor: Playlist?
     @State private var removingPlaylist: Playlist?
+    @State private var testingPlaylist: Playlist?
     @State private var confirmingSignOut = false
     @State private var confirmingPinOff = false
     @State private var pickingGuideCountry = false
@@ -1775,6 +1780,7 @@ private struct MenuTab: View {
             // Juntar as versões do mesmo canal (HD, SD, FHD…) numa linha: liga e desliga.
             let merged = model.prefs.mergeVariants.contains(pl.id)
             Button(s.r("merge_variants") + ": " + (merged ? s.t("On", "Ligado") : s.t("Off", "Desligado"))) { model.setMergeVariants(pl.id, !merged) }
+            Button(s.r("probe_test_list")) { testingPlaylist = pl }
             Button(s.r("edit")) { editingPlaylist = pl }
             Button(s.r("remove_playlist"), role: .destructive) { removingPlaylist = pl }
             Button(s.r("cancel"), role: .cancel) {}
@@ -1792,6 +1798,9 @@ private struct MenuTab: View {
         }
         .sheet(isPresented: Binding(get: { editingPlaylist != nil }, set: { if !$0 { editingPlaylist = nil } })) {
             if let pl = editingPlaylist { PlaylistFormPage(editing: pl) { editingPlaylist = nil } }
+        }
+        .sheet(isPresented: Binding(get: { testingPlaylist != nil }, set: { if !$0 { testingPlaylist = nil } })) {
+            if let pl = testingPlaylist { PhoneListTestSheet(playlist: pl) }
         }
         .sheet(isPresented: Binding(get: { backupPlaylistFor != nil }, set: { if !$0 { backupPlaylistFor = nil } })) {
             if let pl = backupPlaylistFor { PhoneBackupPlaylistPicker(playlist: pl) { backupPlaylistFor = nil } }

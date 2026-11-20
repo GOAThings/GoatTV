@@ -13,6 +13,12 @@ import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
 import cc.slokker.itv.ui.player.OnManualTrack
 import cc.slokker.itv.ui.player.NetVerdict
+import cc.slokker.itv.ui.player.probeRows
+import cc.slokker.itv.ui.player.probeVerdictText
+import cc.slokker.itv.ui.player.probeListVerdict
+import cc.slokker.itv.playback.ListVerdict
+import cc.slokker.itv.playback.ProbeVerdict
+import cc.slokker.itv.playback.StreamProbe
 import cc.slokker.itv.ui.player.icon
 import cc.slokker.itv.ui.player.mbps
 import cc.slokker.itv.ui.player.netLink
@@ -168,6 +174,8 @@ internal fun settingItems(
             streamInfo(player, format, hls)
         }
         Route.Connection -> connectionItems(vm, player, nav)
+        Route.ChannelTest -> channelTestItems(vm, player)
+        is Route.ListTest -> listTestItems(vm)
         Route.Playback, Route.General, Route.Zapping, Route.Appearance, Route.Theme, Route.Guide -> prefPageItems(route, vm, nav)
         Route.Parental, Route.LockedGroups -> parentalItems(route, vm, nav)
         Route.GroupsManage, Route.GroupCountries, Route.ChannelGroups, is Route.ChannelsManage -> organizeItems(route, vm, nav)
@@ -178,6 +186,46 @@ internal fun settingItems(
         }
         Route.ParentalGate, Route.LogoutGate, Route.SettingsGate, Route.NewPin, Route.GroupsOrder, is Route.ChannelsOrder, is Route.TextEdit,
         is Route.BackupChannels, is Route.BackupChannelPick, is Route.BackupChannelAdd -> emptyList()
+    }
+}
+
+/** O painel "Testar este canal": a frase do veredicto e os números dos 10 segundos. */
+@Composable
+private fun channelTestItems(vm: AppViewModel, player: Player?): List<Item> {
+    val st by vm.channelProbe.state.collectAsStateWithLifecycle()
+    val s = LocalStrings.current
+    return buildList {
+        val result = st.result
+        when {
+            st.unsupported -> add(Item.Info("unsupported", s.probeUnsupported, "", icon = ItvIcons.Info))
+            st.running -> add(Item.Info("running", s.probeTesting(st.second), "", icon = ItvIcons.Clock))
+            result != null -> {
+                val line = StreamProbe.verdict(result)
+                val good = line.verdict == ProbeVerdict.OK
+                add(Item.Info("verdict", s.probeVerdictText(line), "", icon = if (good) ItvIcons.Check else ItvIcons.Warning, valueColor = GoatPalette.Warning.takeIf { !good }))
+                s.probeRows(result).forEachIndexed { i, (title, value) -> add(Item.Info("r$i", title, value)) }
+            }
+        }
+        if (!st.running) add(Item.Action("again", if (result == null) s.probeTestChannel else s.probeAgain) { vm.channelProbe.clear(); vm.channelProbe.start(player) })
+    }
+}
+
+/** O painel "Testar esta lista": uma linha por endereço (lista e guia), com a resposta, o tempo, o tamanho e a contagem. */
+@Composable
+private fun listTestItems(vm: AppViewModel): List<Item> {
+    val st by vm.listProbe.state.collectAsStateWithLifecycle()
+    val s = LocalStrings.current
+    return buildList {
+        if (st.running && st.rows.isEmpty()) add(Item.Info("running", s.probeListTesting, "", icon = ItvIcons.Clock))
+        if (st.portal) add(Item.Info("portal", s.probeListPortal, "", icon = ItvIcons.Info))
+        st.rows.forEachIndexed { i, row ->
+            val good = row.verdict == ListVerdict.OK
+            val count = if (row.guide) s.probeListProgrammes(row.count) else s.probeListChannels(row.count)
+            add(Item.Header("h$i", if (row.guide) s.probeListGuide else s.probeListPlaylist))
+            add(Item.Info("v$i", s.probeListVerdict(row), row.host, icon = if (good) ItvIcons.Check else ItvIcons.Warning, valueColor = GoatPalette.Warning.takeIf { !good }))
+            if (row.status >= 0) add(Item.Info("t$i", "${s.probeSeconds(StreamProbe.seconds(row.ms))} · ${StreamProbe.size(row.bytes)}", if (row.verdict == ListVerdict.REFUSED) "" else count))
+        }
+        if (st.noGuide) add(Item.Info("noguide", s.probeListNoGuide, "", icon = ItvIcons.Info))
     }
 }
 
@@ -263,6 +311,13 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
         add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
         val net by vm.net.state.collectAsStateWithLifecycle()
         add(Item.Nav("net", s.connection, s.netShort(net.verdict)) { push(Route.Connection, "net") })
+        add(
+            Item.Nav("probe", s.probeTestChannel, subtitle = s.probeTestChannelSub) {
+                vm.channelProbe.clear()
+                vm.channelProbe.start(player)
+                push(Route.ChannelTest, "probe")
+            },
+        )
         // Por defeito o guia é o da lista; com conta, pode trocar-se o deste canal por um do IPTV-EPG.org.
         if (vm.epgPickerAvailable) {
             val mapping = epgMappings[ch.key]
@@ -897,6 +952,13 @@ private fun playlistItems(route: Route, vm: AppViewModel, nav: PageNav): List<It
                     )
                 }
             }
+            add(
+                Item.Nav("probe", s.probeTestList, subtitle = s.probeTestListSub) {
+                    vm.listProbe.clear()
+                    vm.listProbe.start(p, if (isCurrent) content?.guideUrl else null)
+                    push(Route.ListTest(p.id), "probe")
+                },
+            )
             add(Item.Nav("edit", s.edit) { push(Route.PlaylistEdit(p.id, mutableStateOf(PlaylistForm.from(p))), "edit") })
             add(
                 Item.Action(
