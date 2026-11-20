@@ -51,6 +51,39 @@ struct PhoneChannelTestSheet: View {
     }
 }
 
+/// "Informação do stream" na folha de opções do player: os números do canal a dar, de segundo a segundo.
+struct PhoneStreamInfoSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var stats = StreamStatsMonitor()
+
+    var body: some View {
+        let s = model.strings
+        NavigationStack {
+            List {
+                ForEach(stats.rows) { row in
+                    HStack {
+                        Text(s.r(row.key)).foregroundStyle(Theme.text)
+                        Spacer()
+                        Text(row.value).foregroundStyle(Theme.textFaint).multilineTextAlignment(.trailing)
+                    }
+                }
+            }
+            .navigationTitle(s.r("stream_info"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .task {
+            stats.reset()
+            while !Task.isCancelled {
+                stats.update(model)
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+}
+
 private extension ChannelProbe.Phase {
     var isDone: Bool {
         if case .done = self { return true }

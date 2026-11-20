@@ -1005,4 +1005,21 @@
     <string name="mobile_data_quality_same">Igual que con Wi-Fi</string>
     <!-- Buffer automático -->
     <string name="buffer_auto">Automático (se adapta a la conexión)</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">Códecs, tasa de bits, búfer e imágenes perdidas, actualizados cada segundo</string>
+    <string name="stats_engine">Motor del reproductor</string>
+    <string name="stats_source">Fuente</string>
+    <string name="stats_frame_rate">Velocidad de fotogramas</string>
+    <string name="stats_scan">Exploración</string>
+    <string name="stats_processing">Procesado de imagen</string>
+    <string name="stats_audio_track">Pista de audio</string>
+    <string name="stats_decode_errors">Errores del decodificador</string>
+    <string name="stats_concealed">Imágenes ocultadas</string>
+    <string name="stats_progressive">Progresivo</string>
+    <string name="stats_interlaced">Entrelazado</string>
+    <string name="stats_deinterlacing">Desentrelazado</string>
+    <string name="stats_upscaling">Reescalado</string>
+    <string name="stats_tone_mapping">HDR a SDR</string>
+    <string name="stats_fallback">respaldo</string>
+    <string name="stats_failover">failover</string>
 </resources>

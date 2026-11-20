@@ -122,6 +122,8 @@ struct SettingsPanel: View {
     @State private var stack: [Page] = []
     @State private var channelProbe = ChannelProbe()
     @State private var listProbe = ListProbe()
+    /// "Informação do stream": as linhas, refeitas de segundo a segundo enquanto a página está aberta.
+    @State private var streamStats = StreamStatsMonitor()
     /// A linha que abriu cada página, para o foco voltar a ela ao recuar.
     @State private var openedFrom: [String] = []
     @State private var pendingFocus: String?
@@ -192,6 +194,15 @@ struct SettingsPanel: View {
             if case .backupChannels(let id) = page { model.checkBackupCoverage(id) }
             await loadRemote(page)
             if focus == nil || focus == "loading" { focus = firstFocus }
+        }
+        // "Informação do stream": os números de segundo a segundo, só enquanto a página está aberta.
+        .task(id: page == .streamInfo) {
+            guard page == .streamInfo else { return }
+            streamStats.reset()
+            while !Task.isCancelled {
+                streamStats.update(model)
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
     }
 
@@ -753,7 +764,7 @@ struct SettingsPanel: View {
                 .nav("name", s.r("channel_rename"), value: channel.name, subtitle: s.r("channel_name_sub"), to: .channelName),
                 .nav("subs", s.t("Subtitles", "Legendas"), value: trackName(player.subtitleTracks, player.currentSubtitle), to: .subtitles),
                 pickItem("aspect"),
-                .nav("info", s.t("Stream info", "Informação do stream"), to: .streamInfo),
+                .nav("info", s.t("Stream info", "Informação do stream"), subtitle: s.r("stats_info_sub"), to: .streamInfo),
                 .action("probe", s.r("probe_test_channel"), subtitle: s.r("probe_test_channel_sub")) {
                     channelProbe.clear()
                     channelProbe.start(model.player, interlacedWord: s.r("probe_interlaced"), hdrWord: s.r("probe_hdr"))
@@ -805,25 +816,8 @@ struct SettingsPanel: View {
             }
 
         case .streamInfo:
-            guard let channel = model.current else { return [] }
-            let group = model.content?.categoryName(channel.categoryId) ?? channel.categoryId
-            var list: [Item] = [
-                .info("res", s.t("Resolution", "Resolução"), model.player.resolution ?? "—"),
-                .info("fmt", s.t("Format", "Formato"), model.player.format.map { $0 == StreamFormat.hls ? "HLS (m3u8)" : "MPEG-TS" } ?? "—"),
-                .info("grp", s.groups, group == PlaylistContent.others ? s.others : group),
-                .info("player", s.t("Player", "Player"), model.player.backendName),
-            ]
-            // Com os números dos canais escondidos, também aqui.
-            if prefs.showNumbers { list.insert(.info("num", s.t("Number", "Número"), "\(channel.num)"), at: 2) }
-            // A qualidade do HLS a dar (das várias da playlist), e se foi escolhida à mão.
-            if let q = model.player.hlsQuality, q.labels.count > 1, let label = q.label {
-                list.insert(.info("hls", s.r("hls_quality_title"), q.pinned >= 0 ? label : "\(label) · \(s.r("auto"))"), at: 1)
-            }
-            for (i, detail) in model.player.streamDetails.enumerated() {
-                let title = detail.0 == "video" ? s.t("Video", "Vídeo") : (detail.0 == "audio" ? s.t("Audio", "Áudio") : "Bitrate")
-                list.append(.info("d\(i)", title, detail.1))
-            }
-            return list
+            // Os números do canal a dar, de segundo a segundo (ver StreamStatsMonitor e o .task do body).
+            return streamStats.rows.map { Item.info($0.key, s.r($0.key), $0.value) }
 
         case .channelTest:
             return channelTestItems()

@@ -1003,4 +1003,21 @@
     <string name="mobile_data_quality_same">Wi-Fi जैसी ही</string>
     <!-- Buffer automático -->
     <string name="buffer_auto">स्वचालित (कनेक्शन के अनुसार ढलता है)</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">कोडेक, बिटरेट, बफ़र और छूटे फ़्रेम, हर सेकंड अपडेट</string>
+    <string name="stats_engine">प्लेयर इंजन</string>
+    <string name="stats_source">स्रोत</string>
+    <string name="stats_frame_rate">फ़्रेम दर</string>
+    <string name="stats_scan">स्कैन</string>
+    <string name="stats_processing">तस्वीर की प्रोसेसिंग</string>
+    <string name="stats_audio_track">ऑडियो ट्रैक</string>
+    <string name="stats_decode_errors">डिकोडर त्रुटियाँ</string>
+    <string name="stats_concealed">सुधारे गए फ़्रेम</string>
+    <string name="stats_progressive">प्रोग्रेसिव</string>
+    <string name="stats_interlaced">इंटरलेस्ड</string>
+    <string name="stats_deinterlacing">डीइंटरलेसिंग</string>
+    <string name="stats_upscaling">अपस्केलिंग</string>
+    <string name="stats_tone_mapping">HDR से SDR</string>
+    <string name="stats_fallback">बैकअप</string>
+    <string name="stats_failover">फ़ेलओवर</string>
 </resources>

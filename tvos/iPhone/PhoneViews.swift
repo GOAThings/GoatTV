@@ -1097,7 +1097,7 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, aspect, quality, backup, sleep, sendTv, test
+    case audio, subtitles, aspect, quality, backup, sleep, sendTv, info, test
 
     var id: String { rawValue }
     var symbol: String {
@@ -1109,6 +1109,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
         case .sendTv: "tv"
+        case .info: "info.circle"
         case .test: "stethoscope"
         }
     }
@@ -1121,6 +1122,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
         case .sendTv: "send_to_tv"
+        case .info: "stream_info"
         case .test: "probe_test_channel"
         }
     }
@@ -1155,6 +1157,8 @@ struct PlayerOptionsSheet: View {
             }
         } else if option == .sendTv {
             PhoneSendToTvSheet()
+        } else if option == .info {
+            PhoneStreamInfoSheet()
         } else if option == .test {
             PhoneChannelTestSheet(player: player)
         } else {
@@ -1213,7 +1217,7 @@ struct PlayerOptionsSheet: View {
                     } else {
                         Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint)
                     }
-                case .backup, .sendTv, .test:
+                case .backup, .sendTv, .info, .test:
                     EmptyView()
                 case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }

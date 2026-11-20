@@ -1003,4 +1003,21 @@
     <string name="mobile_data_quality_same">Wie im WLAN</string>
     <!-- Buffer automático -->
     <string name="buffer_auto">Automatisch (passt sich der Verbindung an)</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">Codecs, Bitrate, Puffer und verworfene Bilder, jede Sekunde aktualisiert</string>
+    <string name="stats_engine">Player-Engine</string>
+    <string name="stats_source">Quelle</string>
+    <string name="stats_frame_rate">Bildrate</string>
+    <string name="stats_scan">Abtastung</string>
+    <string name="stats_processing">Bildverarbeitung</string>
+    <string name="stats_audio_track">Tonspur</string>
+    <string name="stats_decode_errors">Decoderfehler</string>
+    <string name="stats_concealed">Verdeckte Bilder</string>
+    <string name="stats_progressive">Progressiv</string>
+    <string name="stats_interlaced">Zeilensprung</string>
+    <string name="stats_deinterlacing">Deinterlacing</string>
+    <string name="stats_upscaling">Hochskalierung</string>
+    <string name="stats_tone_mapping">HDR zu SDR</string>
+    <string name="stats_fallback">Ersatz</string>
+    <string name="stats_failover">Failover</string>
 </resources>

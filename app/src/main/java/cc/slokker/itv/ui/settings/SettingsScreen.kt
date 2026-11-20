@@ -9,11 +9,12 @@ import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
-import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
 import cc.slokker.itv.ui.player.OnManualTrack
 import cc.slokker.itv.ui.player.NetVerdict
 import cc.slokker.itv.ui.player.probeRows
+import cc.slokker.itv.ui.player.rememberStreamStats
+import cc.slokker.itv.ui.player.statsTitle
 import cc.slokker.itv.ui.player.probeVerdictText
 import cc.slokker.itv.ui.player.probeListVerdict
 import cc.slokker.itv.playback.ListVerdict
@@ -47,7 +48,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
-import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import cc.slokker.itv.BuildConfig
@@ -62,7 +62,6 @@ import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.I18n
@@ -70,7 +69,6 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.HdrType
-import cc.slokker.itv.ui.player.dynamicRangeLabel
 import kotlinx.coroutines.launch
 
 /** Nome da origem dos logótipos: a lista, o guia de cada canal, ou o país (pelo código). */
@@ -168,11 +166,7 @@ internal fun settingItems(
         is Route.EpgCountry -> epgCountryItems(route, vm, nav)
         Route.Audio -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_AUDIO, player, allowOff = false, onManualTrack)
         Route.Subtitles -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_TEXT, player, allowOff = true, onManualTrack)
-        Route.StreamInfo -> {
-            val format by vm.streamFormat.collectAsStateWithLifecycle()
-            val hls by HlsQualityControl.now.collectAsStateWithLifecycle()
-            streamInfo(player, format, hls)
-        }
+        Route.StreamInfo -> streamStatsItems(vm, player)
         Route.Connection -> connectionItems(vm, player, nav)
         Route.ChannelTest -> channelTestItems(vm, player)
         is Route.ListTest -> listTestItems(vm)
@@ -308,7 +302,7 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
             add(nav.pick("hls_quality", s.hlsQuality, options, q.selected) { HlsQualityControl.pin(it as Int) })
         }
         add(nav.choice(SettingsCatalog.ASPECT, SettingValues(prefs, null), s))
-        add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
+        add(Item.Nav("info", s.streamInfo, subtitle = s.statsInfoSub) { push(Route.StreamInfo, "info") })
         val net by vm.net.state.collectAsStateWithLifecycle()
         add(Item.Nav("net", s.connection, s.netShort(net.verdict)) { push(Route.Connection, "net") })
         add(
@@ -1155,31 +1149,11 @@ private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boo
     return options.map { o -> Item.Check(o.key, o.label, o.selected, o.details?.takeIf { it.isNotEmpty() }) { o.select() } }
 }
 
-private fun streamInfo(player: Player?, format: String?, hls: HlsQualityControl.Now? = null): List<Item> {
-    if (player == null) return emptyList()
-    val video = player.videoSize
-    val tracks = player.currentTracks
-    fun selected(type: Int): Format? = tracks.groups.filter { it.type == type }.firstNotNullOfOrNull { g ->
-        (0 until g.length).firstOrNull { g.isTrackSelected(it) }?.let { g.getTrackFormat(it) }
-    }
-    val v = selected(C.TRACK_TYPE_VIDEO)
-    val a = selected(C.TRACK_TYPE_AUDIO)
-    return listOfNotNull(
-        Item.Info("res", I18n.s.resolution, if (video.width > 0) "${video.width}×${video.height}" else "—"),
-        v?.let { Item.Info("range", I18n.s.dynamicRange, dynamicRangeLabel(it)) },
-        v?.let {
-            Item.Info("vcodec", I18n.s.video, listOfNotNull(codecName(it.sampleMimeType), it.frameRate.takeIf { r -> r > 0 }?.let { r -> "%.0f fps".format(r) }).joinToString(" · "))
-        },
-        a?.let {
-            Item.Info("acodec", I18n.s.audio, listOfNotNull(codecName(it.sampleMimeType), channelsLabel(it.channelCount), it.sampleRate.takeIf { r -> r > 0 }?.let { r -> "${r / 1000} kHz" }).joinToString(" · "))
-        },
-        // A qualidade do HLS a dar (das várias da playlist), e se foi escolhida à mão.
-        hls?.takeIf { it.variants.size > 1 }?.let { q ->
-            q.label?.let { label -> Item.Info("hls", I18n.s.hlsQualityTitle, if (q.pinned >= 0) label else "$label · ${I18n.s.auto}") }
-        },
-        Item.Info("buffer", I18n.s.buffer, "${player.totalBufferedDuration / 1000} s"),
-        Item.Info("fmt", I18n.s.preferredFormat, when (format) { StreamFormat.TS -> "TS"; StreamFormat.HLS -> "HLS"; else -> I18n.s.auto }),
-    )
+/** "Informação do stream": os números do canal a dar, de segundo a segundo (ver StreamStatsMeter). */
+@Composable
+private fun streamStatsItems(vm: AppViewModel, player: Player?): List<Item> {
+    val s = LocalStrings.current
+    return rememberStreamStats(vm, player, s).map { Item.Info(it.key, s.statsTitle(it.key), it.value) }
 }
 
 /**

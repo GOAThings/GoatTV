@@ -19,6 +19,8 @@ public struct MediaTrack: Equatable, Sendable {
     public var role = 0
     /// Os canais da faixa: os que o PMT anuncia e, na que está a tocar, os que os blocos descodificados têm; 0 = não se sabe.
     public var channels = 0
+    /// A frequência do som (Hz) da faixa que está a tocar, pelos blocos descodificados; 0 = não se sabe.
+    public var sampleRate = 0
     /// O NAME da faixa de um HLS, se disser.
     public var name: String?
 }
@@ -58,6 +60,10 @@ public struct VideoDetails: @unchecked Sendable {
     /// O SPS diz que as imagens podem vir entrelaçadas (os 576i e 1080i): a cadência do ecrã dobra com o
     /// desentrelaçamento "suave" (cada campo uma imagem).
     public var interlaced = false
+    /// O perfil e o nível do SPS (VideoInfo.profile/level do núcleo partilhado) e a profundidade: "Informação do stream".
+    public var profile = -1
+    public var level = -1
+    public var bitDepth = 8
 }
 
 /// Uma imagem de vídeo comprimida que o hardware não descodifica (MPEG-2): vai para um descodificador em software.
@@ -426,7 +432,8 @@ public final class MediaPipeline {
                     videoLines = Int(info.height)
                     videoWidth = Int(info.width)
                     onVideoDetails?(VideoDetails(width: Int(info.width), height: Int(info.height), fps: Double(info.fps),
-                                                 hdr10: info.isHdr10, hlg: info.isHlg, format: f, interlaced: info.interlaced))
+                                                 hdr10: info.isHdr10, hlg: info.isHlg, format: f, interlaced: info.interlaced,
+                                                 profile: Int(info.profile), level: Int(info.level), bitDepth: Int(info.bitDepth)))
                 }
             }
         }
@@ -553,8 +560,10 @@ public final class MediaPipeline {
             audioFormat = Self.audioFormat(f)
             if audioFormat == nil { unsupported("audio \(f.codec.name) \(f.sampleRate) Hz \(f.channels) ch") }
             // Os canais de verdade da faixa que toca: o nome dela passa a tê-los (ver AudioNames).
-            if let i = tracks.firstIndex(where: { $0.pid == pid }), tracks[i].channels != Int(f.channels) {
+            if let i = tracks.firstIndex(where: { $0.pid == pid }),
+               tracks[i].channels != Int(f.channels) || tracks[i].sampleRate != Int(f.sampleRate) {
                 tracks[i].channels = Int(f.channels)
+                tracks[i].sampleRate = Int(f.sampleRate)
                 onTracks?(tracks)
             }
         }

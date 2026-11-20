@@ -1000,4 +1000,21 @@
     <string name="mobile_data_quality_same">Wi-Fi와 동일</string>
     <!-- Buffer automático -->
     <string name="buffer_auto">자동 (연결 상태에 맞춤)</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">코덱, 비트레이트, 버퍼, 누락된 프레임 (매초 업데이트)</string>
+    <string name="stats_engine">플레이어 엔진</string>
+    <string name="stats_source">소스</string>
+    <string name="stats_frame_rate">프레임 레이트</string>
+    <string name="stats_scan">주사 방식</string>
+    <string name="stats_processing">화면 처리</string>
+    <string name="stats_audio_track">오디오 트랙</string>
+    <string name="stats_decode_errors">디코더 오류</string>
+    <string name="stats_concealed">보정된 프레임</string>
+    <string name="stats_progressive">프로그레시브</string>
+    <string name="stats_interlaced">인터레이스</string>
+    <string name="stats_deinterlacing">디인터레이스</string>
+    <string name="stats_upscaling">업스케일</string>
+    <string name="stats_tone_mapping">HDR을 SDR로</string>
+    <string name="stats_fallback">대체</string>
+    <string name="stats_failover">페일오버</string>
 </resources>

@@ -103,6 +103,8 @@ internal class GoatCoreMediaPlayer(
     internal val coreStats: GoatCorePlayer.Stats? get() = core?.stats
     internal val isHls: Boolean get() = hls
     internal val streamInfo: VideoInfo? get() = videoInfo
+    /** Os números do motor agora, para "Informação do stream"; null sem motor a dar. */
+    internal fun coreSnapshot(): cc.slokker.itv.ui.player.goatcore.GoatCoreSnapshot? = core?.snapshot()
     @Volatile internal var firstFrameMs = -1L
     private var generation = 0
 

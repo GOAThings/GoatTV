@@ -26,6 +26,12 @@ class VideoInfo(
      * vale a pena desentrelaçar.
      */
     val interlaced: Boolean = false,
+    /**
+     * O perfil e o nível que o SPS declara (para "Informação do stream"): no H.264 o profile_idc (100 = High) e o
+     * level_idc (40 = 4.0); no HEVC o general_profile_idc (2 = Main 10) e o general_level_idc (153 = 5.1). -1 = não diz.
+     */
+    val profile: Int = -1,
+    val level: Int = -1,
 ) {
     /** Largura ÷ altura de um píxel (1 nos quadrados). */
     val pixelRatio: Float get() = if (sarWidth > 0 && sarHeight > 0) sarWidth.toFloat() / sarHeight else 1f
@@ -39,7 +45,8 @@ class VideoInfo(
         fun h264(nal: ByteArray, from: Int = 0, to: Int = nal.size): VideoInfo? = runCatching {
             val b = SpsBits(SpsBits.rbsp(nal, from + 1, to))
             val profile = b.u(8)
-            b.u(16)
+            b.u(8) // constraint_set
+            val level = b.u(8)
             b.ue()
             var chroma = 1
             var depth = 8
@@ -95,7 +102,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / (2.0 * units)).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = !frameMbsOnly)
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = !frameMbsOnly, profile = profile, level = level)
         }.getOrNull()
 
         /** O SPS de HEVC (o NAL inteiro, com os 2 bytes do cabeçalho), ou null se não se perceber. */
@@ -105,7 +112,10 @@ class VideoInfo(
             val maxSubLayers = b.u(3)
             b.u(1)
             // profile_tier_level: o geral (88 + 8 bits) e o que houver das subcamadas.
-            b.skip(96)
+            b.u(3) // general_profile_space, general_tier_flag
+            val profile = b.u(5)
+            b.skip(80) // os flags de compatibilidade e de restrições
+            val level = b.u(8)
             val profilePresent = BooleanArray(maxSubLayers)
             val levelPresent = BooleanArray(maxSubLayers)
             for (i in 0 until maxSubLayers) {
@@ -177,7 +187,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / units.toDouble()).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = fieldSeq)
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = fieldSeq, profile = profile, level = level)
         }.getOrNull()
 
         private val HIGH_PROFILES = setOf(100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135)

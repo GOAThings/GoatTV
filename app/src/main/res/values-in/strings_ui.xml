@@ -1001,4 +1001,21 @@
     <string name="mobile_data_quality_same">Sama seperti Wi-Fi</string>
     <!-- Buffer automático -->
     <string name="buffer_auto">Otomatis (menyesuaikan dengan koneksi)</string>
+    <!-- Informação do stream: os números do canal a dar, atualizados a cada segundo -->
+    <string name="stats_info_sub">Codec, bitrate, buffer, dan frame terbuang, diperbarui tiap detik</string>
+    <string name="stats_engine">Mesin pemutar</string>
+    <string name="stats_source">Sumber</string>
+    <string name="stats_frame_rate">Frame rate</string>
+    <string name="stats_scan">Pemindaian</string>
+    <string name="stats_processing">Pemrosesan gambar</string>
+    <string name="stats_audio_track">Trek audio</string>
+    <string name="stats_decode_errors">Galat dekoder</string>
+    <string name="stats_concealed">Frame yang ditambal</string>
+    <string name="stats_progressive">Progresif</string>
+    <string name="stats_interlaced">Interlaced</string>
+    <string name="stats_deinterlacing">Deinterlacing</string>
+    <string name="stats_upscaling">Upscaling</string>
+    <string name="stats_tone_mapping">HDR ke SDR</string>
+    <string name="stats_fallback">cadangan</string>
+    <string name="stats_failover">failover</string>
 </resources>

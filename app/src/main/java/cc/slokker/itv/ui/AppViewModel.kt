@@ -1042,6 +1042,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** A fiabilidade de cada fonte (as quedas, as aberturas falhadas e o tempo a ver), só neste aparelho (ver SourceHistory). */
     internal val sourceHistory get() = c.sourceHistory
 
+    /**
+     * A reprodução do canal principal (o player da TV ou do telemóvel), enquanto está no ecrã: "Informação do stream"
+     * lê daqui as religações e a fonte que está a dar. null fora do player.
+     */
+    internal var mainPlayback: cc.slokker.itv.ui.player.engine.ChannelPlayback? = null
+
+    /** O débito a rolar de "Informação do stream" (o painel lê-o de segundo a segundo enquanto está aberto). */
+    internal val streamStats = cc.slokker.itv.ui.player.StreamStatsMeter()
+
     /** O que a fonte [key] (SourceHistory.key) somou esta semana; null sem nada. */
     internal fun sourceStats(key: String): SourceStats? = sourceHistory.history.stats(key, System.currentTimeMillis())
 
