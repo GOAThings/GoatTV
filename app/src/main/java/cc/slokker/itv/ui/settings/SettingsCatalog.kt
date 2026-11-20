@@ -232,6 +232,22 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 27, TvSection.AUDIO),
         phone = Place(PhonePage.PLAYBACK, 37, PhoneSection.PICTURE_SOUND),
     )
+    /** O atraso da saída de som (Bluetooth…) acerta-se sozinho no GoatCore (ver media/OutputLatency); o manual soma-se. */
+    val AUDIO_DELAY_AUTO = Setting.Toggle(
+        Prefs.Key.AUDIO_DELAY_AUTO, { it.audioDelayAuto }, { it.audioDelayAutoSub },
+        read = { it.audioDelayAuto },
+        tv = Place(TvPage.PLAYBACK, 26, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 36, PhoneSection.PICTURE_SOUND),
+    )
+    /** Vozes mais claras com a saída em estéreo (ver media/VoiceDownmix); sem efeito no som em passthrough. */
+    val AUDIO_VOICES = Setting.Choice(
+        Prefs.Key.AUDIO_VOICES, { it.audioVoices },
+        options = { s -> listOf(Prefs.AudioVoices.OFF to s.off, Prefs.AudioVoices.ON to s.on) },
+        read = { it.prefs.audioVoices },
+        subtitle = { it.audioVoicesSub },
+        tv = Place(TvPage.PLAYBACK, 28, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 38, PhoneSection.PICTURE_SOUND),
+    )
     /** Telemóvel: só aparece quando o aparelho tem janela pequena (o telemóvel esconde-a sem ela). */
     val PIP = Setting.Toggle(
         Prefs.Key.PIP_ENABLED, { it.pictureInPicture },
@@ -460,7 +476,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, HLS_QUALITY, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LEVEL, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_DELAY_AUTO, AUDIO_LEVEL, AUDIO_VOICES, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,

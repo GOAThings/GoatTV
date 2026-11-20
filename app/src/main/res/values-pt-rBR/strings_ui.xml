@@ -902,4 +902,9 @@
     <string name="hls_quality_lowest">A mais baixa</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Rádio</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Atraso automático do som</string>
+    <string name="audio_delay_auto_sub">Acerta a imagem com o som no Bluetooth e noutras saídas lentas. O atraso manual soma-se a este</string>
+    <string name="audio_voices">Vozes mais claras</string>
+    <string name="audio_voices_sub">Em estéreo, o som surround é misturado com os diálogos mais altos. Sem efeito no Dolby em passthrough</string>
 </resources>

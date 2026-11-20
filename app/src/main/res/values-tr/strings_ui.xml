@@ -900,4 +900,9 @@
     <string name="hls_quality_lowest">En düşük</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radyo</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Otomatik ses gecikmesi</string>
+    <string name="audio_delay_auto_sub">Bluetooth ve diğer yavaş çıkışlarda görüntü ile sesi bir arada tutar. Elle ayarlanan gecikme buna eklenir</string>
+    <string name="audio_voices">Daha net konuşmalar</string>
+    <string name="audio_voices_sub">Stereo hoparlörlerde surround ses, diyaloglar daha yüksek olacak şekilde karıştırılır. Ses geçişiyle (passthrough) giden Dolby\'yi etkilemez</string>
 </resources>

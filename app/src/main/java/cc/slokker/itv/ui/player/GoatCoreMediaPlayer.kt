@@ -61,6 +61,12 @@ internal class GoatCoreMediaPlayer(
     private val audioLevel: String = Prefs.AudioLevel.OFF,
     /** Definições → Desentrelaçar (Prefs.Deinterlace; ver [GoatCorePlayer.deinterlace]). */
     private val deinterlace: String = cc.slokker.itv.data.Prefs.Deinterlace.OFF,
+    /** O atraso do som à mão e o acerto automático da saída (ver [GoatCorePlayer.audioDelayMs] e audioDelayAuto). */
+    private val audioDelayMs: Int = 0,
+    private val audioDelayAuto: Boolean = true,
+    /** Vozes mais claras, e se a saída de som só leva estéreo (ver [GoatCorePlayer.audioVoices] e stereoOutput). */
+    private val audioVoices: Boolean = false,
+    private val stereoOutput: () -> Boolean = { true },
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
@@ -229,6 +235,7 @@ internal class GoatCoreMediaPlayer(
         startPositionMs = -1
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
             audioLevel = audioLevel, levelKey = levelKey,
+            audioDelayMs = audioDelayMs, audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, stereoOutput = stereoOutput,
             deinterlace = deinterlace, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true

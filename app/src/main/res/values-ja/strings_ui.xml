@@ -897,4 +897,9 @@
     <string name="hls_quality_lowest">最低</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">ラジオ</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">音声遅延の自動調整</string>
+    <string name="audio_delay_auto_sub">Bluetoothなど遅延のある出力でも映像と音を合わせます。手動の遅延はこれに加算されます</string>
+    <string name="audio_voices">声をはっきり</string>
+    <string name="audio_voices_sub">ステレオスピーカーでは、サラウンド音声をセリフを大きくしてミックスします。パススルーのドルビーには効きません</string>
 </resources>

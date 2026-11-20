@@ -901,4 +901,9 @@
     <string name="hls_quality_lowest">Lowest</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radio</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Automatic audio delay</string>
+    <string name="audio_delay_auto_sub">Keeps picture and sound together on Bluetooth and other slow outputs. The manual delay is added on top</string>
+    <string name="audio_voices">Clearer voices</string>
+    <string name="audio_voices_sub">With stereo speakers, surround sound is mixed with louder dialogue. No effect on Dolby sent by passthrough</string>
 </resources>

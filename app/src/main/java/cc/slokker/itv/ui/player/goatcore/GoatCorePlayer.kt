@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
@@ -12,6 +13,8 @@ import android.view.Surface
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.media.AudioFrameReader
 import cc.slokker.itv.media.AudioLeveler
+import cc.slokker.itv.media.OutputLatency
+import cc.slokker.itv.media.VoiceDownmix
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.Mpeg2Reader
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.GoatCoreFfmpegAudio
@@ -68,6 +71,20 @@ class GoatCorePlayer(
     private val levelKey: String = "",
     /** Definições → Desentrelaçar (Prefs.Deinterlace): nos canais entrelaçados, a GPU tira o "pente" (ver [Deinterlacer]). */
     private val deinterlace: String = cc.slokker.itv.data.Prefs.Deinterlace.OFF,
+    /** O atraso do som à mão (Prefs.audioDelayMs): + o som mais tarde, − mais cedo. Soma-se ao automático. */
+    private val audioDelayMs: Int = 0,
+    /**
+     * O atraso da saída de som (Bluetooth e outras saídas lentas) acerta-se sozinho (Prefs.audioDelayAuto; ver
+     * [RouteLatency]). Desligado, o relógio é o de antes: o carimbo do AudioTrack tal como vem, e nada em passthrough.
+     */
+    private val audioDelayAuto: Boolean = true,
+    /** Vozes mais claras (Prefs.AudioVoices; ver media/VoiceDownmix): só no PCM que sai daqui, como o nivelamento. */
+    private val audioVoices: Boolean = false,
+    /**
+     * A saída de som só leva estéreo (a TV sem recetor, auscultadores)? Pergunta-se ao abrir cada faixa com canal
+     * central: só então a mistura para estéreo se faz aqui (um recetor que aceita os canais todos fica com eles).
+     */
+    private val stereoOutput: () -> Boolean = { true },
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -213,7 +230,7 @@ class GoatCorePlayer(
     val started: Boolean get() = lastOutputAt > 0
 
     /** O tempo do relógio agora (µs), ou Long.MIN_VALUE antes de começar: as legendas acertam-se por ele. */
-    val nowUs: Long get() = nowPtsUs()
+    val nowUs: Long get() = videoNowUs()
 
     /** A faixa de áudio pedida (o menu ou a língua das Definições); -1 = a escolhida ao abrir. */
     @Volatile private var requestedAudio = -1
@@ -817,7 +834,7 @@ class GoatCorePlayer(
         // Pelo relógio do sistema (sem som, ou em passthrough), uma paragem da rede não o pára: a primeira imagem
         // depois dela volta a acertá-lo, senão saíam todas atrasadas.
         if (audioTrack == null && clockBasePtsUs != Long.MIN_VALUE && SystemClock.elapsedRealtime() - lastOutputAt > RESYNC_AFTER_MS) {
-            startWallClock(ptsUs)
+            startWallClock(ptsUs - videoOffsetUs())
         }
         var now = clockNow(ptsUs)
         // À espera do som (no máximo meio segundo): a imagem fica no descodificador.
@@ -830,9 +847,9 @@ class GoatCorePlayer(
         var early = ptsUs - now
         while (running && early > RELEASE_AHEAD_US) {
             Thread.sleep(((early - RELEASE_AHEAD_US) / 1000).coerceIn(1, 200))
-            early = ptsUs - nowPtsUs()
+            early = ptsUs - videoNowUs()
         }
-        val late = nowPtsUs() - ptsUs
+        val late = videoNowUs() - ptsUs
         if (late > 50_000) {
             stats.framesLate++
             c.releaseOutputBuffer(index, false)
@@ -860,10 +877,10 @@ class GoatCorePlayer(
 
     /** O tempo do relógio; sem ele ainda, começa o do sistema nesta imagem se não houver som (ou não vier a tempo). */
     private fun clockNow(ptsUs: Long): Long {
-        val now = nowPtsUs()
+        val now = videoNowUs()
         if (now != Long.MIN_VALUE) return now
         if (audioPid < 0 || audioFailed || audioWaitOver()) {
-            startWallClock(ptsUs)
+            startWallClock(ptsUs - videoOffsetUs())
             return ptsUs
         }
         return Long.MIN_VALUE
@@ -891,7 +908,23 @@ class GoatCorePlayer(
         clockBasePtsUs = ptsUs
     }
 
-    /** O tempo do vídeo agora, pelo som se houver; Long.MIN_VALUE antes de haver relógio. */
+    /**
+     * Quanto a imagem vai à frente do relógio do som (µs): o atraso do som pedido nas definições ([audioDelayMs]) e,
+     * em passthrough, menos a latência da saída (o relógio é o do sistema e não a conta; no PCM já vem descontada no
+     * [AudioClock]). Sem som não há nada a acertar.
+     */
+    private fun videoOffsetUs(): Long {
+        if (audioPid < 0 || audioFailed) return 0
+        return audioDelayMs * 1000L - (if (bitstreamTrack != null) routeLatency.us else 0L)
+    }
+
+    /** O relógio da imagem (e das legendas): o do som ([nowPtsUs]) com o [videoOffsetUs]. */
+    private fun videoNowUs(): Long {
+        val now = nowPtsUs()
+        return if (now == Long.MIN_VALUE) now else now + videoOffsetUs()
+    }
+
+    /** O tempo do som agora (o que se está a ouvir), pelo AudioTrack se houver; Long.MIN_VALUE antes de haver relógio. */
     private fun nowPtsUs(): Long {
         val track = audioTrack
         val base = audioBasePtsUs
@@ -900,7 +933,90 @@ class GoatCorePlayer(
         return clockBasePtsUs + ((SystemClock.elapsedRealtimeNanos() / 1000 - clockBaseRealtimeUs) * speed).toLong()
     }
 
-    private val audioClock = AudioClock()
+    private val routeLatency = RouteLatency(audioDelayAuto)
+    private val audioClock = AudioClock(routeLatency)
+
+    /**
+     * A latência da saída de som em uso ([OutputLatency]), medida na thread do som de meio em meio segundo e quando a
+     * saída muda (uns auscultadores Bluetooth que se ligam a meio): pelo carimbo do AudioTrack onde ele é de confiança
+     * (PCM), pelo getLatency escondido (como o AudioTrackPositionTracker do Media3) e, numa saída Bluetooth que não
+     * diz nada, um valor habitual. Serve onde o relógio não vem do carimbo: antes de ele existir (o início de cada
+     * canal) e em passthrough.
+     */
+    private class RouteLatency(val auto: Boolean) {
+        private val latency = OutputLatency()
+        /** A latência a descontar agora (µs); 0 com o acerto automático desligado. */
+        @Volatile var us = 0L
+            private set
+        private var track: AudioTrack? = null
+        private var measuredAt = 0L
+        private var loggedUs = -1L
+        /** A saída mudou (avisa o sistema, noutra thread): mede-se de novo na escrita seguinte. */
+        @Volatile private var routeChanged = false
+
+        private val onRouting = if (Build.VERSION.SDK_INT >= 24) android.media.AudioRouting.OnRoutingChangedListener { routeChanged = true } else null
+
+        /** Segue as mudanças de saída de [t] (ao criá-lo). */
+        fun watch(t: AudioTrack) {
+            if (!auto || Build.VERSION.SDK_INT < 24) return
+            val listener = onRouting ?: return
+            runCatching { t.addOnRoutingChangedListener(listener, android.os.Handler(android.os.Looper.getMainLooper())) }
+        }
+
+        /**
+         * Só na thread do som, depois de cada escrita em [t]. [stampUs]: a latência que o carimbo dá agora, ou -1
+         * (sem carimbo, ou em passthrough, onde ele não é de confiança). [direct]: passthrough.
+         */
+        fun sample(t: AudioTrack, rate: Int, stampUs: Long, direct: Boolean) {
+            if (!auto) return
+            val now = SystemClock.elapsedRealtime()
+            val changed = routeChanged || track !== t
+            if (!changed && now - measuredAt < MEASURE_EVERY_MS) return
+            measuredAt = now
+            val device = runCatching { t.routedDevice }.getOrNull()
+            val key = (device?.type ?: 0) + if (direct) 1000 else 0
+            if (changed) {
+                routeChanged = false
+                track = t
+                loggedUs = -1
+                // Começa no que esta saída deu da última vez (outro canal): o zap já arranca acertado.
+                latency.reset(remembered[key] ?: -1)
+            }
+            val reported = reportedUs(t, rate)
+            us = latency.measure(stampUs, reported, bluetooth(device))
+            if (!latency.known) return
+            remembered[key] = us
+            if (loggedUs < 0 || us - loggedUs > 20_000 || loggedUs - us > 20_000) {
+                loggedUs = us
+                Log.i(TAG, "audio output ${device?.let { "type ${it.type} ${it.productName}" } ?: "?"}${if (direct) " (passthrough)" else ""}: " +
+                    "latency ${us / 1000} ms (timestamp ${if (stampUs < 0) "-" else (stampUs / 1000).toString()}, reported ${if (reported < 0) "-" else (reported / 1000).toString()})")
+            }
+        }
+
+        private companion object {
+            const val MEASURE_EVERY_MS = 500L
+
+            /** O que cada tipo de saída deu da última vez, enquanto a app está aberta (PCM e passthrough à parte). */
+            val remembered = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+
+            /** AudioTrack.getLatency (escondido, o mesmo que o Media3 usa); null se o aparelho não o deixa chamar. */
+            val getLatency: java.lang.reflect.Method? by lazy { runCatching { AudioTrack::class.java.getMethod("getLatency") }.getOrNull() }
+
+            /** O que a saída declara (µs, sem o buffer da faixa), ou -1. */
+            fun reportedUs(t: AudioTrack, rate: Int): Long {
+                val ms = runCatching { getLatency?.invoke(t) as? Int }.getOrNull() ?: return -1
+                val buffer = runCatching { if (Build.VERSION.SDK_INT >= 24) t.bufferCapacityInFrames else t.bufferSizeInFrames }.getOrDefault(-1)
+                return OutputLatency.reported(ms, buffer, rate)
+            }
+
+            fun bluetooth(d: android.media.AudioDeviceInfo?): Boolean = when (d?.type) {
+                android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+                // Auscultadores, colunas e emissão Bluetooth LE (Android 12/13) e aparelhos auditivos (Android 9).
+                26, 27, 30, 23 -> true
+                else -> false
+            }
+        }
+    }
 
     /**
      * O relógio pelo som. O carimbo do AudioTrack (a amostra que está a sair agora, com a hora) é o mais certo, também
@@ -908,8 +1024,13 @@ class GoatCorePlayer(
      * (±100 ms) e as imagens saíam aos solavancos: o relógio anda com o tempo real e acerta-se pelo som aos poucos; uma
      * diferença grande (o som começou, recomeçou, ou mudou) acerta-o de vez. [now] não aloca nada: a thread do vídeo,
      * ao alocar no arranque da app, ficava parada à espera do GC.
+     *
+     * A latência da saída (o HDMI, uns auscultadores Bluetooth) já vem no carimbo: ele diz o que está a ouvir-se, não
+     * o que se entregou. Com o acerto automático ([route]) confirma-se que o carimbo faz sentido (como o Media3: um
+     * que diga que a saída vai segundos atrás, ou à frente, do que se entregou não se usa) e, enquanto não há carimbo,
+     * a posição da cabeça desconta a latência medida (senão a imagem ia adiantada no início de cada canal).
      */
-    private class AudioClock {
+    private class AudioClock(private val route: RouteLatency) {
         private val ts = android.media.AudioTimestamp()
         private var stampTrack: AudioTrack? = null
         private var stampFrames = 0L
@@ -921,14 +1042,31 @@ class GoatCorePlayer(
          * Lê o carimbo de [track]; só na thread do som, depois de cada escrita (o getTimestamp aloca, e a thread do
          * vídeo não pode).
          */
-        fun sample(track: AudioTrack) {
+        fun sample(track: AudioTrack, rate: Int) {
             if (track.playState != AudioTrack.PLAYSTATE_PLAYING) return
-            if (!runCatching { track.getTimestamp(ts) }.getOrDefault(false) || ts.framePosition <= 0) return
-            synchronized(this) {
-                stampTrack = track
-                stampFrames = ts.framePosition
-                stampNanos = ts.nanoTime
+            var stamped = runCatching { track.getTimestamp(ts) }.getOrDefault(false) && ts.framePosition > 0
+            var behindUs = -1L
+            // Fora de 1× a cabeça e o carimbo não contam o mesmo: não se comparam.
+            if (stamped && route.auto && speed == 1f && rate > 0) {
+                // Quanto o que se ouve agora vai atrás do que o sistema já levou: a latência da saída. A conta em
+                // 32 bits, como a cabeça (que dá a volta ao fim de um dia a 48 kHz).
+                val heard = ts.framePosition + (System.nanoTime() - ts.nanoTime) * rate / 1_000_000_000L
+                behindUs = (track.playbackHeadPosition - heard.toInt()).toLong() * 1_000_000L / rate
+                if (behindUs < -STAMP_SLACK_US || behindUs > STAMP_MAX_US) {
+                    stamped = false
+                    behindUs = -1
+                } else if (behindUs < 0) {
+                    behindUs = 0
+                }
             }
+            if (stamped) {
+                synchronized(this) {
+                    stampTrack = track
+                    stampFrames = ts.framePosition
+                    stampNanos = ts.nanoTime
+                }
+            }
+            route.sample(track, rate, behindUs, direct = false)
         }
 
         /**
@@ -945,7 +1083,8 @@ class GoatCorePlayer(
             if (playing && stampTrack === track) {
                 stampFrames + (System.nanoTime() - stampNanos) * rate / 1_000_000_000L
             } else {
-                track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
+                // Sem carimbo (ainda): o que o sistema já levou, menos o que a saída demora a dá-lo a ouvir.
+                ((track.playbackHeadPosition.toLong() and 0xFFFFFFFFL) - route.us * rate / 1_000_000L).coerceAtLeast(0)
             }
 
         /** O tempo do conteúdo (µs desde o início da faixa) ao fim de [frames] amostras tocadas. */
@@ -996,6 +1135,10 @@ class GoatCorePlayer(
 
         private companion object {
             const val MAX_ERROR_US = 250_000L
+            /** O carimbo pode ir um nada à frente da cabeça (ela anda aos blocos); mais do que isto é disparate. */
+            const val STAMP_SLACK_US = 100_000L
+            /** Como no Media3: um carimbo a mais de 5 s do que se entregou não é de confiança. */
+            const val STAMP_MAX_US = 5_000_000L
         }
     }
 
@@ -1078,10 +1221,10 @@ class GoatCorePlayer(
                     track?.release()
                     pcmRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                     pcmChannels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                    track = newTrack(pcmRate, pcmChannels)
+                    track = newTrack(pcmRate, outChannels(pcmRate, pcmChannels))
                     if (audioBasePtsUs != Long.MIN_VALUE) audioBasePtsUs = Long.MIN_VALUE
                 } else if (o >= 0) {
-                    val t = track ?: newTrack(f.sampleRate, f.channels).also { track = it }
+                    val t = track ?: newTrack(pcmRate, outChannels(pcmRate, pcmChannels)).also { track = it }
                     if (audioBasePtsUs == Long.MIN_VALUE && !startAudioAt(info.presentationTimeUs)) {
                         // Mais antigo do que a imagem que está a dar: salta-se.
                         c.releaseOutputBuffer(o, false)
@@ -1098,9 +1241,8 @@ class GoatCorePlayer(
                     buf.position(info.offset)
                     buf.get(pcm)
                     c.releaseOutputBuffer(o, false)
-                    levelerFor(pcmRate, pcmChannels)?.processPcm16(pcm, 0, pcm.size)
-                    t.write(pcm, 0, pcm.size)
-                    audioClock.sample(t)
+                    t.write(pcm, 0, processPcm(pcm, pcmRate, pcmChannels))
+                    audioClock.sample(t, pcmRate)
                     stats.audioFrames++
                     if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
@@ -1147,7 +1289,7 @@ class GoatCorePlayer(
                 while (running) {
                     val (pcm, ptsUs) = dec.take() ?: break
                     if (pcm.isEmpty()) continue
-                    val t = track ?: newTrack(dec.sampleRate, dec.channels).also { track = it }
+                    val t = track ?: newTrack(dec.sampleRate, outChannels(dec.sampleRate, dec.channels)).also { track = it }
                     if (audioTrack !== t) {
                         if (audioBasePtsUs == Long.MIN_VALUE && !startAudioAt(ptsUs)) continue
                         audioBasePtsUs = ptsUs
@@ -1155,9 +1297,8 @@ class GoatCorePlayer(
                         t.setVolume(volume)
                         if (!paused) t.play()
                     }
-                    levelerFor(dec.sampleRate, dec.channels)?.processPcm16(pcm, 0, pcm.size)
-                    t.write(pcm, 0, pcm.size)
-                    audioClock.sample(t)
+                    t.write(pcm, 0, processPcm(pcm, dec.sampleRate, dec.channels))
+                    audioClock.sample(t, dec.sampleRate)
                     stats.audioFrames++
                     if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
                 }
@@ -1194,6 +1335,39 @@ class GoatCorePlayer(
             .also { leveler = it }
     }
 
+    // Vozes mais claras (só na thread do som): refeito se o PCM mudar de frequência ou de canais.
+    private var voices: VoiceDownmix? = null
+    private var voicesFormat = 0L
+
+    /** As vozes mais claras para o PCM de [rate] Hz e [channels] canais, ou null (desligado, ou nada a fazer nele). */
+    private fun voicesFor(rate: Int, channels: Int): VoiceDownmix? {
+        if (!audioVoices || !VoiceDownmix.applies(channels)) return null
+        val key = rate.toLong() shl 8 or channels.toLong()
+        if (voicesFormat == key) return voices
+        voicesFormat = key
+        // Com canal central só se mistura aqui se a saída for estéreo; a que leva os canais todos fica com eles.
+        val stereo = channels <= 2 || runCatching { stereoOutput() }.getOrDefault(true)
+        Log.i(TAG, if (stereo) "clearer voices: $channels ch -> stereo here" else "clearer voices: the output takes $channels ch, left alone")
+        return (if (stereo) VoiceDownmix(rate, channels) else null).also { voices = it }
+    }
+
+    /** Os canais com que o PCM de [channels] canais sai daqui (2 quando as vozes mais claras o misturam). */
+    private fun outChannels(rate: Int, channels: Int): Int = voicesFor(rate, channels)?.outChannels ?: channels
+
+    /**
+     * As vozes mais claras e o nivelamento em [pcm] (16 bits, [channels] canais), no próprio array e numa só passagem:
+     * primeiro a mistura (o nivelamento mede o que se vai ouvir, e é o limitador dele que segura os picos). Devolve os
+     * bytes a escrever (menos quando se mistura para estéreo).
+     */
+    private fun processPcm(pcm: ByteArray, rate: Int, channels: Int): Int {
+        val v = voicesFor(rate, channels)
+        if (v == null) {
+            levelerFor(rate, channels)?.processPcm16(pcm, 0, pcm.size)
+            return pcm.size
+        }
+        return v.processPcm16(pcm, 0, pcm.size, levelerFor(rate, v.outChannels))
+    }
+
     /** Guarda o ganho a que o canal chegou (se chegou a ouvir-se), para o próximo zap começar nele. */
     private fun rememberLevel() {
         val l = leveler ?: return
@@ -1212,6 +1386,7 @@ class GoatCorePlayer(
             .setBufferSizeInBytes(64 * 1024)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
+        routeLatency.watch(t)
         audioRate = f.sampleRate
         Log.i(TAG, "audio passthrough ${f.codec} ${f.channels} ch")
         try {
@@ -1238,7 +1413,8 @@ class GoatCorePlayer(
                 // Fora de 1× o som em bruto não acompanha a imagem: não se escreve.
                 if (speed != 1f) continue
                 t.write(u.data, 0, u.data.size)
-                audioClock.sample(t)
+                // A latência que a saída declara (o carimbo aqui não serve): a imagem espera por ela (ver [videoOffsetUs]).
+                routeLatency.sample(t, f.sampleRate, -1, direct = true)
                 stats.audioFrames++
                 if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
             }
@@ -1295,7 +1471,10 @@ class GoatCorePlayer(
             .setBufferSizeInBytes(maxOf(min * 2, 16 * 1024))
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
-            .also { t -> if (speed != 1f) runCatching { t.playbackParams = playbackParams(speed) } }
+            .also { t ->
+                routeLatency.watch(t)
+                if (speed != 1f) runCatching { t.playbackParams = playbackParams(speed) }
+            }
     }
 
     private fun fail(why: String, unsupported: Boolean = false, cause: Throwable? = null) {

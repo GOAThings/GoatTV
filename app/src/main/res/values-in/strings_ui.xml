@@ -898,4 +898,9 @@
     <string name="hls_quality_lowest">Terendah</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radio</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Tunda audio otomatis</string>
+    <string name="audio_delay_auto_sub">Menjaga gambar dan suara tetap selaras di Bluetooth dan keluaran lambat lainnya. Tunda manual ditambahkan di atasnya</string>
+    <string name="audio_voices">Dialog lebih jelas</string>
+    <string name="audio_voices_sub">Dengan speaker stereo, suara surround dicampur dengan dialog yang lebih keras. Tidak berpengaruh pada Dolby lewat passthrough</string>
 </resources>

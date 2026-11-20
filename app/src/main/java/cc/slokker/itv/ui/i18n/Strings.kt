@@ -1168,6 +1168,12 @@ class Strings(context: Context) {
     // ---- Rádio (canais só de som) ----
     val radioLabel get() = s(R.string.radio_label)
 
+    // ---- Som: atraso automático e vozes mais claras ----
+    val audioDelayAuto get() = s(R.string.audio_delay_auto)
+    val audioDelayAutoSub get() = s(R.string.audio_delay_auto_sub)
+    val audioVoices get() = s(R.string.audio_voices)
+    val audioVoicesSub get() = s(R.string.audio_voices_sub)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

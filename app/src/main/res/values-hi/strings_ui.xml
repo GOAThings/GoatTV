@@ -900,4 +900,9 @@
     <string name="hls_quality_lowest">सबसे कम</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">रेडियो</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">स्वचालित ऑडियो देरी</string>
+    <string name="audio_delay_auto_sub">ब्लूटूथ और दूसरे धीमे आउटपुट पर तस्वीर और आवाज़ को साथ रखता है। मैन्युअल देरी इसके ऊपर जुड़ती है</string>
+    <string name="audio_voices">ज़्यादा साफ़ संवाद</string>
+    <string name="audio_voices_sub">स्टीरियो स्पीकर पर सराउंड साउंड को ऊँचे संवाद के साथ मिलाया जाता है। पासथ्रू से भेजे गए Dolby पर असर नहीं</string>
 </resources>

@@ -57,6 +57,16 @@ data class Prefs(
     val audioDelayMs: Int = 0,
     /** Nivelar o volume entre canais ([AudioLevel]): desligado, nivelar ou modo noite. Não mexe no som em passthrough. */
     val audioLevel: String = AudioLevel.OFF,
+    /**
+     * O atraso da saída de som (Bluetooth e outras saídas lentas) acerta-se sozinho no GoatCore (ver
+     * media/OutputLatency); o [audioDelayMs] soma-se por cima. Desliga-se num aparelho que declare um atraso errado.
+     */
+    val audioDelayAuto: Boolean = true,
+    /**
+     * Vozes mais claras ([AudioVoices]): com a saída em estéreo, o som com canal central mistura-se na app com os
+     * diálogos mais altos (ver media/VoiceDownmix). Não mexe no som em passthrough.
+     */
+    val audioVoices: String = AudioVoices.OFF,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
     /** A qualidade dos canais HLS com várias ([HlsQuality]): automática, a melhor, poupar dados ou a mais baixa. */
@@ -246,6 +256,8 @@ data class Prefs(
         const val AUDIO_DECODER = "audio_decoder"
         const val AUDIO_DELAY = "audio_delay_ms"
         const val AUDIO_LEVEL = "audio_level"
+        const val AUDIO_DELAY_AUTO = "audio_delay_auto"
+        const val AUDIO_VOICES = "audio_voices"
         const val HDR = "hdr"
         const val HLS_QUALITY = "hls_quality"
         const val NET_GRAPH = "net_graph"
@@ -342,6 +354,12 @@ data class Prefs(
     object AudioLevel {
         const val OFF = "off"; const val LEVEL = "level"; const val NIGHT = "night"
         val ALL = setOf(OFF, LEVEL, NIGHT)
+    }
+
+    /** Vozes mais claras (ver media/VoiceDownmix). */
+    object AudioVoices {
+        const val OFF = "off"; const val ON = "on"
+        val ALL = setOf(OFF, ON)
     }
 
     object Deinterlace {
@@ -556,6 +574,8 @@ data class Prefs(
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),
                 audioLevel = str(Key.AUDIO_LEVEL, d.audioLevel, AudioLevel.ALL),
+                audioDelayAuto = bool(Key.AUDIO_DELAY_AUTO, d.audioDelayAuto),
+                audioVoices = str(Key.AUDIO_VOICES, d.audioVoices, AudioVoices.ALL),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 hlsQuality = str(Key.HLS_QUALITY, d.hlsQuality, HlsQuality.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),

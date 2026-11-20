@@ -908,4 +908,9 @@
     <string name="hls_quality_lowest">الأدنى</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">راديو</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">تأخير الصوت التلقائي</string>
+    <string name="audio_delay_auto_sub">يُبقي الصورة والصوت متطابقين مع البلوتوث والمخارج البطيئة الأخرى. يُضاف التأخير اليدوي فوقه</string>
+    <string name="audio_voices">أصوات أوضح</string>
+    <string name="audio_voices_sub">مع السماعات الستيريو، يُمزج الصوت المحيطي مع رفع صوت الحوار. لا يؤثر على Dolby المُرسل عبر تمرير الصوت</string>
 </resources>

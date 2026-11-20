@@ -213,6 +213,8 @@ class PersistedFormatTest {
         "deinterlace" to (Prefs.Key.DEINTERLACE to Prefs.Deinterlace.OFF),
         "audioDelayMs" to (Prefs.Key.AUDIO_DELAY to 150),
         "audioLevel" to (Prefs.Key.AUDIO_LEVEL to Prefs.AudioLevel.NIGHT),
+        "audioDelayAuto" to (Prefs.Key.AUDIO_DELAY_AUTO to false),
+        "audioVoices" to (Prefs.Key.AUDIO_VOICES to Prefs.AudioVoices.ON),
         "reminderSwitch" to (Prefs.Key.REMINDER_SWITCH to true),
         "epgPastHours" to (Prefs.Key.EPG_PAST_HOURS to 72),
         "epgFutureHours" to (Prefs.Key.EPG_FUTURE_HOURS to 168),

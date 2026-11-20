@@ -904,4 +904,9 @@
     <string name="hls_quality_lowest">Самое низкое</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Радио</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Автоматическая задержка звука</string>
+    <string name="audio_delay_auto_sub">Синхронизирует картинку и звук на Bluetooth и других медленных выходах. Ручная задержка добавляется сверху</string>
+    <string name="audio_voices">Более чёткие голоса</string>
+    <string name="audio_voices_sub">На стереодинамиках объёмный звук сводится с более громкими диалогами. Не действует на Dolby при прямом выводе звука</string>
 </resources>

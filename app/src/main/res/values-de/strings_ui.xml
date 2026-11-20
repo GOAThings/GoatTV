@@ -900,4 +900,9 @@
     <string name="hls_quality_lowest">Niedrigste</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">Radio</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">Automatische Tonverzögerung</string>
+    <string name="audio_delay_auto_sub">Hält Bild und Ton bei Bluetooth und anderen langsamen Ausgängen synchron. Die manuelle Verzögerung kommt hinzu</string>
+    <string name="audio_voices">Klarere Stimmen</string>
+    <string name="audio_voices_sub">Bei Stereo-Lautsprechern wird Surround-Ton mit lauteren Dialogen gemischt. Keine Wirkung auf Dolby per Passthrough</string>
 </resources>

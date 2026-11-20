@@ -897,4 +897,9 @@
     <string name="hls_quality_lowest">最低</string>
     <!-- Rádio (canais só de som) e sessão de media -->
     <string name="radio_label">电台</string>
+    <!-- Som: atraso automático e vozes mais claras (audio_delay_auto, audio_voices) -->
+    <string name="audio_delay_auto">自动音频延迟</string>
+    <string name="audio_delay_auto_sub">在蓝牙等较慢的输出上保持画面与声音同步。手动延迟会叠加在其上</string>
+    <string name="audio_voices">人声更清晰</string>
+    <string name="audio_voices_sub">使用立体声扬声器时，环绕声会以更响的对白混合。对音频直通输出的杜比无效</string>
 </resources>
