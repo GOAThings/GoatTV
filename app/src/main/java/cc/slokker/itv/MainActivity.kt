@@ -110,6 +110,8 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             }
+            // Uma TV para o "Enviar para a TV" sem mDNS (ex.: --es demo_tv 10.0.2.2): aparece na folha como encontrada.
+            intent.getStringExtra("demo_tv")?.takeIf { cc.slokker.itv.data.LanRequest.isIpHost(it) && ':' !in it }?.let { cc.slokker.itv.data.TvFinder.demoHost = it }
             intent.getStringExtra("demo_m3u")?.let { url ->
                 lifecycleScope.launch { vm.savePlaylist(null, PlaylistForm(type = PlaylistType.M3U, name = intent.getStringExtra("demo_name") ?: "Demo", url = url)) }
             }

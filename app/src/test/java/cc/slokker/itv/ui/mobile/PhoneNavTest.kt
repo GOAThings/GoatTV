@@ -87,6 +87,14 @@ class PhoneNavTest {
     }
 
     @Test
+    fun `sending to a TV stops the channel and goes home`() {
+        val sent = watching.sentToTv()
+        assertFalse(sent.video)
+        assertTrue(sent.home)
+        assertEquals(PhoneTab.Tv, sent.tab)
+    }
+
+    @Test
     fun `a group from search opens on the TV home`() {
         assertEquals(PhoneNav(PhoneTab.Tv, home = true, stopped = false, homeGroup = "kids"), watching.tabTapped(PhoneTab.Search).groupFromSearch("kids"))
     }

@@ -1,8 +1,13 @@
 package cc.slokker.itv
 
+import android.content.Context
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.util.Log
 import cc.slokker.itv.data.LanRequest
 import cc.slokker.itv.data.PhoneChannelList
+import cc.slokker.itv.data.SendToTv
+import cc.slokker.itv.data.deviceName
 import cc.slokker.itv.data.read
 import cc.slokker.itv.ui.AppViewModel
 import kotlinx.coroutines.CancellationException
@@ -16,6 +21,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import okio.Buffer
+import java.io.InputStream
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -35,11 +41,15 @@ import java.util.concurrent.TimeUnit
  *   GET /logo/<chave>  o logótipo do canal, pedido pela TV ao fornecedor (o telemóvel nunca fala com ele)
  *   POST /play/<chave> põe o canal a dar, como escolhê-lo na lista. 409 se a GoatTV não estiver à frente (o
  *                      telemóvel abre-a pelo GoatLauncher e tenta outra vez), 404 se não puder ser visto.
+ *   GET /hello         quem é esta TV, para o "Enviar para a TV" da GoatTV no telemóvel ([SendToTv]).
+ *   POST /open         o canal que o telemóvel estava a ver (ids e nome em JSON), aberto das listas desta TV.
+ *
+ * A porta anuncia-se na rede como [SendToTv.SERVICE] (Bonjour), com o nome da TV, para os telemóveis a encontrarem.
  *
  * Só nas TVs (leanback): num telemóvel a porta nem abre. O estado vem do [AppViewModel] da atividade, que a
  * [MainActivity] regista em [attach]; mexe-se nele sempre na thread principal.
  */
-class PhoneChannels(private val container: AppContainer) {
+class PhoneChannels(private val container: AppContainer, private val context: Context) {
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.w(TAG, "Porta: ${e.javaClass.simpleName}") },
     )
@@ -60,6 +70,7 @@ class PhoneChannels(private val container: AppContainer) {
                 Log.w(TAG, "Porta $PORT ocupada", it)
                 return@launch
             }
+            advertise()
             while (true) {
                 // Com tudo ocupado, os seguintes esperam na fila do sistema: um telemóvel pede muitos logótipos de uma vez.
                 slots.acquire()
@@ -105,7 +116,8 @@ class PhoneChannels(private val container: AppContainer) {
 
     private suspend fun serve(client: Socket) {
         client.soTimeout = READ_TIMEOUT_MS
-        val request = LanRequest.read(client.getInputStream().buffered()) ?: return
+        val input = client.getInputStream().buffered()
+        val request = LanRequest.read(input) ?: return
         if (!request.allowed) {
             reply(client, TEXT, "recusado".toByteArray(), status = "403 Forbidden")
             return
@@ -117,6 +129,9 @@ class PhoneChannels(private val container: AppContainer) {
             method == "GET" && path == "/now" -> now(client)
             method == "GET" && path.startsWith("/logo/") -> logo(client, PhoneChannelList.decodeKey(path.removePrefix("/logo/")))
             method == "POST" && path.startsWith("/play/") -> play(client, PhoneChannelList.decodeKey(path.removePrefix("/play/")))
+            method == "GET" && path == "/hello" ->
+                reply(client, JSON, SendToTv.hello(deviceName(context), BuildConfig.VERSION_NAME, context.packageName).toByteArray())
+            method == "POST" && path == "/open" -> open(client, input, request.contentLength)
             else -> notFound(client)
         }
     }
@@ -163,6 +178,56 @@ class PhoneChannels(private val container: AppContainer) {
             }
         }
         reply(client, TEXT, (if (status == "200 OK") "ok" else status.substringAfter(' ')).toByteArray(), status = status)
+    }
+
+    /** Um canal mandado pelo telemóvel ("Enviar para a TV"): primeiro a app à frente, depois as listas, depois o canal. */
+    private suspend fun open(client: Socket, input: InputStream, length: Int) {
+        val request = body(input, length)?.let { SendToTv.parse(it) }
+        if (request == null) {
+            reply(client, TEXT, "pedido".toByteArray(), status = SendToTv.statusLine(400))
+            return
+        }
+        val (status, name) = withContext(Dispatchers.Main.immediate) {
+            val vm = viewModel
+            when {
+                // Atrás de outra app o telemóvel pede ao GoatLauncher para a trazer e tenta outra vez.
+                !resumed -> SendToTv.NOT_IN_FRONT to ""
+                vm == null -> SendToTv.NO_LISTS to ""
+                else -> vm.openFromPhone(request)
+            }
+        }
+        reply(client, JSON, SendToTv.opened(name).toByteArray(), status = SendToTv.statusLine(status))
+    }
+
+    /** O corpo de [length] bytes (até [SendToTv.MAX_BODY_BYTES]), ou null sem tamanho, maior ou cortado. */
+    private fun body(input: InputStream, length: Int): String? {
+        if (length !in 1..SendToTv.MAX_BODY_BYTES) return null
+        val bytes = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val n = input.read(bytes, read, length - read)
+            if (n < 0) return null
+            read += n
+        }
+        return String(bytes, Charsets.UTF_8)
+    }
+
+    /** Anuncia a porta na rede (mDNS) com o nome da TV; o sistema tira o anúncio quando a app acaba. */
+    private fun advertise() {
+        val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return
+        val info = NsdServiceInfo().apply {
+            serviceName = deviceName(context)
+            serviceType = SendToTv.SERVICE
+            port = PORT
+        }
+        runCatching {
+            nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, object : NsdManager.RegistrationListener {
+                override fun onServiceRegistered(info: NsdServiceInfo) = Unit
+                override fun onRegistrationFailed(info: NsdServiceInfo, error: Int) { Log.w(TAG, "Anúncio: $error") }
+                override fun onServiceUnregistered(info: NsdServiceInfo) = Unit
+                override fun onUnregistrationFailed(info: NsdServiceInfo, error: Int) = Unit
+            })
+        }.onFailure { Log.w(TAG, "Anúncio: ${it.javaClass.simpleName}") }
     }
 
     private fun cached(url: String): Logo? = synchronized(logos) { logos[url] }
@@ -240,9 +305,10 @@ class PhoneChannels(private val container: AppContainer) {
     }
 
     companion object {
-        const val PORT = 6471
+        const val PORT = SendToTv.PORT
         private const val TAG = "PhoneChannels"
         private const val TEXT = "text/plain; charset=utf-8"
+        private const val JSON = "application/json; charset=utf-8"
 
         /** Chega para dois telemóveis a pedir os logótipos todos ao mesmo tempo. */
         private const val MAX_CONNECTIONS = 16

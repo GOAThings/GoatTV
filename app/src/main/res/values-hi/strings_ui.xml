@@ -917,4 +917,14 @@
     <string name="save_picture">तस्वीर सहेजें</string>
     <string name="picture_saved">तस्वीर सहेजी गई</string>
     <string name="picture_save_failed">तस्वीर सहेजी नहीं जा सकी</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">टीवी पर भेजें</string>
+    <string name="send_searching">इस नेटवर्क पर टीवी खोजे जा रहे हैं…</string>
+    <string name="send_empty">कोई टीवी नहीं मिला। टीवी को उसी Wi-Fi से जोड़ें और उस पर GoatTV खोलें।</string>
+    <string name="send_playing">%1$s पर चल रहा है</string>
+    <string name="send_missing">%1$s पर यह चैनल नहीं है</string>
+    <string name="send_closed">%1$s पर GoatTV खोलें</string>
+    <string name="send_failed">%1$s तक नहीं पहुँच सके</string>
+    <string name="send_from">%1$s से</string>
+    <string name="send_from_phone">एक फ़ोन से</string>
 </resources>

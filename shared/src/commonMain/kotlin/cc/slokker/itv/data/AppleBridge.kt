@@ -105,6 +105,42 @@ object AppleBridge {
     /** [PictureName.of]: o nome (sem extensão) de uma imagem guardada do canal, com a hora [epochMs]. */
     fun pictureName(channel: String, epochMs: Long): String = PictureName.of(channel, epochMs)
 
+    // ---- Enviar para a TV (ver SendToTv) ----
+
+    fun sendBody(playlist: String, channel: String, name: String, pro: String, from: String): String =
+        SendToTv.body(playlist, channel, name, pro, from)
+
+    fun sendParse(body: String): SendRequest? = SendToTv.parse(body)
+
+    fun sendHello(name: String, version: String, pkg: String): String = SendToTv.hello(name, version, pkg)
+
+    fun sendParseHello(body: String): SendHello? = SendToTv.parseHello(body)
+
+    fun sendRoute(request: SendRequest, openId: String, playlists: List<String>, proOnTv: Boolean): Int =
+        SendToTv.route(request, openId, playlists, proOnTv)
+
+    fun sendByName(name: String, pool: AppleEntries): String? = SendToTv.byName(name, pool.list)
+
+    fun sendStatus(inFront: Boolean, ready: Boolean, found: Boolean): Int = SendToTv.status(inFront, ready, found)
+
+    fun sendStatusLine(code: Int): String = SendToTv.statusLine(code)
+
+    fun sendRetry(status: Int): Boolean = SendToTv.retry(status)
+
+    fun sendStep(status: Int, attempt: Int, launched: Boolean, canLaunch: Boolean): Int = SendToTv.step(status, attempt, launched, canLaunch)
+
+    fun sendOutcome(status: Int): Int = SendToTv.outcome(status)
+
+    fun sendOrder(names: List<String>, last: String?): List<Int> = SendToTv.order(names, last)
+
+    fun sendClean(text: String): String = SendToTv.clean(text)
+
+    fun sendOpened(name: String): String = SendToTv.opened(name)
+
+    fun sendParseOpened(body: String): String = SendToTv.parseOpened(body)
+
+    fun sendLauncherPath(pkg: String): String = SendToTv.launcherPath(pkg)
+
     private fun obj(json: String): JsonObject =
         runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())
 

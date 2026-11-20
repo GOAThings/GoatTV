@@ -21,7 +21,7 @@ class ItvApp : Application(), SingletonImageLoader.Factory {
         I18n.s = Strings.of(this)
         container = AppContainer(this)
         // Os canais para o GoatRemote na rede de casa: só nas TVs, num telemóvel não se abre porta nenhuma.
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) PhoneChannels(container).start()
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) PhoneChannels(container, this).start()
     }
 
     // Os logos vêm dos servidores IPTV: usar o mesmo cliente (e User-Agent) das listas.

@@ -918,4 +918,14 @@
     <string name="save_picture">Save picture</string>
     <string name="picture_saved">Picture saved</string>
     <string name="picture_save_failed">Could not save the picture</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">Send to TV</string>
+    <string name="send_searching">Looking for TVs on this network…</string>
+    <string name="send_empty">No TV found. Connect the TV to the same Wi-Fi and open GoatTV on it.</string>
+    <string name="send_playing">Playing on %1$s</string>
+    <string name="send_missing">%1$s does not have this channel</string>
+    <string name="send_closed">Open GoatTV on %1$s</string>
+    <string name="send_failed">Could not reach %1$s</string>
+    <string name="send_from">From %1$s</string>
+    <string name="send_from_phone">From a phone</string>
 </resources>

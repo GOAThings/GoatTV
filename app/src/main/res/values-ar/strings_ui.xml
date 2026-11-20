@@ -925,4 +925,14 @@
     <string name="save_picture">حفظ الصورة</string>
     <string name="picture_saved">تم حفظ الصورة</string>
     <string name="picture_save_failed">تعذّر حفظ الصورة</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">إرسال إلى التلفزيون</string>
+    <string name="send_searching">جارٍ البحث عن أجهزة تلفزيون في هذه الشبكة…</string>
+    <string name="send_empty">لم يتم العثور على تلفزيون. وصّل التلفزيون بشبكة Wi-Fi نفسها وافتح GoatTV عليه.</string>
+    <string name="send_playing">يُعرض الآن على %1$s</string>
+    <string name="send_missing">لا تتوفر هذه القناة على %1$s</string>
+    <string name="send_closed">افتح GoatTV على %1$s</string>
+    <string name="send_failed">تعذّر الوصول إلى %1$s</string>
+    <string name="send_from">من %1$s</string>
+    <string name="send_from_phone">من هاتف</string>
 </resources>

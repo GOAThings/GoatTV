@@ -47,6 +47,8 @@ import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.data.ProContent
 import cc.slokker.itv.data.ProSet
 import cc.slokker.itv.data.ProLineup
+import cc.slokker.itv.data.SendRequest
+import cc.slokker.itv.data.SendToTv
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -1342,6 +1344,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** O telemóvel escolheu [channel]: como escolhê-lo na lista de canais (o último canal grava-se na mesma). */
     fun playFromPhone(channel: Channel) = play(channel, groupFor(channel))
+
+    /**
+     * "Enviar para a TV" (ver [SendToTv]): abre o canal que a GoatTV do telemóvel estava a ver. Pela lista e chave
+     * quando esta TV tem essa lista (a mesma conta), senão pelo nome nos canais que se podem ver sem PIN; no Modo TV
+     * Pro procura-se na lista única. O código da resposta e o nome do canal aberto.
+     */
+    fun openFromPhone(request: SendRequest): Pair<Int, String> {
+        val content = content.value?.takeIf { phoneReady() } ?: return SendToTv.NO_LISTS to ""
+        val route = SendToTv.route(request, content.playlist.id, playlists.value.map { it.id }, proMode)
+        if (route == SendToTv.ROUTE_SWITCH) {
+            // A outra lista abre-se e o canal fica pendente até ela carregar (como um link do ecrã inicial).
+            openLink(request.playlist, request.channel)
+            showToast(I18n.s.sendFrom(request.from))
+            return SendToTv.OK to request.name
+        }
+        val catalog = catalog()
+        val channel = (if (route == SendToTv.ROUTE_HERE) phoneChannel(request.channel) else null)
+            ?: SendToTv.byName(request.name, content.channels.filter { catalog.isVisible(it, Audience.PERSISTENT) }.map { ChannelMatch.entry(it) })
+                ?.let(::phoneChannel)
+            ?: return SendToTv.NOT_FOUND to ""
+        playFromPhone(channel)
+        showToast(I18n.s.sendFrom(request.from))
+        return SendToTv.OK to channel.name
+    }
 
     /**
      * Põe os canais recentes no ecrã inicial (o primeiro também no "A seguir"). Fica lá sem PIN e depois de a app

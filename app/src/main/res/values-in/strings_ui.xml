@@ -915,4 +915,14 @@
     <string name="save_picture">Simpan gambar</string>
     <string name="picture_saved">Gambar disimpan</string>
     <string name="picture_save_failed">Gambar tidak dapat disimpan</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">Kirim ke TV</string>
+    <string name="send_searching">Mencari TV di jaringan ini…</string>
+    <string name="send_empty">TV tidak ditemukan. Hubungkan TV ke Wi-Fi yang sama dan buka GoatTV di TV.</string>
+    <string name="send_playing">Diputar di %1$s</string>
+    <string name="send_missing">%1$s tidak memiliki saluran ini</string>
+    <string name="send_closed">Buka GoatTV di %1$s</string>
+    <string name="send_failed">Tidak dapat menjangkau %1$s</string>
+    <string name="send_from">Dari %1$s</string>
+    <string name="send_from_phone">Dari ponsel</string>
 </resources>

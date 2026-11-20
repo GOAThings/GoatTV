@@ -914,4 +914,14 @@
     <string name="save_picture">保存画面</string>
     <string name="picture_saved">画面已保存</string>
     <string name="picture_save_failed">无法保存画面</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">发送到电视</string>
+    <string name="send_searching">正在此网络中查找电视…</string>
+    <string name="send_empty">未找到电视。请将电视连接到同一 Wi-Fi，并在电视上打开 GoatTV。</string>
+    <string name="send_playing">正在 %1$s 上播放</string>
+    <string name="send_missing">%1$s 没有这个频道</string>
+    <string name="send_closed">请在 %1$s 上打开 GoatTV</string>
+    <string name="send_failed">无法连接 %1$s</string>
+    <string name="send_from">来自 %1$s</string>
+    <string name="send_from_phone">来自手机</string>
 </resources>

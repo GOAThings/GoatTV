@@ -86,6 +86,9 @@ internal data class PhoneNav(
     /** ✕ no mini-leitor. */
     fun closePlayer(): PhoneNav = copy(stopped = true)
 
+    /** O canal foi para uma TV ("Enviar para a TV"): para aqui e volta ao ecrã inicial. */
+    fun sentToTv(): PhoneNav = copy(tab = PhoneTab.Tv, home = true, stopped = true, homeGroup = null, recordings = false, sports = false)
+
     fun openGroup(id: String): PhoneNav = copy(homeGroup = id)
 
     fun closeGroup(): PhoneNav = copy(homeGroup = null)

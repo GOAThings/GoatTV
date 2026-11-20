@@ -917,4 +917,14 @@
     <string name="save_picture">Görüntüyü kaydet</string>
     <string name="picture_saved">Görüntü kaydedildi</string>
     <string name="picture_save_failed">Görüntü kaydedilemedi</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">TV\'ye gönder</string>
+    <string name="send_searching">Bu ağdaki TV\'ler aranıyor…</string>
+    <string name="send_empty">TV bulunamadı. TV\'yi aynı Wi-Fi ağına bağlayın ve TV\'de GoatTV\'yi açın.</string>
+    <string name="send_playing">%1$s üzerinde oynatılıyor</string>
+    <string name="send_missing">%1$s cihazında bu kanal yok</string>
+    <string name="send_closed">GoatTV\'yi %1$s üzerinde açın</string>
+    <string name="send_failed">%1$s cihazına ulaşılamadı</string>
+    <string name="send_from">Gönderen: %1$s</string>
+    <string name="send_from_phone">Bir telefondan</string>
 </resources>

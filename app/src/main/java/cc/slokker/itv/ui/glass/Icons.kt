@@ -236,6 +236,11 @@ object ItvIcons {
     val Add: ImageVector by lazy { icon("Add", "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z") }
     val DragHandle: ImageVector by lazy { icon("DragHandle", "M20 9H4v2h16V9zM4 15h16v-2H4v2z") }
 
+    /** Uma TV ("Enviar para a TV"). */
+    val Tv: ImageVector by lazy {
+        icon("Tv", "M21,3H3c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5c0,-1.1 -0.9,-2 -2,-2zM21,17H3V5h18v12z")
+    }
+
     val Camera: ImageVector by lazy {
         icon(
             "Camera",

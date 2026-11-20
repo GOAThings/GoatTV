@@ -921,4 +921,14 @@
     <string name="save_picture">Сохранить кадр</string>
     <string name="picture_saved">Кадр сохранён</string>
     <string name="picture_save_failed">Не удалось сохранить кадр</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">Отправить на ТВ</string>
+    <string name="send_searching">Поиск телевизоров в этой сети…</string>
+    <string name="send_empty">Телевизор не найден. Подключите телевизор к той же сети Wi-Fi и откройте на нём GoatTV.</string>
+    <string name="send_playing">Воспроизводится на %1$s</string>
+    <string name="send_missing">На %1$s нет этого канала</string>
+    <string name="send_closed">Откройте GoatTV на %1$s</string>
+    <string name="send_failed">Не удалось связаться с %1$s</string>
+    <string name="send_from">От: %1$s</string>
+    <string name="send_from_phone">С телефона</string>
 </resources>

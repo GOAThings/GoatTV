@@ -666,7 +666,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), SEND_TV(ItvIcons.Tv) }
 
 /** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
 @Composable
@@ -682,12 +682,13 @@ private fun PlayerOption.label(): String {
         PlayerOption.QUALITY -> s.hlsQuality
         PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
+        PlayerOption.SEND_TV -> s.sendToTv
     }
 }
 
 /** O áudio, as legendas ou o temporizador do canal a dar. */
 @Composable
-internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, option: PlayerOption, onClose: () -> Unit) {
+internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, option: PlayerOption, onSent: () -> Unit = {}, onClose: () -> Unit) {
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
@@ -784,6 +785,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                         }
                     }
                 }
+                PlayerOption.SEND_TV -> SendToTvSection(vm, onSent, onClose)
             }
         }
     }

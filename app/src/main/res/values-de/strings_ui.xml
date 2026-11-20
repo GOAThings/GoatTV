@@ -917,4 +917,14 @@
     <string name="save_picture">Bild speichern</string>
     <string name="picture_saved">Bild gespeichert</string>
     <string name="picture_save_failed">Das Bild konnte nicht gespeichert werden</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">An TV senden</string>
+    <string name="send_searching">Suche nach Fernsehern in diesem Netzwerk…</string>
+    <string name="send_empty">Kein Fernseher gefunden. Verbinde den Fernseher mit demselben WLAN und öffne GoatTV darauf.</string>
+    <string name="send_playing">Läuft auf %1$s</string>
+    <string name="send_missing">%1$s hat diesen Sender nicht</string>
+    <string name="send_closed">Öffne GoatTV auf %1$s</string>
+    <string name="send_failed">%1$s ist nicht erreichbar</string>
+    <string name="send_from">Von %1$s</string>
+    <string name="send_from_phone">Von einem Handy</string>
 </resources>

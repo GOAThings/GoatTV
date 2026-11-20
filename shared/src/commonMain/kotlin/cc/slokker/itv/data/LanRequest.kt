@@ -11,6 +11,8 @@ class LanRequest private constructor(
     val path: String,
     private val hasOrigin: Boolean,
     private val hosts: List<String>,
+    /** O tamanho do corpo (Content-Length), ou -1 se não vier, vier repetido ou não for um número: aí não se lê corpo. */
+    val contentLength: Int = -1,
 ) {
     val allowed: Boolean get() = !hasOrigin && hosts.size == 1 && (isIpHost(hosts[0]) || isHomeName(hosts[0]))
 
@@ -24,7 +26,9 @@ class LanRequest private constructor(
             val method = requestLine[0].takeIf { it.isNotEmpty() } ?: return null
             val path = requestLine.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
             val headers = lines.drop(1).filter { ':' in it }.map { it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim() }
-            return LanRequest(method, path, headers.any { it.first == "origin" }, headers.filter { it.first == "host" }.map { it.second })
+            val lengths = headers.filter { it.first == "content-length" }.map { it.second }
+            val length = lengths.singleOrNull()?.takeIf { it.length in 1..9 && it.all { c -> c in '0'..'9' } }?.toInt() ?: -1
+            return LanRequest(method, path, headers.any { it.first == "origin" }, headers.filter { it.first == "host" }.map { it.second }, length)
         }
 
         /** Um IPv4 ou um IPv6 entre parênteses retos, com ou sem porta. Nunca um nome (nem se tenta resolvê-lo). */

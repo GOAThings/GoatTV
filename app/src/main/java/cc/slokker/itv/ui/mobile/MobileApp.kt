@@ -251,7 +251,12 @@ fun MobileMain(vm: AppViewModel) {
             }
         }
     }
-    options?.let { if (!pip) PlayerOptionsSheet(vm, playback, it) { options = null } }
+    // A dar na TV: o telemóvel para o canal (larga a ligação ao fornecedor) e volta ao ecrã inicial.
+    val sentToTv = {
+        if (landscape) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        nav = nav.sentToTv()
+    }
+    options?.let { if (!pip) PlayerOptionsSheet(vm, playback, it, onSent = sentToTv) { options = null } }
     homePinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { homePinFor = null }, rejected = vm::pinRejected) { pin ->
             vm.unlockGroup(id, pin).also { if (it) { nav = nav.openGroup(id); homePinFor = null } }

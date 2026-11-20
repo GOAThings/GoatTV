@@ -919,4 +919,14 @@
     <string name="save_picture">Salva immagine</string>
     <string name="picture_saved">Immagine salvata</string>
     <string name="picture_save_failed">Impossibile salvare l\'immagine</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">Invia alla TV</string>
+    <string name="send_searching">Ricerca di TV su questa rete…</string>
+    <string name="send_empty">Nessuna TV trovata. Collega la TV alla stessa rete Wi-Fi e apri GoatTV sulla TV.</string>
+    <string name="send_playing">In riproduzione su %1$s</string>
+    <string name="send_missing">%1$s non ha questo canale</string>
+    <string name="send_closed">Apri GoatTV su %1$s</string>
+    <string name="send_failed">Impossibile raggiungere %1$s</string>
+    <string name="send_from">Da %1$s</string>
+    <string name="send_from_phone">Da un telefono</string>
 </resources>

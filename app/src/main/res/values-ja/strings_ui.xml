@@ -914,4 +914,14 @@
     <string name="save_picture">画像を保存</string>
     <string name="picture_saved">画像を保存しました</string>
     <string name="picture_save_failed">画像を保存できませんでした</string>
+    <!-- Enviar para a TV -->
+    <string name="send_to_tv">テレビに送信</string>
+    <string name="send_searching">このネットワークのテレビを探しています…</string>
+    <string name="send_empty">テレビが見つかりません。テレビを同じWi-Fiに接続し、テレビでGoatTVを開いてください。</string>
+    <string name="send_playing">%1$sで再生中</string>
+    <string name="send_missing">%1$sにはこのチャンネルがありません</string>
+    <string name="send_closed">%1$sでGoatTVを開いてください</string>
+    <string name="send_failed">%1$sに接続できません</string>
+    <string name="send_from">%1$sから</string>
+    <string name="send_from_phone">スマートフォンから</string>
 </resources>

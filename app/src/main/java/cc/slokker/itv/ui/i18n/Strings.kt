@@ -1186,6 +1186,16 @@ class Strings(context: Context) {
     val pictureSaved get() = s(R.string.picture_saved)
     val pictureSaveFailed get() = s(R.string.picture_save_failed)
 
+    // Enviar para a TV
+    val sendToTv get() = s(R.string.send_to_tv)
+    val sendSearching get() = s(R.string.send_searching)
+    val sendEmpty get() = s(R.string.send_empty)
+    fun sendPlaying(tv: String) = s(R.string.send_playing, tv)
+    fun sendMissing(tv: String) = s(R.string.send_missing, tv)
+    fun sendClosed(tv: String) = s(R.string.send_closed, tv)
+    fun sendFailed(tv: String) = s(R.string.send_failed, tv)
+    fun sendFrom(phone: String) = if (phone.isEmpty()) s(R.string.send_from_phone) else s(R.string.send_from, phone)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(
