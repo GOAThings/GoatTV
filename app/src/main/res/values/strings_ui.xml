@@ -918,4 +918,11 @@
     <string name="save_picture">Save picture</string>
     <string name="picture_saved">Picture saved</string>
     <string name="picture_save_failed">Could not save the picture</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Upscaling</string>
+    <string name="upscale_sharp">Sharp</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">Makes video smaller than the screen look sharper. Uses more power; AI needs a capable device and switches back by itself when it cannot keep up</string>
+    <string name="upscale_shield">On boxes with their own AI upscaling (NVIDIA SHIELD), the system upscaler only works while this is Off and the picture adjustments are at zero, because then the picture goes straight from the decoder to the screen</string>
+    <string name="upscale_sub_apple">Makes video smaller than the screen look sharper with Apple MetalFX. Uses more power. Not available on devices without MetalFX</string>
 </resources>

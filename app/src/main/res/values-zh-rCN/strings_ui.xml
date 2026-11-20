@@ -914,4 +914,11 @@
     <string name="save_picture">保存画面</string>
     <string name="picture_saved">画面已保存</string>
     <string name="picture_save_failed">无法保存画面</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">画面放大</string>
+    <string name="upscale_sharp">锐利</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">让小于屏幕的视频更清晰。耗电更多；AI 需要性能足够的设备，跟不上时会自动退回</string>
+    <string name="upscale_shield">在自带 AI 放大的盒子上（NVIDIA SHIELD），只有此项关闭且画面调整为零时系统放大才起作用，因为这时画面直接从解码器送到屏幕</string>
+    <string name="upscale_sub_apple">使用 Apple MetalFX 让小于屏幕的视频更清晰。耗电更多。没有 MetalFX 的设备上不可用</string>
 </resources>

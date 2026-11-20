@@ -32,6 +32,7 @@ import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.media.Upscaling
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
 import cc.slokker.itv.media.WebVtt
@@ -91,6 +92,13 @@ class GoatCorePlayer(
      * ao abrir, o vídeo de 8 bits SDR passa pela GPU (ver [VideoGpuStage]), e a partir daí mudam sem reabrir o canal.
      */
     private val picture: () -> PictureLook = { PictureLook() },
+    /**
+     * Definições → Imagem → Aumentar a imagem (Prefs.Upscale; ver [VideoGpuStage] e media/Upscaling): só na imagem
+     * principal (quem cria o player passa "off" nas outras), só no 8 bits SDR mais pequeno do que o ecrã.
+     */
+    private val upscale: String = Prefs.Upscale.OFF,
+    /** O tamanho da superfície do vídeo agora (largura, altura), para saber logo se vale a pena aumentar; null sem ela. */
+    private val surfaceSize: () -> IntArray? = { null },
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -821,15 +829,43 @@ class GoatCorePlayer(
         val look = picture()
         val adjust = look.applies(bitDepth, hdr)
         if (!look.neutral && !adjust) Log.i(TAG, "picture: not applied to this video (bitDepth=$bitDepth hdr=$hdr)")
-        if (mode == Deinterlacing.NONE && !adjust) return null
+        val up = upscaleFor(info)
+        if (mode == Deinterlacing.NONE && !adjust && up == Prefs.Upscale.OFF) return null
         val verdict = InterlaceVerdict(woven = known == Deinterlacing.DECODER_WOVEN || decoder in wovenDecoders)
-        return runCatching { VideoGpuStage(surface, mode, verdict, pictureLook = picture, onWoven = { wovenDecoders += decoder }) }
+        return runCatching {
+            VideoGpuStage(surface, mode, verdict, pictureLook = picture, onWoven = { wovenDecoders += decoder }, upscale = up, upscaleMemory = upscaleMemory)
+        }
             .onSuccess {
                 if (mode != Deinterlacing.NONE) Log.i(TAG, "interlaced: deinterlacing ($deinterlace) on the GPU, decoder $decoder woven=${verdict.woven}")
                 if (adjust) Log.i(TAG, "picture: adjusting on the GPU ($look)")
             }
             .onFailure { Log.w(TAG, "video gpu: no stage: ${it.message}") }
             .getOrNull()
+    }
+
+    /**
+     * O aumento a pedir ao [VideoGpuStage] para o vídeo [info] (Prefs.Upscale), ou "off": só no 8 bits SDR, e, se já se
+     * sabe o tamanho do vídeo e o da superfície, só quando o vídeo é mais pequeno e esta resolução ainda não mostrou
+     * que não aguenta. O modo de cada imagem decide-se no estágio (pelo tamanho que o descodificador dá).
+     */
+    private fun upscaleFor(info: VideoInfo?): String {
+        if (upscale == Prefs.Upscale.OFF) return upscale
+        val bitDepth = info?.bitDepth ?: 8
+        val hdr = info?.isHdr == true
+        val size = surfaceSize()
+        val w = info?.width ?: 0
+        val h = info?.height ?: 0
+        val ceiling = synchronized(upscaleMemory) { upscaleMemory.ceiling(w, h) }
+        val mode = if (size != null && w > 0 && h > 0) {
+            Upscaling.mode(upscale, w, h, size[0], size[1], bitDepth, hdr, ceiling = ceiling)
+        } else {
+            Upscaling.mode(upscale, 1, 1, Upscaling.MAX_WIDTH, Upscaling.MAX_HEIGHT, bitDepth, hdr, ceiling = ceiling)
+        }
+        if (mode == Upscaling.OFF) {
+            Log.i(TAG, "upscale: off for this video (${w}x$h bitDepth=$bitDepth hdr=$hdr surface=${size?.joinToString("x") ?: "?"} ceiling=${Upscaling.name(ceiling)})")
+            return Prefs.Upscale.OFF
+        }
+        return upscale
     }
 
     /** Mostra a imagem na hora dela pelo relógio (o som, ou o do sistema); atrasada mais de 50 ms, salta-se. */
@@ -1572,6 +1608,9 @@ class GoatCorePlayer(
 
         /** Os descodificadores que já se viu darem os campos juntos (ver InterlaceVerdict), enquanto a app está aberta. */
         private val wovenDecoders: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+        /** O aumento que cada resolução aguentou nesta sessão (ver [VideoGpuStage]); sincroniza-se nele. */
+        private val upscaleMemory = cc.slokker.itv.media.UpscaleMemory()
         private const val MAX_PID = 0x1FFF
         private const val CAPTION_REORDER = 6
 

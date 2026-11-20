@@ -919,4 +919,11 @@
     <string name="save_picture">Guardar imagen</string>
     <string name="picture_saved">Imagen guardada</string>
     <string name="picture_save_failed">No se pudo guardar la imagen</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Escalado</string>
+    <string name="upscale_sharp">Nítido</string>
+    <string name="upscale_ai">IA</string>
+    <string name="upscale_sub">Hace más nítido el vídeo más pequeño que la pantalla. Gasta más energía; la IA necesita un dispositivo capaz y vuelve atrás sola cuando no da abasto</string>
+    <string name="upscale_shield">En los dispositivos con escalado por IA propio (NVIDIA SHIELD), el del sistema solo funciona con esto desactivado y los ajustes de imagen a cero, porque así la imagen va directa del decodificador a la pantalla</string>
+    <string name="upscale_sub_apple">Hace más nítido el vídeo más pequeño que la pantalla con MetalFX de Apple. Gasta más energía. No disponible en dispositivos sin MetalFX</string>
 </resources>

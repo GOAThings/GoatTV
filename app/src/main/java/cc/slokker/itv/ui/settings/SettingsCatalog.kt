@@ -254,6 +254,19 @@ object SettingsCatalog {
     val PICTURE_CONTRAST = pictureChoice(Prefs.Key.PICTURE_CONTRAST, { it.pictureContrast }, { it.prefs.pictureContrast }, 20)
     val PICTURE_SATURATION = pictureChoice(Prefs.Key.PICTURE_SATURATION, { it.pictureSaturation }, { it.prefs.pictureSaturation }, 30)
     val PICTURE_SHARPNESS = pictureChoice(Prefs.Key.PICTURE_SHARPNESS, { it.pictureSharpness }, { it.prefs.pictureSharpness }, 40, from = 0)
+    /**
+     * Aumentar a imagem (ver media/Upscaling): desligado, nítido ou IA, no vídeo de 8 bits SDR mais pequeno do que o
+     * ecrã. Na TV, o subtítulo diz também que o aumento da própria box (o da SHIELD) só trabalha com isto desligado e os
+     * ajustes no 0 (é quando o vídeo vai direto do descodificador para o ecrã).
+     */
+    val UPSCALE = Setting.Choice(
+        Prefs.Key.UPSCALE, { it.upscale },
+        options = { s -> listOf(Prefs.Upscale.OFF to s.off, Prefs.Upscale.SHARP to s.upscaleSharp, Prefs.Upscale.AI to s.upscaleAi) },
+        read = { it.prefs.upscale },
+        subtitle = { "${it.upscaleSub}. ${it.upscaleShield}" },
+        tv = Place(TvPage.PLAYBACK, 45, TvSection.PICTURE),
+        phone = Place(PhonePage.PLAYBACK, 45, PhoneSection.PICTURE),
+    )
     /** "Repor a imagem": põe as quatro no 0 (cada plataforma desenha a linha). */
     val PICTURE_RESET = Setting.Custom(
         "picture_reset",
@@ -489,7 +502,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, HLS_QUALITY, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_DELAY_AUTO, AUDIO_LEVEL, AUDIO_VOICES, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, PICTURE_BRIGHTNESS, PICTURE_CONTRAST, PICTURE_SATURATION, PICTURE_SHARPNESS, PICTURE_RESET, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_DELAY_AUTO, AUDIO_LEVEL, AUDIO_VOICES, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, PICTURE_BRIGHTNESS, PICTURE_CONTRAST, PICTURE_SATURATION, PICTURE_SHARPNESS, UPSCALE, PICTURE_RESET, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,

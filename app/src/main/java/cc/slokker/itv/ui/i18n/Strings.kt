@@ -1185,6 +1185,11 @@ class Strings(context: Context) {
     val savePicture get() = s(R.string.save_picture)
     val pictureSaved get() = s(R.string.picture_saved)
     val pictureSaveFailed get() = s(R.string.picture_save_failed)
+    val upscale get() = s(R.string.upscale)
+    val upscaleSharp get() = s(R.string.upscale_sharp)
+    val upscaleAi get() = s(R.string.upscale_ai)
+    val upscaleSub get() = s(R.string.upscale_sub)
+    val upscaleShield get() = s(R.string.upscale_shield)
 
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */

@@ -915,4 +915,11 @@
     <string name="save_picture">Simpan gambar</string>
     <string name="picture_saved">Gambar disimpan</string>
     <string name="picture_save_failed">Gambar tidak dapat disimpan</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Peningkatan skala</string>
+    <string name="upscale_sharp">Tajam</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">Membuat video yang lebih kecil dari layar tampak lebih tajam. Memakai lebih banyak daya; AI butuh perangkat yang mampu dan kembali sendiri bila tidak sanggup</string>
+    <string name="upscale_shield">Pada boks dengan peningkatan skala AI sendiri (NVIDIA SHIELD), milik sistem hanya bekerja saat ini Mati dan penyesuaian gambar di nol, karena saat itu gambar langsung dari dekoder ke layar</string>
+    <string name="upscale_sub_apple">Membuat video yang lebih kecil dari layar tampak lebih tajam dengan Apple MetalFX. Memakai lebih banyak daya. Tidak tersedia di perangkat tanpa MetalFX</string>
 </resources>

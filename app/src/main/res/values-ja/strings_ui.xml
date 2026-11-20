@@ -914,4 +914,11 @@
     <string name="save_picture">画像を保存</string>
     <string name="picture_saved">画像を保存しました</string>
     <string name="picture_save_failed">画像を保存できませんでした</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">アップスケーリング</string>
+    <string name="upscale_sharp">シャープ</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">画面より小さい映像をくっきり見せます。消費電力が増えます。AI には高性能な機器が必要で、追いつかないときは自動で戻ります</string>
+    <string name="upscale_shield">独自の AI アップスケーリングを持つボックス（NVIDIA SHIELD）では、これがオフで画質調整がゼロのときだけシステムのアップスケーラーが働きます。そのとき映像はデコーダーから直接画面に送られるためです</string>
+    <string name="upscale_sub_apple">Apple MetalFX で画面より小さい映像をくっきり見せます。消費電力が増えます。MetalFX のない機器では使えません</string>
 </resources>

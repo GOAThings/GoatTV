@@ -218,6 +218,8 @@ fun MobileMenu(vm: AppViewModel) {
                     // Os ajustes da imagem não chegam a todo o vídeo: diz-se por baixo deles.
                     if (section == PhoneSection.PICTURE) {
                         Text(s.pictureSub, color = ItvColors.TextFaint, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp))
+                        // O aumento da imagem gasta mais energia, e a IA volta atrás sozinha.
+                        Text(s.upscaleSub, color = ItvColors.TextFaint, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
                     }
                 }) { setting ->
                     when (setting) {

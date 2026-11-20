@@ -1063,6 +1063,7 @@ private fun accountItems(route: Route, vm: AppViewModel, nav: PageNav): List<Ite
             Item.Info("net", "OkHttp, Retrofit, Gson", "Apache-2.0"),
             Item.Info("coil", "Coil, ZXing", "Apache-2.0"),
             Item.Info("font", "Adwaita Sans", "OFL-1.1"),
+            Item.Info("fsrcnnx", "FSRCNNX (igv)", "LGPL-3.0"),
         )
 
         else -> emptyList()

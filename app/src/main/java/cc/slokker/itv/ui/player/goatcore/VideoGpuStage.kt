@@ -16,6 +16,9 @@ import android.view.Surface
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.media.UpscaleGovernor
+import cc.slokker.itv.media.UpscaleMemory
+import cc.slokker.itv.media.Upscaling
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
@@ -51,6 +54,15 @@ import java.util.concurrent.CountDownLatch
  *
  * A hora de cada imagem é a que o descodificador lhe deu (releaseOutputBuffer com a hora): vai para o ecrã com
  * eglPresentationTimeANDROID, e o segundo campo meia imagem depois.
+ *
+ * Aumentar a imagem ([upscale], Definições → Imagem; ver [Upscaler] e media/Upscaling): pela ordem desentrelaçar →
+ * aumentar → ajustes → ecrã, cada passagem no tamanho de saída dela. O vídeo passa sempre pela imagem de fora (a
+ * cópia, se não houver nada a desentrelaçar), que se aumenta para o tamanho da superfície do ecrã (a EGL; o leitor
+ * põe-na do tamanho do ecrã a sério, ver GoatCoreMediaPlayer). O modo de cada tamanho de vídeo e de superfície
+ * decide-se aqui, e mede-se cada imagem (o tempo da GPU, com glFinish): se não acompanhar ([UpscaleGovernor]), desce
+ * de "IA" para "Nítido" e de "Nítido" para nada, e a resolução fica assim para o resto da sessão ([upscaleMemory]).
+ * A "IA" precisa de um contexto GLES 3.0 com render para meia precisão: pede-se um quando a definição a quer, e sem
+ * ele fica o "Nítido".
  */
 internal class VideoGpuStage(
     private val output: Surface,
@@ -61,6 +73,10 @@ internal class VideoGpuStage(
     private val pictureLook: () -> PictureLook = { PictureLook() },
     /** Viu-se pente: o descodificador dá os campos juntos (para os canais seguintes já começarem a saber). */
     private val onWoven: () -> Unit = {},
+    /** Aumentar a imagem (Prefs.Upscale): o que a definição pede para este vídeo (já de 8 bits SDR). */
+    private val upscale: String = cc.slokker.itv.data.Prefs.Upscale.OFF,
+    /** O que cada resolução aguentou nesta sessão (sincroniza-se nela). */
+    private val upscaleMemory: UpscaleMemory = UpscaleMemory(),
 ) : SurfaceTexture.OnFrameAvailableListener {
     private val thread = HandlerThread("goatcore-video-gpu").apply { start() }
     private val handler = Handler(thread.looper)
@@ -81,6 +97,17 @@ internal class VideoGpuStage(
     private var combTexture = 0
     private var combFbo = 0
     private lateinit var texture2d: SurfaceTexture
+
+    /** O aumento da imagem (só com a definição ligada); [es3]: o contexto é GLES 3.0. */
+    private var upscaler: Upscaler? = null
+    private var es3 = false
+    private var governor: UpscaleGovernor? = null
+    /** O vídeo e a superfície para que se decidiu o modo do [governor]. */
+    private val upscaleFor = IntArray(4)
+    /** O tempo da GPU na imagem que se está a desenhar (as duas, nos campos), e quando começou a passagem atual. */
+    private var busyNs = 0L
+    private var passStartNs = 0L
+    private val surfaceSize = IntArray(2)
 
     /** Onde o descodificador desenha. */
     lateinit var input: Surface
@@ -151,15 +178,22 @@ internal class VideoGpuStage(
         display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         val version = IntArray(2)
         check(EGL14.eglInitialize(display, version, 0, version, 1)) { "eglInitialize" }
-        val attributes = intArrayOf(
-            EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
-            EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT, EGL14.EGL_NONE,
-        )
-        val configs = arrayOfNulls<EGLConfig>(1)
-        val count = IntArray(1)
-        check(EGL14.eglChooseConfig(display, attributes, 0, configs, 0, 1, count, 0) && count[0] > 0) { "eglChooseConfig" }
-        val config = configs[0]!!
-        context = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
+        // A "IA" do aumento precisa do GLES 3.0: pede-se esse contexto primeiro; sem ele, o de sempre (GLES2).
+        var config: EGLConfig? = null
+        if (upscale == cc.slokker.itv.data.Prefs.Upscale.AI && !Upscaler.broken) {
+            config = chooseConfig(EGLExt.EGL_OPENGL_ES3_BIT_KHR)
+            if (config != null) {
+                context = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 3, EGL14.EGL_NONE), 0)
+                es3 = context != EGL14.EGL_NO_CONTEXT
+            }
+            if (!es3) Log.i(TAG, "upscale: no OpenGL ES 3.0 context, ai is not available (sharp instead)")
+        }
+        if (!es3) {
+            config = chooseConfig(EGL14.EGL_OPENGL_ES2_BIT)
+            checkNotNull(config) { "eglChooseConfig" }
+            context = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
+        }
+        checkNotNull(config)
         check(context != EGL14.EGL_NO_CONTEXT) { "eglCreateContext" }
         window = EGL14.eglCreateWindowSurface(display, config, output, intArrayOf(EGL14.EGL_NONE), 0)
         check(window != EGL14.EGL_NO_SURFACE) { "eglCreateWindowSurface" }
@@ -184,6 +218,25 @@ internal class VideoGpuStage(
         texture2d = SurfaceTexture(external)
         texture2d.setOnFrameAvailableListener(this, handler)
         input = Surface(texture2d)
+
+        if (upscale != cc.slokker.itv.data.Prefs.Upscale.OFF) {
+            // A rede escreve em texturas de meia precisão: o GLES 3.2 já o faz, o 3.0 e o 3.1 com a extensão.
+            val version = GLES20.glGetString(GLES20.GL_VERSION) ?: ""
+            val extensions = GLES20.glGetString(GLES20.GL_EXTENSIONS) ?: ""
+            val halfFloat = "GL_EXT_color_buffer_half_float" in extensions || "GL_EXT_color_buffer_float" in extensions || "OpenGL ES 3.2" in version
+            if (es3 && !halfFloat) Log.i(TAG, "upscale: $version has no half-float render targets, ai is not available (sharp instead)")
+            upscaler = Upscaler(es3 && halfFloat)
+        }
+    }
+
+    private fun chooseConfig(renderable: Int): EGLConfig? {
+        val attributes = intArrayOf(
+            EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+            EGL14.EGL_RENDERABLE_TYPE, renderable, EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT, EGL14.EGL_NONE,
+        )
+        val configs = arrayOfNulls<EGLConfig>(1)
+        val count = IntArray(1)
+        return if (EGL14.eglChooseConfig(display, attributes, 0, configs, 0, 1, count, 0) && count[0] > 0) configs[0] else null
     }
 
     override fun onFrameAvailable(surfaceTexture: SurfaceTexture) {
@@ -205,33 +258,82 @@ internal class VideoGpuStage(
             val w = width.takeIf { it > 0 } ?: return
             val h = height.takeIf { it > 0 } ?: return
             val look = pictureLook()
-            if (mode == Deinterlacing.NONE) {
+            EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, surfaceSize, 0)
+            EGL14.eglQuerySurface(display, window, EGL14.EGL_HEIGHT, surfaceSize, 1)
+            val up = upscaleMode(w, h, surfaceSize[0], surfaceSize[1])
+            busyNs = 0L
+            if (mode == Deinterlacing.NONE && up == Upscaling.OFF) {
                 // Só os ajustes: uma passagem, do descodificador para o ecrã.
                 pictureW = w
                 pictureH = h
                 passedThrough++
-                present(look, fromDecoder = true, at)
+                present(look, fromDecoder = true, at, Upscaling.OFF)
                 return
             }
             if (w != pictureW || h != pictureH) resize(w, h)
-            if (verdict.measuring && drawn++ % MEASURE_EVERY == 0L) measure()
+            if (mode != Deinterlacing.NONE && verdict.measuring && drawn++ % MEASURE_EVERY == 0L) measure()
             val progressive = frame?.progressive == true
-            if (!verdict.deinterlace || progressive) {
+            if (mode == Deinterlacing.NONE || !verdict.deinterlace || progressive) {
                 passedThrough++
-                draw(MODE_COPY, 0f, at, look)
-                return
-            }
-            deinterlaced++
-            if (mode == Deinterlacing.FIELDS) {
-                val first = if (frame?.bottomFirst == true) 1f else 0f
-                draw(MODE_FIELD, first, at, look)
-                draw(MODE_FIELD, 1f - first, at + fieldNs, look)
+                draw(MODE_COPY, 0f, at, look, up)
             } else {
-                draw(MODE_BLEND, 0f, at, look)
+                deinterlaced++
+                if (mode == Deinterlacing.FIELDS) {
+                    val first = if (frame?.bottomFirst == true) 1f else 0f
+                    draw(MODE_FIELD, first, at, look, up)
+                    draw(MODE_FIELD, 1f - first, at + fieldNs, look, up)
+                } else {
+                    draw(MODE_BLEND, 0f, at, look, up)
+                }
             }
+            if (up != Upscaling.OFF) govern(w, h)
         } catch (e: Exception) {
             Log.w(TAG, "video gpu: ${e.javaClass.simpleName} ${e.message}")
         }
+    }
+
+    /**
+     * O modo do aumento para o vídeo [w]×[h] na superfície [sw]×[sh]: decide-se de novo quando um dos dois muda (ver
+     * Upscaling.mode), e daí em diante é o do [governor].
+     */
+    private fun upscaleMode(w: Int, h: Int, sw: Int, sh: Int): Int {
+        val u = upscaler ?: return Upscaling.OFF
+        if (governor == null || upscaleFor[0] != w || upscaleFor[1] != h || upscaleFor[2] != sw || upscaleFor[3] != sh) {
+            upscaleFor[0] = w
+            upscaleFor[1] = h
+            upscaleFor[2] = sw
+            upscaleFor[3] = sh
+            val ceiling = synchronized(upscaleMemory) { upscaleMemory.ceiling(w, h) }
+            val m = Upscaling.mode(upscale, w, h, sw, sh, aiCapable = u.aiReady, ceiling = if (Upscaler.sharpBroken) Upscaling.OFF else ceiling)
+            val why = when {
+                m == Upscaling.requested(upscale) -> ""
+                ceiling < Upscaling.requested(upscale) && m == ceiling -> " (this resolution could not keep up before)"
+                Upscaling.scale(w, h, sw, sh) < Upscaling.MIN_SCALE -> " (the video is not smaller than the surface)"
+                !u.aiReady -> " (no GPU support for ai)"
+                else -> " (too small a difference for ai)"
+            }
+            Log.i(TAG, "upscale: ${Upscaling.name(m)} for ${w}x$h on a ${sw}x$sh surface$why")
+            governor = UpscaleGovernor(m)
+        }
+        return governor?.mode ?: Upscaling.OFF
+    }
+
+    /** Conta a imagem que acabou de sair no [governor] (o tempo da GPU e o que tinha, o intervalo entre imagens). */
+    private fun govern(w: Int, h: Int) {
+        val g = governor ?: return
+        val before = g.mode
+        if (!g.frame(System.nanoTime() / 1_000_000, busyNs / 1000, fieldNs * 2 / 1000)) return
+        synchronized(upscaleMemory) { upscaleMemory.lower(w, h, g.mode) }
+        Log.i(TAG, "upscale: ${Upscaling.name(before)} cannot keep up with ${w}x$h (late ${g.lastLate}/${g.lastFrames} frames in a second), " +
+            "${Upscaling.name(g.mode)} for this resolution from now on")
+    }
+
+    /** O aumento [up] falhou nesta GPU ([e]): desce um modo já (a rede não volta a tentar-se nesta sessão). */
+    private fun upscaleFailed(up: Int, e: Throwable) {
+        val g = governor ?: return
+        if (up == Upscaling.SHARP) Upscaler.sharpBroken = true
+        g.down()
+        Log.w(TAG, "upscale: ${Upscaling.name(up)} failed on this GPU (${e.javaClass.simpleName} ${e.message}), ${Upscaling.name(g.mode)} instead")
     }
 
     /** A imagem de fora (o tamanho do vídeo) onde se desentrelaça. */
@@ -271,8 +373,12 @@ internal class VideoGpuStage(
         }
     }
 
-    /** [kind]: MODE_COPY, MODE_FIELD (o campo [field]: 0 = linhas pares, 1 = ímpares) ou MODE_BLEND; para o ecrã às [atNs]. */
-    private fun draw(kind: Float, field: Float, atNs: Long, look: PictureLook) {
+    /**
+     * [kind]: MODE_COPY, MODE_FIELD (o campo [field]: 0 = linhas pares, 1 = ímpares) ou MODE_BLEND; para o ecrã às
+     * [atNs], aumentada por [up].
+     */
+    private fun draw(kind: Float, field: Float, atNs: Long, look: PictureLook, up: Int) {
+        passStartNs = System.nanoTime()
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, pictureFbo)
         GLES20.glViewport(0, 0, pictureW, pictureH)
         GLES20.glUseProgram(deinterlace)
@@ -284,19 +390,45 @@ internal class VideoGpuStage(
         GLES20.glUniform1f(GLES20.glGetUniformLocation(deinterlace, "mode"), kind)
         quad(deinterlace)
 
-        present(look, fromDecoder = false, atNs)
+        present(look, fromDecoder = false, atNs, up)
     }
 
     /**
      * A última passagem: a imagem desentrelaçada (ou, com [fromDecoder], a textura do descodificador) para o ecrã às
-     * [atNs], com os ajustes [look] (a nitidez e a cor).
+     * [atNs], com os ajustes [look] (a nitidez e a cor). Com o aumento [up]: a "IA" faz primeiro a imagem 2× (que esta
+     * passagem estica para o ecrã, com os ajustes), o "Nítido" é ele próprio esta passagem (com a cor, e a nitidez dos
+     * ajustes somada ao realce dele).
      */
-    private fun present(look: PictureLook, fromDecoder: Boolean, atNs: Long) {
+    private fun present(look: PictureLook, fromDecoder: Boolean, atNs: Long, up: Int) {
+        var source = picture
+        var sourceW = pictureW
+        var sourceH = pictureH
+        // O modo pode ter descido nesta mesma imagem (o primeiro campo falhou).
+        var upMode = if (fromDecoder) Upscaling.OFF else minOf(up, governor?.mode ?: Upscaling.OFF)
+        if (upMode == Upscaling.AI) {
+            try {
+                source = upscaler!!.runAi(picture, pictureW, pictureH, ::quad)
+                sourceW = pictureW * 2
+                sourceH = pictureH * 2
+            } catch (e: Throwable) {
+                upscaleFailed(Upscaling.AI, e)
+                upMode = governor?.mode ?: Upscaling.OFF
+            }
+        }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
-        val size = IntArray(2)
-        EGL14.eglQuerySurface(display, window, EGL14.EGL_WIDTH, size, 0)
-        EGL14.eglQuerySurface(display, window, EGL14.EGL_HEIGHT, size, 1)
-        GLES20.glViewport(0, 0, size[0], size[1])
+        GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
+        if (upMode == Upscaling.SHARP) {
+            try {
+                upscaler!!.drawSharp(picture, pictureW, pictureH, look, SHARP_STRENGTH + look.sharpen, ::quad)
+                swap(atNs, timed = true)
+                return
+            } catch (e: Throwable) {
+                upscaleFailed(Upscaling.SHARP, e)
+                upMode = Upscaling.OFF
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
+            }
+        }
         val level = if (look.neutral) LEVEL_COPY else if (look.sharpness == 0) LEVEL_COLOUR else LEVEL_SHARP
         val program = finalProgram(fromDecoder, level)
         GLES20.glUseProgram(program)
@@ -304,10 +436,10 @@ internal class VideoGpuStage(
             bindExternal(program)
         } else {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, picture)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, source)
             GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "tex"), 0)
             GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(program, "st"), 1, false, IDENTITY, 0)
-            GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "texel"), 1f / pictureW, 1f / pictureH)
+            GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "texel"), 1f / sourceW, 1f / sourceH)
         }
         if (level >= LEVEL_COLOUR) {
             GLES20.glUniformMatrix3fv(GLES20.glGetUniformLocation(program, "colour"), 1, false, look.rgbMatrix(), 0)
@@ -315,6 +447,18 @@ internal class VideoGpuStage(
         }
         if (level >= LEVEL_SHARP) GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "sharp"), look.sharpen)
         quad(program)
+        swap(atNs, timed = up != Upscaling.OFF)
+    }
+
+    /**
+     * Para o ecrã às [atNs]. [timed]: com o aumento, espera-se pela GPU antes (glFinish) e conta-se o tempo desde o
+     * início da passagem ([busyNs], ver [govern]): o eglSwapBuffers pode esperar pelo ecrã, e isso não é atraso da GPU.
+     */
+    private fun swap(atNs: Long, timed: Boolean) {
+        if (timed) {
+            GLES20.glFinish()
+            busyNs += System.nanoTime() - passStartNs
+        }
         EGLExt.eglPresentationTimeANDROID(display, window, atNs)
         EGL14.eglSwapBuffers(display, window)
     }
@@ -364,12 +508,14 @@ internal class VideoGpuStage(
         thread.quitSafely()
     }
 
-    private companion object {
+    internal companion object {
         const val TAG = "GoatCore"
         val IDENTITY = floatArrayOf(1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f)
 
         /** O que a última passagem faz: só copia, a cor, ou a nitidez e a cor. */
         const val LEVEL_COPY = 0
+        /** O realce do "Nítido" sem nitidez nos ajustes (ver Upscaler.drawSharp; a dos ajustes soma-se). */
+        const val SHARP_STRENGTH = 0.4f
         const val LEVEL_COLOUR = 1
         const val LEVEL_SHARP = 2
 

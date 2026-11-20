@@ -917,4 +917,11 @@
     <string name="save_picture">Görüntüyü kaydet</string>
     <string name="picture_saved">Görüntü kaydedildi</string>
     <string name="picture_save_failed">Görüntü kaydedilemedi</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Ölçekleme</string>
+    <string name="upscale_sharp">Keskin</string>
+    <string name="upscale_ai">YZ</string>
+    <string name="upscale_sub">Ekrandan küçük videoyu daha keskin gösterir. Daha fazla enerji harcar; YZ güçlü bir cihaz ister ve yetişemezse kendiliğinden geri döner</string>
+    <string name="upscale_shield">Kendi YZ ölçeklemesi olan kutularda (NVIDIA SHIELD) sistemin ölçeklemesi yalnızca bu kapalıyken ve görüntü ayarları sıfırdayken çalışır, çünkü o zaman görüntü kod çözücüden doğrudan ekrana gider</string>
+    <string name="upscale_sub_apple">Ekrandan küçük videoyu Apple MetalFX ile daha keskin gösterir. Daha fazla enerji harcar. MetalFX olmayan cihazlarda yoktur</string>
 </resources>
