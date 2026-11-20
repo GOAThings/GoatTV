@@ -342,8 +342,8 @@
     <string name="engine_aether">AetherEngine (실험적)</string>
     <string name="using_vlc">이 채널은 VLC로 재생됩니다</string>
     <string name="decoder">동영상 디코더</string>
-    <string name="deinterlace">디인터레이스 (VLC)</string>
-    <string name="deinterlace_sub">576i 및 1080i 채널용. ExoPlayer에서는 TV가 처리합니다</string>
+    <string name="deinterlace">디인터레이스</string>
+    <string name="deinterlace_sub">576i 및 1080i 채널용. 디코더가 직접 처리하지 않을 때 적용됩니다</string>
     <string name="deinterlace_smooth">부드럽게 (50/60 프레임)</string>
     <string name="deinterlace_normal">보통 (25/30 프레임)</string>
     <string name="decoder_hw">하드웨어(권장)</string>

@@ -13,6 +13,17 @@ class VideoUnit(
     /** Os tempos da imagem (90 kHz), como os deu quem chamou [NalReader.next]; -1 em [NalReader.unit]. */
     val pts: Long = -1,
     val dts: Long = -1,
+    /**
+     * A imagem é inteira (progressiva): o SPS não deixa entrelaçar (H.264 com frame_mbs_only, HEVC), ou no MPEG-2 o
+     * progressive_frame. Numa imagem entrelaçada (false), [bottomFirst] diz qual dos campos foi captado primeiro.
+     */
+    val progressive: Boolean = true,
+    /**
+     * Entrelaçada, com o campo de baixo (as linhas ímpares) primeiro: num campo solto ou num par, o primeiro é o de
+     * baixo; no MPEG-2, sem top_field_first. Uma imagem H.264 entrelaçada codificada inteira (MBAFF) não o diz sem o
+     * SEI pic_timing: fica false (o de cima primeiro, o habitual nas emissões HD).
+     */
+    val bottomFirst: Boolean = false,
 )
 
 /**
@@ -62,7 +73,7 @@ class NalReader(private val hevc: Boolean) {
      * devolve null. Os descodificadores do Android e da Apple não dão imagem com os campos soltos.
      */
     fun next(annexB: ByteArray, pts: Long, dts: Long): VideoUnit? {
-        val u = unit(annexB).let { VideoUnit(it.data, it.keyframe, it.parameterSets, pts, dts) }
+        val u = unit(annexB).let { scanned(it.data, it.keyframe, it.parameterSets, pts, dts) }
         val slice = lastSlice
         val h = held
         if (!pairFields && slice != null && slice.field) {
@@ -79,12 +90,23 @@ class NalReader(private val hevc: Boolean) {
         if (h != null && h.frameNum == slice.frameNum && h.bottom != slice.bottom) {
             held = null
             fieldPairs++
-            return VideoUnit(h.unit.data + u.data, h.unit.keyframe || u.keyframe, h.unit.parameterSets.ifEmpty { u.parameterSets }, h.unit.pts, h.unit.dts)
+            return VideoUnit(h.unit.data + u.data, h.unit.keyframe || u.keyframe, h.unit.parameterSets.ifEmpty { u.parameterSets }, h.unit.pts, h.unit.dts,
+                progressive = false, bottomFirst = h.bottom)
         }
         held = Held(u, slice.frameNum, slice.bottom)
         // O campo anterior não teve par: vai sozinho (melhor do que perdê-lo).
         if (h != null) loneFields++
         return h?.unit
+    }
+
+    /**
+     * A imagem com os tempos e o modo como foi captada (ver [VideoUnit.progressive]), pela primeira fatia ([lastSlice]):
+     * um campo diz qual é; uma imagem inteira num SPS entrelaçado (MBAFF) fica entrelaçada, com o campo de cima primeiro.
+     */
+    private fun scanned(data: ByteArray, keyframe: Boolean, sets: List<ByteArray>, pts: Long, dts: Long): VideoUnit {
+        val slice = lastSlice
+        val progressive = hevc || spsInfo?.frameMbsOnly != false
+        return VideoUnit(data, keyframe, sets, pts, dts, progressive = progressive, bottomFirst = !progressive && slice?.let { it.field && it.bottom } == true)
     }
 
     /** Os conjuntos de parâmetros já vistos, ou vazio se ainda falta algum (antes disso não se pode descodificar). */

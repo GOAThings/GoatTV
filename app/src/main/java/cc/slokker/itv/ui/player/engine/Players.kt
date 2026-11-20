@@ -85,7 +85,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         val capture = if (DebugEngine.capture) java.io.File(context.cacheDir, "goatcore.ts") else null
         val appContext = context.applicationContext
         return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough, needsSdr = { f -> HdrType.needsSdr(appContext, f, prefs.hdr) },
-            udp = UdpTsDataSource.Factory(appContext))
+            udp = UdpTsDataSource.Factory(appContext), deinterlace = prefs.deinterlace)
             .apply { playWhenReady = true }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE

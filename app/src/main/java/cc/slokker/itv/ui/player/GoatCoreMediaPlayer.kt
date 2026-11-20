@@ -56,6 +56,8 @@ internal class GoatCoreMediaPlayer(
     private val needsSdr: (Format) -> Boolean = { false },
     /** Os canais em UDP/RTP (ver [cc.slokker.itv.ui.player.goatcore.UdpTsDataSource]). */
     val udp: DataSource.Factory? = null,
+    /** Definições → Desentrelaçar (Prefs.Deinterlace; ver [GoatCorePlayer.deinterlace]). */
+    private val deinterlace: String = cc.slokker.itv.data.Prefs.Deinterlace.OFF,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
@@ -198,7 +200,7 @@ internal class GoatCoreMediaPlayer(
         val g = ++generation
         startPositionMs = -1
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
-            needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
+            deinterlace = deinterlace, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
