@@ -895,4 +895,6 @@
     <string name="hls_quality_best">최고</string>
     <string name="hls_quality_data_saver">데이터 절약 (최대 720p)</string>
     <string name="hls_quality_lowest">최저</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">라디오</string>
 </resources>

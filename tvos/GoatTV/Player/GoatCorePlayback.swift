@@ -180,6 +180,8 @@ final class GoatCorePlayback: NSObject {
     var onEvent: ((Event) -> Void)?
     /// Definições → Desentrelaçar ("yadif2x", "yadif" ou "off"): vale para o canal que se abrir a seguir.
     var deinterlace = "yadif2x"
+    /// Chegaram (ou mudaram) as faixas do canal: o leitor vê se é só de som (uma rádio).
+    var onTracks: (() -> Void)?
     /// O código HTTP com que o fornecedor recusou o stream, quando se sabe.
     private(set) var httpStatus: Int?
     /// Porque falhou (para o registo).
@@ -290,6 +292,7 @@ final class GoatCorePlayback: NSObject {
         switch event {
         case .tracks(let list):
             tracks = list
+            onTracks?()
         case .videoSize(let width, let height):
             videoHeight = height
             view.videoSize = CGSize(width: width, height: height)

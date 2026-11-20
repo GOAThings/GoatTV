@@ -902,4 +902,6 @@
     <string name="hls_quality_best">Лучшее</string>
     <string name="hls_quality_data_saver">Экономия трафика (до 720p)</string>
     <string name="hls_quality_lowest">Самое низкое</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Радио</string>
 </resources>

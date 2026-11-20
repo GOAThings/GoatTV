@@ -90,6 +90,8 @@ import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.player.TuningPill
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.player.VideoView
+import cc.slokker.itv.ui.player.RadioView
+import androidx.media3.common.Player
 import cc.slokker.itv.ui.player.PlaybackSpeed
 import cc.slokker.itv.ui.player.Timeshift
 import cc.slokker.itv.ui.player.VlcPlayer
@@ -285,12 +287,17 @@ internal fun VideoArea(
                 factory = { VideoView(it).also { v -> playback.view = v } },
                 update = {
                     playback.view = it
-                    // Como na TV: o ecrã não se apaga enquanto o canal dá (ou carrega).
-                    it.keepScreenOn = playback.playing || playback.buffering
+                    // Como na TV: o ecrã não se apaga enquanto o canal dá (ou carrega). Uma rádio deixa-o apagar (o som
+                    // continua com o ecrã bloqueado).
+                    it.keepScreenOn = (playback.playing || playback.buffering) && !playback.radio
                 },
                 modifier = Modifier.fillMaxSize(),
             )
             playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+            // Uma rádio: o logótipo, o nome e o programa no lugar da imagem preta.
+            if (playback.radio && playback.failure == null) {
+                RadioView(channel, playback.programme, playing = playback.playing, compact = !fullscreen || second != null)
+            }
         }
         if (second == null) {
             Box(Modifier.fillMaxSize(), content = main)
@@ -435,6 +442,8 @@ internal fun VideoArea(
                                 // Não arrancou: tenta outra vez desde o primeiro formato (o OK da TV).
                                 playback.failure != null -> playback.core.retry()
                                 playback.playing -> playback.player.pause()
+                                // Parado pela sessão de media (sem pausa do direto): volta a abrir no direto.
+                                playback.player.playbackState == Player.STATE_IDLE -> playback.core.onStart()
                                 // Pausa do direto: continua de onde parou (o disco continuou a gravar).
                                 cu == null -> ts.resume(playback.player)
                                 else -> playback.player.play()

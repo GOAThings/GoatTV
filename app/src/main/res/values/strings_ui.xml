@@ -899,4 +899,6 @@
     <string name="hls_quality_best">Best</string>
     <string name="hls_quality_data_saver">Data saver (up to 720p)</string>
     <string name="hls_quality_lowest">Lowest</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Radio</string>
 </resources>

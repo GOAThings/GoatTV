@@ -4,6 +4,7 @@ import cc.slokker.itv.data.Category
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.OTHERS_GROUP
 import cc.slokker.itv.data.Sha1
+import cc.slokker.itv.playback.RadioRules
 
 /**
  * Parser M3U/M3U8 em streaming: lê linha a linha, por isso aguenta listas com dezenas de MB. Só guarda canais de TV
@@ -102,6 +103,7 @@ object M3uParser {
                         archiveDays = catchup?.days ?: 0,
                         catchupType = catchup?.type,
                         catchupSource = catchup?.source,
+                        radio = RadioRules.m3uHint(info.attrs).takeIf { it },
                     )
                 }
             }

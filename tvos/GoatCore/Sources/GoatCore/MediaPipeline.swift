@@ -538,8 +538,18 @@ public final class MediaPipeline {
             asbd.mFormatID = kAudioFormatEnhancedAC3
             asbd.mFramesPerPacket = 1536
         case "MPEG_AUDIO":
-            asbd.mFormatID = kAudioFormatMPEGLayer2
-            asbd.mFramesPerPacket = 1152
+            // A camada vem do cabeçalho dos blocos: o MP2 da TV, o MP3 das rádios (576 amostras no MPEG-2/2.5).
+            switch f.mpegLayer {
+            case 3:
+                asbd.mFormatID = kAudioFormatMPEGLayer3
+                asbd.mFramesPerPacket = f.sampleRate < 32000 ? 576 : 1152
+            case 1:
+                asbd.mFormatID = kAudioFormatMPEGLayer1
+                asbd.mFramesPerPacket = 384
+            default:
+                asbd.mFormatID = kAudioFormatMPEGLayer2
+                asbd.mFramesPerPacket = 1152
+            }
         default:
             return nil
         }

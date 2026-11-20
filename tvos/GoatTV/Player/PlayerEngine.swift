@@ -49,6 +49,9 @@ final class PlayerEngine: NSObject {
     private(set) var hasPicture = false
     /// O formato da forma que está a dar ("ts" ou "m3u8").
     private(set) var format: String?
+    /// O stream é só de som (uma rádio, ver RadioRules), pelas faixas do GoatCore; nil enquanto não se sabe (ou noutro
+    /// motor).
+    private(set) var streamAudioOnly: Bool?
     /// O motor que está a dar.
     private(set) var backend: Backend = .vlc
     /// Já esteve a dar neste canal (então uma falha é a stream que caiu: volta a ligar sempre).
@@ -289,6 +292,7 @@ final class PlayerEngine: NSObject {
         g.view.isHidden = true
         view.insertSubview(g.view, belowSubview: freezeView)
         g.onEvent = { [weak self] event in self?.goatCoreEvent(event) }
+        g.onTracks = { [weak self] in self?.goatCoreTracks() }
         g.onPipEnded = { [weak self] in self?.onPipEnded?() }
         g.view.setSubtitleLook(size: subtitleLook.size, style: subtitleLook.style, position: subtitleLook.position)
         goatCorePlayback = g
@@ -447,6 +451,7 @@ final class PlayerEngine: NSObject {
             manualAudio = nil
             manualSubtitle = nil
             stalls.clear()
+            streamAudioOnly = nil
         }
         drops.removeAll()
         afr.newChannel()
@@ -627,6 +632,7 @@ final class PlayerEngine: NSObject {
         hideFreeze()
         stopBackends()
         hasPicture = false
+        streamAudioOnly = nil
         state = .idle
         // A TV volta ao modo normal: o AFR "ao começar" volta a mudar no próximo canal.
         clearDisplayCriteria()
@@ -691,6 +697,7 @@ final class PlayerEngine: NSObject {
         appleView.isHidden = backend != .apple
         if backend == .aether { aether.view.isHidden = false } else { aetherPlayback?.view.isHidden = true }
         if backend == .goatcore { goatCore.view.isHidden = false } else { goatCorePlayback?.view.isHidden = true }
+        if backend != .goatcore { streamAudioOnly = nil }
         hasPicture = false
         movingSince = nil
         state = .opening
@@ -1266,6 +1273,13 @@ final class PlayerEngine: NSObject {
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil
         g.open(url, headers: headers, startMs: ring ? 0 : openStartMs, hls: hls, channel: channel)
+    }
+
+    /// As faixas do GoatCore: só som (sem vídeo) é uma rádio.
+    private func goatCoreTracks() {
+        guard backend == .goatcore, let tracks = goatCorePlayback?.tracks, !tracks.isEmpty else { return }
+        let value = !tracks.contains { $0.kind == .video } && tracks.contains { $0.kind == .audio }
+        if streamAudioOnly != value { streamAudioOnly = value }
     }
 
     private func goatCoreEvent(_ event: GoatCorePlayback.Event) {

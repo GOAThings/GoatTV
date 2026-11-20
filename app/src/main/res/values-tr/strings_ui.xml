@@ -898,4 +898,6 @@
     <string name="hls_quality_best">En iyi</string>
     <string name="hls_quality_data_saver">Veri tasarrufu (720p\'ye kadar)</string>
     <string name="hls_quality_lowest">En düşük</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Radyo</string>
 </resources>

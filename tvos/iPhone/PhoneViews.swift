@@ -446,9 +446,9 @@ struct PhoneMain: View {
                 if tab == .menu || stopped { model.player.stop() }
             }
         }
-        // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta.
+        // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta (uma rádio continua, e ele também).
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background, model.sleepAt != nil { model.setSleepTimer(nil, announce: false) }
+            if phase == .background, model.sleepAt != nil, !model.isRadio { model.setSleepTimer(nil, announce: false) }
         }
         // Temporizador: aviso no último minuto; ao acabar, para e sai da app.
         .task(id: model.sleepAt) {
@@ -565,6 +565,14 @@ private struct VideoPane: View {
                 }
             }
             .ignoresSafeArea(edges: fullscreen ? .all : [])
+            // Uma rádio (só som): o logótipo, o nome e o programa no lugar da imagem preta.
+            if model.isRadio, model.second == nil, model.player.state != .failed, let channel = model.current {
+                RadioView(channel: channel, logo: model.logo(for: channel), programme: model.currentProgramme,
+                          label: model.strings.r("radio_label"), playing: model.player.state == .playing && !model.player.paused,
+                          accent: model.prefs.accent, compact: !fullscreen)
+                    .ignoresSafeArea(edges: fullscreen ? .all : [])
+                    .allowsHitTesting(false)
+            }
             if model.playbackError != nil, model.player.state == .failed {
                 // O erro explicado fica por cima de tudo (mais abaixo): aqui não há nada a carregar.
             } else if !controls, model.player.frozen || (model.player.state == .playing && !model.player.hasPicture) {
@@ -657,6 +665,10 @@ private struct VideoPane: View {
                     }
                     Spacer()
                     if fullscreen { Text(Date(), style: .time).font(.subheadline.weight(.semibold)) }
+                    // AirPlay: o som vai para outro aparelho (colunas, uma Apple TV); ver AirPlayButton.
+                    AirPlayButton()
+                        .frame(width: 40, height: 40)
+                        .background(Color.white.opacity(0.14), in: Circle())
                     // Dois canais lado a lado.
                     if model.second == nil {
                         hudButton("rectangle.split.2x1") { pickingSecond = true; touched += 1 }
@@ -678,8 +690,12 @@ private struct VideoPane: View {
                     if model.player.frozen || model.player.state == .opening || (model.player.state == .playing && !model.player.hasPicture) {
                         ProgressView().tint(.white).frame(width: 60, height: 60)
                     } else {
-                        Button { model.player.togglePause(); touched += 1 } label: {
-                            Image(systemName: model.player.paused ? "play.fill" : "pause.fill").font(.title2)
+                        Button {
+                            // Parado pelo ecrã bloqueado ou pelo centro de controlo (sem pausa do direto): volta ao direto.
+                            if model.remoteStopped { model.remotePlay() } else { model.player.togglePause() }
+                            touched += 1
+                        } label: {
+                            Image(systemName: model.player.paused || model.remoteStopped ? "play.fill" : "pause.fill").font(.title2)
                                 .frame(width: 60, height: 60)
                                 .background(Color.white.opacity(0.14), in: Circle())
                         }

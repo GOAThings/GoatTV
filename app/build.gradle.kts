@@ -104,6 +104,8 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
+    // A sessão de media: teclas de media, "OK Google, pausa", e a notificação da rádio no telemóvel.
+    implementation(libs.media3.session)
     // Áudio por software no ExoPlayer quando a box não o descodifica (MP2, AC-3, E-AC-3, DTS…).
     implementation(libs.nextlib.media3ext)
     // O VLC como player alternativo (Definições → Reprodução).

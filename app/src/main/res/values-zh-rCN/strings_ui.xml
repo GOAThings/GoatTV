@@ -895,4 +895,6 @@
     <string name="hls_quality_best">最佳</string>
     <string name="hls_quality_data_saver">省流量（最高 720p）</string>
     <string name="hls_quality_lowest">最低</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">电台</string>
 </resources>

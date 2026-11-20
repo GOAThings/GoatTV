@@ -22,6 +22,8 @@ struct GoatTVApp: App {
                     phone.attach(model)
                 }
                 .onOpenURL { model.open($0) }
+                // O canal no centro de controlo e na app Comando (ver NowPlaying).
+                .modifier(NowPlayingBridge(model: model))
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { model.didEnterBackground() }
                     if phase == .active { model.didBecomeActive() }

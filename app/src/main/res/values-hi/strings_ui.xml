@@ -898,4 +898,6 @@
     <string name="hls_quality_best">सर्वश्रेष्ठ</string>
     <string name="hls_quality_data_saver">डेटा बचत (720p तक)</string>
     <string name="hls_quality_lowest">सबसे कम</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">रेडियो</string>
 </resources>

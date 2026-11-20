@@ -896,4 +896,6 @@
     <string name="hls_quality_best">Terbaik</string>
     <string name="hls_quality_data_saver">Hemat data (hingga 720p)</string>
     <string name="hls_quality_lowest">Terendah</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Radio</string>
 </resources>

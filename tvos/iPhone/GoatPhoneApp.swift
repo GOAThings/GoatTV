@@ -9,7 +9,9 @@ struct GoatPhoneApp: App {
 
     init() {
         URLCache.shared = URLCache(memoryCapacity: 64 << 20, diskCapacity: 256 << 20, directory: nil)
-        // Com o botão de silêncio ligado, o som do vídeo continua a ouvir-se.
+        // Com o botão de silêncio ligado, o som do vídeo continua a ouvir-se. A categoria .playback (com o modo de fundo
+        // "audio" do Info.plist) também deixa uma rádio continuar em segundo plano e com o ecrã bloqueado, e o som ir
+        // por AirPlay (ver AirPlayButton).
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         try? AVAudioSession.sharedInstance().setActive(true)
     }
@@ -21,6 +23,8 @@ struct GoatPhoneApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear { model.start() }
                 .onOpenURL { model.open($0) }
+                // O canal no centro de controlo e no ecrã bloqueado (ver NowPlaying).
+                .modifier(NowPlayingBridge(model: model))
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { model.didEnterBackground() }
                     if phase == .active { model.didBecomeActive() }

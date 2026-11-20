@@ -179,3 +179,72 @@ struct InvisibleButtonStyle: ButtonStyle {
         configuration.label
     }
 }
+
+/// O ecrã de um canal só de som (uma rádio), no lugar da imagem preta: o logótipo grande, o nome, o programa a dar (se
+/// o guia o tiver) e umas barras de equalizador animadas (paradas em pausa), como no Android (RadioView.kt).
+/// [compact]: o iPhone ao alto (menos espaço).
+struct RadioView: View {
+    let channel: Channel
+    let logo: URL?
+    let programme: String?
+    /// O que se escreve sem programa ("Rádio").
+    let label: String
+    let playing: Bool
+    let accent: String
+    var compact = false
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Theme.sky.opacity(0.2), Theme.background], startPoint: .top, endPoint: .bottom)
+            VStack(spacing: compact ? 8 : 22) {
+                ChannelLogo(url: logo, name: channel.name, size: compact ? CGSize(width: 112, height: 70) : CGSize(width: 320, height: 200))
+                Text(channel.name)
+                    .font(.system(size: compact ? 17 : 46, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                Text(programme ?? label)
+                    .font(.system(size: compact ? 14 : 30))
+                    .foregroundStyle(Theme.textDim)
+                    .lineLimit(1)
+                EqualizerBars(playing: playing, accent: accent)
+                    .frame(width: compact ? 56 : 150, height: compact ? 22 : 60)
+                    .padding(.top, compact ? 2 : 10)
+            }
+            .padding(compact ? 12 : 60)
+        }
+    }
+}
+
+/// Barras que sobem e descem (barato: um relógio só, cada barra com a sua fase); em pausa ficam baixas e paradas.
+private struct EqualizerBars: View {
+    let playing: Bool
+    let accent: String
+    /// As voltas de cada barra por ciclo (inteiras, para o ciclo fechar sem saltos).
+    private static let speeds: [Double] = [2, 3, 1, 4, 2]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !playing)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate / 1.6
+            GeometryReader { geo in
+                let n = Self.speeds.count
+                let gap = geo.size.width / CGFloat(n * 3)
+                let w = (geo.size.width - gap * CGFloat(n - 1)) / CGFloat(n)
+                HStack(alignment: .bottom, spacing: gap) {
+                    ForEach(0..<n, id: \.self) { i in
+                        RoundedRectangle(cornerRadius: w / 3)
+                            .fill(Theme.accent(accent))
+                            .frame(width: w, height: geo.size.height * Self.level(i, t: t, playing: playing))
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+            }
+        }
+    }
+
+    /// A altura da barra [i] (0…1) ao tempo [t].
+    private static func level(_ i: Int, t: Double, playing: Bool) -> CGFloat {
+        guard playing else { return 0.15 }
+        let wave = (sin((t * speeds[i] + Double(i) * 0.37) * 2 * Double.pi) + 1) / 2
+        return CGFloat(0.25 + 0.75 * wave)
+    }
+}

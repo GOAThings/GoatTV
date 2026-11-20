@@ -1165,6 +1165,9 @@ class Strings(context: Context) {
     val hlsQualityDataSaver get() = s(R.string.hls_quality_data_saver)
     val hlsQualityLowest get() = s(R.string.hls_quality_lowest)
 
+    // ---- Rádio (canais só de som) ----
+    val radioLabel get() = s(R.string.radio_label)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

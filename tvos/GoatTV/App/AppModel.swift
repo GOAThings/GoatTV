@@ -63,6 +63,10 @@ final class AppModel {
     private(set) var zapCount = 0
 
     let player = PlayerEngine()
+    /// O canal no centro de controlo e no ecrã bloqueado, e os comandos do sistema (ver NowPlaying).
+    let nowPlaying = NowPlaying()
+    /// Parado por um comando do sistema (pausa sem a pausa do direto): "reproduzir" volta ao direto.
+    var remoteStopped = false
     /// As gravações (só com a app aberta: ver RecordingManager).
     let recordings = RecordingManager()
     /// Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta do cartão
@@ -1318,6 +1322,7 @@ final class AppModel {
         }) { return }
         if let group { groupId = group }
         catchup = nil
+        remoteStopped = false
         playbackError = nil
         playbackStatus = nil
         if let current, current.key != channel.key, remember, Date().timeIntervalSince(playingSince) >= Self.watchedSeconds {
@@ -2434,7 +2439,13 @@ final class AppModel {
         closeSecond()
         // No Picture in Picture o canal continua a dar fora da app; para (e liberta a ligação) quando ele fechar.
         keptForPip = player.inPictureInPicture
-        if keptForPip {
+        #if os(iOS)
+        // Uma rádio continua só com o som (em segundo plano e com o ecrã bloqueado: os controlos ficam no ecrã bloqueado).
+        keptForRadio = !keptForPip && isRadio && player.state != .idle
+        #endif
+        if keptForRadio {
+            // A rádio continua.
+        } else if keptForPip {
             player.onPipEnded = { [weak self] in
                 guard let self, self.backgrounded else { return }
                 self.player.stop()
@@ -2448,6 +2459,8 @@ final class AppModel {
     @ObservationIgnored private var backgrounded = false
     /// Ao ir para segundo plano o canal estava no Picture in Picture e continuou a dar.
     @ObservationIgnored private var keptForPip = false
+    /// Ao ir para segundo plano dava uma rádio, que continuou (só o iPhone).
+    @ObservationIgnored private var keptForRadio = false
 
     /// De volta à app: o canal (ou o catch-up) volta a dar.
     func didBecomeActive() {
@@ -2455,12 +2468,14 @@ final class AppModel {
         checkForUpdate()
         guard backgrounded else { return }
         backgrounded = false
-        // Voltou do Picture in Picture: o canal nunca parou.
-        if keptForPip, player.state != .idle {
+        // Voltou do Picture in Picture (ou da rádio em segundo plano): o canal nunca parou.
+        if keptForPip || keptForRadio, player.state != .idle {
             keptForPip = false
+            keptForRadio = false
             return
         }
         keptForPip = false
+        keptForRadio = false
         guard screen == .player, let current else { return }
         if let cu = catchup {
             var resume = cu
