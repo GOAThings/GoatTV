@@ -214,7 +214,12 @@ fun MobileMenu(vm: AppViewModel) {
             }
             MenuPage.Playback -> {
                 PageHeader(s.playback, s.settings) { page = null }
-                CatalogSections(PhonePage.PLAYBACK, vm, values, open) { setting ->
+                CatalogSections(PhonePage.PLAYBACK, vm, values, open, after = { section ->
+                    // Os ajustes da imagem não chegam a todo o vídeo: diz-se por baixo deles.
+                    if (section == PhoneSection.PICTURE) {
+                        Text(s.pictureSub, color = ItvColors.TextFaint, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp))
+                    }
+                }) { setting ->
                     when (setting) {
                         // Só nos telemóveis com janela pequena.
                         SettingsCatalog.PIP -> {

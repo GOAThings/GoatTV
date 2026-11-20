@@ -162,4 +162,30 @@ extension Strings {
             return [(Prefs.SubtitlePosition.normal, r("subtitle_position_normal")), (Prefs.SubtitlePosition.raised, r("subtitle_position_raised"))]
         }
     }
+
+    /// As opções de um ajuste da imagem ("picture_brightness", "picture_contrast", "picture_saturation": −5 a +5;
+    /// "picture_sharpness": 0 a 5), com os textos do Android (SettingsCatalog.pictureLabel): "+2", "−3", e o 0 "Desligado".
+    func pictureOptions(_ key: String) -> [(value: Int, label: String)] {
+        let range = key == "picture_sharpness" ? PictureAdjust.sharpnessRange : PictureAdjust.range
+        return range.map { v in (v, v == 0 ? r("off") : v > 0 ? "+\(v)" : "−\(abs(v))") }
+    }
+}
+
+extension Prefs {
+    /// O valor de um ajuste da imagem, pela chave das definições.
+    func pictureValue(_ key: String) -> Int {
+        switch key {
+        case "picture_brightness": return pictureBrightness
+        case "picture_contrast": return pictureContrast
+        case "picture_saturation": return pictureSaturation
+        default: return pictureSharpness
+        }
+    }
+
+    /// "Repor a imagem": os quatro ajustes no 0, para gravar de uma vez (AppModel.setPrefs).
+    static var pictureReset: [String: JSON?] {
+        var values: [String: JSON?] = [:]
+        for key in pictureKeys { values[key] = JSON.number(0) }
+        return values
+    }
 }

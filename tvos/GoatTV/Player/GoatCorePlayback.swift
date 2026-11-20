@@ -231,6 +231,18 @@ final class GoatCorePlayback: NSObject {
     var audioLevel = "off"
     /// O passthrough (Prefs.audioPassthrough): o AC-3/E-AC-3 não se nivela, segue para o recetor como vem.
     var passthrough = true
+    /// Os ajustes da imagem (Definições → Imagem; ver PictureAdjust e InterlacedVideo): mudam com o canal a dar (o
+    /// caminho do vídeo troca na imagem-chave seguinte).
+    var picture = PictureAdjust() {
+        didSet { if picture != oldValue { session?.setPicture(picture) } }
+    }
+
+    /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem"); nil se não houver vídeo. A resposta vem
+    /// noutra thread.
+    func snapshot(_ completion: @escaping @Sendable (CGImage?) -> Void) {
+        guard let session else { return completion(nil) }
+        session.snapshot(completion)
+    }
 
     override init() {
         super.init()
@@ -265,7 +277,7 @@ final class GoatCorePlayback: NSObject {
         synchronizer.addRenderer(display)
         synchronizer.addRenderer(audioRenderer)
         pip = nil
-        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace)
+        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace, picture: picture)
         s.rate = userRate
         s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough)
         s.primary = primary
@@ -604,17 +616,19 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private static let resumeAheadSeconds = 10.0
 
     init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer,
-         deinterlace: String) {
+         deinterlace: String, picture: PictureAdjust) {
         self.display = display
         self.audio = audio
         self.synchronizer = synchronizer
         self.deinterlace = deinterlace
+        self.picture = picture
         super.init()
-        // O H.264 entrelaçado passa pelo desentrelaçador (ver [interlacedVideo]); desligado, vai como o resto.
-        if deinterlace != "off" {
-            pipeline.onInterlacedVideo = { [weak self] b, bottomFirst, progressive in
-                self?.interlacedVideo(b, bottomFirst: bottomFirst, progressive: progressive)
-            }
+        // O H.264 entrelaçado passa pelo desentrelaçador (ver [interlacedVideo]); desligado, vai como o resto. Com
+        // ajustes da imagem, o vídeo de 8 bits SDR vai pelo mesmo caminho (ver MediaPipeline.adjustVideo).
+        pipeline.deinterlaceVideo = deinterlace != "off"
+        pipeline.adjustVideo = !picture.neutral
+        pipeline.onInterlacedVideo = { [weak self] b, bottomFirst, progressive in
+            self?.interlacedVideo(b, bottomFirst: bottomFirst, progressive: progressive)
         }
         pipeline.onTracks = { [weak self] tracks in
             guard let self else { return }
@@ -622,7 +636,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             self.hasAudio = tracks.contains { $0.kind == .audio }
             self.onEvent?(.tracks(tracks))
         }
-        pipeline.onVideo = { [weak self] b in self?.video(b) }
+        pipeline.onVideo = { [weak self] b in self?.compressedVideo(b) }
         pipeline.onCodedVideo = { [weak self] v in self?.codedVideo(v) }
         pipeline.onAudio = { [weak self] b in self?.audioSample(b) }
         pipeline.onUnsupported = { [weak self] what in self?.fail("unsupported \(what)") }
@@ -877,18 +891,46 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// Definições → Desentrelaçar, para o MPEG-2 (o bwdif do SoftwareVideo) e o H.264 entrelaçado (InterlacedVideo).
     private let deinterlace: String
 
-    /// O H.264 entrelaçado (os 576i e 1080i), descodificado aqui e desentrelaçado na GPU: a camada não o faz.
+    /// O H.264 entrelaçado (os 576i e 1080i), descodificado aqui e desentrelaçado na GPU: a camada não o faz. E o
+    /// vídeo com ajustes da imagem, que se fazem no mesmo sítio.
     private var interlaced: InterlacedVideo?
     private var interlacedFailed = false
+    /// Os ajustes da imagem (só na fila, ver [setPicture]).
+    private var picture: PictureAdjust
+    /// A última imagem passou pelo [interlaced] (ver [compressedVideo]).
+    private var processing = false
+
+    /// Outros ajustes da imagem: valem já nas imagens que passam pela GPU; o vídeo que ia direto para a camada (ou o
+    /// contrário, ao voltar tudo ao 0) troca de caminho na imagem-chave seguinte.
+    func setPicture(_ picture: PictureAdjust) {
+        queue.async {
+            self.picture = picture
+            self.interlaced?.picture = picture
+            self.pipeline.adjustVideo = !picture.neutral
+        }
+    }
+
+    /// O vídeo comprimido, direto para a camada. Se até aqui passava pela GPU (os ajustes voltaram ao 0), primeiro
+    /// saem as imagens que lá estavam à espera.
+    private func compressedVideo(_ b: CMSampleBuffer) {
+        if processing {
+            processing = false
+            for f in interlaced?.finish() ?? [] { video(f) }
+        }
+        video(b)
+    }
 
     private func interlacedVideo(_ b: CMSampleBuffer, bottomFirst: Bool, progressive: Bool) {
         guard !closed else { return }
         if interlaced == nil, !interlacedFailed {
             interlaced = InterlacedVideo(fieldRate: deinterlace != "yadif")
+            interlaced?.picture = picture
             interlacedFailed = interlaced == nil
-            DebugLog.add(interlaced == nil ? "GoatCore: interlaced video, no GPU deinterlacer" : "GoatCore: interlaced video, deinterlacing on the GPU (\(deinterlace))")
+            DebugLog.add(interlaced == nil ? "GoatCore: no GPU video stage (interlaced video or picture adjustments)"
+                : "GoatCore: video through the GPU (deinterlace \(deinterlace), picture \(picture.neutral ? "as is" : "adjusted"))")
         }
         guard let deinterlacer = interlaced else { return video(b) }
+        processing = true
         guard let frames = deinterlacer.decode(b, bottomFirst: bottomFirst, progressive: progressive) else {
             // O VideoToolbox não o descodifica à parte: vai como vinha (a camada recomeça na imagem-chave seguinte).
             interlaced = nil
@@ -927,6 +969,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             DebugLog.add("GoatCore: video renderer interrupted, resuming at the next keyframe")
             display.flush()
             waitSync = true
+            recentVideo.removeAll()
         }
         if waitSync {
             guard Self.isSync(b) else { return }
@@ -939,9 +982,51 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             onEvent?(.videoSize(width: Int(d.width.rounded()), height: Int(d.height.rounded())))
         }
         display.enqueue(b)
+        remember(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
         if pts.isValid, !lastVideo.isValid || pts > lastVideo { lastVideo = pts }
         if startTime == nil, pts.isValid { begin(at: pts) }
+    }
+
+    // MARK: Guardar imagem
+
+    /// As últimas imagens que foram para a camada, pela ordem em que foram (ver [snapshot]). A camada não dá a imagem
+    /// que mostra, por isso guarda-se aqui com que a refazer: das comprimidas, tudo desde a imagem-chave da que está no
+    /// ecrã (uns MB); das já descodificadas (desentrelaçadas, ajustadas ou MPEG-2), a que está no ecrã e as que ainda
+    /// vão dar, que a camada guarda de qualquer maneira. Só no iPhone: o Apple TV não tem onde guardar imagens.
+    private var recentVideo: [CMSampleBuffer] = []
+    private var recentDecoded = false
+    private static let maxRecent = 1_500
+
+    private func remember(_ b: CMSampleBuffer) {
+        #if os(iOS)
+        let decoded = CMSampleBufferGetImageBuffer(b) != nil
+        if decoded != recentDecoded {
+            recentDecoded = decoded
+            recentVideo.removeAll()
+        }
+        let now = synchronizer.currentTime()
+        func shown(_ f: CMSampleBuffer) -> Bool {
+            let t = CMSampleBufferGetPresentationTimeStamp(f)
+            return t.isValid && now.isValid && t <= now
+        }
+        if decoded {
+            if let at = recentVideo.lastIndex(where: shown), at > 0 { recentVideo.removeFirst(at) }
+        } else if Self.isSync(b) {
+            if let key = recentVideo.lastIndex(where: { Self.isSync($0) && shown($0) }), key > 0 { recentVideo.removeFirst(key) }
+        }
+        recentVideo.append(b)
+        if recentVideo.count > Self.maxRecent { recentVideo.removeFirst(recentVideo.count - Self.maxRecent) }
+        #endif
+    }
+
+    /// A imagem que está no ecrã (ver VideoSnapshot), refeita fora desta fila; nil sem vídeo.
+    func snapshot(_ completion: @escaping @Sendable (CGImage?) -> Void) {
+        queue.async {
+            let frames = self.recentVideo
+            let now = self.synchronizer.currentTime()
+            DispatchQueue.global(qos: .userInitiated).async { completion(VideoSnapshot.image(frames, at: now)) }
+        }
     }
 
     private static func isSync(_ b: CMSampleBuffer) -> Bool {

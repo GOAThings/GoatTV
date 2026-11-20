@@ -66,6 +66,7 @@ targets:
       - sdk: CoreMedia.framework
       - sdk: CoreText.framework
       - sdk: VideoToolbox.framework
+      - sdk: Photos.framework
       - sdk: OpenGLES.framework
     info:
       path: iPhone/Info.plist
@@ -80,6 +81,8 @@ targets:
         UIUserInterfaceStyle: Dark
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
+        # "Guardar imagem" no leitor: só para juntar a imagem do canal às Fotografias (nunca para as ler).
+        NSPhotoLibraryAddUsageDescription: GoatTV saves the picture of the channel you are watching to your Photos when you tap Save picture.
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         CFBundleURLTypes:
           - CFBundleURLName: cc.slokker.goattv

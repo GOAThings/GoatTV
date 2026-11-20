@@ -81,6 +81,10 @@ struct NowStrip: View {
                             pill(option.symbol, sleeping.map { "\(Int($0.timeIntervalSinceNow / 60) + 1) min" } ?? option.title(model),
                                  tint: sleeping != nil ? Theme.sky : Theme.text) { onOption(option) }
                         }
+                        // A imagem do canal, sem os botões nem as legendas da app, para a fototeca.
+                        if !model.isRadio {
+                            pill("camera", s.r("save_picture")) { PhonePicture.save(model, channel: channel) }
+                        }
                         // O Picture in Picture (no motor GoatCore): o canal continua num canto fora da app.
                         if let pip = model.player.pictureInPicture {
                             pill("pip.enter", s.r("picture_in_picture")) { pip.startPictureInPicture() }
