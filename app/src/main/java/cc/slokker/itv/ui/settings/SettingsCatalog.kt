@@ -261,7 +261,7 @@ object SettingsCatalog {
      */
     val UPSCALE = Setting.Choice(
         Prefs.Key.UPSCALE, { it.upscale },
-        options = { s -> listOf(Prefs.Upscale.OFF to s.off, Prefs.Upscale.SHARP to s.upscaleSharp, Prefs.Upscale.AI to s.upscaleAi) },
+        options = { s -> listOfNotNull(Prefs.Upscale.OFF to s.off, Prefs.Upscale.SHARP to s.upscaleSharp, (Prefs.Upscale.AI to s.upscaleAi).takeIf { cc.slokker.itv.ui.player.goatcore.Upscaler.AI_READY }) },
         read = { it.prefs.upscale },
         subtitle = { "${it.upscaleSub}. ${it.upscaleShield}" },
         tv = Place(TvPage.PLAYBACK, 45, TvSection.PICTURE),

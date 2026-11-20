@@ -248,7 +248,14 @@ internal class Upscaler(private val es3: Boolean) {
         private const val NETWORK = "/goatcore/FSRCNNX_x2_8-0-4-1.glsl"
 
         /** A rede falhou neste aparelho: não se volta a tentar até a app fechar. */
-        @Volatile var broken = false
+        /**
+         * A "IA" ainda não está pronta: na SHIELD (2026-11-20) a imagem saiu com as cores lavadas e uma grelha de
+         * pontos (a junção da luma 2× com a cor está errada). Até se corrigir, "IA" faz o mesmo que "Nítido" e não
+         * aparece nas Definições.
+         */
+        const val AI_READY = false
+
+        @Volatile var broken = !AI_READY
 
         /** O "Nítido" falhou neste aparelho (o shader não compila): fica desligado até a app fechar. */
         @Volatile var sharpBroken = false
