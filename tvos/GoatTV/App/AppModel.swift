@@ -3,6 +3,7 @@ import Foundation
 import TVServices
 #endif
 import GoatCore
+import Network
 import Observation
 import UIKit
 
@@ -67,6 +68,15 @@ final class AppModel {
     let nowPlaying = NowPlaying()
     /// Parado por um comando do sistema (pausa sem a pausa do direto): "reproduzir" volta ao direto.
     var remoteStopped = false
+    /// Parar se ninguém estiver a ver (idle_stop): a fase da contagem, que o aviso e o ecrã de parado mostram.
+    private(set) var idlePhase = IdleWatch.Phase.watching
+    /// Os segundos que faltam no aviso "Ainda estás a ver?".
+    private(set) var idleSecondsLeft = 0
+    @ObservationIgnored private let idleWatch = IdleWatch()
+    @ObservationIgnored private var idleTask: Task<Void, Never>?
+    /// A rede gasta dados móveis (do operador ou um ponto de acesso): ver mobile_data_quality.
+    @ObservationIgnored private var expensiveNetwork = false
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
     /// As gravações (só com a app aberta: ver RecordingManager).
     let recordings = RecordingManager()
     /// Com uma gravação a decorrer, o que se ia fazer (outro canal, catch-up, outra lista) à espera da resposta do cartão
@@ -728,7 +738,7 @@ final class AppModel {
             engine.hdr = prefs.hdr
         }
         // A qualidade dos HLS com várias (o leitor do canal principal também deixa escolher uma à mão).
-        HlsQualityControl.shared.preference = prefs.hlsQuality
+        applyHlsPreference()
         for engine in extraPlayers {
             engine.controlsDisplay = false
             engine.ownsProviderConnection = false
@@ -1358,6 +1368,8 @@ final class AppModel {
     /// [force]: já se respondeu ao cartão da gravação (ou não é preciso perguntar).
     func play(_ channel: Channel, from group: String? = nil, remember: Bool = true, opening: Bool = true, force: Bool = false) {
         guard let content else { return }
+        // Escolher um canal (também o mesmo) é um comando: tira do ecrã de parado e recomeça a contagem.
+        idleWatchAgain()
         if opening, !force, guardRecording(channel, { [weak self] in
             self?.play(channel, from: group, remember: remember, opening: opening, force: true)
         }) { return }
@@ -1664,6 +1676,106 @@ final class AppModel {
     /// Pede os programas curtos (Xtream) de um canal sem guia (ex.: ao passar por ele no guia).
     func requestShortEpg(_ channel: Channel) {
         loadShortEpgIfNeeded(channel)
+    }
+
+    // MARK: Parar se ninguém estiver a ver
+
+    private static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    /// Liga a contagem do idle_stop e a escuta dos comandos (na raiz das duas apps, ver NowPlayingBridge) e da rede
+    /// (mobile_data_quality). Só a primeira vez faz alguma coisa.
+    func startIdleWatch() {
+        startNetworkWatch()
+        guard idleTask == nil else { return }
+        idleTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
+                self.idleTick()
+            }
+        }
+        IdleInput.install { [weak self] in self?.noteInput() ?? false }
+    }
+
+    private func idleTick() {
+        // Uma gravação a usar a ligação deste canal, ou nada a dar: a contagem espera.
+        var active = player.state != .idle && !remoteStopped
+        if let current {
+            if recordingOf(current) != nil { active = false }
+        } else {
+            active = false
+        }
+        idleWatch.tick(Self.nowMs(), limitMs: IdleWatch.limitMs(prefs.idleStop), active: active)
+        publishIdle()
+    }
+
+    private func publishIdle() {
+        let left = idleWatch.secondsLeft(Self.nowMs())
+        if left != idleSecondsLeft { idleSecondsLeft = left }
+        let phase = idleWatch.phase
+        guard phase != idlePhase else { return }
+        let before = idlePhase
+        idlePhase = phase
+        if phase == .stopped {
+            stopForIdle()
+        } else if before == .stopped {
+            updateWatching()
+        }
+    }
+
+    /// Ninguém estava a ver: larga o canal (e os extra) e a ligação ao fornecedor; o centro de controlo e o ecrã
+    /// bloqueado ficam com o canal parado ("reproduzir" volta a abri-lo).
+    private func stopForIdle() {
+        flushWatched()
+        closeSecond()
+        player.stop()
+        remoteStopped = true
+        updateWatching()
+    }
+
+    /// Um comando do utilizador (tecla, toque, comando do sistema): recomeça a contagem. Devolve true se mostrava o
+    /// aviso (então o comando só serve para o fechar).
+    @discardableResult
+    func noteInput() -> Bool {
+        let prompt = idlePhase == .prompt
+        idleWatch.onInput(Self.nowMs())
+        if idlePhase != .watching { publishIdle() }
+        return prompt
+    }
+
+    /// Escolheu-se um canal, ou "continuar" no ecrã bloqueado: sai do ecrã de parado e recomeça a contagem.
+    func idleWatchAgain() {
+        idleWatch.watchAgain(Self.nowMs())
+        if idlePhase != .watching { publishIdle() }
+    }
+
+    /// "Ver outra vez" no ecrã de parado: volta a abrir o mesmo canal.
+    func watchAgain() {
+        idleWatchAgain()
+        if let current { play(current, remember: false) }
+    }
+
+    // MARK: Dados móveis
+
+    /// Com dados móveis (isExpensive: operador ou ponto de acesso) e mobile_data_quality = auto, os HLS poupam dados;
+    /// na Wi-Fi ou no cabo volta a definição de sempre. A rede muda a meio do canal e o leitor refaz o plano.
+    private func startNetworkWatch() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let expensive = path.isExpensive
+            Task { @MainActor in
+                guard let self, self.expensiveNetwork != expensive else { return }
+                self.expensiveNetwork = expensive
+                self.applyHlsPreference()
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "cc.slokker.goattv.path", qos: .utility))
+        pathMonitor = monitor
+    }
+
+    private func applyHlsPreference() {
+        HlsQualityControl.shared.preference = HlsQualityControl.effective(prefs.hlsQuality, mobileData: prefs.mobileDataQuality, expensive: expensiveNetwork)
     }
 
     // MARK: Segundo canal
@@ -2828,7 +2940,7 @@ extension AppModel {
 
     /// Diz às gravações o que o leitor está a ver (uma gravação do disco não usa a ligação: é como não ver nada).
     func updateWatching() {
-        guard let content, let current, catchup?.recording == nil else {
+        guard let content, let current, catchup?.recording == nil, idlePhase != .stopped else {
             recordings.watching = nil
             return
         }

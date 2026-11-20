@@ -75,6 +75,8 @@ public final class HlsReader: @unchecked Sendable {
         let main: Bool
         /// A língua da playlist (ISO 639-2), numa faixa de áudio à parte.
         let language: String?
+        /// O EXT-X-MEDIA de uma faixa de áudio à parte: o papel, os canais e o nome (ver GoatShared.AudioRole).
+        let rendition: GoatShared.HlsRendition?
         var nextSequence = Int64.min
         var pending: [HlsSegment] = []
         var ended = false
@@ -88,10 +90,11 @@ public final class HlsReader: @unchecked Sendable {
         /// Num direto: quanto antes do fim se começou (ms), para o áudio começar no mesmo ponto que o vídeo.
         var liveOffsetMs: Int64 = -1
 
-        init(_ url: String, main: Bool, language: String? = nil) {
+        init(_ url: String, main: Bool, language: String? = nil, rendition: GoatShared.HlsRendition? = nil) {
             mediaUrl = url
             self.main = main
             self.language = language
+            self.rendition = rendition
         }
 
         /// Uma playlist de legendas que deixou de responder.
@@ -167,6 +170,8 @@ public final class HlsReader: @unchecked Sendable {
                 if lane === video {
                     out = merger.video(data: d)
                 } else if let i = audios.firstIndex(where: { $0 === lane }) {
+                    // O papel, os canais e o nome da faixa vão no PMT (para o menu do áudio os mostrar).
+                    if let r = lane.rendition { merger.describeAudio(lane: Int32(i), role: r.role, channels: r.channels, name: r.name) }
                     out = merger.audio(data: d, lane: Int32(i), language: lane.language)
                 }
             }
@@ -287,7 +292,7 @@ public final class HlsReader: @unchecked Sendable {
             base = variants[level].uri
             // O áudio à parte: as línguas todas (até [maxAudio]), para o menu do áudio as ter como num TS.
             let v = variants[level]
-            audios = v.audio.prefix(Self.maxAudio).map { Lane($0.uri, main: false, language: $0.code) }
+            audios = v.audio.prefix(Self.maxAudio).map { Lane($0.uri, main: false, language: $0.code, rendition: $0) }
             subtitles = v.subtitles.prefix(Self.maxSubtitles).map { Lane($0.uri, main: false, language: $0.code) }
             if !audios.isEmpty || !subtitles.isEmpty {
                 merger = GoatShared.HlsMergeBuffer(audioInVideo: audios.isEmpty)

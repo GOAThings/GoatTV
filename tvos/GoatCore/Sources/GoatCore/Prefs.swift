@@ -39,6 +39,10 @@ public struct Prefs: Equatable, Sendable {
     public var hdr = "auto"
     /// A qualidade dos canais HLS com várias: "auto", "best", "data_saver" ou "lowest" (ver HlsQualityControl).
     public var hlsQuality = "auto"
+    /// Só nos telemóveis: "auto" (com dados móveis conta como "data_saver") ou "same".
+    public var mobileDataQuality = "auto"
+    /// Parar se ninguém estiver a ver: "off", "2h", "4h" ou "6h" sem comandos (ver GoatShared.IdleWatch).
+    public var idleStop = "off"
     /// Desentrelaçar no VLC (só tvOS): "yadif2x", "yadif" ou "off".
     public var deinterlace = "yadif2x"
     /// Passthrough de áudio (Dolby/DTS para o recetor ou a TV).
@@ -294,6 +298,8 @@ public struct Prefs: Equatable, Sendable {
         afrFallback = p.afrFallback
         hdr = p.hdr
         hlsQuality = p.hlsQuality
+        mobileDataQuality = p.mobileDataQuality
+        idleStop = p.idleStop
         deinterlace = p.deinterlace
         audioPassthrough = p.audioPassthrough
         freezeFrame = p.freezeFrame

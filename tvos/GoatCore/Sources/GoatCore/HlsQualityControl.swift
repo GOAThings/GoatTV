@@ -63,6 +63,12 @@ public final class HlsQualityControl: @unchecked Sendable {
         }
     }
 
+    /// A definição que conta agora: com dados móveis ([expensive]) e `mobile_data_quality` = "auto" (só nos telemóveis),
+    /// qualquer uma menos "lowest" conta como "data_saver"; na Wi-Fi ou com "same", a de sempre.
+    public static func effective(_ preference: String, mobileData: String, expensive: Bool) -> String {
+        HlsQuality.shared.effectivePreference(preference: preference, mobileData: mobileData, cellular: expensive)
+    }
+
     /// Muda sempre que a definição ou a escolha à mão mudam: o leitor volta a fazer o plano.
     public var version: Int { state.withLock { $0.version } }
 

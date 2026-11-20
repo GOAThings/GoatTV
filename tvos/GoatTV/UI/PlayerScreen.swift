@@ -477,6 +477,9 @@ struct PlayerScreen: View {
                     .allowsHitTesting(false)
             }
 
+            // "Ainda estás a ver?" e o ecrã de parado (definição idle_stop).
+            IdleOverlay()
+
             if case .settings(let page) = panel {
                 // À esquerda, como as listas, em todos os temas.
                 HStack {
@@ -633,7 +636,7 @@ struct PlayerScreen: View {
         }
         .buttonStyle(InvisibleButtonStyle())
         .focused($focus, equals: .surface)
-        .disabled(panel != .none || hud || tvGuide || sportsHub || reminder != nil || recordingCard)
+        .disabled(panel != .none || hud || tvGuide || sportsHub || reminder != nil || recordingCard || model.idlePhase == .stopped)
         .onMoveCommand(perform: move)
         .onPlayPauseCommand(perform: playPause)
         .onExitCommand(perform: backAction)

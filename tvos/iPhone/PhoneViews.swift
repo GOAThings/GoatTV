@@ -478,6 +478,8 @@ struct PhoneMain: View {
             }
         }
         .sensoryFeedback(.selection, trigger: model.current?.key)
+        // "Ainda estás a ver?" e o ecrã de parado (definição idle_stop).
+        .overlay { IdleOverlay() }
         .statusBarHidden(landscape)
         .persistentSystemOverlays(landscape ? .hidden : .automatic)
         .task {
@@ -2058,11 +2060,20 @@ private struct MenuTab: View {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)
                 pick(s.r("hls_quality_title"), "hls_quality", p.hlsQuality,
                      [("auto", s.r("auto")), ("best", s.r("hls_quality_best")), ("data_saver", s.r("hls_quality_data_saver")), ("lowest", s.r("hls_quality_lowest"))])
+                // Só nos telemóveis: com dados móveis os HLS com várias qualidades poupam dados (os TS simples não mudam).
+                pick(s.r("mobile_data_quality"), "mobile_data_quality", p.mobileDataQuality,
+                     [("auto", s.r("mobile_data_quality_auto")), ("same", s.r("mobile_data_quality_same"))])
+                Text(s.r("mobile_data_quality_sub")).font(.footnote).foregroundStyle(Theme.textFaint)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
                 pick(s.t("Reconnect if the stream fails", "Reconectar se a stream falhar"), "reconnect_seconds", .number(Double(p.reconnectSeconds)), [(.number(0), s.t("No", "Não"))] + [2, 5, 10, 30].map { (.number(Double($0)), s.t("After %@ s", "Ao fim de %@ s", "\($0)")) })
                 toggle(s.r("timeshift"), "timeshift", p.timeshift)
                 toggle(s.r("protect_paused"), "protect_paused", p.protectPaused)
                 pick(s.r("zap_delay"), "zap_delay_ms", .number(Double(p.zapDelayMs)),
                      zapDelayOptions)
+                pick(s.r("idle_stop"), "idle_stop", p.idleStop,
+                     [("off", s.r("off")), ("2h", s.r("idle_stop_2h")), ("4h", s.r("idle_stop_4h")), ("6h", s.r("idle_stop_6h"))])
+                Text(s.r("idle_stop_sub")).font(.footnote).foregroundStyle(Theme.textFaint)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
             }
             section(s.t("Advanced", "Avançado")) {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)

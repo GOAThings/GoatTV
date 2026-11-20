@@ -13,6 +13,13 @@ public struct MediaTrack: Equatable, Sendable {
     public let kind: Kind
     /// A língua que o canal diz (ISO 639-2, em minúsculas), se disser.
     public let language: String?
+    /// O papel da faixa de áudio (GoatShared.AudioRole: 0 normal, 1 só efeitos, 2 para quem ouve mal, 3 audiodescrição,
+    /// 4 original), pelo PMT (ou pelo HLS).
+    public var role = 0
+    /// Os canais da faixa: os que o PMT anuncia e, na que está a tocar, os que os blocos descodificados têm; 0 = não se sabe.
+    public var channels = 0
+    /// O NAME da faixa de um HLS, se disser.
+    public var name: String?
 }
 
 /// Umas legendas do canal: uma faixa DVB (imagens; [page] 0) ou uma página do teletexto (a faixa [pid], a página
@@ -264,7 +271,8 @@ public final class MediaPipeline {
             case "SUBTITLE": .subtitle
             default: .data
             }
-            return MediaTrack(pid: Int(t.pid), codec: t.codec.name, kind: kind, language: t.language)
+            return MediaTrack(pid: Int(t.pid), codec: t.codec.name, kind: kind, language: t.language,
+                              role: Int(t.role), channels: Int(t.channels), name: t.name)
         }
         rawTracks = list
         let hadCaptions = textTracks.contains { $0.isCaptions }
@@ -512,6 +520,11 @@ public final class MediaPipeline {
             audioFormatKey = f
             audioFormat = Self.audioFormat(f)
             if audioFormat == nil { unsupported("audio \(f.codec.name) \(f.sampleRate) Hz \(f.channels) ch") }
+            // Os canais de verdade da faixa que toca: o nome dela passa a tê-los (ver AudioNames).
+            if let i = tracks.firstIndex(where: { $0.pid == pid }), tracks[i].channels != Int(f.channels) {
+                tracks[i].channels = Int(f.channels)
+                onTracks?(tracks)
+            }
         }
         guard let format = audioFormat else { return }
         // Um bloco por amostra (com a descrição do pacote): o renderizador decide como os junta.

@@ -248,3 +248,42 @@ private struct EqualizerBars: View {
         return CGFloat(0.25 + 0.75 * wave)
     }
 }
+
+/// "Ainda estás a ver?" e o ecrã de parado (definição idle_stop, ver AppModel.noteInput): o aviso tem a contagem de 60 s e
+/// fecha-se com qualquer tecla ou toque; depois de parar, "Ver outra vez" volta a abrir o canal. Igual no Apple TV e no iPhone.
+struct IdleOverlay: View {
+    @Environment(AppModel.self) private var model
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let s = model.strings
+        switch model.idlePhase {
+        case .watching:
+            EmptyView()
+        case .prompt:
+            card(title: s.r("idle_prompt_title"), text: s.r("idle_prompt_sub", "\(model.idleSecondsLeft)"),
+                 button: s.r("idle_keep"), scrim: 0.6) { model.noteInput() }
+        case .stopped:
+            card(title: s.r("idle_stopped_title"), text: nil, button: s.r("idle_watch_again"), scrim: 0.95) { model.watchAgain() }
+        }
+    }
+
+    private func card(title: String, text: String?, button: String, scrim: Double, action: @escaping () -> Void) -> some View {
+        ZStack {
+            Color.black.opacity(scrim).ignoresSafeArea()
+            VStack(spacing: 20) {
+                Image(systemName: "moon.zzz.fill").font(.largeTitle).foregroundStyle(.secondary)
+                Text(title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+                if let text {
+                    Text(text).font(.headline).foregroundStyle(.secondary).monospacedDigit()
+                }
+                Button(button, action: action)
+                    .focused($focused)
+                    .padding(.top, 12)
+            }
+            .padding(40)
+            .frame(maxWidth: 800)
+        }
+        .onAppear { focused = true }
+    }
+}

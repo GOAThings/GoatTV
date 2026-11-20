@@ -128,14 +128,23 @@ extension AppModel {
     /// Os comandos do sistema vão para o leitor: a pausa é a do direto (ou a do catch-up); sem ela, pára o stream e
     /// "reproduzir" volta ao direto. O seguinte e o anterior mudam de canal (como o CH+ e o CH− no Android).
     func connectNowPlaying() {
-        nowPlaying.onPlay = { [weak self] in self?.remotePlay() }
-        nowPlaying.onPause = { [weak self] in self?.remotePause() }
+        // Os botões do ecrã bloqueado e dos auriculares também contam como alguém a ver (ver idle_stop).
+        nowPlaying.onPlay = { [weak self] in
+            self?.idleWatchAgain()
+            self?.remotePlay()
+        }
+        nowPlaying.onPause = { [weak self] in
+            self?.noteInput()
+            self?.remotePause()
+        }
         nowPlaying.onNext = { [weak self] in
             guard let self else { return }
+            self.noteInput()
             self.zap(self.prefs.reverseZap ? -1 : 1)
         }
         nowPlaying.onPrevious = { [weak self] in
             guard let self else { return }
+            self.noteInput()
             self.zap(self.prefs.reverseZap ? 1 : -1)
         }
     }
@@ -169,7 +178,10 @@ struct NowPlayingBridge: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onAppear { model.connectNowPlaying() }
+            .onAppear {
+                model.connectNowPlaying()
+                model.startIdleWatch()
+            }
             .onChange(of: model.nowPlayingInfo, initial: true) { _, info in model.nowPlaying.update(info) }
             .task {
                 while !Task.isCancelled {

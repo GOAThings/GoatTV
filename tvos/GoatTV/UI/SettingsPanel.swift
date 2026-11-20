@@ -836,6 +836,7 @@ struct SettingsPanel: View {
                 .toggle("exit_confirm", s.t("Confirm exit with a second Back", "Confirmar saída com 2.º Voltar"), prefs.exitConfirm) {
                     model.setPref("exit_confirm", .bool($0))
                 },
+                pickItem("idle_stop", subtitle: s.r("idle_stop_sub")),
                 .nav("ua", "User-Agent", value: prefs.userAgent.isEmpty ? s.t("Default", "Predefinido") : prefs.userAgent,
                      subtitle: s.t("For providers that block the default one", "Para fornecedores que bloqueiam o predefinido"), to: .userAgent),
             ]
@@ -1638,6 +1639,10 @@ struct SettingsPanel: View {
             return (s.r("deinterlace"),
                     [o("yadif2x", s.r("deinterlace_smooth")), o("yadif", s.r("deinterlace_normal")), o("off", s.r("off"))],
                     .string(p.deinterlace))
+        case "idle_stop":
+            return (s.r("idle_stop"),
+                    [o("off", s.r("off")), o("2h", s.r("idle_stop_2h")), o("4h", s.r("idle_stop_4h")), o("6h", s.r("idle_stop_6h"))],
+                    .string(p.idleStop))
         case "hls_quality":
             return (s.r("hls_quality_title"),
                     [o("auto", s.r("auto")), o("best", s.r("hls_quality_best")), o("data_saver", s.r("hls_quality_data_saver")),

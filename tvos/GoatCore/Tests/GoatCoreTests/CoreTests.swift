@@ -540,6 +540,26 @@ enum CoreTests {
         up.fail()
         try expect(up.active, false)
         try expect(up.wanted(width: 1024, height: 576, screenWidth: 3840, screenHeight: 2160), false)
+        try expect(Prefs().idleStop, "off")
+        try expect(Prefs(settings: .object(["idle_stop": "4h"])).idleStop, "4h")
+        try expect(Prefs(settings: .object(["idle_stop": "3h"])).idleStop, "off")
+        try expect(Prefs().mobileDataQuality, "auto")
+        try expect(Prefs(settings: .object(["mobile_data_quality": "same"])).mobileDataQuality, "same")
+        try expect(Prefs(settings: .object(["mobile_data_quality": "x"])).mobileDataQuality, "auto")
+        try expect(HlsQualityControl.effective("best", mobileData: "auto", expensive: true), "data_saver")
+        try expect(HlsQualityControl.effective("best", mobileData: "same", expensive: true), "best")
+        try expect(HlsQualityControl.effective("best", mobileData: "auto", expensive: false), "best")
+        try expect(IdleWatch.limitMs("2h"), 7_200_000)
+        let idle = IdleWatch()
+        idle.tick(1, limitMs: 7_200_000, active: true)
+        idle.tick(1 + 7_200_000, limitMs: 7_200_000, active: true)
+        try expect(idle.phase == .prompt, true)
+        idle.tick(1 + 7_200_000 + 60_000, limitMs: 7_200_000, active: true)
+        try expect(idle.phase == .stopped, true)
+        try expect(AudioNames.labels([AudioNameInput(language: "Português", role: 0, channels: 6, codec: "AC-3")],
+                                     words: AudioNameWords(original: "Original", audioDescription: "Audio description", hearingImpaired: "HI",
+                                                           cleanEffects: "FX", mono: "Mono", stereo: "Stereo", audioN: "Audio %d")),
+                  ["Português · 5.1"])
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
         // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.

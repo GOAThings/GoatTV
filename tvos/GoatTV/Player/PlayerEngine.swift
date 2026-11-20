@@ -1775,7 +1775,8 @@ extension PlayerEngine {
             }
         case .goatcore:
             return goatCoreAudio.map { t in
-                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected, codec: t.codec))
+                TrackOption(id: t.id, name: t.name,
+                            info: TrackInfo(language: t.language, label: t.name, channels: t.channels, selected: t.selected, codec: t.codec, detail: t.detail))
             }
         }
     }
@@ -1918,14 +1919,31 @@ extension PlayerEngine {
         }
     }
 
-    private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool, codec: String?)] {
+    private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool, codec: String?, channels: Int, detail: String?)] {
         guard let g = goatCorePlayback else { return [] }
         let list = g.audioTracks
         let selected = g.selectedAudio ?? list.first?.pid
+        let names = goatCoreAudioNames(list)
         return list.enumerated().map { i, t in
-            let name = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 } ?? "Audio \(i + 1)"
-            return (Int32(t.pid), name, t.language, t.pid == selected, Self.memoryCodec(t.codec))
+            (Int32(t.pid), names[i], t.language, t.pid == selected, Self.memoryCodec(t.codec), t.channels, AudioNames.detail(role: t.role))
         }
+    }
+
+    /// O nome de cada faixa de áudio: língua · papel · canais (o formato só se duas ficassem iguais), como no Android
+    /// ("Português · 5.1", "English · Original", "Português · Audiodescrição", "Áudio 2 · 5.1").
+    private func goatCoreAudioNames(_ list: [MediaTrack]) -> [String] {
+        let locale = appLanguage ?? "en"
+        let s = Strings(language: locale)
+        let words = AudioNameWords(original: s.r("audio_label_original"), audioDescription: s.r("audio_label_description"),
+                                   hearingImpaired: s.r("audio_label_hearing"), cleanEffects: s.r("audio_label_effects"),
+                                   mono: s.r("audio_label_mono"), stereo: s.r("audio_label_stereo"),
+                                   audioN: s.r("audio_label_n", "%d"))
+        func language(_ t: MediaTrack) -> String {
+            guard let raw = t.language ?? t.name, let code = Languages.code(raw) else { return "" }
+            return Languages.displayName(code, locale: locale)
+        }
+        return AudioNames.labels(list.map { AudioNameInput(language: language($0), role: $0.role, channels: $0.channels, codec: AudioNames.codecName($0.codec)) },
+                                 words: words)
     }
 
     /// O formato do áudio pelo nome curto da memória do canal (os mesmos do Android), a partir do do núcleo partilhado.
