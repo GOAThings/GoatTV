@@ -17,6 +17,9 @@ class StreamDemuxer(private val listener: TsListener) {
     /** É um MP4 (já se sabe quando houver 8 bytes)? */
     val isMp4: Boolean get() = mp4 != null
 
+    /** Num TS, os pacotes guardados antes do PMT que se leram depois dele (ver [TsDemuxer.replayedPackets]). */
+    val replayedPackets: Int get() = ts?.replayedPackets ?: 0
+
     fun feed(data: ByteArray, off: Int, len: Int) {
         ts?.let { it.feed(data, off, len); return }
         mp4?.let { it.feed(data, off, len); return }

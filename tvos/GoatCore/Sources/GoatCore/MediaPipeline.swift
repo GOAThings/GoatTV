@@ -219,6 +219,9 @@ public final class MediaPipeline {
     /// O fim do stream: o que estava a meio sai.
     public func flush() { demuxer.flush() }
 
+    /// Num TS, os pacotes que chegaram antes do PMT e se leram depois dele (para o registo do arranque, o GoatZap).
+    public var replayedPackets: Int { Int(demuxer.replayedPackets) }
+
     /// Outra ligação: esquece tudo.
     public func reset() {
         demuxer = StreamDemuxer(listener: listener)
