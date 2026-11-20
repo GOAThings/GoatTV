@@ -32,6 +32,7 @@ internal class AppPlaybackHost(
     override fun recordingUrl(channel: Channel): String? = vm.recordingRingUrl(channel)
     override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> = vm.backupStreams(latestData(), request.channel)
     override fun onBackupPlaying(origin: BackupOrigin) {
+        if (origin.quiet) return
         // No Modo TV Pro, o aviso diz a fonte que falhou e a que está a dar (as duas podem ser da mesma lista).
         val proFailed = vm.proBackupPlaying()
         vm.showToast(
@@ -51,6 +52,12 @@ internal class AppPlaybackHost(
         vm.providerOutage.markDown(member?.playlist?.id ?: data.playlist.id)
     }
     override fun onMainPlaying(request: PlaybackRequest) = vm.providerOutage.clear(latestData().playlist.id)
+
+    // A fiabilidade de cada fonte (ver SourceHistory): o que aconteceu a cada uma, só neste aparelho.
+    override fun sourceUnreliable(request: PlaybackRequest): Boolean = vm.sourceUnreliable(latestData(), request)
+    override fun onSourceOpened(request: PlaybackRequest, ok: Boolean) = vm.sourceHistory.recordOpen(request.source, ok)
+    override fun onSourceDrop(request: PlaybackRequest) = vm.sourceHistory.recordDrop(request.source)
+    override fun onSourceWatched(request: PlaybackRequest, seconds: Long) = vm.sourceHistory.recordWatched(request.source, seconds)
 
     // A memória do canal: pela lista aberta e pelo canal que o ecrã mostra (no Modo TV Pro, o da lista única, seja
     // qual for a fonte a dar; com um failover, o da lista principal).

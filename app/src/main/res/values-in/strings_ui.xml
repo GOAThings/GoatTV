@@ -932,4 +932,10 @@
     <string name="upscale_sub">Membuat video yang lebih kecil dari layar tampak lebih tajam. Memakai lebih banyak daya; AI butuh perangkat yang mampu dan kembali sendiri bila tidak sanggup</string>
     <string name="upscale_shield">Pada boks dengan peningkatan skala AI sendiri (NVIDIA SHIELD), milik sistem hanya bekerja saat ini Mati dan penyesuaian gambar di nol, karena saat itu gambar langsung dari dekoder ke layar</string>
     <string name="upscale_sub_apple">Membuat video yang lebih kecil dari layar tampak lebih tajam dengan Apple MetalFX. Memakai lebih banyak daya. Tidak tersedia di perangkat tanpa MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d putus dalam %2$s minggu ini</string>
+    <string name="source_history_drop_one">1 putus dalam %1$s minggu ini</string>
+    <string name="source_history_failed">%1$d dari %2$d pembukaan gagal minggu ini</string>
+    <string name="source_history_stable">Tidak ada putus dalam %1$s minggu ini</string>
 </resources>

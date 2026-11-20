@@ -934,4 +934,10 @@
     <string name="upscale_sub">Ekrandan küçük videoyu daha keskin gösterir. Daha fazla enerji harcar; YZ güçlü bir cihaz ister ve yetişemezse kendiliğinden geri döner</string>
     <string name="upscale_shield">Kendi YZ ölçeklemesi olan kutularda (NVIDIA SHIELD) sistemin ölçeklemesi yalnızca bu kapalıyken ve görüntü ayarları sıfırdayken çalışır, çünkü o zaman görüntü kod çözücüden doğrudan ekrana gider</string>
     <string name="upscale_sub_apple">Ekrandan küçük videoyu Apple MetalFX ile daha keskin gösterir. Daha fazla enerji harcar. MetalFX olmayan cihazlarda yoktur</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">Bu hafta %2$s içinde %1$d kopma</string>
+    <string name="source_history_drop_one">Bu hafta %1$s içinde 1 kopma</string>
+    <string name="source_history_failed">Bu hafta %2$d açılıştan %1$d tanesi başarısız</string>
+    <string name="source_history_stable">Bu hafta %1$s içinde kopma yok</string>
 </resources>

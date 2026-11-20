@@ -60,7 +60,7 @@ internal fun ProSourcesPanel(vm: AppViewModel, channel: Channel, width: Dp, onPi
                     modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
                     leading = { Text("${i + 1}", color = LocalContentColor.current.copy(alpha = 0.6f), style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(24.dp)) },
                     title = listOfNotNull(qualityLabel(src.quality), src.playlistName).joinToString(" · "),
-                    subtitle = src.channelName,
+                    subtitle = listOfNotNull(src.channelName, s.sourceHistory(src.history)).joinToString("\n"),
                     trailing = { if (src.down) Text(s.proSourceDown, style = MaterialTheme.typography.bodySmall, color = DownRed) },
                 )
             }

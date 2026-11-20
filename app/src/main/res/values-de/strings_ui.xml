@@ -934,4 +934,10 @@
     <string name="upscale_sub">Macht Video, das kleiner als der Bildschirm ist, schärfer. Braucht mehr Energie; KI braucht ein leistungsfähiges Gerät und schaltet von selbst zurück, wenn sie nicht mithält</string>
     <string name="upscale_shield">Auf Boxen mit eigener KI-Hochskalierung (NVIDIA SHIELD) funktioniert die des Systems nur, wenn dies aus ist und die Bildeinstellungen auf null stehen, denn dann geht das Bild direkt vom Decoder zum Bildschirm</string>
     <string name="upscale_sub_apple">Macht Video, das kleiner als der Bildschirm ist, mit Apple MetalFX schärfer. Braucht mehr Energie. Auf Geräten ohne MetalFX nicht verfügbar</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d Abbrüche in %2$s diese Woche</string>
+    <string name="source_history_drop_one">1 Abbruch in %1$s diese Woche</string>
+    <string name="source_history_failed">%1$d von %2$d Öffnungen diese Woche fehlgeschlagen</string>
+    <string name="source_history_stable">Keine Abbrüche in %1$s diese Woche</string>
 </resources>

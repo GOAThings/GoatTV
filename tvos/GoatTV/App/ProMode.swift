@@ -10,23 +10,39 @@ final class ProSet {
     let members: [String: PlaylistContent]
     private let sources: [String: [ProLineup.Ref]]
     private let health: ProHealth
+    /// A fiabilidade de cada fonte (as quedas, as aberturas falhadas, o tempo a ver): desempata as fontes.
+    private let history: SourceHistory
 
-    init(lineupId: String, members: [String: PlaylistContent], sources: [String: [ProLineup.Ref]], health: ProHealth) {
+    init(lineupId: String, members: [String: PlaylistContent], sources: [String: [ProLineup.Ref]], health: ProHealth, history: SourceHistory) {
         self.lineupId = lineupId
         self.members = members
         self.sources = sources
         self.health = health
+        self.history = history
+    }
+
+    /// As fontes do canal [key] que ainda existem, com a qualidade da tabela, da melhor para a pior. As que falharam há
+    /// pouco (ProHealth) vão para o fim, e em cada grupo as claramente más segundo o historial também; entre fontes da
+    /// mesma qualidade, a mais fiável primeiro. Sem historial, é a ordem da tabela.
+    private func ordered(_ key: String) -> [(ref: ProLineup.Ref, member: PlaylistContent, channel: Channel)] {
+        let found = (sources[key] ?? []).compactMap { r -> (ref: ProLineup.Ref, member: PlaylistContent, channel: Channel)? in
+            guard let m = members[r.playlistId], let c = m.byKey[r.key] else { return nil }
+            return (r, m, c)
+        }
+        func sorted(_ list: [(ref: ProLineup.Ref, member: PlaylistContent, channel: Channel)]) -> [(ref: ProLineup.Ref, member: PlaylistContent, channel: Channel)] {
+            let order = history.order(keys: list.map { SourceHistory.key($0.ref.playlistId, $0.ref.key) }, tiers: list.map { $0.ref.quality })
+            return order.map { list[$0] }
+        }
+        return sorted(found.filter { !isDown($0.member, $0.channel) }) + sorted(found.filter { isDown($0.member, $0.channel) })
     }
 
     /// As fontes do canal [key] que ainda existem, da melhor para a pior (as que falharam no fim).
     func resolve(_ key: String) -> [(member: PlaylistContent, channel: Channel)] {
-        let found = (sources[key] ?? []).compactMap { r -> (member: PlaylistContent, channel: Channel)? in
-            guard let m = members[r.playlistId], let c = m.byKey[r.key] else { return nil }
-            return (m, c)
-        }
-        let up = found.filter { !isDown($0.member, $0.channel) }
-        return up + found.filter { isDown($0.member, $0.channel) }
+        ordered(key).map { ($0.member, $0.channel) }
     }
+
+    /// A chave no historial (SourceHistory.key) da fonte [channel] de [member].
+    func sourceKey(_ member: PlaylistContent, _ channel: Channel) -> String { SourceHistory.key(member.playlist.id, channel.key) }
 
     /// A fonte [channel] de [member] falhou (cai sempre, ou não abre): durante uns dias as outras vêm antes.
     func demote(_ member: PlaylistContent, _ channel: Channel) { health.markDown(member.playlist.id, channel.key, channel.name) }
@@ -39,10 +55,7 @@ final class ProSet {
 
     /// A qualidade (pelo nome, ChannelMatch.Quality) da fonte que vai dar o canal [key], ou nil.
     func quality(_ key: String) -> Int? {
-        let refs = (sources[key] ?? []).compactMap { r -> (ref: ProLineup.Ref, channel: Channel)? in
-            members[r.playlistId]?.byKey[r.key].map { (r, $0) }
-        }
-        return (refs.first { !health.isDown($0.ref.playlistId, $0.ref.key, $0.channel.name) } ?? refs.first)?.ref.quality
+        ordered(key).first?.ref.quality
     }
 }
 
@@ -63,13 +76,13 @@ enum ProContent {
     /// Os canais de [members] (pela ordem de preferência, já como se mostram) arrumados por [result]. Cada canal fica
     /// com o nome e o número da tabela, e com o logótipo e o guia da melhor fonte que os tenha (o guia, de
     /// preferência, da lista cujo guia se usa: o da primeira que tem um).
-    static func build(_ lineupId: String, members: [PlaylistContent], result: ProLineup.Result, health: ProHealth, strings s: Strings)
+    static func build(_ lineupId: String, members: [PlaylistContent], result: ProLineup.Result, health: ProHealth, history: SourceHistory, strings s: Strings)
         -> (content: PlaylistContent, set: ProSet) {
         let guide = members.first { $0.guideUrl != nil }
         var byId: [String: PlaylistContent] = [:]
         for m in members where byId[m.playlist.id] == nil { byId[m.playlist.id] = m }
         let set = ProSet(lineupId: lineupId, members: byId,
-                         sources: Dictionary(result.channels.map { ($0.id, $0.sources) }, uniquingKeysWith: { a, _ in a }), health: health)
+                         sources: Dictionary(result.channels.map { ($0.id, $0.sources) }, uniquingKeysWith: { a, _ in a }), health: health, history: history)
         var channels: [Channel] = []
         for pc in result.channels {
             let found = set.resolve(pc.id)
@@ -119,6 +132,8 @@ struct ProSourceInfo: Identifiable {
     let channelName: String
     let quality: Int
     let down: Bool
+    /// O que se passou com a fonte esta semana ("3 quedas em 2 h esta semana"); nil sem nada para dizer.
+    var history: String?
     var id: Int { index }
 }
 
@@ -142,7 +157,8 @@ extension AppModel {
         return pro.resolve(channel.key).enumerated().map { i, s in
             ProSourceInfo(index: i, playlistName: s.member.playlist.name, channelName: s.channel.name,
                           quality: ChannelMatch.parse(s.channel.name).quality,
-                          down: providerOutage.isDown(s.member.playlist.id, now: now) || pro.isDown(s.member, s.channel))
+                          down: providerOutage.isDown(s.member.playlist.id, now: now) || pro.isDown(s.member, s.channel),
+                          history: sourceLine(pro.sourceKey(s.member, s.channel)))
         }
     }
 
@@ -204,7 +220,7 @@ extension AppModel {
             return FailoverStream(playlist: s.member.playlist, channel: shown,
                                   candidates: streamCandidates(playlist: s.member.playlist, channel: s.channel, preferred: prefs.streamFormat,
                                                                allowedFormats: s.member.account?.allowedFormats ?? []),
-                                  sameList: false)
+                                  sameList: false, sourceKey: pro.sourceKey(s.member, s.channel))
         }
         DebugLog.add("Pro: \"\(channel.name)\" -> " + streams.map { "\"\($0.channel.name)\" (\($0.playlist.name))" }.joined(separator: " | "))
         return streams

@@ -2,6 +2,8 @@ package cc.slokker.itv.ui.i18n
 
 import cc.slokker.itv.data.GroupCountries
 import cc.slokker.itv.data.SportsHub
+import cc.slokker.itv.playback.SourceReliability
+import cc.slokker.itv.playback.SourceStats
 import androidx.core.os.ConfigurationCompat
 import android.content.Context
 import android.content.res.Configuration
@@ -1200,6 +1202,21 @@ class Strings(context: Context) {
     fun sendClosed(tv: String) = s(R.string.send_closed, tv)
     fun sendFailed(tv: String) = s(R.string.send_failed, tv)
     fun sendFrom(phone: String) = if (phone.isEmpty()) s(R.string.send_from_phone) else s(R.string.send_from, phone)
+
+    /**
+     * A linha da fiabilidade de uma fonte esta semana ("3 quedas em 2 h esta semana · 1 de 4 aberturas falharam esta
+     * semana"), ou null sem nada para dizer (ver SourceHistory).
+     */
+    fun sourceHistory(st: SourceStats?): String? {
+        if (st == null) return null
+        val watched = SourceReliability.watchedLabel(st.watchedSec)
+        val parts = listOfNotNull(
+            if (st.drops == 1) s(R.string.source_history_drop_one, watched) else if (st.drops > 1) s(R.string.source_history_drops, st.drops, watched) else null,
+            if (st.failedOpens > 0) s(R.string.source_history_failed, st.failedOpens, st.opens + st.failedOpens) else null,
+        )
+        if (parts.isNotEmpty()) return parts.joinToString(" · ")
+        return if (st.watchedSec >= SourceReliability.STABLE_MIN_SEC) s(R.string.source_history_stable, watched) else null
+    }
 
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */

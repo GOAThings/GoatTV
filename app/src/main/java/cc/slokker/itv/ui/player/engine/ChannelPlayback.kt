@@ -14,6 +14,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.playback.AttemptFailure
 import cc.slokker.itv.playback.NextStep
@@ -133,6 +134,12 @@ internal class ChannelPlayback(
     /** À procura do canal na lista de reserva (ver [failOver]). */
     private var backupJob: Job? = null
 
+    /** Quando (elapsedRealtime) o direto atual começou a dar, para o tempo visto da fonte (ver [flushWatched]); 0 = parado. */
+    private var watchStartedAt = 0L
+
+    /** O pedido que já contou como abertura falhada (uma só vez por pedido, não a cada formato). */
+    private var failedOpenCounted: PlaybackRequest? = null
+
     /** O direto parado a carregar: ao fim de [PlaybackRules.STALL_MS] sem voltar, liga-se outra vez (ver [onStall]). */
     private var stallJob: Job? = null
 
@@ -211,6 +218,7 @@ internal class ChannelPlayback(
 
     /** O ecrã saiu: nada fica a correr. */
     fun release() {
+        flushWatched()
         backupJob?.cancel()
         retryJob?.cancel()
         stallJob?.cancel()
@@ -266,6 +274,7 @@ internal class ChannelPlayback(
     }
 
     private fun open(request: PlaybackRequest) {
+        flushWatched()
         held = false
         this.request = request
         candidates = request.candidates
@@ -287,11 +296,16 @@ internal class ChannelPlayback(
         nextTryAt = 0L
         // A lista principal esteve em baixo há pouco (ver ProviderOutage): vai-se logo aos failovers, sem esperar pelas
         // tentativas de sempre. Sem nenhum (os da própria lista não contam: falhavam também), tenta-se a principal.
-        if (policy.failover && request.live && request.backup == null && host.providerDown(request)) {
+        val providerDown = policy.failover && request.live && request.backup == null && host.providerDown(request)
+        // A fonte tem um historial claramente mau (SourceHistory): a outra versão do canal na própria lista dá primeiro,
+        // se também não for má; a má fica para o fim (se as outras falharem, volta-se a ela).
+        val unreliable = !providerDown && policy.failover && request.live && request.backup == null && host.sourceUnreliable(request)
+        if (providerDown || unreliable) {
             backupJob = scope.launch {
                 val backups = runCatching { host.backupsFor(request) }.getOrDefault(emptyList())
                 if (this@ChannelPlayback.request !== request) return@launch
-                if (backups.isNotEmpty()) openBackup(backups, null) else start(0)
+                val usable = if (unreliable) backups.firstOrNull()?.let { it.sameList && !it.bad } == true else backups.isNotEmpty()
+                if (usable) openBackup(backups, null, quiet = unreliable) else start(0)
             }
             return
         }
@@ -309,10 +323,12 @@ internal class ChannelPlayback(
         error: PlaybackException?,
         failed: List<String> = emptyList(),
         mainFormat: String? = currentCandidate?.format,
+        quiet: Boolean = false,
     ) {
         val main = request?.let { it.backup?.main ?: it } ?: return
         val backup = backups.firstOrNull() ?: return
-        val origin = BackupOrigin(main, error, mainFormat, backup.mainName, backup.backupName, backup.sameList, backups.drop(1), failed, backup.label)
+        flushWatched()
+        val origin = BackupOrigin(main, error, mainFormat, backup.mainName, backup.backupName, backup.sameList, backups.drop(1), failed, backup.label, quiet)
         val req = backup.request.asBackup(origin)
         held = false
         request = req
@@ -376,6 +392,7 @@ internal class ChannelPlayback(
 
     /** Box em segundo plano, ecrã desligado ou (telemóvel) nas Definições: pára e liberta a ligação. */
     fun stop() {
+        flushWatched()
         // Uma reabertura pendente abria o stream com a app em segundo plano: ao voltar, recomeça em [onStart].
         backupJob?.cancel()
         retryJob?.cancel()
@@ -484,6 +501,12 @@ internal class ChannelPlayback(
      */
     private fun afterFailure(error: PlaybackException, req: PlaybackRequest, noAnswer: Boolean, failoverAllowed: Boolean = canFailOver(req)) {
         val reconnect = retryDelay(host.prefs, ended = false)
+        // Um direto que nunca chegou a dar: conta uma abertura falhada desta fonte (uma vez por pedido). As recusas da
+        // conta toda (ocupada, servidor em baixo) não são desta fonte.
+        if (req.live && !wasPlaying && failedOpenCounted !== req && !ProviderOutage.providerWide(OpenRetry.httpCode(error))) {
+            failedOpenCounted = req
+            host.onSourceOpened(req, false)
+        }
         val step = PlaybackRules.nextStep(
             AttemptFailure(
                 live = req.live,
@@ -547,6 +570,7 @@ internal class ChannelPlayback(
      */
     private fun onDrop() {
         val req = request ?: return
+        recordDrop()
         val at = now()
         drops.addLast(at)
         while (drops.isNotEmpty() && at - drops.first() > DROP_WINDOW_MS) drops.removeFirst()
@@ -560,7 +584,25 @@ internal class ChannelPlayback(
         }
     }
 
+    /** A ligação caiu depois de dar: conta para a fiabilidade da fonte (e o tempo visto até aqui fica registado). */
+    private fun recordDrop() {
+        val req = request ?: return
+        if (!req.live || !wasPlaying) return
+        flushWatched()
+        host.onSourceDrop(req)
+    }
+
+    /** Regista o tempo que o direto atual deu desde [watchStartedAt] (a fonte vê-se de novo quando voltar a dar). */
+    private fun flushWatched() {
+        val started = watchStartedAt
+        watchStartedAt = 0L
+        val req = request ?: return
+        if (started == 0L || !req.live) return
+        host.onSourceWatched(req, (now() - started) / 1_000L)
+    }
+
     private fun onStall(req: PlaybackRequest) {
+        recordDrop()
         val failover = stalls.stalled(now(), canFailOver(req))
         Log.w(TAG, "Direto preso a carregar há ${PlaybackRules.STALL_MS / 1000} s: ${if (failover) "failovers" else "volta a ligar"}")
         if (failover) {
@@ -634,13 +676,16 @@ internal class ChannelPlayback(
                 // Um canal em direto não acaba: "acabou" quer dizer que o servidor fechou a ligação (comum em streams
                 // .ts). Sem isto o vídeo parava em silêncio e a TV entrava em proteção de ecrã. Antes de alguma vez
                 // dar, fica a cápsula "a sintonizar" (como sempre na TV).
-                wasPlaying -> retryDelay(host.prefs, ended = true)?.let(::reconnectIn)
+                wasPlaying -> retryDelay(host.prefs, ended = true)?.let { recordDrop(); reconnectIn(it) }
             }
         }
         if (state == Player.STATE_READY) openJob?.cancel()
         if (state == Player.STATE_READY && !ready) {
             ready = true
+            val firstOpen = !wasPlaying
             wasPlaying = true
+            watchStartedAt = now()
+            if (firstOpen && live) request?.let { host.onSourceOpened(it, true) }
             retries = 0
             reconnects = 0
             nextTryAt = 0L
@@ -742,7 +787,7 @@ internal class ChannelPlayback(
         val origin = req.backup ?: return showFailure(error, req, delayMs, null, currentCandidate?.format)
         val failed = origin.failed + origin.label
         if (origin.rest.isNotEmpty()) {
-            openBackup(origin.rest, origin.mainError, failed, origin.mainFormat)
+            openBackup(origin.rest, origin.mainError, failed, origin.mainFormat, origin.quiet)
             return
         }
         request = origin.main

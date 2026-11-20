@@ -84,6 +84,20 @@ final class PlayerEngine: NSObject {
     /// Um direto novo da lista principal: devolve true se ela esteve em baixo há pouco e quem usa o leitor vai logo à
     /// reserva, sem a tentar (e chama depois [playBackup] ou, sem o canal na reserva, [openMain]).
     @ObservationIgnored var skipMain: (() -> Bool)?
+    /// A fiabilidade da fonte que está a dar (ver SourceHistory): abriu ([ok]) ou não abriu, caiu depois de dar, ou
+    /// deu durante [seconds] s. A chave é a que o [play] e o [playBackup] receberam.
+    @ObservationIgnored var onSourceOpened: ((_ key: String, _ ok: Bool) -> Void)?
+    @ObservationIgnored var onSourceDrop: ((_ key: String) -> Void)?
+    @ObservationIgnored var onSourceWatched: ((_ key: String, _ seconds: Int64) -> Void)?
+    /// A fonte aberta (a que o [play] ou o [playBackup] receberam), e a que está a dar com desde quando (ver [flushWatched]).
+    @ObservationIgnored private var openedSource: String?
+    @ObservationIgnored private var watchSource: String?
+    /// A fonte da lista principal enquanto se dá um failover (a que volta quando ele também falha).
+    @ObservationIgnored private var mainSource: String?
+    @ObservationIgnored private var watchStartedAt: Date?
+    /// As fontes que já contaram como abertura falhada nesta volta (uma só vez cada, não a cada formato).
+    @ObservationIgnored private var failedCounted = Set<String>()
+
     /// O canal da reserva começou a dar (o aviso "<lista> não responde. A dar da <reserva>.").
     @ObservationIgnored var onBackupPlaying: (() -> Void)?
     /// Um failover também não abriu: devolve true se quem usa o leitor passa ao seguinte (e chama [playBackup] outra
@@ -459,7 +473,7 @@ final class PlayerEngine: NSObject {
     /// lista outra vez, a lista que deu a volta) não abre nada.
     /// [startMs]: abrir já tanto depois do início do vídeo (o catch-up do Stalker, que é a gravação do programa todo).
     func play(_ candidates: [StreamCandidate], channelKey: String, live: Bool, userAgent: String?, referrer: String?,
-              pausable: Bool = false, startMs: Int64 = 0, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+              pausable: Bool = false, startMs: Int64 = 0, sourceKey: String? = nil, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         let same = openedKey == channelKey
         if !same || live != openedLive { speed = 1 }
         // Parado a meio de uma passagem de canais, voltar ao mesmo canal também é mais uma tecla.
@@ -467,6 +481,10 @@ final class PlayerEngine: NSObject {
         let back = !zap && live && openedLive && same && openedCandidates == candidates && (state == .opening || state == .playing)
         let pause: Int64 = zap || back ? pacer.delayFor(nowMs: Self.uptimeMs(), setting: zapDelayMs) : 0
         if back { return }
+        // O que se viu até aqui conta para a fonte que dava, não para a nova.
+        flushWatched()
+        failedCounted.removeAll()
+        openedSource = live ? sourceKey : nil
         openedKey = channelKey
         openedLive = live
         openedCandidates = candidates
@@ -648,6 +666,7 @@ final class PlayerEngine: NSObject {
     }
 
     func stop() {
+        flushWatched()
         watchdog?.cancel()
         retry?.cancel()
         pendingStart?.cancel()
@@ -805,6 +824,13 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         let started = started ?? (state == .playing)
         let status = currentHTTPStatus
+        if started {
+            recordDrop(keepWatching: false)
+        } else if openedLive, !wasPlaying, let key = openedSource, !failedCounted.contains(key), !ProviderOutage.providerWide(status) {
+            // Um direto que nunca chegou a dar: uma abertura falhada desta fonte (as recusas da conta toda não contam).
+            failedCounted.insert(key)
+            onSourceOpened?(key, false)
+        }
         let hasNext = index + 1 < attempts.count
         // O catch-up caiu a meio (sem outro formato por tentar): quem usa o leitor pede de novo daquele ponto.
         if wasPlaying, !openedLive, started || !hasNext {
@@ -878,6 +904,7 @@ final class PlayerEngine: NSObject {
 
     /// Preso: volta a ligar; se voltar a prender pouco depois, passa-se aos failovers do canal (se houver; ver StallCounter).
     private func stalled() {
+        recordDrop(keepWatching: false)
         let failover = stalls.stalled(nowMs: Self.uptimeMs(), failoverAllowed: openedLive && !onBackup && onStartFailed != nil)
         DebugLog.add("Player: live stuck for \(Int(PlaybackRules.stallSeconds)) s (\(failover ? "failovers" : "reconnecting"))")
         if failover, let ask = onStartFailed {
@@ -896,6 +923,7 @@ final class PlayerEngine: NSObject {
     /// A ligação caiu e o gravador vai voltar a ligar. Um canal que dá um segundo e cai, sempre, nunca chega a falhar
     /// (cada religação dá vídeo): à terceira queda num minuto vai-se aos failovers, como num direto preso (como no Android).
     private func dropped() {
+        recordDrop(keepWatching: true)
         guard openedLive, !onBackup, !backupAsked, let ask = onStartFailed else { return }
         let now = Self.uptimeMs()
         drops.append(now)
@@ -907,6 +935,8 @@ final class PlayerEngine: NSObject {
         let key = openedKey
         Task { @MainActor [weak self] in
             guard let self, self.openedKey == key, self.openedLive, !self.onBackup, !self.backupAsked else { return }
+            // O tempo visto fica registado (e a queda de agora não conta duas vezes em [afterFailure]).
+            self.flushWatched()
             self.stopBackends()
             self.backupAsked = true
             self.lastNoAnswer = false
@@ -917,6 +947,23 @@ final class PlayerEngine: NSObject {
                 self.afterFailure(started: true)
             }
         }
+    }
+
+    /// A ligação da fonte caiu depois de dar: conta para a fiabilidade dela e fecha o tempo visto até aqui. Com
+    /// [keepWatching] (o gravador volta a ligar sozinho, sem parar de dar), o tempo volta a contar desde já.
+    private func recordDrop(keepWatching: Bool) {
+        guard openedLive, let key = watchSource else { return }
+        flushWatched(restart: keepWatching)
+        onSourceDrop?(key)
+    }
+
+    /// Regista o tempo que a fonte a dar deu desde que começou a contar; com [restart], continua a contar daqui.
+    private func flushWatched(restart: Bool = false) {
+        guard let key = watchSource, let started = watchStartedAt else { return }
+        let seconds = Int64(Date().timeIntervalSince(started))
+        watchStartedAt = restart ? Date() : nil
+        if !restart { watchSource = nil }
+        if seconds > 0 { onSourceWatched?(key, seconds) }
     }
 
     /// Nenhuma forma abriu ou caiu a meio (ver [afterFailure]).
@@ -980,6 +1027,12 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         state = .playing
         watchProgress()
+        // A fonte abriu (uma vez por abertura; as religações depois de cair não contam) e passa-se a contar o tempo visto.
+        if openedLive, let key = openedSource {
+            if !wasPlaying { onSourceOpened?(key, true) }
+            watchSource = key
+            watchStartedAt = Date()
+        }
         wasPlaying = true
         retries = 0
         reconnects = 0
@@ -1031,8 +1084,12 @@ final class PlayerEngine: NSObject {
     /// de [onStartFailed], de [onBackupFailed] para o seguinte, ou "experimentar agora"). A ligação anterior fecha antes
     /// ([open] pára o motor e larga o anel; ver [whenConnectionFree]); o ecrã continua no canal da principal e o próximo
     /// canal (ou [play] outra vez) volta a ela.
-    func playBackup(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, linkResolver: (() async -> [StreamCandidate]?)? = nil) {
+    func playBackup(_ candidates: [StreamCandidate], userAgent: String?, referrer: String?, sourceKey: String? = nil,
+                    linkResolver: (() async -> [StreamCandidate]?)? = nil) {
         guard openedKey != nil else { return }
+        flushWatched()
+        if !onBackup { mainSource = openedSource }
+        openedSource = openedLive ? sourceKey : nil
         if !onBackup {
             mainRequest = (openedCandidates, self.userAgent, self.referrer, self.linkResolver)
         }
@@ -1070,6 +1127,7 @@ final class PlayerEngine: NSObject {
     /// A reserva também falhou: as tentativas seguintes voltam a começar pela lista principal.
     private func restoreMain() {
         guard let main = mainRequest else { return }
+        openedSource = mainSource
         onBackup = false
         backupFailed = true
         mainRequest = nil

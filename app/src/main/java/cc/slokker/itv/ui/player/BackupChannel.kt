@@ -119,7 +119,8 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
             val chosen = choice?.filter { c.channelOf(it) != null }
             // Uma escolha cujos canais já não existem conta como sem escolha (como na lista "Canais de reserva").
             if (choice?.isEmpty() == true || !chosen.isNullOrEmpty()) return chosen.orEmpty()
-            return c.variants + if (manual) emptyList() else listOfNotNull(c.autoChannel?.key)
+            // Sem escolha à mão, a ordem segue a fiabilidade de cada fonte (a mesma de backupStreams).
+            return vm.orderFailovers(c.variants + if (manual) emptyList() else listOfNotNull(c.autoChannel?.key), c.main, c.content)
         }
 
     /** Os failovers ainda são os do automático (nada escolhido à mão). */
@@ -160,6 +161,12 @@ internal class BackupPanelState(private val vm: AppViewModel, val channel: Chann
         is ChannelMatch.Result.Match -> s.backupChannelAutoIs(choices?.autoChannel?.name.orEmpty())
         is ChannelMatch.Result.Unsure -> s.backupChannelUnsure
         else -> s.backupChannelNoMatch
+    }
+
+    /** O que se sabe da fiabilidade do failover [failover] esta semana ("3 quedas em 2 h esta semana"); null sem nada. */
+    fun history(failover: String, s: Strings): String? {
+        val c = choices ?: return null
+        return vm.failoverSourceKey(failover, c.main, c.content)?.let { s.sourceHistory(vm.sourceStats(it)) }
     }
 
     /** A etiqueta de um failover: "Esta lista" ou o nome da reserva. */
@@ -286,6 +293,7 @@ internal fun BackupChannelBody(vm: AppViewModel, state: BackupPanelState, onTry:
                             else SourceTag(state.source(f, s))
                         },
                         title = c.name,
+                        subtitle = state.history(f, s),
                     )
                 }
                 item(key = "add") {

@@ -938,4 +938,10 @@
     <string name="upscale_sub">Делает видео, которое меньше экрана, чётче. Расходует больше энергии; ИИ нужен мощный прибор, и он сам отключается, если не успевает</string>
     <string name="upscale_shield">На приставках с собственным ИИ-масштабированием (NVIDIA SHIELD) системное работает, только когда это выключено, а настройки изображения на нуле: тогда картинка идёт прямо из декодера на экран</string>
     <string name="upscale_sub_apple">Делает видео, которое меньше экрана, чётче с помощью Apple MetalFX. Расходует больше энергии. Недоступно на устройствах без MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d обрывов за %2$s на этой неделе</string>
+    <string name="source_history_drop_one">1 обрыв за %1$s на этой неделе</string>
+    <string name="source_history_failed">не открылось %1$d из %2$d раз на этой неделе</string>
+    <string name="source_history_stable">Без обрывов за %1$s на этой неделе</string>
 </resources>

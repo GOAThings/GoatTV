@@ -936,4 +936,10 @@
     <string name="upscale_sub">Rende più nitido il video più piccolo dello schermo. Consuma più energia; l’IA richiede un dispositivo potente e torna indietro da sola se non regge</string>
     <string name="upscale_shield">Sui box con un proprio upscaling IA (NVIDIA SHIELD), quello di sistema funziona solo con questa opzione disattivata e le regolazioni dell’immagine a zero, perché così l’immagine va direttamente dal decoder allo schermo</string>
     <string name="upscale_sub_apple">Rende più nitido il video più piccolo dello schermo con Apple MetalFX. Consuma più energia. Non disponibile sui dispositivi senza MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d interruzioni in %2$s questa settimana</string>
+    <string name="source_history_drop_one">1 interruzione in %1$s questa settimana</string>
+    <string name="source_history_failed">%1$d aperture su %2$d non riuscite questa settimana</string>
+    <string name="source_history_stable">Nessuna interruzione in %1$s questa settimana</string>
 </resources>

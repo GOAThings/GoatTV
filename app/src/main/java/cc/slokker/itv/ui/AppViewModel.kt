@@ -49,6 +49,9 @@ import cc.slokker.itv.data.ProSet
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.SendRequest
 import cc.slokker.itv.data.SendToTv
+import cc.slokker.itv.playback.SourceHistory
+import cc.slokker.itv.playback.SourceReliability
+import cc.slokker.itv.playback.SourceStats
 import cc.slokker.itv.ui.player.engine.BackupStream
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import kotlinx.coroutines.withTimeoutOrNull
@@ -214,6 +217,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         },
         proMembers = { playlists.value.filterNot { it.id in prefs.value.proSkip } },
         proHealth = c.proHealth,
+        sourceHistory = c.sourceHistory,
     )
 
     val content: StateFlow<PlaylistContent?> = lists.content
@@ -1020,15 +1024,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Uma fonte de um canal do Modo TV Pro (ver [proSources]): [down] se a lista dela esteve em baixo há pouco. */
-    class ProSource(val index: Int, val playlistName: String, val channelName: String, val quality: Int, val down: Boolean)
+    class ProSource(val index: Int, val playlistName: String, val channelName: String, val quality: Int, val down: Boolean, val history: SourceStats? = null)
 
     /** As fontes de [channel] no Modo TV Pro, da melhor para a pior; vazia fora dele. */
     fun proSources(channel: Channel): List<ProSource> {
         val pro = content.value?.pro ?: return emptyList()
         return pro.resolve(channel.key).mapIndexed { i, (m, c) ->
-            ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id) || pro.isDown(m, c))
+            ProSource(i, m.playlist.name, c.name, ChannelMatch.parse(c.name).quality, providerOutage.isDown(m.playlist.id) || pro.isDown(m, c), pro.stats(m, c))
         }
     }
+
+    /** A fiabilidade de cada fonte (as quedas, as aberturas falhadas e o tempo a ver), só neste aparelho (ver SourceHistory). */
+    internal val sourceHistory get() = c.sourceHistory
+
+    /** O que a fonte [key] (SourceHistory.key) somou esta semana; null sem nada. */
+    internal fun sourceStats(key: String): SourceStats? = sourceHistory.history.stats(key, System.currentTimeMillis())
+
+    /**
+     * A fonte de [request] tem um historial claramente mau e a própria lista tem outra versão do canal (Juntar
+     * variantes) para dar no lugar dela: o player abre essa primeiro (ver ChannelPlayback). Fora do Modo TV Pro, que
+     * já ordena as fontes pelo mesmo historial.
+     */
+    internal fun sourceUnreliable(data: PlaylistContent, request: PlaybackRequest): Boolean =
+        data.pro == null && request.source.isNotEmpty() && data.variants[request.shownKey].orEmpty().isNotEmpty() &&
+            sourceHistory.history.isBad(request.source, System.currentTimeMillis())
+
+    /**
+     * Os failovers automáticos [list] (ChannelMatch.failovers) pela fiabilidade: entre os da mesma qualidade, o mais
+     * fiável primeiro; os de historial claramente mau no fim (nunca de fora). Sem historial, a mesma ordem. [main] é
+     * a lista principal (os failovers dela têm ChannelMatch.MAIN_PREFIX) e [backup] a reserva.
+     */
+    internal fun orderFailovers(list: List<String>, main: PlaylistContent?, backup: PlaylistContent?): List<String> = SourceReliability.order(
+        list, sourceHistory.history, System.currentTimeMillis(),
+        tier = { f -> ChannelMatch.mainKeyOf(f)?.let { main?.byKey?.get(it)?.name }?.let { ChannelMatch.parse(it).quality } ?: -1 },
+        key = { f -> failoverSourceKey(f, main, backup) },
+    )
+
+    /** A chave no historial do failover [f] ([orderFailovers]); null se a lista dele não está à mão. */
+    internal fun failoverSourceKey(f: String, main: PlaylistContent?, backup: PlaylistContent?): String? =
+        ChannelMatch.mainKeyOf(f)?.let { k -> main?.let { SourceHistory.key(it.playlist.id, k) } } ?: backup?.takeIf { ChannelMatch.mainKeyOf(f) == null }?.let { SourceHistory.key(it.playlist.id, f) }
 
     /** A lista [playlistId] entra ([on]) ou não na lista única do Modo TV Pro; com ele ligado, a lista única refaz-se. */
     fun setProMember(playlistId: String, on: Boolean) {
@@ -2006,7 +2040,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // O aviso diz a lista que falhou (a da primeira fonte), não "Portugal".
             val failed = all.firstOrNull()?.first?.playlist?.name ?: main.playlist.name
             return (up + down).map { (m, c) ->
-                BackupStream(PlaybackRequest.of(m, ProContent.asShown(c, channel).copy(name = c.name), null, streamFormat.value, stalkerLinks), failed, m.playlist.name)
+                BackupStream(PlaybackRequest.of(m, ProContent.asShown(c, channel).copy(name = c.name), null, streamFormat.value, stalkerLinks).also { it.source = SourceHistory.key(m.playlist.id, c.key) }, failed, m.playlist.name)
             }
         }
         val id = main.playlist.id
@@ -2023,16 +2057,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val matcher = content?.let { matcherFor(it) } ?: ChannelMatch.Matcher(emptyList())
         val manual = backupManual(id)
         val variants = main.variants[channel.key].orEmpty()
-        val list = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, chosen ?: backupChoice(id, channel.key), manual, variants) { it in main.byKey }
+        val picked = chosen ?: backupChoice(id, channel.key)
+        val found = ChannelMatch.failovers(ChannelMatch.entry(channel, main), matcher, picked, manual, variants) { it in main.byKey }
+        // A ordem automática segue a fiabilidade de cada fonte; a que a pessoa escolheu à mão não se mexe.
+        val list = if (picked == null) orderFailovers(found, main, content) else found
         val mainDown = providerOutage.isDown(id)
         val streams = list.mapNotNull { f ->
             val mainKey = ChannelMatch.mainKeyOf(f)
             when {
                 mainKey != null -> main.byKey[mainKey]?.takeUnless { mainDown }?.let { c ->
-                    BackupStream(PlaybackRequest.of(main, c, null, streamFormat.value, stalkerLinks), main.playlist.name, c.name, sameList = true)
+                    BackupStream(PlaybackRequest.of(main, c, null, streamFormat.value, stalkerLinks), main.playlist.name, c.name, sameList = true, bad = isBadSource(main, mainKey))
                 }
                 content != null && !busy -> content.byKey[f]?.let { c ->
-                    BackupStream(PlaybackRequest.of(content, c, null, streamFormat.value, stalkerLinks), main.playlist.name, content.playlist.name)
+                    BackupStream(PlaybackRequest.of(content, c, null, streamFormat.value, stalkerLinks), main.playlist.name, content.playlist.name, bad = isBadSource(content, f))
                 }
                 else -> null
             }
@@ -2041,6 +2078,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         Log.i(TAG_BACKUP, if (streams.isEmpty()) "Reserva: nenhum failover para \"${channel.name}\"${if (manual) " (manual)" else ""}" else "Reserva: \"${channel.name}\" → $names")
         return streams
     }
+
+    private fun isBadSource(content: PlaylistContent, channelKey: String) =
+        sourceHistory.history.isBad(SourceHistory.key(content.playlist.id, channelKey), System.currentTimeMillis())
 
     /** Os canais de uma lista na reserva: a cobertura e a lista "Canais de reserva" (cada canal e o seu estado). */
     class BackupReview(
