@@ -874,4 +874,11 @@
     <string name="pro_source_failed">%1$s stopped working. Playing %2$s.</string>
     <string name="pro_use_list">Use in TV Pro mode</string>
     <string name="pro_use_list_sub">Its channels go into the one list</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Quality</string>
+    <string name="hls_quality_title">HLS quality</string>
+    <string name="hls_quality_sub">For HLS channels with several qualities. In the player you can also pick one for the channel you are watching</string>
+    <string name="hls_quality_best">Best</string>
+    <string name="hls_quality_data_saver">Data saver (up to 720p)</string>
+    <string name="hls_quality_lowest">Lowest</string>
 </resources>

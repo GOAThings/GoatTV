@@ -873,4 +873,11 @@
     <string name="pro_source_failed">%1$s funktioniert nicht mehr. Es läuft %2$s.</string>
     <string name="pro_use_list">Im TV-Pro-Modus verwenden</string>
     <string name="pro_use_list_sub">Ihre Sender kommen in die eine Liste</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Qualität</string>
+    <string name="hls_quality_title">HLS-Qualität</string>
+    <string name="hls_quality_sub">Für HLS-Sender mit mehreren Qualitäten. Im Player lässt sich auch eine für den laufenden Sender wählen</string>
+    <string name="hls_quality_best">Beste</string>
+    <string name="hls_quality_data_saver">Datensparmodus (bis 720p)</string>
+    <string name="hls_quality_lowest">Niedrigste</string>
 </resources>

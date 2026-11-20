@@ -875,4 +875,11 @@
     <string name="pro_source_failed">%1$s ne fonctionne plus. Lecture de %2$s.</string>
     <string name="pro_use_list">Utiliser dans le mode TV Pro</string>
     <string name="pro_use_list_sub">Ses chaînes entrent dans la liste unique</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Qualité</string>
+    <string name="hls_quality_title">Qualité HLS</string>
+    <string name="hls_quality_sub">Pour les chaînes HLS avec plusieurs qualités. Dans le lecteur, vous pouvez aussi en choisir une pour la chaîne en cours</string>
+    <string name="hls_quality_best">La meilleure</string>
+    <string name="hls_quality_data_saver">Économie de données (jusqu\'à 720p)</string>
+    <string name="hls_quality_lowest">La plus basse</string>
 </resources>

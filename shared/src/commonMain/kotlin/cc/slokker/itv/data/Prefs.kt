@@ -51,6 +51,8 @@ data class Prefs(
     val audioDelayMs: Int = 0,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
+    /** A qualidade dos canais HLS com várias ([HlsQuality]): automática, a melhor, poupar dados ou a mais baixa. */
+    val hlsQuality: String = HlsQuality.AUTO,
     /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
     val netGraph: Boolean = false,
     /** Avisar quando o canal está sempre a parar, com a causa e o que experimentar. */
@@ -233,6 +235,7 @@ data class Prefs(
         const val AUDIO_DECODER = "audio_decoder"
         const val AUDIO_DELAY = "audio_delay_ms"
         const val HDR = "hdr"
+        const val HLS_QUALITY = "hls_quality"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
         const val TIMESHIFT = "timeshift"
@@ -394,6 +397,11 @@ data class Prefs(
         const val AUTO = "auto"; const val SDR = "sdr"
         val ALL = setOf(AUTO, SDR)
     }
+    /** Ver media/HlsQuality: o que cada uma escolhe entre as qualidades de um HLS. */
+    object HlsQuality {
+        const val AUTO = "auto"; const val BEST = "best"; const val DATA_SAVER = "data_saver"; const val LOWEST = "lowest"
+        val ALL = setOf(AUTO, BEST, DATA_SAVER, LOWEST)
+    }
     object Aspect {
         const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill"
         val ALL = setOf(FIT, ZOOM, FILL)
@@ -513,6 +521,7 @@ data class Prefs(
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
+                hlsQuality = str(Key.HLS_QUALITY, d.hlsQuality, HlsQuality.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),

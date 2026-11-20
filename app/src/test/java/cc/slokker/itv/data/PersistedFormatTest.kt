@@ -230,6 +230,7 @@ class PersistedFormatTest {
         "pipEnabled" to (Prefs.Key.PIP_ENABLED to true),
         "audioDecoder" to (Prefs.Key.AUDIO_DECODER to Prefs.Decoder.SOFTWARE),
         "hdr" to (Prefs.Key.HDR to Prefs.Hdr.SDR),
+        "hlsQuality" to (Prefs.Key.HLS_QUALITY to Prefs.HlsQuality.DATA_SAVER),
         "netGraph" to (Prefs.Key.NET_GRAPH to true),
         "netWarnings" to (Prefs.Key.NET_WARNINGS to false),
         "timeshift" to (Prefs.Key.TIMESHIFT to false),

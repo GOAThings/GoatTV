@@ -1138,6 +1138,14 @@ class Strings(context: Context) {
     val video get() = s(R.string.video)
     val preferredFormat get() = s(R.string.preferred_format)
 
+    // ---- Qualidade HLS ----
+    val hlsQuality get() = s(R.string.hls_quality)
+    val hlsQualityTitle get() = s(R.string.hls_quality_title)
+    val hlsQualitySub get() = s(R.string.hls_quality_sub)
+    val hlsQualityBest get() = s(R.string.hls_quality_best)
+    val hlsQualityDataSaver get() = s(R.string.hls_quality_data_saver)
+    val hlsQualityLowest get() = s(R.string.hls_quality_lowest)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

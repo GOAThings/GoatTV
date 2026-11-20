@@ -871,4 +871,11 @@
     <string name="pro_source_failed">%1$s berhenti berfungsi. Memutar %2$s.</string>
     <string name="pro_use_list">Pakai di mode TV Pro</string>
     <string name="pro_use_list_sub">Salurannya masuk ke satu daftar</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Kualitas</string>
+    <string name="hls_quality_title">Kualitas HLS</string>
+    <string name="hls_quality_sub">Untuk saluran HLS dengan beberapa kualitas. Di pemutar Anda juga bisa memilih satu untuk saluran yang sedang ditonton</string>
+    <string name="hls_quality_best">Terbaik</string>
+    <string name="hls_quality_data_saver">Hemat data (hingga 720p)</string>
+    <string name="hls_quality_lowest">Terendah</string>
 </resources>

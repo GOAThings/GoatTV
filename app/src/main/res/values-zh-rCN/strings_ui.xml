@@ -870,4 +870,11 @@
     <string name="pro_source_failed">%1$s 已停止工作。正在播放 %2$s。</string>
     <string name="pro_use_list">在 TV Pro 模式中使用</string>
     <string name="pro_use_list_sub">其频道会加入同一个列表</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">画质</string>
+    <string name="hls_quality_title">HLS 画质</string>
+    <string name="hls_quality_sub">适用于有多种画质的 HLS 频道。也可以在播放器中为正在观看的频道选择画质</string>
+    <string name="hls_quality_best">最佳</string>
+    <string name="hls_quality_data_saver">省流量（最高 720p）</string>
+    <string name="hls_quality_lowest">最低</string>
 </resources>

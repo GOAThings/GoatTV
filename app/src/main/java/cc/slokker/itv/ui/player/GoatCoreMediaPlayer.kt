@@ -65,6 +65,9 @@ internal class GoatCoreMediaPlayer(
 
     private val main = Handler(Looper.getMainLooper())
 
+    /** O player do canal principal: o HLS dele tem o menu da qualidade (ver HlsQualityControl); o segundo canal não. */
+    var primary = false
+
     private var source: DataSource.Factory? = null
     private var uri: Uri? = null
     private var hls = false
@@ -247,7 +250,7 @@ internal class GoatCoreMediaPlayer(
         // HLS: os segmentos TS um atrás do outro (ver HlsInputStream); o resto é o stream direto.
         val from = startMs
         player.open {
-            if (hls) return@open cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString(), from) { offsetMs = it }
+            if (hls) return@open cc.slokker.itv.ui.player.goatcore.HlsInputStream(factory, uri.toString(), from, onStart = { offsetMs = it }, primary = primary)
             // Num ficheiro com ponto de partida: o byte onde ele fica (sem dar, do início).
             val plan = if (from > 0) runCatching { TsSeek.plan(factory, uri, from) }.onFailure { android.util.Log.w("GoatCore", "seek: ${it.message}") }.getOrNull() else null
             plan?.let { firstPts = it.firstPts }

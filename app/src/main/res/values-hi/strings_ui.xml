@@ -873,4 +873,11 @@
     <string name="pro_source_failed">%1$s ने काम करना बंद कर दिया। %2$s चल रहा है।</string>
     <string name="pro_use_list">TV Pro मोड में इस्तेमाल करें</string>
     <string name="pro_use_list_sub">इसके चैनल एक ही सूची में जाते हैं</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">गुणवत्ता</string>
+    <string name="hls_quality_title">HLS गुणवत्ता</string>
+    <string name="hls_quality_sub">कई गुणवत्ताओं वाले HLS चैनलों के लिए। प्लेयर में आप देखे जा रहे चैनल के लिए भी एक चुन सकते हैं</string>
+    <string name="hls_quality_best">सर्वश्रेष्ठ</string>
+    <string name="hls_quality_data_saver">डेटा बचत (720p तक)</string>
+    <string name="hls_quality_lowest">सबसे कम</string>
 </resources>

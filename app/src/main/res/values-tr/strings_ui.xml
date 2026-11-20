@@ -873,4 +873,11 @@
     <string name="pro_source_failed">%1$s çalışmayı durdurdu. %2$s oynatılıyor.</string>
     <string name="pro_use_list">TV Pro modunda kullan</string>
     <string name="pro_use_list_sub">Kanalları tek listeye girer</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Kalite</string>
+    <string name="hls_quality_title">HLS kalitesi</string>
+    <string name="hls_quality_sub">Birden çok kalitesi olan HLS kanalları için. Oynatıcıda izlediğiniz kanal için de bir kalite seçebilirsiniz</string>
+    <string name="hls_quality_best">En iyi</string>
+    <string name="hls_quality_data_saver">Veri tasarrufu (720p\'ye kadar)</string>
+    <string name="hls_quality_lowest">En düşük</string>
 </resources>

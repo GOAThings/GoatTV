@@ -875,4 +875,11 @@
     <string name="pro_source_failed">%1$s ha smesso di funzionare. In onda %2$s.</string>
     <string name="pro_use_list">Usa nella modalità TV Pro</string>
     <string name="pro_use_list_sub">I suoi canali entrano nell\'unica lista</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Qualità</string>
+    <string name="hls_quality_title">Qualità HLS</string>
+    <string name="hls_quality_sub">Per i canali HLS con più qualità. Nel lettore puoi anche sceglierne una per il canale che stai guardando</string>
+    <string name="hls_quality_best">La migliore</string>
+    <string name="hls_quality_data_saver">Risparmio dati (fino a 720p)</string>
+    <string name="hls_quality_lowest">La più bassa</string>
 </resources>

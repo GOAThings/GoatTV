@@ -93,6 +93,7 @@ import cc.slokker.itv.ui.player.VlcPlayer
 import cc.slokker.itv.ui.player.behindLabel
 import cc.slokker.itv.ui.player.rememberStreamState
 import cc.slokker.itv.ui.player.trackOptions
+import cc.slokker.itv.ui.player.goatcore.HlsQualityControl
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
 import kotlinx.coroutines.Job
@@ -559,7 +560,8 @@ internal fun VideoArea(
                         // O que estava no "mais": cada um no seu botão.
                         // O canal de reserva só no direto, numa lista com reserva.
         val backup = catchup == null && vm.content.collectAsStateWithLifecycle().value?.playlist?.id?.let(vm::backupOf) != null
-        PlayerOption.entries.filter { it != PlayerOption.BACKUP || backup }.forEach { option ->
+        val quality = hlsQualityShown()
+        PlayerOption.entries.filter { (it != PlayerOption.BACKUP || backup) && (it != PlayerOption.QUALITY || quality) }.forEach { option ->
                             ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
@@ -648,7 +650,11 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
+
+/** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
+@Composable
+private fun hlsQualityShown(): Boolean = HlsQualityControl.now.collectAsStateWithLifecycle().value?.options?.isNotEmpty() == true
 
 @Composable
 private fun PlayerOption.label(): String {
@@ -656,6 +662,7 @@ private fun PlayerOption.label(): String {
     return when (this) {
         PlayerOption.AUDIO -> s.audio
         PlayerOption.SUBTITLES -> s.subtitles
+        PlayerOption.QUALITY -> s.hlsQuality
         PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
     }
@@ -688,6 +695,26 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                             MenuRow(o.label, null, checked = o.selected) {
                                 o.select()
                                 onClose()
+                            }
+                        }
+                    }
+                }
+                // Automático (a definição) ou uma qualidade fixa, até mudar de canal; por baixo, a que está a dar.
+                PlayerOption.QUALITY -> {
+                    val q = HlsQualityControl.now.collectAsStateWithLifecycle().value
+                    Section(option.label()) {
+                        if (q == null || q.options.isEmpty()) Note(s.noTracks)
+                        q?.label?.let { Note(it) }
+                        if (q != null && q.options.isNotEmpty()) {
+                            MenuRow(s.auto, null, checked = q.selected < 0) {
+                                HlsQualityControl.pin(-1)
+                                onClose()
+                            }
+                            q.options.forEach { o ->
+                                MenuRow(o.label, null, checked = q.selected == o.index) {
+                                    HlsQualityControl.pin(o.index)
+                                    onClose()
+                                }
                             }
                         }
                     }
@@ -755,7 +782,8 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         } else if (catchup == null && ts.available) {
             ActionPill(ItvIcons.Record, s.record, tint = PhoneColors.LiveRed) { vm.recordNow(channel, ts.feed) }
         }
-        PlayerOption.entries.forEach { option ->
+        val quality = hlsQualityShown()
+        PlayerOption.entries.filter { it != PlayerOption.QUALITY || quality }.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
             ActionPill(option.icon, label, tint = if (option == PlayerOption.SLEEP && sleepAt != null) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
