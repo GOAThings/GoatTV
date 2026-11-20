@@ -67,6 +67,8 @@ internal class GoatCoreMediaPlayer(
     /** Vozes mais claras, e se a saída de som só leva estéreo (ver [GoatCorePlayer.audioVoices] e stereoOutput). */
     private val audioVoices: Boolean = false,
     private val stereoOutput: () -> Boolean = { true },
+    /** Aumentar a imagem (Prefs.Upscale; ver [GoatCorePlayer.upscale]): "off" fora da imagem principal. */
+    private val upscale: String = Prefs.Upscale.OFF,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /**
      * Definições → Imagem (ver [GoatCorePlayer.picture]): muda-se com o canal a dar. Passar de tudo no 0 para algum
@@ -192,9 +194,57 @@ internal class GoatCoreMediaPlayer(
         textureSurface = null
     }
 
+    /**
+     * Com o aumento da imagem ligado, a superfície da SurfaceView fica do tamanho do ecrã a sério: nas boxes 4K a
+     * interface é 1080p e a superfície seria também 1080p (o sistema estica-a para o ecrã depois, e o aumento ficava
+     * por aí). O tamanho segue o da vista ([fitSurface]); nunca mais do que 3840×2160.
+     */
+    private val surfaceLayout = android.view.View.OnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> fitSurface(v as SurfaceView) }
+
+    private fun fitSurface(v: SurfaceView) {
+        val w = v.width
+        val h = v.height
+        if (w <= 0 || h <= 0) return
+        val display = v.display ?: return
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display.getRealMetrics(metrics)
+        val mode = display.mode
+        val logical = maxOf(metrics.widthPixels, metrics.heightPixels)
+        val physical = maxOf(mode.physicalWidth, mode.physicalHeight)
+        val k = if (logical > 0) physical.toFloat() / logical else 1f
+        if (k < 1.05f) {
+            v.holder.setSizeFromLayout()
+            return
+        }
+        val s = minOf(k, cc.slokker.itv.media.Upscaling.MAX_WIDTH.toFloat() / w, cc.slokker.itv.media.Upscaling.MAX_HEIGHT.toFloat() / h).coerceAtLeast(1f)
+        val fw = (w * s).toInt() and 1.inv()
+        val fh = (h * s).toInt() and 1.inv()
+        if (fixedSize[0] == fw && fixedSize[1] == fh) return
+        fixedSize[0] = fw
+        fixedSize[1] = fh
+        android.util.Log.i("GoatCore", "upscale: video surface ${fw}x$fh for a ${w}x$h view (display ${mode.physicalWidth}x${mode.physicalHeight}, interface ${metrics.widthPixels}x${metrics.heightPixels})")
+        v.holder.setFixedSize(fw, fh)
+    }
+
+    private val fixedSize = IntArray(2)
+
+    /** O tamanho da superfície do vídeo agora (ver [GoatCorePlayer.surfaceSize]). */
+    private fun videoSurfaceSize(): IntArray? {
+        surfaceView?.holder?.surfaceFrame?.takeIf { it.width() > 0 && it.height() > 0 }?.let { return intArrayOf(it.width(), it.height()) }
+        return textureView?.takeIf { it.width > 0 && it.height > 0 }?.let { intArrayOf(it.width, it.height) }
+    }
+
     /** Larga a imagem atual (SurfaceView ou TextureView). */
     private fun detachOutput() {
         surfaceView?.holder?.removeCallback(surfaceCallback)
+        surfaceView?.let { v ->
+            if (upscale != Prefs.Upscale.OFF) {
+                v.removeOnLayoutChangeListener(surfaceLayout)
+                v.holder.setSizeFromLayout()
+                fixedSize.fill(0)
+            }
+        }
         surfaceView = null
         textureView?.let { if (it.surfaceTextureListener === textureListener) it.surfaceTextureListener = null }
         textureView = null
@@ -242,7 +292,7 @@ internal class GoatCoreMediaPlayer(
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
             audioLevel = audioLevel, levelKey = levelKey,
             audioDelayMs = audioDelayMs, audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, stereoOutput = stereoOutput,
-            deinterlace = deinterlace, picture = { picture }, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
+            deinterlace = deinterlace, picture = { picture }, upscale = upscale, surfaceSize = ::videoSurfaceSize, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true
                 playbackState = Player.STATE_READY
@@ -596,6 +646,10 @@ internal class GoatCoreMediaPlayer(
             if (videoOutput is SurfaceView) {
                 surfaceView = videoOutput
                 videoOutput.holder.addCallback(surfaceCallback)
+                if (upscale != Prefs.Upscale.OFF) {
+                    videoOutput.addOnLayoutChangeListener(surfaceLayout)
+                    fitSurface(videoOutput)
+                }
             } else if (videoOutput is TextureView) {
                 textureView = videoOutput
                 videoOutput.surfaceTextureListener = textureListener

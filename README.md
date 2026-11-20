@@ -67,3 +67,7 @@ Third-party: [Adwaita Sans](third_party/adwaita-sans-OFL.txt) (SIL Open Font Lic
 uses [VLCKit](https://code.videolan.org/videolan/VLCKit) (LGPL 2.1). The Apple apps' experimental engine is
 [AetherEngine](https://github.com/superuser404notfound/AetherEngine) (LGPL 3.0 with an App Store exception), with FFmpeg
 (LGPL 2.1) and libdovi (MIT): see [third_party/aetherengine-NOTICE.txt](third_party/aetherengine-NOTICE.txt).
+The Android app's AI upscaling uses the FSRCNNX_x2_8-0-4-1 network by igv
+([FSRCNN-TensorFlow](https://github.com/igv/FSRCNN-TensorFlow), release 1.1, commit 1aa11ab), LGPL 3.0: see
+[third_party/fsrcnnx-LGPL-3.0.txt](third_party/fsrcnnx-LGPL-3.0.txt) and the notice in
+`app/src/main/resources/goatcore/FSRCNNX_x2_8-0-4-1.glsl`.

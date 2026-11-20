@@ -43,7 +43,7 @@ internal data class PlaybackPolicy(
     val subtitleLanguage: Boolean,
     /** Um canal em direto que não abre passa para os failovers dele, pela ordem (ver [PlaybackHost.backupsFor]). */
     val failover: Boolean,
-    /** Os ajustes da imagem (Definições → Imagem): só na imagem principal (os canais extra vão como vêm). */
+    /** Os ajustes e o aumento da imagem (Definições → Imagem): só na imagem principal (os canais extra vão como vêm). */
     val picture: Boolean = true,
 ) {
     companion object {
@@ -333,18 +333,20 @@ internal data class PlayerBuild(
      * Os valores em si mudam sem recriar o player (ver GoatCoreMediaPlayer.picture).
      */
     val picture: Boolean = false,
+    /** Aumentar a imagem (Prefs.Upscale): só na imagem principal ("off" nas outras), decide-se ao criar o player. */
+    val upscale: String = Prefs.Upscale.OFF,
 ) {
     /** As definições com que se cria o player ([buildPlayer] lê só estas). */
     fun applyTo(prefs: Prefs): Prefs = prefs.copy(
         engine = engine, buffer = buffer, decoder = decoder, audioDecoder = audioDecoder, audioPassthrough = audioPassthrough, hdr = hdr,
         deinterlace = deinterlace, audioDelayMs = audioDelayMs, audioLevel = audioLevel,
-        audioDelayAuto = audioDelayAuto, audioVoices = audioVoices,
+        audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, upscale = upscale,
     )
 
     companion object {
-        fun of(prefs: Prefs, engine: String, passthrough: Boolean, picture: Boolean = false) = PlayerBuild(
+        fun of(prefs: Prefs, engine: String, passthrough: Boolean, picture: Boolean = false, upscale: String = Prefs.Upscale.OFF) = PlayerBuild(
             engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough && passthrough, prefs.hdr, prefs.deinterlace, prefs.audioDelayMs,
-            prefs.audioLevel, prefs.audioDelayAuto, prefs.audioVoices, picture,
+            prefs.audioLevel, prefs.audioDelayAuto, prefs.audioVoices, picture, upscale,
         )
     }
 }

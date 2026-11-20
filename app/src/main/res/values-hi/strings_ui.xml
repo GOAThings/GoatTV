@@ -927,4 +927,11 @@
     <string name="send_failed">%1$s तक नहीं पहुँच सके</string>
     <string name="send_from">%1$s से</string>
     <string name="send_from_phone">एक फ़ोन से</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">अपस्केलिंग</string>
+    <string name="upscale_sharp">शार्प</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">स्क्रीन से छोटे वीडियो को ज़्यादा साफ़ दिखाता है। ज़्यादा बिजली लेता है; AI के लिए सक्षम डिवाइस चाहिए और साथ न दे पाने पर यह अपने आप पीछे लौट जाता है</string>
+    <string name="upscale_shield">जिन बॉक्स में अपना AI अपस्केलिंग है (NVIDIA SHIELD), वहाँ सिस्टम का अपस्केलर तभी काम करता है जब यह बंद हो और चित्र समायोजन शून्य पर हों, क्योंकि तब चित्र डिकोडर से सीधे स्क्रीन पर जाता है</string>
+    <string name="upscale_sub_apple">Apple MetalFX से स्क्रीन से छोटे वीडियो को ज़्यादा साफ़ दिखाता है। ज़्यादा बिजली लेता है। MetalFX के बिना डिवाइस पर उपलब्ध नहीं</string>
 </resources>

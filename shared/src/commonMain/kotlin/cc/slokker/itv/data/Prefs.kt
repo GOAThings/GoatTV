@@ -76,6 +76,12 @@ data class Prefs(
     val pictureContrast: Int = 0,
     val pictureSaturation: Int = 0,
     val pictureSharpness: Int = 0,
+    /**
+     * Aumentar a imagem no GoatCore ([Upscale]; ver media/Upscaling): desligado, nítido (sem rede neural) ou IA (uma
+     * rede neural pequena, que volta sozinha ao nítido se a GPU não aguentar). Só no vídeo de 8 bits SDR mais pequeno
+     * do que o ecrã, e só na imagem principal.
+     */
+    val upscale: String = Upscale.OFF,
     /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
     val netGraph: Boolean = false,
     /** Avisar quando o canal está sempre a parar, com a causa e o que experimentar. */
@@ -269,6 +275,7 @@ data class Prefs(
         const val PICTURE_CONTRAST = "picture_contrast"
         const val PICTURE_SATURATION = "picture_saturation"
         const val PICTURE_SHARPNESS = "picture_sharpness"
+        const val UPSCALE = "upscale"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
         const val TIMESHIFT = "timeshift"
@@ -360,6 +367,12 @@ data class Prefs(
     }
 
     /** Os ajustes da imagem (ver media/PictureLook): cada um de −[MAX] a +[MAX] (a nitidez de 0 a [MAX]); 0 = como vem. */
+    /** Aumentar a imagem (ver media/Upscaling): desligado, nítido (FSR 1, sem rede neural) ou IA (rede neural). */
+    object Upscale {
+        const val OFF = "off"; const val SHARP = "sharp"; const val AI = "ai"
+        val ALL = setOf(OFF, SHARP, AI)
+    }
+
     object Picture {
         const val MAX = 5
         /** As quatro chaves, para as repor todas de uma vez ("Repor a imagem"). */
@@ -598,6 +611,7 @@ data class Prefs(
                 pictureContrast = int(Key.PICTURE_CONTRAST, d.pictureContrast).coerceIn(-Picture.MAX, Picture.MAX),
                 pictureSaturation = int(Key.PICTURE_SATURATION, d.pictureSaturation).coerceIn(-Picture.MAX, Picture.MAX),
                 pictureSharpness = int(Key.PICTURE_SHARPNESS, d.pictureSharpness).coerceIn(0, Picture.MAX),
+                upscale = str(Key.UPSCALE, d.upscale, Upscale.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),
                 timeshift = bool(Key.TIMESHIFT, d.timeshift),

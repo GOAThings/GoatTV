@@ -90,7 +90,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs, picture: PictureLook = 
         return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough, needsSdr = { f -> HdrType.needsSdr(appContext, f, prefs.hdr) },
             udp = UdpTsDataSource.Factory(appContext), audioLevel = prefs.audioLevel, deinterlace = prefs.deinterlace,
             audioDelayMs = prefs.audioDelayMs, audioDelayAuto = prefs.audioDelayAuto,
-            audioVoices = prefs.audioVoices == Prefs.AudioVoices.ON, stereoOutput = { AudioOutputs.stereoOnly(appContext) })
+            audioVoices = prefs.audioVoices == Prefs.AudioVoices.ON, stereoOutput = { AudioOutputs.stereoOnly(appContext) }, upscale = prefs.upscale)
             .apply {
                 this.picture = picture
                 playWhenReady = true

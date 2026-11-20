@@ -929,4 +929,11 @@
     <string name="send_failed">Não foi possível falar com %1$s</string>
     <string name="send_from">De %1$s</string>
     <string name="send_from_phone">De um telemóvel</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Aumentar a imagem</string>
+    <string name="upscale_sharp">Nítido</string>
+    <string name="upscale_ai">IA</string>
+    <string name="upscale_sub">Torna mais nítido o vídeo mais pequeno do que o ecrã. Gasta mais energia; a IA precisa de um aparelho capaz e volta atrás sozinha quando não acompanha</string>
+    <string name="upscale_shield">Nas boxes com aumento por IA próprio (NVIDIA SHIELD), o do sistema só funciona com isto desligado e os ajustes da imagem no 0, porque assim a imagem vai direta do descodificador para o ecrã</string>
+    <string name="upscale_sub_apple">Torna mais nítido o vídeo mais pequeno do que o ecrã, com o MetalFX da Apple. Gasta mais energia. Não existe nos aparelhos sem MetalFX</string>
 </resources>

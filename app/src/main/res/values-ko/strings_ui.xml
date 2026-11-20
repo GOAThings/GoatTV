@@ -924,4 +924,11 @@
     <string name="send_failed">%1$s에 연결할 수 없습니다</string>
     <string name="send_from">%1$s에서 보냄</string>
     <string name="send_from_phone">휴대폰에서 보냄</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">업스케일링</string>
+    <string name="upscale_sharp">선명</string>
+    <string name="upscale_ai">AI</string>
+    <string name="upscale_sub">화면보다 작은 영상을 더 선명하게 보여 줍니다. 전력을 더 씁니다. AI는 성능 좋은 기기가 필요하며 따라가지 못하면 스스로 되돌아갑니다</string>
+    <string name="upscale_shield">자체 AI 업스케일링이 있는 박스(NVIDIA SHIELD)에서는 이 항목이 꺼져 있고 화면 조정이 0일 때만 시스템 업스케일러가 작동합니다. 그때 영상이 디코더에서 화면으로 바로 가기 때문입니다</string>
+    <string name="upscale_sub_apple">Apple MetalFX로 화면보다 작은 영상을 더 선명하게 보여 줍니다. 전력을 더 씁니다. MetalFX가 없는 기기에서는 사용할 수 없습니다</string>
 </resources>

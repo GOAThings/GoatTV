@@ -935,4 +935,11 @@
     <string name="send_failed">تعذّر الوصول إلى %1$s</string>
     <string name="send_from">من %1$s</string>
     <string name="send_from_phone">من هاتف</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">تكبير الصورة</string>
+    <string name="upscale_sharp">حاد</string>
+    <string name="upscale_ai">ذكاء اصطناعي</string>
+    <string name="upscale_sub">يجعل الفيديو الأصغر من الشاشة أكثر وضوحًا. يستهلك طاقة أكثر؛ الذكاء الاصطناعي يحتاج جهازًا قادرًا ويعود تلقائيًا إذا لم يواكب</string>
+    <string name="upscale_shield">في الأجهزة التي لها تكبير خاص بالذكاء الاصطناعي (NVIDIA SHIELD)، لا يعمل تكبير النظام إلا عندما يكون هذا متوقفًا وتعديلات الصورة على الصفر، لأن الصورة حينها تذهب مباشرة من فك الترميز إلى الشاشة</string>
+    <string name="upscale_sub_apple">يجعل الفيديو الأصغر من الشاشة أكثر وضوحًا باستخدام Apple MetalFX. يستهلك طاقة أكثر. غير متاح في الأجهزة بدون MetalFX</string>
 </resources>

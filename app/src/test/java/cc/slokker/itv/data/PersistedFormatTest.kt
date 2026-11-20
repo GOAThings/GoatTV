@@ -219,6 +219,7 @@ class PersistedFormatTest {
         "pictureContrast" to (Prefs.Key.PICTURE_CONTRAST to -3),
         "pictureSaturation" to (Prefs.Key.PICTURE_SATURATION to 4),
         "pictureSharpness" to (Prefs.Key.PICTURE_SHARPNESS to 5),
+        "upscale" to (Prefs.Key.UPSCALE to Prefs.Upscale.AI),
         "reminderSwitch" to (Prefs.Key.REMINDER_SWITCH to true),
         "epgPastHours" to (Prefs.Key.EPG_PAST_HOURS to 72),
         "epgFutureHours" to (Prefs.Key.EPG_FUTURE_HOURS to 168),

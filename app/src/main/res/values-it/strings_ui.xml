@@ -929,4 +929,11 @@
     <string name="send_failed">Impossibile raggiungere %1$s</string>
     <string name="send_from">Da %1$s</string>
     <string name="send_from_phone">Da un telefono</string>
+    <!-- Aumentar a imagem -->
+    <string name="upscale">Upscaling</string>
+    <string name="upscale_sharp">Nitido</string>
+    <string name="upscale_ai">IA</string>
+    <string name="upscale_sub">Rende più nitido il video più piccolo dello schermo. Consuma più energia; l’IA richiede un dispositivo potente e torna indietro da sola se non regge</string>
+    <string name="upscale_shield">Sui box con un proprio upscaling IA (NVIDIA SHIELD), quello di sistema funziona solo con questa opzione disattivata e le regolazioni dell’immagine a zero, perché così l’immagine va direttamente dal decoder allo schermo</string>
+    <string name="upscale_sub_apple">Rende più nitido il video più piccolo dello schermo con Apple MetalFX. Consuma più energia. Non disponibile sui dispositivi senza MetalFX</string>
 </resources>
