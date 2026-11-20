@@ -715,6 +715,7 @@ final class AppModel {
         strings = Strings(language: prefs.language)
         player.reconnectSeconds = prefs.reconnectSeconds
         player.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
+        player.adaptiveBuffer = prefs.buffer == Prefs.Buffer.auto
         refreshChannelAspect()
         for engine in [player] + extraPlayers {
             engine.zapDelayMs = prefs.zapDelayMs
@@ -1887,6 +1888,7 @@ final class AppModel {
                                           allowedFormats: src.content.account?.allowedFormats ?? [])
         engine.reconnectSeconds = prefs.reconnectSeconds
         engine.cachingMs = Prefs.Buffer.milliseconds(prefs.buffer)
+        engine.adaptiveBuffer = prefs.buffer == Prefs.Buffer.auto
         let stalker = loader.stalker
         let playlist = src.content.playlist, channel = src.channel
         engine.play(candidates, channelKey: v.channel.key, live: true, userAgent: channel.userAgent ?? prefs.userAgent,

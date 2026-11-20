@@ -465,6 +465,7 @@ internal class ChannelPlayback(
                 startMs = seekMs,
                 audioLanguage = audioLanguage(prefs).takeIf { !tracks.isManual(C.TRACK_TYPE_AUDIO) },
                 textLanguage = textLanguage(prefs).takeIf { !tracks.isManual(C.TRACK_TYPE_TEXT) },
+                adaptiveBuffer = prefs.buffer == Prefs.Buffer.AUTO && req.live,
             ),
         )
         // Um direto que não começa a dar no tempo do buffer (e mais um pouco): o servidor não está a responder.

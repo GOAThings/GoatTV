@@ -1003,4 +1003,6 @@
     <string name="mobile_data_quality_sub">Com dados móveis, os canais HLS com várias qualidades usam Poupar dados (até 720p) para não gastar o teu plano. Na Wi-Fi volta a qualidade de sempre. Os canais TS simples não mudam</string>
     <string name="mobile_data_quality_auto">Poupar dados</string>
     <string name="mobile_data_quality_same">Igual à Wi-Fi</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Automático (adapta-se à ligação)</string>
 </resources>

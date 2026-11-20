@@ -113,6 +113,9 @@ class SettingsCatalogTest {
         val values = SettingValues(Prefs(buffer = Prefs.Buffer.LARGE, epgOffsetMin = 90), StreamFormat.HLS)
         assertEquals("HLS (m3u8)", SettingsCatalog.STREAM_FORMAT.label(s, values))
         assertEquals(s.bufferLarge, SettingsCatalog.BUFFER.label(s, values))
+        // O automático é o padrão e a primeira opção.
+        assertEquals(Prefs.Buffer.AUTO, SettingsCatalog.BUFFER.options(s).first().first)
+        assertEquals(s.bufferAuto, SettingsCatalog.BUFFER.label(s, SettingValues(Prefs(), StreamFormat.HLS)))
         assertEquals("+90 min", SettingsCatalog.EPG_OFFSET.label(s, values, phone = true))
         assertNotEquals(SettingsCatalog.EPG_OFFSET.label(s, values), SettingsCatalog.EPG_OFFSET.label(s, values, phone = true))
         assertEquals(s.auto, SettingsCatalog.STREAM_FORMAT.label(s, defaults))

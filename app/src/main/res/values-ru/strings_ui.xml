@@ -1005,4 +1005,6 @@
     <string name="mobile_data_quality_sub">В мобильной сети каналы HLS с несколькими качествами используют «Экономию трафика» (до 720p), чтобы не тратить ваш тариф. В Wi-Fi возвращается обычное качество. Обычные TS-каналы не меняются</string>
     <string name="mobile_data_quality_auto">Экономия трафика</string>
     <string name="mobile_data_quality_same">Как в Wi-Fi</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Автоматически (подстраивается под соединение)</string>
 </resources>

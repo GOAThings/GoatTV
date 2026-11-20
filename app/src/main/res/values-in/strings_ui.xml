@@ -999,4 +999,6 @@
     <string name="mobile_data_quality_sub">Di data seluler, saluran HLS dengan beberapa kualitas memakai Hemat data (hingga 720p) agar paket Anda hemat. Kembali ke Wi-Fi, kualitas biasa kembali. Saluran TS biasa tidak berubah</string>
     <string name="mobile_data_quality_auto">Hemat data</string>
     <string name="mobile_data_quality_same">Sama seperti Wi-Fi</string>
+    <!-- Buffer automático -->
+    <string name="buffer_auto">Otomatis (menyesuaikan dengan koneksi)</string>
 </resources>

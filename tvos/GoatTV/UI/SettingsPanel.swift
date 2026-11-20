@@ -1662,7 +1662,8 @@ struct SettingsPanel: View {
                     p.streamFormat.map { .string($0) })
         case "buffer":
             return (s.t("Buffer", "Buffer"),
-                    [o("live", s.t("Live (closest to real time)", "Live (o mais perto do direto)")),
+                    [o("auto", s.r("buffer_auto")),
+                     o("live", s.t("Live (closest to real time)", "Live (o mais perto do direto)")),
                      o("small", s.t("Small (fast start)", "Pequeno (arranque rápido)")),
                      o("normal", s.t("Normal", "Normal")),
                      o("large", s.t("Large (unstable network)", "Grande (rede instável)"))],

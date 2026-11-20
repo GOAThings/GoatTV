@@ -40,6 +40,7 @@ object SettingsCatalog {
         Prefs.Key.BUFFER, { it.buffer },
         options = { s ->
             listOf(
+                Prefs.Buffer.AUTO to s.bufferAuto,
                 Prefs.Buffer.LIVE to s.bufferLive,
                 Prefs.Buffer.SMALL to s.bufferSmall,
                 Prefs.Buffer.NORMAL to s.bufferNormal,

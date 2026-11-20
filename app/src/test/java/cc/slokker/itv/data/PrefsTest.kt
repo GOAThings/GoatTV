@@ -27,7 +27,7 @@ class PrefsTest {
     @Test
     fun `missing or invalid values fall back to defaults`() {
         val p = prefs("""{"buffer":"enorme","decoder":42,"info_seconds":"x","show_logos":false,"stream_format":"ts"}""")
-        assertEquals(Prefs.Buffer.NORMAL, p.buffer)
+        assertEquals(Prefs.Buffer.AUTO, p.buffer)
         assertEquals(Prefs.Decoder.HARDWARE, p.decoder)
         assertEquals(Prefs().infoSeconds, p.infoSeconds)
         assertFalse(p.showLogos)

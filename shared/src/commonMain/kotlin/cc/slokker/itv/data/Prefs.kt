@@ -20,7 +20,11 @@ data class Prefs(
     // Reprodução
     /** O player: o ExoPlayer (o normal) ou o VLC, para streams que o ExoPlayer não abra. */
     val engine: String = Engine.EXO,
-    val buffer: String = Buffer.NORMAL,
+    /**
+     * O buffer do direto ([Buffer]). O padrão é o automático ([Buffer.AUTO], ver playback/AdaptiveBuffer); quem já
+     * escolheu um à mão tem-no gravado e fica com ele (só se grava o que se escolhe).
+     */
+    val buffer: String = Buffer.AUTO,
     val decoder: String = Decoder.HARDWARE,
     /** Desentrelaçar no VLC (no ExoPlayer é a TV que o faz). */
     val deinterlace: String = Deinterlace.SMOOTH,
@@ -352,7 +356,9 @@ data class Prefs(
 
     object Buffer {
         const val LIVE = "live"; const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large"
-        val ALL = setOf(LIVE, SMALL, NORMAL, LARGE)
+        /** Automático: o GoatCore aumenta o buffer quando a ligação falha e volta a baixá-lo devagar (ver AdaptiveBuffer). */
+        const val AUTO = "auto"
+        val ALL = setOf(AUTO, LIVE, SMALL, NORMAL, LARGE)
     }
     object Decoder {
         const val HARDWARE = "hw"; const val SOFTWARE = "sw"

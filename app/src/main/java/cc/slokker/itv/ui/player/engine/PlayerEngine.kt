@@ -66,6 +66,8 @@ internal class PlayerEngine(
         player.addListener(listener)
         // Só o canal principal tem a pausa do direto: é também o que tem o menu da qualidade dos HLS.
         (player as? GoatCoreMediaPlayer)?.primary = timeshift != null
+        // O buffer automático só aprende e acelera a ver o direto (não em pausa nem atrás dele no anel).
+        (player as? GoatCoreMediaPlayer)?.atLive = { timeshift?.atLive ?: true }
     }
 
     override val isVlc: Boolean get() = player is VlcPlayer
@@ -89,6 +91,7 @@ internal class PlayerEngine(
                 startMs = options.startMs,
                 audioLanguage = options.audioLanguage,
                 textLanguage = options.textLanguage,
+                adaptive = options.adaptiveBuffer,
             )
             player.prepare()
             player.play()

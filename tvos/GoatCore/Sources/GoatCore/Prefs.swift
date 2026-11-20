@@ -22,7 +22,8 @@ public struct Prefs: Equatable, Sendable {
     /// `stream_format`: "ts", "m3u8" ou nil (automático).
     public var streamFormat: String?
     public var aspect = Aspect.fit
-    public var buffer = Buffer.normal
+    /// O buffer do direto; o padrão é o automático (ver AdaptiveBuffer), e quem escolheu outro fica com ele.
+    public var buffer = Buffer.auto
     /// O motor: "exo" (o normal; no Apple TV, o leitor da Apple nos HLS e o VLC no resto), "vlc" ou "aether" (o
     /// AetherEngine, experimental, só no Apple TV e no iPhone: o Android lê-o como "exo").
     public var engine = "exo"
@@ -177,7 +178,9 @@ public struct Prefs: Equatable, Sendable {
     public enum Aspect { public static let fit = "fit", zoom = "zoom", fill = "fill" }
     public enum Buffer {
         public static let live = "live", small = "small", normal = "normal", large = "large"
-        /// O buffer de rede do VLC, em ms.
+        /// Automático: o GoatCore adapta-se à ligação (ver AdaptiveBuffer); os outros motores ficam com o normal.
+        public static let auto = "auto"
+        /// O buffer de rede do VLC, em ms (o automático é o normal).
         public static func milliseconds(_ b: String) -> Int {
             switch b {
             case live: return 500

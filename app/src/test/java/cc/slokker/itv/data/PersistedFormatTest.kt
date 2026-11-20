@@ -330,6 +330,19 @@ class PersistedFormatTest {
         assertEquals(defaults, Prefs.from(settings))
     }
 
+    /** O buffer passou a ser o automático: quem nunca o escolheu (sem a chave) muda; quem escolheu um fica com ele. */
+    @Test
+    fun `buffer defaults to auto but a saved choice is kept`() {
+        assertEquals(Prefs.Buffer.AUTO, Prefs().buffer)
+        assertEquals(Prefs.Buffer.AUTO, Prefs.from(JsonObject()).buffer)
+        for (value in Prefs.Buffer.ALL) {
+            val saved = JsonObject().also { Prefs.put(it, Prefs.Key.BUFFER, value) }
+            assertEquals(value, Prefs.from(saved).buffer)
+        }
+        // O antigo padrão, gravado à mão, fica.
+        assertEquals(Prefs.Buffer.NORMAL, Prefs.from(JsonObject().also { Prefs.put(it, Prefs.Key.BUFFER, Prefs.Buffer.NORMAL) }).buffer)
+    }
+
     /** As formas dos valores no JSON, que o site e a Apple TV leem: listas, mapas de listas e mapas de texto. */
     @Test
     fun `pref values keep their json shape`() {

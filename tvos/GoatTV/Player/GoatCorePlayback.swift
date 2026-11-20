@@ -245,6 +245,12 @@ final class GoatCorePlayback: NSObject {
     /// Aumentar a imagem (Prefs.upscale: "off", "sharp", "ai"; na Apple os dois são o MetalFX, ver InterlacedVideo).
     /// Só na imagem principal; vale no canal seguinte.
     var upscale = "off"
+    /// O buffer automático (Prefs.Buffer.auto, só no direto; ver AdaptiveBuffer), se o canal abre no direto ou atrás
+    /// dele no anel, e se o que está à frente diz bem como vai a ligação (não num HLS, mesmo pelo anel, que chega aos
+    /// segmentos). Valem no canal seguinte.
+    var adaptiveBuffer = false
+    var adaptiveAtLive = true
+    var adaptiveDips = true
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem"); nil se não houver vídeo. A resposta vem
     /// noutra thread.
@@ -299,6 +305,10 @@ final class GoatCorePlayback: NSObject {
         s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough,
                                    voices: audioVoices, stereoOutput: stereoOutput)
         s.audioDelay = CMTime(value: CMTimeValue(audioDelayMs), timescale: 1000)
+        // O nível aprendido é do fornecedor: o endereço do canal, não o do anel.
+        s.adaptive = adaptiveBuffer ? AdaptiveBuffer(url: channel ?? url.absoluteString) : nil
+        s.adaptiveAtLive = adaptiveAtLive
+        s.adaptiveDips = adaptiveDips
         s.primary = primary
         selectedAudio = nil
         selectedText = nil
@@ -614,8 +624,20 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     var primary = false
     /// A velocidade pedida (o catch-up pode andar mais depressa); só se aplica depois de arrancar.
     var rate: Float = 1 {
-        didSet { queue.async { if self.running { self.synchronizer.setRate(self.rate, time: self.synchronizer.currentTime()) } } }
+        didSet {
+            queue.async {
+                self.drain = 1
+                if self.running { self.synchronizer.setRate(self.rate, time: self.synchronizer.currentTime()) }
+            }
+        }
     }
+    /// O buffer automático (Prefs.Buffer.auto; nil = um dos fixos, que voltam a dar com meio segundo à frente):
+    /// definido antes de [start], depois só na fila.
+    var adaptive: AdaptiveBuffer?
+    /// Aberto no direto (não atrás dele no anel): só aí o buffer automático aprende e gasta o que está a mais.
+    var adaptiveAtLive = true
+    /// O que está à frente diz se a ligação acompanha (ver AdaptiveBuffer.onPlaying): não num HLS.
+    var adaptiveDips = true
 
     /// Nivelar o volume e as vozes mais claras (nil = desligados): definido antes de [start], depois só na fila.
     var leveling: AudioLeveling?
@@ -652,6 +674,12 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private var running = false
     private var userPaused = false
     private var stalled = false
+    /// Já esteve em pausa: o que se vê ficou atrás do direto (o buffer automático deixa de contar até outro canal).
+    private var wasPaused = false
+    /// A velocidade a mais do buffer automático para gastar o que está à frente (1 = nenhuma; ver [adapt]).
+    private var drain: Float = 1
+    /// O som que vai para o leitor é AC-3/E-AC-3 em bruto: esse não se acelera sem se notar.
+    private var bitstreamAudio = false
     private var watch: DispatchSourceTimer?
     private var reportedSize = false
     /// A ligação (HTTP) ou o ficheiro (uma gravação no disco) de onde vem o stream.
@@ -895,6 +923,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     func pause() {
         queue.async {
             self.userPaused = true
+            self.wasPaused = true
             if self.running { self.synchronizer.rate = 0 }
         }
     }
@@ -902,6 +931,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     func resume() {
         queue.async {
             self.userPaused = false
+            self.drain = 1
             if self.running, !self.stalled { self.synchronizer.rate = self.rate }
         }
     }
@@ -1189,6 +1219,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             b = levelled
         }
         b = delayed(b)
+        if adaptive != nil, let fd = CMSampleBufferGetFormatDescription(b),
+           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(fd)?.pointee {
+            bitstreamAudio = asbd.mFormatID == kAudioFormatAC3 || asbd.mFormatID == kAudioFormatEnhancedAC3
+        }
         audio.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
         if pts.isValid, !lastAudio.isValid || pts > lastAudio { lastAudio = pts }
@@ -1253,9 +1287,27 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         if !stalled, lead < 0.05 {
             stalled = true
             synchronizer.rate = 0
-        } else if stalled, lead > 0.5 {
+            drain = 1
+            if adaptiveAtLive, !wasPaused { adaptive?.onStall(ProbeCounters.nowMs()) }
+        } else if stalled, lead > (adaptive?.targetSeconds ?? 0.5) {
+            // Volta a dar com o que o buffer pede à frente (o automático junta mais num fornecedor que falha).
             stalled = false
             synchronizer.setRate(rate, time: now)
+        } else if !stalled, let adaptive {
+            adapt(adaptive, lead: lead)
         }
+    }
+
+    /// O buffer automático a dar: aprende com o que está à frente e, depois de descer de nível, gasta o que está a mais
+    /// a tocar um pouco mais depressa (o leitor da Apple mantém o tom do som). Só no direto, à velocidade normal.
+    private func adapt(_ adaptive: AdaptiveBuffer, lead: Double) {
+        var want: Float = 1
+        if adaptiveAtLive, !wasPaused, rate == 1 {
+            adaptive.onPlaying(ProbeCounters.nowMs(), leadSeconds: lead, dips: adaptiveDips)
+            want = adaptive.rate(leadSeconds: lead, canDrain: !bitstreamAudio)
+        }
+        guard want != drain else { return }
+        drain = want
+        synchronizer.setRate(rate * want, time: synchronizer.currentTime())
     }
 }
