@@ -159,7 +159,15 @@ class HlsMerger(private val audioInVideo: Boolean = false, out: (ByteArray) -> U
         var stream: StreamDemuxer? = null
         var packed: PackedAudioDemuxer? = null
 
-        private fun mapped(t: TsTrack) = t.copy(pid = t.pid + AUDIO_PIDS * (index + 1), language = t.language ?: language)
+        private fun mapped(t: TsTrack): TsTrack {
+            val d = described[index]
+            return t.copy(
+                pid = t.pid + AUDIO_PIDS * (index + 1), language = t.language ?: language,
+                role = if (t.role == AudioRole.MAIN && d != null) d.role else t.role,
+                channels = if (t.channels == 0 && d != null) d.channels else t.channels,
+                name = d?.name ?: t.name,
+            )
+        }
 
         override fun onTracks(tracks: List<TsTrack>) {
             this.tracks = tracks.filter { it.kind == TrackKind.AUDIO }.map(::mapped)
@@ -173,6 +181,18 @@ class HlsMerger(private val audioInVideo: Boolean = false, out: (ByteArray) -> U
     }
 
     private val sides = ArrayList<AudioSide>()
+
+    private class Described(val role: Int, val channels: Int, val name: String?)
+
+    private val described = HashMap<Int, Described>()
+
+    /**
+     * O que a playlist HLS diz da faixa de áudio [lane] (o EXT-X-MEDIA: papel, CHANNELS, NAME): vai no PMT que o
+     * [TsMuxer] escreve, para o leitor poder nomear a faixa. Chamar antes de [audio] com o primeiro segmento dela.
+     */
+    fun describeAudio(lane: Int, role: Int, channels: Int, name: String?) {
+        described[lane] = Described(role, channels, name)
+    }
 
     private fun publishTracks() = muxer.onTracks(videoTracks + sides.flatMap { it.tracks } + subtitleSides.flatMap { it.tracks })
 

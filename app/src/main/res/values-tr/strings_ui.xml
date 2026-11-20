@@ -979,4 +979,26 @@
     <string name="probe_lv_unreachable">Yanıt vermedi</string>
     <string name="probe_lv_empty">Boş</string>
     <string name="probe_list_portal">Portal listeleri burada test edilemez</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Kimse izlemiyorsa durdur</string>
+    <string name="idle_stop_sub">Sağlayıcı bağlantısını serbest bırakır (çoğu yalnızca birine izin verir) ve enerji tasarrufu sağlar. Bu süre boyunca kumanda veya dokunma olmazsa hâlâ izleyip izlemediğiniz sorulur; yanıt gelmezse kanal durdurulur</string>
+    <string name="idle_stop_2h">2 saat sonra</string>
+    <string name="idle_stop_4h">4 saat sonra</string>
+    <string name="idle_stop_6h">6 saat sonra</string>
+    <string name="idle_prompt_title">Hâlâ izliyor musunuz?</string>
+    <string name="idle_prompt_sub">Oynatma %1$d sn içinde duracak</string>
+    <string name="idle_keep">İzlemeye devam et</string>
+    <string name="idle_stopped_title">Kimse izlemediği için oynatma durduruldu</string>
+    <string name="idle_watch_again">Tekrar izle</string>
+    <string name="audio_label_original">Orijinal</string>
+    <string name="audio_label_description">Sesli betimleme</string>
+    <string name="audio_label_hearing">İşitme engelliler için</string>
+    <string name="audio_label_effects">Yalnızca efektler</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Stereo</string>
+    <string name="audio_label_n">Ses %1$s</string>
+    <string name="mobile_data_quality">Mobil veride kalite</string>
+    <string name="mobile_data_quality_sub">Mobil veride, birden çok kalitesi olan HLS kanalları paketinizi korumak için Veri tasarrufu (en fazla 720p) kullanır. Wi-Fi\'ye dönünce olağan kalite geri gelir. Düz TS kanalları değişmez</string>
+    <string name="mobile_data_quality_auto">Veri tasarrufu</string>
+    <string name="mobile_data_quality_same">Wi-Fi ile aynı</string>
 </resources>

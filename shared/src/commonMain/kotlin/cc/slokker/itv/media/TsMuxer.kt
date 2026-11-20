@@ -21,7 +21,7 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
     override fun onTracks(tracks: List<TsTrack>) {
         val usable = tracks.filter { it.codec in STREAM_TYPES }
         val same = usable.size == outs.size && usable.all { t ->
-            outs[t.pid]?.let { it.track.codec == t.codec && it.track.language == t.language } == true
+            outs[t.pid]?.let { it.track.codec == t.codec && it.track.language == t.language && it.track.role == t.role && it.track.channels == t.channels && it.track.name == t.name } == true
         }
         if (same) return
         outs = usable.mapIndexed { i, t ->
@@ -61,7 +61,26 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
         for (o in outs.values) {
             val descriptors = ArrayList<Byte>()
             o.track.language?.takeIf { it.length == 3 }?.let { l ->
-                descriptors += listOf(0x0A, 4, l[0].code.toByte(), l[1].code.toByte(), l[2].code.toByte(), 0).map { it.toByte() }
+                // O 4.º byte é o audio_type: 1 só efeitos, 2 para quem ouve mal, 3 audiodescrição.
+                val audioType = when (o.track.role) {
+                    AudioRole.CLEAN_EFFECTS -> 1
+                    AudioRole.HEARING_IMPAIRED -> 2
+                    AudioRole.DESCRIPTION -> 3
+                    else -> 0
+                }
+                descriptors += listOf(0x0A, 4, l[0].code.toByte(), l[1].code.toByte(), l[2].code.toByte(), audioType).map { it.toByte() }
+            }
+            // Os canais e o NAME de uma faixa de áudio de um HLS (privado do GoatTV, ver NAME_DESCRIPTOR): o PMT não os diz de outra forma.
+            if (o.track.kind == TrackKind.AUDIO && (o.track.channels > 0 || o.track.name != null)) {
+                val name = (o.track.name ?: "").encodeToByteArray().let { if (it.size > MAX_NAME) it.copyOf(MAX_NAME) else it }
+                descriptors += NAME_DESCRIPTOR.toByte()
+                descriptors += (1 + name.size).toByte()
+                descriptors += o.track.channels.coerceIn(0, 255).toByte()
+                descriptors += name.toList()
+            }
+            // O papel que o audio_type não diz (o som original): o supplementary_audio_descriptor, "main audio".
+            if (o.track.kind == TrackKind.AUDIO && o.track.role == AudioRole.ORIGINAL) {
+                descriptors += listOf(0x7F, 2, 0x06, 0x00).map { it.toByte() }
             }
             // As legendas WebVTT: dados privados com o registo "WVTT" (o TsDemuxer reconhece-as por aí).
             if (o.track.codec == Codec.WEBVTT) descriptors += listOf(0x05, 4, 'W'.code, 'V'.code, 'T'.code, 'T'.code).map { it.toByte() }
@@ -171,6 +190,10 @@ class TsMuxer(private val out: (ByteArray) -> Unit) : TsListener {
     }
 
     companion object {
+        /** O descritor privado (user defined) com os canais (1 byte) e o NAME (UTF-8) de uma faixa de áudio de um HLS. */
+        const val NAME_DESCRIPTOR = 0xE1
+        private const val MAX_NAME = 60
+
         private const val PACKET = 188
         private const val PROGRAM = 1
         private const val PMT_PID = 0x1000

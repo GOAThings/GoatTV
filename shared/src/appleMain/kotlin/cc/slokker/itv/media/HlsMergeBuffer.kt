@@ -23,6 +23,9 @@ class HlsMergeBuffer(audioInVideo: Boolean) {
         return take()
     }
 
+    /** O que a playlist diz da faixa de áudio [lane] (papel, canais, nome); vai no PMT. Antes do primeiro [audio] dela. */
+    fun describeAudio(lane: Int, role: Int, channels: Int, name: String?) = merger.describeAudio(lane, role, channels, name)
+
     /** Um segmento da faixa de áudio [lane] (0 = a principal), com a [language] da playlist (ISO 639-2) ou null. */
     fun audio(data: NSData, lane: Int, language: String?): NSData {
         merger.audio(AppleMedia.bytes(data), lane, language)

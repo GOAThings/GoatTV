@@ -979,4 +979,26 @@
     <string name="probe_lv_unreachable">जवाब नहीं आया</string>
     <string name="probe_lv_empty">खाली</string>
     <string name="probe_list_portal">पोर्टल सूचियों की जाँच यहाँ नहीं हो सकती</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">कोई न देख रहा हो तो रोकें</string>
+    <string name="idle_stop_sub">प्रदाता का कनेक्शन मुक्त करता है (ज़्यादातर प्रदाता केवल एक की अनुमति देते हैं) और बिजली बचाता है। इतनी देर रिमोट या टच के बिना रहने पर पूछा जाता है कि क्या आप अब भी देख रहे हैं, और जवाब न मिलने पर चैनल रुक जाता है</string>
+    <string name="idle_stop_2h">2 घंटे बाद</string>
+    <string name="idle_stop_4h">4 घंटे बाद</string>
+    <string name="idle_stop_6h">6 घंटे बाद</string>
+    <string name="idle_prompt_title">क्या आप अब भी देख रहे हैं?</string>
+    <string name="idle_prompt_sub">प्लेबैक %1$d सेकंड में रुक जाएगा</string>
+    <string name="idle_keep">देखना जारी रखें</string>
+    <string name="idle_stopped_title">प्लेबैक रुक गया क्योंकि कोई नहीं देख रहा था</string>
+    <string name="idle_watch_again">फिर से देखें</string>
+    <string name="audio_label_original">मूल</string>
+    <string name="audio_label_description">ऑडियो विवरण</string>
+    <string name="audio_label_hearing">कम सुनने वालों के लिए</string>
+    <string name="audio_label_effects">केवल इफ़ेक्ट</string>
+    <string name="audio_label_mono">मोनो</string>
+    <string name="audio_label_stereo">स्टीरियो</string>
+    <string name="audio_label_n">ऑडियो %1$s</string>
+    <string name="mobile_data_quality">मोबाइल डेटा पर गुणवत्ता</string>
+    <string name="mobile_data_quality_sub">मोबाइल डेटा पर, कई गुणवत्ता वाले HLS चैनल आपका प्लान बचाने के लिए डेटा सेवर (अधिकतम 720p) इस्तेमाल करते हैं। Wi-Fi पर लौटने पर सामान्य गुणवत्ता वापस आ जाती है। सादे TS चैनल नहीं बदलते</string>
+    <string name="mobile_data_quality_auto">डेटा बचाएँ</string>
+    <string name="mobile_data_quality_same">Wi-Fi जैसी ही</string>
 </resources>

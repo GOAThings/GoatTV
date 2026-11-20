@@ -50,6 +50,7 @@ import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.media.PictureLook
+import cc.slokker.itv.media.AudioRole
 import cc.slokker.itv.playback.TrackMemory
 import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.HdrType
@@ -294,9 +295,12 @@ internal fun Format.trackInfo(supported: Boolean, selected: Boolean): TrackInfo 
     }
     // A página do teletexto vem na chave da faixa (ver GoatCorePlayer.teletextKey).
     val page = if (codec == "teletext") id?.removePrefix("goatcore:")?.toIntOrNull()?.let { (it and 0xFFF).toString(16) } else null
+    // Os mesmos nomes que o AudioRole.detail dá (a audiodescrição, para quem ouve mal, só efeitos, o original).
     val role = when {
-        roleFlags and C.ROLE_FLAG_DESCRIBES_VIDEO != 0 -> "ad"
-        roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0 -> "hi"
+        roleFlags and C.ROLE_FLAG_DESCRIBES_VIDEO != 0 -> AudioRole.detail(AudioRole.DESCRIPTION)
+        roleFlags and (C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND or C.ROLE_FLAG_ENHANCED_DIALOG_INTELLIGIBILITY) != 0 -> AudioRole.detail(AudioRole.HEARING_IMPAIRED)
+        roleFlags and C.ROLE_FLAG_SUPPLEMENTARY != 0 -> AudioRole.detail(AudioRole.CLEAN_EFFECTS)
+        roleFlags and C.ROLE_FLAG_MAIN != 0 -> AudioRole.detail(AudioRole.ORIGINAL)
         else -> null
     }
     return TrackInfo(

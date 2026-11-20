@@ -46,6 +46,9 @@ internal interface SessionControls {
     /** Canal seguinte / anterior (o CH+ e o CH− do comando). */
     fun next()
     fun previous()
+
+    /** Chegou um comando da sessão (pausa, seguinte…): conta como alguém a ver (ver AppViewModel.noteInput). */
+    fun onCommand() {}
 }
 
 /** O que a sessão mostra: o canal, o programa a dar (o guia) e o logótipo. */
@@ -120,8 +123,18 @@ internal class SessionPlayer(player: Player, private val controls: () -> Session
         return builder.build()
     }
 
+    /**
+     * Ninguém estava a ver e o canal parou (ver AppViewModel.onIdleStop): a sessão fica em pausa, à espera de
+     * "continuar" (o botão do ecrã bloqueado volta a abrir o canal).
+     */
+    fun stopForIdle() {
+        stopped = true
+        invalidateState()
+    }
+
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         val c = controls()
+        c.onCommand()
         when {
             playWhenReady && stopped -> {
                 stopped = false
@@ -139,6 +152,7 @@ internal class SessionPlayer(player: Player, private val controls: () -> Session
     }
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
+        controls().onCommand()
         when (seekCommand) {
             Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> controls().next()
             Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> controls().previous()
@@ -157,7 +171,14 @@ internal class SessionPlayer(player: Player, private val controls: () -> Session
  * com uma rádio a dar, a notificação de media (o serviço [RadioService]) mantém o som com a app em segundo plano.
  */
 @Composable
-internal fun PlayerMediaSession(player: Player?, info: SessionInfo, controls: SessionControls, keepInBackground: Boolean) {
+internal fun PlayerMediaSession(
+    player: Player?,
+    info: SessionInfo,
+    controls: SessionControls,
+    keepInBackground: Boolean,
+    /** Regista como parar a sessão quando ninguém está a ver (a notificação da rádio sai logo, mesmo com o ecrã bloqueado). */
+    registerIdleStop: ((() -> Unit)?) -> Unit = {},
+) {
     val context = LocalContext.current
     val latestControls by rememberUpdatedState(controls)
     val holder = remember { arrayOfNulls<MediaSession>(1) }
@@ -190,6 +211,16 @@ internal fun PlayerMediaSession(player: Player?, info: SessionInfo, controls: Se
         }
     }
     SideEffect { sessionPlayer?.info = info }
+    DisposableEffect(sessionPlayer) {
+        val wrapped = sessionPlayer
+        if (wrapped != null) {
+            registerIdleStop {
+                wrapped.stopForIdle()
+                holder[0]?.let { RadioService.detach(it) }
+            }
+        }
+        onDispose { registerIdleStop(null) }
+    }
     LaunchedEffect(keepInBackground, holder[0]) {
         val session = holder[0] ?: return@LaunchedEffect
         if (keepInBackground) RadioService.attach(context, session) else RadioService.detach(session)

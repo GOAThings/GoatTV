@@ -239,6 +239,8 @@ class PersistedFormatTest {
         "audioDecoder" to (Prefs.Key.AUDIO_DECODER to Prefs.Decoder.SOFTWARE),
         "hdr" to (Prefs.Key.HDR to Prefs.Hdr.SDR),
         "hlsQuality" to (Prefs.Key.HLS_QUALITY to Prefs.HlsQuality.DATA_SAVER),
+        "mobileDataQuality" to (Prefs.Key.MOBILE_DATA_QUALITY to Prefs.MobileDataQuality.SAME),
+        "idleStop" to (Prefs.Key.IDLE_STOP to Prefs.IdleStop.H4),
         "netGraph" to (Prefs.Key.NET_GRAPH to true),
         "netWarnings" to (Prefs.Key.NET_WARNINGS to false),
         "timeshift" to (Prefs.Key.TIMESHIFT to false),

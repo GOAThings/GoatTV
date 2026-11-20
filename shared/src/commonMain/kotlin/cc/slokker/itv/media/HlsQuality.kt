@@ -63,6 +63,13 @@ object HlsQuality {
         }
     }
 
+    /**
+     * A definição que conta agora: com dados móveis ([cellular]) e `mobile_data_quality` = auto (só nos telemóveis),
+     * qualquer uma menos "a mais baixa" conta como Poupar dados; na Wi-Fi ou com "same", a de sempre.
+     */
+    fun effectivePreference(preference: String, mobileData: String, cellular: Boolean): String =
+        if (cellular && mobileData == Prefs.MobileDataQuality.AUTO && preference != Prefs.HlsQuality.LOWEST) Prefs.HlsQuality.DATA_SAVER else preference
+
     /** Cabe em Poupar dados: até 720p, ou (sem altura) até ~3 Mb/s. */
     fun fitsSaver(v: HlsVariant): Boolean =
         if (v.height > 0) v.height <= SAVER_HEIGHT else v.bandwidth in 1..SAVER_BANDWIDTH

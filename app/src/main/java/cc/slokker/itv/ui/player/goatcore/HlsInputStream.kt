@@ -15,6 +15,7 @@ import cc.slokker.itv.media.HlsMerger
 import cc.slokker.itv.media.HlsPlaylist
 import cc.slokker.itv.media.HlsQuality
 import cc.slokker.itv.media.HlsQualityPlan
+import cc.slokker.itv.media.HlsRendition
 import cc.slokker.itv.media.HlsRange
 import cc.slokker.itv.media.HlsSegment
 import cc.slokker.itv.media.HlsVariant
@@ -117,7 +118,7 @@ class HlsInputStream(
      * Uma playlist de segmentos lida em sequência: a do vídeo ([main], que pode ser a principal e muda de qualidade)
      * ou a do áudio à parte. [seconds]: quanto já se leu (é por aí que se escolhe o lado a ler a seguir).
      */
-    private inner class Lane(var mediaUrl: String, val main: Boolean, val language: String? = null) {
+    private inner class Lane(var mediaUrl: String, val main: Boolean, val language: String? = null, val rendition: HlsRendition? = null) {
         var nextSequence = Long.MIN_VALUE
         val pending = ArrayDeque<HlsSegment>()
         var ended = false
@@ -145,7 +146,7 @@ class HlsInputStream(
                 base = variants[level].uri
                 // O áudio à parte: as línguas todas (até [MAX_AUDIO]), para o menu do áudio as ter como num TS.
                 val v = variants[level]
-                audios = v.audio.take(MAX_AUDIO).map { Lane(it.uri, main = false, language = it.code) }
+                audios = v.audio.take(MAX_AUDIO).map { Lane(it.uri, main = false, language = it.code, rendition = it) }
                 subtitles = v.subtitles.take(MAX_SUBTITLES).map { Lane(it.uri, main = false, language = it.code) }
                 if (audios.isNotEmpty() || subtitles.isNotEmpty()) {
                     merger = HlsMerger(audioInVideo = audios.isEmpty()) { merged.write(it) }
@@ -322,7 +323,13 @@ class HlsInputStream(
             } else {
                 val data = lane.next()
                 if (data != null) {
-                    if (lane === video) m.video(data) else m.audio(data, audios.indexOf(lane), lane.language)
+                    if (lane === video) {
+                        m.video(data)
+                    } else {
+                        // O papel, os canais e o nome da faixa vão no PMT (para o menu do áudio os mostrar).
+                        lane.rendition?.let { m.describeAudio(audios.indexOf(lane), it.role, it.channels, it.name) }
+                        m.audio(data, audios.indexOf(lane), lane.language)
+                    }
                 }
             }
             m.unsupported?.let { throw UnsupportedStream(it) }

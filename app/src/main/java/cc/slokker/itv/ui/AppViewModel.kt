@@ -49,6 +49,7 @@ import cc.slokker.itv.data.ProSet
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.SendRequest
 import cc.slokker.itv.data.SendToTv
+import cc.slokker.itv.playback.IdleWatch
 import cc.slokker.itv.playback.SourceHistory
 import cc.slokker.itv.playback.SourceReliability
 import cc.slokker.itv.playback.SourceStats
@@ -1289,6 +1290,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Põe [channel] a tocar; CH+/CH− passam a percorrer o grupo [groupId]. */
     fun play(channel: Channel, groupId: String) {
+        // Escolher um canal (também o mesmo) é um comando: tira do ecrã de parado.
+        idleWatchAgain()
         // Com uma gravação de outro canal a decorrer, pergunta antes de largar a ligação dela.
         guarded(channel) {
             playback.playIn(channel, groupId)
@@ -1389,6 +1392,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * Pro procura-se na lista única. O código da resposta e o nome do canal aberto.
      */
     fun openFromPhone(request: SendRequest): Pair<Int, String> {
+        idleWatchAgain()
         val content = content.value?.takeIf { phoneReady() } ?: return SendToTv.NO_LISTS to ""
         val route = SendToTv.route(request, content.playlist.id, playlists.value.map { it.id }, proMode)
         if (route == SendToTv.ROUTE_SWITCH) {
@@ -1583,6 +1587,80 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (announce) showToast(minutes?.let { I18n.s.sleepSet(it) } ?: I18n.s.sleepOff)
     }
 
+    // ---- Parar se ninguém estiver a ver (definição idle_stop, ver playback/IdleWatch) -----------------
+
+    private val idleWatch = IdleWatch()
+    private val _idlePhase = MutableStateFlow(IdleWatch.WATCHING)
+
+    /** A fase da contagem (IdleWatch.WATCHING, PROMPT ou STOPPED): o aviso "Ainda estás a ver?" e o ecrã de parado. */
+    val idlePhase: StateFlow<Int> = _idlePhase.asStateFlow()
+    private val _idleSecondsLeft = MutableStateFlow(0)
+
+    /** Os segundos que faltam no aviso. */
+    val idleSecondsLeft: StateFlow<Int> = _idleSecondsLeft.asStateFlow()
+
+    /** O leitor regista aqui como largar o canal (e a sessão de media) quando ninguém estava a ver; null sem leitor. */
+    var onIdleStop: (() -> Unit)? = null
+
+    private fun idleClock() = android.os.SystemClock.elapsedRealtime()
+
+    private fun publishIdle() {
+        val now = idleClock()
+        val phase = idleWatch.phase()
+        val before = _idlePhase.value
+        _idleSecondsLeft.value = idleWatch.secondsLeft(now)
+        if (phase == before) return
+        _idlePhase.value = phase
+        if (phase == IdleWatch.STOPPED) {
+            // Já não se vê nada: as gravações deixam de ver este canal como o que se está a ver.
+            updateWatching()
+            onIdleStop?.invoke()
+        } else if (before == IdleWatch.STOPPED) {
+            updateWatching()
+        }
+    }
+
+    /**
+     * Um comando do utilizador (tecla, toque, o GoatRemote, a sessão de media): recomeça a contagem. Devolve true se
+     * mostrava o aviso: esse comando só serve para o fechar (quem chama não o passa à app). Na thread principal.
+     */
+    fun noteInput(): Boolean {
+        val prompt = idleWatch.phase() == IdleWatch.PROMPT
+        if (idleWatch.phase() == IdleWatch.WATCHING) {
+            idleWatch.onInput(idleClock())
+            return false
+        }
+        idleWatch.onInput(idleClock())
+        publishIdle()
+        return prompt
+    }
+
+    /** "Ver outra vez" no ecrã de parado (ou outro canal, ou o "continuar" da sessão de media): o canal volta a abrir. */
+    fun idleWatchAgain() {
+        if (idleWatch.phase() == IdleWatch.WATCHING) {
+            idleWatch.onInput(idleClock())
+            return
+        }
+        idleWatch.watchAgain(idleClock())
+        publishIdle()
+    }
+
+    private fun startIdleWatch() {
+        viewModelScope.launch {
+            while (true) {
+                delay(1_000)
+                val channel = playback.playing.value
+                // Uma gravação a usar a ligação deste canal: a contagem espera (parar o canal não a deve tocar).
+                val recording = channel != null && activeRecordings.value.any { it.playlistId == content.value?.playlist?.id && it.channelKey == channel.key }
+                val active = channel != null && playerVisible && !recording
+                idleWatch.tick(idleClock(), IdleWatch.limitMs(prefs.value.idleStop), active)
+                publishIdle()
+            }
+        }
+        // Mudar de canal também é um comando (e tira do ecrã de parado).
+        viewModelScope.launch { playback.playing.map { it?.key }.distinctUntilChanged().collect { idleWatchAgain() } }
+    }
+
     fun hasReminder(channel: Channel, entry: EpgEntry): Boolean = reminderList.has(channel, entry)
 
     /** Marca/desmarca o lembrete de um programa que ainda vai começar. */
@@ -1658,10 +1736,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             recordings.switchTo.collect { r -> openLink(r.playlistId, r.channelKey) }
         }
         viewModelScope.launch { playback.playing.collect { updateWatching() } }
+        startIdleWatch()
         viewModelScope.launch { playback.catchup.collect { updateWatching() } }
         viewModelScope.launch { prefs.collect { p -> recordings.setPadding(p.recordPaddingBeforeMin, p.recordPaddingAfterMin) } }
         // A qualidade dos HLS: a definição vale em todos; a escolha à mão no leitor só até se mudar de canal.
-        viewModelScope.launch { prefs.collect { p -> cc.slokker.itv.ui.player.goatcore.HlsQualityControl.preference = p.hlsQuality } }
+        // Com dados móveis (só nos telemóveis; as TVs estão na Wi-Fi ou no cabo) e mobile_data_quality = auto, conta como
+        // "poupar dados"; a rede muda a meio do canal e o leitor volta a fazer o plano (ver HlsQualityControl.version).
+        val metered = cc.slokker.itv.ui.player.goatcore.MeteredNetwork(getApplication()).also { it.start() }
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(prefs, metered.metered) { p, cellular ->
+                cc.slokker.itv.media.HlsQuality.effectivePreference(p.hlsQuality, p.mobileDataQuality, cellular)
+            }.distinctUntilChanged().collect { cc.slokker.itv.ui.player.goatcore.HlsQualityControl.preference = it }
+        }
         viewModelScope.launch {
             playback.playing.map { it?.key }.distinctUntilChanged().collect { cc.slokker.itv.ui.player.goatcore.HlsQualityControl.clearPin() }
         }
@@ -1688,7 +1774,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val content = content.value
         val cu = playback.catchup.value
         // Uma gravação do disco não usa a ligação: para as marcadas é como não estar a ver nada.
-        recordings.watching = if (!playerVisible || channel == null || content == null || cu?.recording != null) {
+        recordings.watching = if (!playerVisible || _idlePhase.value == IdleWatch.STOPPED || channel == null || content == null || cu?.recording != null) {
             null
         } else {
             RecordingPlan.Watching(content.playlist.id, channel.key, live = cu == null)

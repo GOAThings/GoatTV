@@ -4,6 +4,8 @@ import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Density
@@ -123,6 +125,29 @@ class MainActivity : AppCompatActivity() {
         setContent {
             ItvTheme { ItvRoot() }
         }
+    }
+
+    // Os comandos do utilizador contam para o "Ainda estás a ver?" (ver AppViewModel.noteInput). Com o aviso à vista, a tecla
+    // ou o toque só servem para o fechar: não passam à app (nem o seu levantar).
+    private val swallowedKeys = HashSet<Int>()
+    private var swallowingTouch = false
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_UP && swallowedKeys.remove(event.keyCode)) return true
+        if (vm.noteInput()) {
+            swallowedKeys += event.keyCode
+            return true
+        }
+        // O resto das repetições da tecla que fechou o aviso.
+        if (event.keyCode in swallowedKeys) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) swallowingTouch = vm.noteInput()
+        val swallow = swallowingTouch
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) swallowingTouch = false
+        return if (swallow) true else super.dispatchTouchEvent(event)
     }
 
     override fun onResume() {

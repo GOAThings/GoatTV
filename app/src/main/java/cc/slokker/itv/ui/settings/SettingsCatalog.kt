@@ -66,6 +66,14 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 25),
         phone = Place(PhonePage.PLAYBACK, 15, PhoneSection.CONNECTION),
     )
+    /** Só nos telemóveis: com dados móveis os HLS com várias qualidades poupam dados; na Wi-Fi vale a de cima. */
+    val MOBILE_DATA_QUALITY = Setting.Choice(
+        Prefs.Key.MOBILE_DATA_QUALITY, { it.mobileDataQuality },
+        options = { s -> listOf(Prefs.MobileDataQuality.AUTO to s.mobileDataQualityAuto, Prefs.MobileDataQuality.SAME to s.mobileDataQualitySame) },
+        read = { it.prefs.mobileDataQuality },
+        subtitle = { it.mobileDataQualitySub },
+        phone = Place(PhonePage.PLAYBACK, 17, PhoneSection.CONNECTION),
+    )
     val DECODER = Setting.Choice(
         Prefs.Key.DECODER, { it.decoder },
         options = ::decoders,
@@ -297,6 +305,20 @@ object SettingsCatalog {
         tv = Place(TvPage.GENERAL, 20),
     )
 
+    /** Parar o canal se ninguém estiver a ver (ver playback/IdleWatch): liberta a ligação ao fornecedor. */
+    val IDLE_STOP = Setting.Choice(
+        Prefs.Key.IDLE_STOP, { it.idleStop },
+        options = { s ->
+            listOf(
+                Prefs.IdleStop.OFF to s.off, Prefs.IdleStop.H2 to s.idleStop2h, Prefs.IdleStop.H4 to s.idleStop4h, Prefs.IdleStop.H6 to s.idleStop6h,
+            )
+        },
+        read = { it.prefs.idleStop },
+        subtitle = { it.idleStopSub },
+        tv = Place(TvPage.GENERAL, 25),
+        phone = Place(PhonePage.PLAYBACK, 45, PhoneSection.CONNECTION),
+    )
+
     // ---- Mudança de canal ----
 
     val UP_DOWN = Setting.Choice(
@@ -502,7 +524,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, HLS_QUALITY, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_DELAY_AUTO, AUDIO_LEVEL, AUDIO_VOICES, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, PICTURE_BRIGHTNESS, PICTURE_CONTRAST, PICTURE_SATURATION, PICTURE_SHARPNESS, UPSCALE, PICTURE_RESET, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_DELAY_AUTO, AUDIO_LEVEL, AUDIO_VOICES, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, PICTURE_BRIGHTNESS, PICTURE_CONTRAST, PICTURE_SATURATION, PICTURE_SHARPNESS, UPSCALE, PICTURE_RESET, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, IDLE_STOP, MOBILE_DATA_QUALITY, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,

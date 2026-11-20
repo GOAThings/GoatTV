@@ -977,4 +977,26 @@
     <string name="probe_lv_unreachable">Tidak menjawab</string>
     <string name="probe_lv_empty">Kosong</string>
     <string name="probe_list_portal">Daftar portal tidak dapat diuji di sini</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Berhenti jika tidak ada yang menonton</string>
+    <string name="idle_stop_sub">Membebaskan koneksi penyedia (kebanyakan hanya mengizinkan satu) dan menghemat daya. Setelah selama ini tanpa remote atau sentuhan, Anda ditanya apakah masih menonton, dan jika tidak ada jawaban, saluran berhenti</string>
+    <string name="idle_stop_2h">Setelah 2 jam</string>
+    <string name="idle_stop_4h">Setelah 4 jam</string>
+    <string name="idle_stop_6h">Setelah 6 jam</string>
+    <string name="idle_prompt_title">Masih menonton?</string>
+    <string name="idle_prompt_sub">Pemutaran berhenti dalam %1$d dtk</string>
+    <string name="idle_keep">Lanjut menonton</string>
+    <string name="idle_stopped_title">Pemutaran dihentikan karena tidak ada yang menonton</string>
+    <string name="idle_watch_again">Tonton lagi</string>
+    <string name="audio_label_original">Asli</string>
+    <string name="audio_label_description">Deskripsi audio</string>
+    <string name="audio_label_hearing">Untuk tunarungu</string>
+    <string name="audio_label_effects">Hanya efek</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Stereo</string>
+    <string name="audio_label_n">Audio %1$s</string>
+    <string name="mobile_data_quality">Kualitas di data seluler</string>
+    <string name="mobile_data_quality_sub">Di data seluler, saluran HLS dengan beberapa kualitas memakai Hemat data (hingga 720p) agar paket Anda hemat. Kembali ke Wi-Fi, kualitas biasa kembali. Saluran TS biasa tidak berubah</string>
+    <string name="mobile_data_quality_auto">Hemat data</string>
+    <string name="mobile_data_quality_same">Sama seperti Wi-Fi</string>
 </resources>

@@ -981,4 +981,26 @@
     <string name="probe_lv_unreachable">Pas de réponse</string>
     <string name="probe_lv_empty">Vide</string>
     <string name="probe_list_portal">Les listes de portail ne peuvent pas être testées ici</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Arrêter si personne ne regarde</string>
+    <string name="idle_stop_sub">Libère la connexion au fournisseur (la plupart n\'en autorisent qu\'une) et économise l\'énergie. Après ce délai sans télécommande ni toucher, on vous demande si vous regardez encore, et la chaîne s\'arrête sans réponse</string>
+    <string name="idle_stop_2h">Après 2 heures</string>
+    <string name="idle_stop_4h">Après 4 heures</string>
+    <string name="idle_stop_6h">Après 6 heures</string>
+    <string name="idle_prompt_title">Vous regardez encore ?</string>
+    <string name="idle_prompt_sub">La lecture s\'arrête dans %1$d s</string>
+    <string name="idle_keep">Continuer à regarder</string>
+    <string name="idle_stopped_title">La lecture s\'est arrêtée car personne ne regardait</string>
+    <string name="idle_watch_again">Regarder à nouveau</string>
+    <string name="audio_label_original">Original</string>
+    <string name="audio_label_description">Audiodescription</string>
+    <string name="audio_label_hearing">Malentendants</string>
+    <string name="audio_label_effects">Effets seulement</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Stéréo</string>
+    <string name="audio_label_n">Audio %1$s</string>
+    <string name="mobile_data_quality">Qualité en données mobiles</string>
+    <string name="mobile_data_quality_sub">En données mobiles, les chaînes HLS à plusieurs qualités utilisent Économie de données (jusqu\'à 720p) pour préserver votre forfait. Sur le Wi-Fi, la qualité habituelle revient. Les chaînes TS simples ne changent pas</string>
+    <string name="mobile_data_quality_auto">Économiser les données</string>
+    <string name="mobile_data_quality_same">Comme en Wi-Fi</string>
 </resources>

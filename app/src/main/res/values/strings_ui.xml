@@ -980,4 +980,26 @@
     <string name="probe_lv_unreachable">Did not answer</string>
     <string name="probe_lv_empty">Empty</string>
     <string name="probe_list_portal">Portal lists cannot be tested here</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Stop if nobody is watching</string>
+    <string name="idle_stop_sub">Frees the provider connection (most providers allow only one) and saves power. After this long with no remote or touch input, you are asked if you are still watching, and the channel stops if nobody answers</string>
+    <string name="idle_stop_2h">After 2 hours</string>
+    <string name="idle_stop_4h">After 4 hours</string>
+    <string name="idle_stop_6h">After 6 hours</string>
+    <string name="idle_prompt_title">Still watching?</string>
+    <string name="idle_prompt_sub">Playback stops in %1$d s</string>
+    <string name="idle_keep">Keep watching</string>
+    <string name="idle_stopped_title">Playback stopped because nobody was watching</string>
+    <string name="idle_watch_again">Watch again</string>
+    <string name="audio_label_original">Original</string>
+    <string name="audio_label_description">Audio description</string>
+    <string name="audio_label_hearing">Hearing impaired</string>
+    <string name="audio_label_effects">Effects only</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Stereo</string>
+    <string name="audio_label_n">Audio %1$s</string>
+    <string name="mobile_data_quality">Quality on mobile data</string>
+    <string name="mobile_data_quality_sub">On mobile data, HLS channels with several qualities use Data saver (up to 720p) to spare your plan. Back on Wi-Fi the usual quality returns. Plain TS channels are not affected</string>
+    <string name="mobile_data_quality_auto">Save data</string>
+    <string name="mobile_data_quality_same">Same as on Wi-Fi</string>
 </resources>

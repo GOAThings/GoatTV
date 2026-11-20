@@ -976,4 +976,26 @@
     <string name="probe_lv_unreachable">応答なし</string>
     <string name="probe_lv_empty">空</string>
     <string name="probe_list_portal">ポータルのリストはここではテストできません</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">誰も見ていないときは停止</string>
+    <string name="idle_stop_sub">プロバイダーの接続を解放し（多くは1本のみ許可）、電力を節約します。この時間リモコンやタッチ操作がないと、まだ見ているか確認し、応答がなければチャンネルを停止します</string>
+    <string name="idle_stop_2h">2時間後</string>
+    <string name="idle_stop_4h">4時間後</string>
+    <string name="idle_stop_6h">6時間後</string>
+    <string name="idle_prompt_title">まだ見ていますか？</string>
+    <string name="idle_prompt_sub">%1$d秒後に再生を停止します</string>
+    <string name="idle_keep">視聴を続ける</string>
+    <string name="idle_stopped_title">誰も見ていなかったため再生を停止しました</string>
+    <string name="idle_watch_again">もう一度見る</string>
+    <string name="audio_label_original">オリジナル</string>
+    <string name="audio_label_description">音声解説</string>
+    <string name="audio_label_hearing">聴覚障害者向け</string>
+    <string name="audio_label_effects">効果音のみ</string>
+    <string name="audio_label_mono">モノラル</string>
+    <string name="audio_label_stereo">ステレオ</string>
+    <string name="audio_label_n">音声 %1$s</string>
+    <string name="mobile_data_quality">モバイルデータ時の画質</string>
+    <string name="mobile_data_quality_sub">モバイルデータでは、複数の画質があるHLSチャンネルはデータ節約（最大720p）を使い、通信量を抑えます。Wi-Fiに戻ると通常の画質に戻ります。通常のTSチャンネルは変わりません</string>
+    <string name="mobile_data_quality_auto">データ節約</string>
+    <string name="mobile_data_quality_same">Wi-Fiと同じ</string>
 </resources>

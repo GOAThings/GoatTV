@@ -71,6 +71,10 @@ data class Prefs(
     val hdr: String = Hdr.AUTO,
     /** A qualidade dos canais HLS com várias ([HlsQuality]): automática, a melhor, poupar dados ou a mais baixa. */
     val hlsQuality: String = HlsQuality.AUTO,
+    /** Só nos telemóveis: com dados móveis, os HLS com várias qualidades poupam dados ([MobileDataQuality]). */
+    val mobileDataQuality: String = MobileDataQuality.AUTO,
+    /** Parar se ninguém estiver a ver ([IdleStop]): depois deste tempo sem comandos pergunta e, sem resposta, pára o canal. */
+    val idleStop: String = IdleStop.OFF,
     /** A imagem (ver media/PictureLook): o brilho, o contraste e a saturação de −5 a +5, a nitidez de 0 a 5; 0 = como vem. */
     val pictureBrightness: Int = 0,
     val pictureContrast: Int = 0,
@@ -271,6 +275,8 @@ data class Prefs(
         const val AUDIO_VOICES = "audio_voices"
         const val HDR = "hdr"
         const val HLS_QUALITY = "hls_quality"
+        const val MOBILE_DATA_QUALITY = "mobile_data_quality"
+        const val IDLE_STOP = "idle_stop"
         const val PICTURE_BRIGHTNESS = "picture_brightness"
         const val PICTURE_CONTRAST = "picture_contrast"
         const val PICTURE_SATURATION = "picture_saturation"
@@ -467,6 +473,16 @@ data class Prefs(
         const val AUTO = "auto"; const val BEST = "best"; const val DATA_SAVER = "data_saver"; const val LOWEST = "lowest"
         val ALL = setOf(AUTO, BEST, DATA_SAVER, LOWEST)
     }
+    /** Telemóveis: "auto" = com dados móveis conta como [HlsQuality.DATA_SAVER]; "same" = a mesma qualidade de sempre. */
+    object MobileDataQuality {
+        const val AUTO = "auto"; const val SAME = "same"
+        val ALL = setOf(AUTO, SAME)
+    }
+    /** Parar se ninguém estiver a ver (ver playback/IdleWatch): desligado ou ao fim de 2, 4 ou 6 horas sem comandos. */
+    object IdleStop {
+        const val OFF = "off"; const val H2 = "2h"; const val H4 = "4h"; const val H6 = "6h"
+        val ALL = setOf(OFF, H2, H4, H6)
+    }
     object Aspect {
         const val FIT = "fit"; const val ZOOM = "zoom"; const val FILL = "fill"
         val ALL = setOf(FIT, ZOOM, FILL)
@@ -607,6 +623,8 @@ data class Prefs(
                 audioVoices = str(Key.AUDIO_VOICES, d.audioVoices, AudioVoices.ALL),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 hlsQuality = str(Key.HLS_QUALITY, d.hlsQuality, HlsQuality.ALL),
+                mobileDataQuality = str(Key.MOBILE_DATA_QUALITY, d.mobileDataQuality, MobileDataQuality.ALL),
+                idleStop = str(Key.IDLE_STOP, d.idleStop, IdleStop.ALL),
                 pictureBrightness = int(Key.PICTURE_BRIGHTNESS, d.pictureBrightness).coerceIn(-Picture.MAX, Picture.MAX),
                 pictureContrast = int(Key.PICTURE_CONTRAST, d.pictureContrast).coerceIn(-Picture.MAX, Picture.MAX),
                 pictureSaturation = int(Key.PICTURE_SATURATION, d.pictureSaturation).coerceIn(-Picture.MAX, Picture.MAX),

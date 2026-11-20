@@ -981,4 +981,26 @@
     <string name="probe_lv_unreachable">No respondió</string>
     <string name="probe_lv_empty">Vacía</string>
     <string name="probe_list_portal">Las listas de portal no se pueden probar aquí</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Parar si nadie está viendo</string>
+    <string name="idle_stop_sub">Libera la conexión con el proveedor (la mayoría solo permite una) y ahorra energía. Pasado este tiempo sin mando ni toques, pregunta si sigues viendo y, si nadie responde, el canal se detiene</string>
+    <string name="idle_stop_2h">A las 2 horas</string>
+    <string name="idle_stop_4h">A las 4 horas</string>
+    <string name="idle_stop_6h">A las 6 horas</string>
+    <string name="idle_prompt_title">¿Sigues viendo?</string>
+    <string name="idle_prompt_sub">La reproducción se detiene en %1$d s</string>
+    <string name="idle_keep">Seguir viendo</string>
+    <string name="idle_stopped_title">La reproducción se detuvo porque nadie estaba viendo</string>
+    <string name="idle_watch_again">Ver de nuevo</string>
+    <string name="audio_label_original">Original</string>
+    <string name="audio_label_description">Audiodescripción</string>
+    <string name="audio_label_hearing">Para personas con discapacidad auditiva</string>
+    <string name="audio_label_effects">Solo efectos</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Estéreo</string>
+    <string name="audio_label_n">Audio %1$s</string>
+    <string name="mobile_data_quality">Calidad con datos móviles</string>
+    <string name="mobile_data_quality_sub">Con datos móviles, los canales HLS con varias calidades usan Ahorro de datos (hasta 720p) para no gastar tu tarifa. Con Wi-Fi vuelve la calidad de siempre. Los canales TS simples no cambian</string>
+    <string name="mobile_data_quality_auto">Ahorrar datos</string>
+    <string name="mobile_data_quality_same">Igual que con Wi-Fi</string>
 </resources>

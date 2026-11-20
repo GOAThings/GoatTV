@@ -63,7 +63,7 @@ class SettingsCatalogTest {
             ),
             tv(TvPage.PLAYBACK),
         )
-        assertEquals(listOf(TvSection.MAIN to listOf(k.AUTO_START, k.EXIT_CONFIRM, k.USER_AGENT)), tv(TvPage.GENERAL))
+        assertEquals(listOf(TvSection.MAIN to listOf(k.AUTO_START, k.EXIT_CONFIRM, k.IDLE_STOP, k.USER_AGENT)), tv(TvPage.GENERAL))
         assertEquals(listOf(TvSection.MAIN to listOf(k.UP_DOWN, k.REVERSE_ZAP, k.ZAP_DELAY, k.INFO_SECONDS, k.STARTUP, k.BACK_ACTION, k.KEY_RED, k.KEY_GREEN, k.KEY_YELLOW, k.KEY_BLUE)), tv(TvPage.ZAPPING))
         assertEquals(
             listOf(
@@ -84,7 +84,7 @@ class SettingsCatalogTest {
                 PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES),
                 PhoneSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, k.UPSCALE, "picture_reset"),
                 PhoneSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
-                PhoneSection.CONNECTION to listOf(k.BUFFER, k.HLS_QUALITY, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY),
+                PhoneSection.CONNECTION to listOf(k.BUFFER, k.HLS_QUALITY, k.MOBILE_DATA_QUALITY, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY, k.IDLE_STOP),
                 PhoneSection.ADVANCED to listOf("format", k.DECODER, k.DEINTERLACE, k.AUDIO_DECODER, k.USER_AGENT),
                 PhoneSection.RECORDINGS to listOf(k.RECORD_PADDING_BEFORE, k.RECORD_PADDING_AFTER),
             ),
@@ -105,7 +105,7 @@ class SettingsCatalogTest {
         assertTrue(Prefs.Key.AFR in tvOnly && Prefs.Key.AFR_FALLBACK in tvOnly && Prefs.Key.HDR in tvOnly && Prefs.Key.UI_SCALE in tvOnly)
         // O atraso ao mudar de canal vale nos dois (o telemóvel também muda de canal a deslizar).
         assertTrue(SettingsCatalog.ZAP_DELAY.tv != null && SettingsCatalog.ZAP_DELAY.phone != null)
-        assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)
+        assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.MOBILE_DATA_QUALITY, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)
     }
 
     @Test

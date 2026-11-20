@@ -1,10 +1,22 @@
 package cc.slokker.itv.media
 
 /** Uma faixa numa playlist à parte (EXT-X-MEDIA com URI: áudio ou legendas): a playlist e a língua (LANGUAGE, ou o NAME). */
-class HlsRendition(val uri: String, val language: String?) {
+class HlsRendition(
+    val uri: String,
+    val language: String?,
+    /** O papel da faixa de áudio ([AudioRole]): CHARACTERISTICS e, sem elas, o NAME. */
+    val role: Int = AudioRole.MAIN,
+    /** Os canais (o atributo CHANNELS: "6", "2", "16/JOC" → 16); 0 = não diz. */
+    val channels: Int = 0,
+    /** O NAME da faixa (a língua, quando LANGUAGE não vem, é o NAME). */
+    val name: String? = null,
+) {
     /** A língua em ISO 639-2 (a que o PMT leva), ou null se não disser. */
     val code: String? get() = cc.slokker.itv.data.Languages.threeLetter(language)
 }
+
+/** Uma linha EXT-X-MEDIA já lida: o URI (null = dentro dos segmentos), a língua, se é a DEFAULT, e o que diz da faixa. */
+private class Media(val uri: String?, val language: String?, val default: Boolean, val name: String?, val role: Int, val channels: Int)
 
 /**
  * Uma qualidade de uma playlist HLS principal: a playlist dela, o débito, (se o disser) a altura da imagem, o grupo de
@@ -87,8 +99,8 @@ class HlsPlaylist(
             var unsupported: String? = null
             var pendingVariant: Map<String, String>? = null
             // As faixas de áudio de cada grupo (EXT-X-MEDIA): o URI (null = dentro dos segmentos), a língua e se é a DEFAULT.
-            val audio = LinkedHashMap<String, MutableList<Triple<String?, String?, Boolean>>>()
-            val subtitles = LinkedHashMap<String, MutableList<Triple<String?, String?, Boolean>>>()
+            val audio = LinkedHashMap<String, MutableList<Media>>()
+            val subtitles = LinkedHashMap<String, MutableList<Media>>()
             // O grupo de legendas de cada qualidade (o atributo SUBTITLES), pela ordem de [variants].
             val subtitleGroups = ArrayList<String?>()
             var pendingDuration = -1.0
@@ -109,10 +121,13 @@ class HlsPlaylist(
                     line.startsWith("#EXT-X-MEDIA:") -> {
                         val a = attributes(line.substringAfter(':'))
                         val group = a["GROUP-ID"]
-                        val entry = Triple(a["URI"]?.let { resolve(base, it) }, a["LANGUAGE"] ?: a["NAME"], a["DEFAULT"] == "YES")
+                        val entry = Media(
+                            a["URI"]?.let { resolve(base, it) }, a["LANGUAGE"] ?: a["NAME"], a["DEFAULT"] == "YES",
+                            a["NAME"], AudioRole.fromHls(a["CHARACTERISTICS"], a["NAME"]), a["CHANNELS"]?.substringBefore('/')?.trim()?.toIntOrNull() ?: 0,
+                        )
                         if (group != null) when (a["TYPE"]) {
                             "AUDIO" -> audio.getOrPut(group) { ArrayList() } += entry
-                            "SUBTITLES" -> if (entry.first != null) subtitles.getOrPut(group) { ArrayList() } += entry
+                            "SUBTITLES" -> if (entry.uri != null) subtitles.getOrPut(group) { ArrayList() } += entry
                         }
                     }
                     line.startsWith("#EXT-X-TARGETDURATION:") -> target = line.substringAfter(':').toDoubleOrNull() ?: target
@@ -169,9 +184,9 @@ class HlsPlaylist(
             }
             // O áudio à parte de cada qualidade: um grupo com alguma faixa sem URI tem o áudio principal dentro dos
             // segmentos (as outras línguas à parte ficam por agora); senão, todas, a DEFAULT primeiro.
-            fun ordered(list: List<Triple<String?, String?, Boolean>>) = list.sortedByDescending { it.third }.map { HlsRendition(it.first!!, it.second) }
+            fun ordered(list: List<Media>) = list.sortedByDescending { it.default }.map { HlsRendition(it.uri!!, it.language, it.role, it.channels, it.name) }
             val withAudio = variants.mapIndexed { i, v ->
-                val separate = v.audioGroup?.let { audio[it] }?.takeIf { r -> r.isNotEmpty() && r.none { it.first == null } }
+                val separate = v.audioGroup?.let { audio[it] }?.takeIf { r -> r.isNotEmpty() && r.none { it.uri == null } }
                 val subs = subtitleGroups.getOrNull(i)?.let { subtitles[it] }.orEmpty()
                 if (separate == null && subs.isEmpty()) v
                 else HlsVariant(v.uri, v.bandwidth, v.height, v.codecs, v.audioGroup, separate?.let(::ordered).orEmpty(), ordered(subs), v.frameRate)

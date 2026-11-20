@@ -983,4 +983,26 @@
     <string name="probe_lv_unreachable">Нет ответа</string>
     <string name="probe_lv_empty">Пусто</string>
     <string name="probe_list_portal">Списки порталов здесь проверить нельзя</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Остановить, если никто не смотрит</string>
+    <string name="idle_stop_sub">Освобождает подключение к провайдеру (большинство разрешает только одно) и экономит энергию. Если за это время не было нажатий на пульт или касаний, приложение спросит, смотрите ли вы ещё, и без ответа остановит канал</string>
+    <string name="idle_stop_2h">Через 2 часа</string>
+    <string name="idle_stop_4h">Через 4 часа</string>
+    <string name="idle_stop_6h">Через 6 часов</string>
+    <string name="idle_prompt_title">Вы ещё смотрите?</string>
+    <string name="idle_prompt_sub">Воспроизведение остановится через %1$d с</string>
+    <string name="idle_keep">Продолжить просмотр</string>
+    <string name="idle_stopped_title">Воспроизведение остановлено, потому что никто не смотрел</string>
+    <string name="idle_watch_again">Смотреть снова</string>
+    <string name="audio_label_original">Оригинал</string>
+    <string name="audio_label_description">Аудиодескрипция</string>
+    <string name="audio_label_hearing">Для слабослышащих</string>
+    <string name="audio_label_effects">Только эффекты</string>
+    <string name="audio_label_mono">Моно</string>
+    <string name="audio_label_stereo">Стерео</string>
+    <string name="audio_label_n">Аудио %1$s</string>
+    <string name="mobile_data_quality">Качество в мобильной сети</string>
+    <string name="mobile_data_quality_sub">В мобильной сети каналы HLS с несколькими качествами используют «Экономию трафика» (до 720p), чтобы не тратить ваш тариф. В Wi-Fi возвращается обычное качество. Обычные TS-каналы не меняются</string>
+    <string name="mobile_data_quality_auto">Экономия трафика</string>
+    <string name="mobile_data_quality_same">Как в Wi-Fi</string>
 </resources>

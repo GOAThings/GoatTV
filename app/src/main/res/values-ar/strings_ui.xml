@@ -987,4 +987,26 @@
     <string name="probe_lv_unreachable">لا استجابة</string>
     <string name="probe_lv_empty">فارغة</string>
     <string name="probe_list_portal">لا يمكن اختبار قوائم البوابة هنا</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">الإيقاف إذا لم يكن أحد يشاهد</string>
+    <string name="idle_stop_sub">يحرّر اتصال المزوّد (معظم المزوّدين يسمحون باتصال واحد فقط) ويوفّر الطاقة. بعد هذه المدة دون أي ضغط على جهاز التحكم أو لمس، يُسأل إن كنت لا تزال تشاهد، وإذا لم يكن هناك رد تتوقف القناة</string>
+    <string name="idle_stop_2h">بعد ساعتين</string>
+    <string name="idle_stop_4h">بعد 4 ساعات</string>
+    <string name="idle_stop_6h">بعد 6 ساعات</string>
+    <string name="idle_prompt_title">هل ما زلت تشاهد؟</string>
+    <string name="idle_prompt_sub">سيتوقف التشغيل خلال %1$d ث</string>
+    <string name="idle_keep">متابعة المشاهدة</string>
+    <string name="idle_stopped_title">توقف التشغيل لأن أحدًا لم يكن يشاهد</string>
+    <string name="idle_watch_again">شاهد مجددًا</string>
+    <string name="audio_label_original">الأصلي</string>
+    <string name="audio_label_description">الوصف الصوتي</string>
+    <string name="audio_label_hearing">لضعاف السمع</string>
+    <string name="audio_label_effects">المؤثرات فقط</string>
+    <string name="audio_label_mono">أحادي</string>
+    <string name="audio_label_stereo">ستيريو</string>
+    <string name="audio_label_n">الصوت %1$s</string>
+    <string name="mobile_data_quality">الجودة على بيانات الجوال</string>
+    <string name="mobile_data_quality_sub">على بيانات الجوال، تستخدم قنوات HLS ذات الجودات المتعددة توفير البيانات (حتى 720p) للحفاظ على باقتك. عند العودة إلى Wi-Fi تعود الجودة المعتادة. قنوات TS العادية لا تتغير</string>
+    <string name="mobile_data_quality_auto">توفير البيانات</string>
+    <string name="mobile_data_quality_same">مثل Wi-Fi</string>
 </resources>

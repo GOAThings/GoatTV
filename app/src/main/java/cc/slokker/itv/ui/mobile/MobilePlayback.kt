@@ -35,6 +35,7 @@ import cc.slokker.itv.ui.player.engine.rememberChannelAspect
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.player.engine.resizeModeFor
 import cc.slokker.itv.ui.player.PlayerMediaSession
+import cc.slokker.itv.playback.IdleWatch
 import cc.slokker.itv.ui.player.SessionControls
 import cc.slokker.itv.ui.player.SessionInfo
 import cc.slokker.itv.ui.player.rememberIsRadio
@@ -178,13 +179,17 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
             override fun next() = vm.zap(1)
 
             override fun previous() = vm.zap(-1)
+
+            override fun onCommand() = vm.idleWatchAgain()
         },
         keepInBackground = playback.radio && active && playback.failure == null,
+        // Ninguém a ver (definição idle_stop): larga a ligação já, mesmo com o ecrã bloqueado (e a rádio sai da notificação).
+        registerIdleStop = { stopSession -> vm.onIdleStop = stopSession?.let { stop -> { core.stop(); stop() } } },
     )
     val latestRadio by rememberUpdatedState(playback.radio && active)
 
     LifecycleStartEffect(core) {
-        if (latestActive) {
+        if (latestActive && vm.idlePhase.value != IdleWatch.STOPPED) {
             core.onStart()
             vm.onPlayerVisible(true)
         }

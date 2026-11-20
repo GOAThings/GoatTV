@@ -17,6 +17,12 @@ data class TsTrack(
     val kind: TrackKind,
     val language: String?,
     val config: ByteArray? = null,
+    /** Só no áudio: o papel da faixa ([AudioRole]), pelos descritores do PMT (ou pelo HLS, que o TsMuxer escreve). */
+    val role: Int = AudioRole.MAIN,
+    /** Só no áudio: os canais que o PMT anuncia (0 = não diz; o formato descodificado é que manda, ver AudioFormat). */
+    val channels: Int = 0,
+    /** Só no áudio vindo de um HLS: o NAME da faixa, para quando a língua não vem (ver [TsMuxer]). */
+    val name: String? = null,
 )
 
 /**
@@ -334,6 +340,9 @@ class TsDemuxer(private val listener: TsListener) {
     private fun track(type: Int, pid: Int, d: ByteArray, from: Int, to: Int): TsTrack {
         var language: String? = null
         var config: ByteArray? = null
+        var role = AudioRole.MAIN
+        var channels = 0
+        var name: String? = null
         var codec = when (type) {
             0x1B -> Codec.H264
             0x24 -> Codec.HEVC
@@ -354,10 +363,34 @@ class TsDemuxer(private val listener: TsListener) {
             if (body + length > to) break
             when (tag) {
                 // ISO_639_language: a língua da faixa (áudio, ou legendas sem o descritor próprio).
-                0x0A -> if (length >= 3 && language == null) language = text(d, body, 3)
+                // O audio_type (4.º byte): 1 só efeitos, 2 para quem ouve mal, 3 comentário para quem vê mal (audiodescrição).
+                0x0A -> if (length >= 3 && language == null) {
+                    language = text(d, body, 3)
+                    if (length >= 4) AudioRole.fromIsoAudioType(d[body + 3].toInt() and 0xFF).takeIf { it != AudioRole.MAIN }?.let { role = it }
+                }
                 // DVB: o tipo 0x06 (dados privados) é que diz o que vem lá.
-                0x6A -> if (type == 0x06) codec = Codec.AC3
-                0x7A -> if (type == 0x06) codec = Codec.EAC3
+                // AC-3 / E-AC-3: o component_type (canais e tipo de serviço), quando o descritor o traz.
+                0x6A, 0x7A -> {
+                    if (type == 0x06) codec = if (tag == 0x6A) Codec.AC3 else Codec.EAC3
+                    if (length >= 2 && d[body].toInt() and 0x80 != 0) {
+                        val component = d[body + 1].toInt() and 0xFF
+                        channels = AudioRole.channelsOfComponent(component and 0x07)
+                        if (role == AudioRole.MAIN) role = AudioRole.fromAc3Service((component shr 3) and 0x07)
+                    }
+                }
+                // Descritor de extensão (0x7F): 0x06 = supplementary_audio (classificação editorial e, às vezes, a língua).
+                0x7F -> if (length >= 2 && (d[body].toInt() and 0xFF) == 0x06) {
+                    val flags = d[body + 1].toInt() and 0xFF
+                    val editorial = (flags shr 2) and 0x1F
+                    if (flags and 0x01 != 0 && length >= 5 && language == null) language = text(d, body + 2, 3)
+                    val editorialRole = AudioRole.fromEditorial(editorial)
+                    if (editorialRole != AudioRole.ORIGINAL || role == AudioRole.MAIN) role = editorialRole
+                }
+                // Privado do GoatTV (escrito pelo TsMuxer): os canais e o nome da faixa de um HLS.
+                TsMuxer.NAME_DESCRIPTOR -> if (length >= 1) {
+                    channels = d[body].toInt() and 0xFF
+                    if (length > 1) name = d.decodeToString(body + 1, body + length).takeIf { it.isNotBlank() }
+                }
                 0x59 -> if (type == 0x06) {
                     codec = Codec.DVB_SUBTITLE
                     if (length >= 3) language = text(d, body, 3)
@@ -389,7 +422,7 @@ class TsDemuxer(private val listener: TsListener) {
             Codec.DVB_SUBTITLE, Codec.TELETEXT, Codec.WEBVTT -> TrackKind.SUBTITLE
             Codec.ID3, Codec.UNKNOWN -> TrackKind.DATA
         }
-        return TsTrack(pid, type, codec, kind, language?.lowercase()?.takeIf { it.isNotBlank() && it.all { c -> c in 'a'..'z' } }, config)
+        return TsTrack(pid, type, codec, kind, language?.lowercase()?.takeIf { it.isNotBlank() && it.all { c -> c in 'a'..'z' } }, config, role, channels, name)
     }
 
     private fun text(d: ByteArray, from: Int, n: Int): String = CharArray(n) { (d[from + it].toInt() and 0xFF).toChar() }.concatToString()

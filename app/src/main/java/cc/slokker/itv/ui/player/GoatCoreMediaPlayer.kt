@@ -33,6 +33,9 @@ import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.VideoInfo
+import cc.slokker.itv.media.AudioLabelInput
+import cc.slokker.itv.media.AudioRole
+import cc.slokker.itv.media.AudioTrackLabel
 import cc.slokker.itv.media.TsTrack
 import cc.slokker.itv.ui.player.goatcore.GoatCorePlayer
 import cc.slokker.itv.ui.player.goatcore.TsSeek
@@ -462,7 +465,16 @@ internal class GoatCoreMediaPlayer(
      */
     private fun tracksOf(list: List<TsTrack>): Tracks {
         val playing = chosenAudio.takeIf { pid -> list.any { it.pid == pid } } ?: core?.selectedAudio ?: -1
-        fun label(language: String?) = language?.let { cc.slokker.itv.data.Languages.code(it) }?.let { java.util.Locale.forLanguageTag(it).displayLanguage }
+        val strings = cc.slokker.itv.ui.i18n.I18n.s
+        fun label(language: String?) = language?.let { cc.slokker.itv.data.Languages.code(it) }
+            ?.let { java.util.Locale.forLanguageTag(it).getDisplayLanguage(strings.locale).replaceFirstChar { c -> c.titlecase(strings.locale) } }
+        // As faixas de áudio com nome claro: língua · papel · canais (o formato só se duas ficassem iguais), ver AudioTrackLabel.
+        val audioTracks = list.filter { it.kind == TrackKind.AUDIO }
+        fun channelsOf(t: TsTrack) = core?.channelsOf(t.pid)?.takeIf { it > 0 } ?: t.channels
+        val audioLabels = AudioTrackLabel.labels(
+            audioTracks.map { t -> AudioLabelInput(label(t.language ?: t.name).orEmpty(), t.role, channelsOf(t), codecName(t.codec)) },
+            strings.audioLabelWords,
+        ).withIndex().associate { (i, l) -> audioTracks[i].pid to l }
         val groups = list.filter { it.kind == TrackKind.VIDEO || it.kind == TrackKind.AUDIO || it.codec == Codec.DVB_SUBTITLE || it.codec == Codec.WEBVTT }.map { t ->
             val id = "goatcore:${t.pid}"
             val info = videoInfo.takeIf { t.kind == TrackKind.VIDEO }
@@ -470,7 +482,13 @@ internal class GoatCoreMediaPlayer(
                 .setId(id)
                 .setSampleMimeType(mimeOf(t.codec))
                 .setLanguage(t.language)
-                .setLabel(label(t.language))
+                .setLabel(if (t.kind == TrackKind.AUDIO) audioLabels[t.pid] else label(t.language))
+                .apply {
+                    if (t.kind == TrackKind.AUDIO) {
+                        channelsOf(t).takeIf { it > 0 }?.let { setChannelCount(it) }
+                        setRoleFlags(roleFlagsOf(t.role))
+                    }
+                }
                 .build()
             val supported = t.kind != TrackKind.AUDIO || GoatCorePlayer.playable(t.codec, passthrough)
             val selected = t.kind == TrackKind.VIDEO || t.pid == playing || (t.kind == TrackKind.SUBTITLE && t.pid == chosenText)
@@ -500,6 +518,23 @@ internal class GoatCoreMediaPlayer(
             listOf(Tracks.Group(TrackGroup(id, format), false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(key == chosenText)))
         }
         return Tracks(groups + teletext + captions)
+    }
+
+    /** Os role flags do Media3 para o papel de uma faixa de áudio (o inverso está em trackInfo, ver AudioRole.detail). */
+    private fun roleFlagsOf(role: Int): Int = when (role) {
+        AudioRole.DESCRIPTION -> C.ROLE_FLAG_DESCRIBES_VIDEO
+        AudioRole.HEARING_IMPAIRED -> C.ROLE_FLAG_ENHANCED_DIALOG_INTELLIGIBILITY
+        AudioRole.CLEAN_EFFECTS -> C.ROLE_FLAG_SUPPLEMENTARY
+        AudioRole.ORIGINAL -> C.ROLE_FLAG_MAIN
+        else -> 0
+    }
+
+    private fun codecName(codec: Codec): String = when (codec) {
+        Codec.AAC_ADTS, Codec.AAC_LATM -> "AAC"
+        Codec.AC3 -> "AC-3"
+        Codec.EAC3 -> "E-AC-3"
+        Codec.MPEG_AUDIO -> "MP2"
+        else -> ""
     }
 
     /** Um Format com o que o SPS diz (para o selo HDR, o AFR e a decisão de converter para SDR). */

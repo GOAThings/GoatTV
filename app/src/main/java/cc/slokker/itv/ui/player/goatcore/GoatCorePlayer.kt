@@ -675,10 +675,20 @@ class GoatCorePlayer(
         listener.onCues(pts, cues, androidx.media3.common.C.TIME_UNSET)
     }
 
+    /** Os canais que cada faixa de áudio tem de facto (os blocos descodificados, não o que o PMT diz), por PID. */
+    private val decodedChannels = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+
+    /** Os canais descodificados da faixa [pid]; 0 enquanto não chegou nenhum bloco dela. */
+    fun channelsOf(pid: Int): Int = decodedChannels[pid] ?: 0
+
     private fun audio(pid: Int, sample: TsSample) {
         val state = audioTracks[pid] ?: return
         val reader = state.reader
-        for (frame in reader.frames(sample.data, sample.pts, sample.discontinuity)) {
+        val frames = reader.frames(sample.data, sample.pts, sample.discontinuity)
+        // A primeira vez que se sabem os canais da faixa (ou que mudam, ex. de estéreo para 5.1): o nome dela passa a tê-los.
+        val channels = reader.format?.channels ?: 0
+        if (channels > 0 && decodedChannels.put(pid, channels) != channels) listener.onTracks(allTracks)
+        for (frame in frames) {
             val pts = state.clock.unwrap(frame.pts)
             val unit = AudioUnit(frame.data, pts * 100 / 9, reader.format)
             // Os últimos segundos de cada faixa ficam guardados; a que toca vai também para o descodificador.

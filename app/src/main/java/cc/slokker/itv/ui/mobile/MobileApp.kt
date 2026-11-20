@@ -57,7 +57,9 @@ import cc.slokker.itv.data.Reminder
 import cc.slokker.itv.ui.player.behindLabel
 import cc.slokker.itv.ui.player.reminderCountdown
 import cc.slokker.itv.ui.AppViewModel
+import cc.slokker.itv.playback.IdleWatch
 import cc.slokker.itv.ui.glass.ItvIcons
+import cc.slokker.itv.ui.player.IdleOverlays
 import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.theme.ItvColors
 import cc.slokker.itv.ui.theme.LocalAccent
@@ -84,7 +86,9 @@ fun MobileMain(vm: AppViewModel) {
     // A dar: em grande no separador TV, ou no mini-leitor por cima dos separadores (no início, no guia...).
     val video = nav.video
     val big = nav.big
-    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = video)
+    // Ninguém a ver (definição idle_stop): o canal fecha-se (e liberta a ligação) até se pedir "Ver outra vez".
+    val idlePhase by vm.idlePhase.collectAsStateWithLifecycle()
+    val playback = rememberMobilePlayback(vm, current, data, prefs, streamFormat, active = video && idlePhase != IdleWatch.STOPPED)
     // Mudar de canal em pausa ou atrás do direto pergunta primeiro (ver AppViewModel.guarded).
     DisposableEffect(playback) {
         vm.liveShifted = { playback.core.timeshift?.worthAsking == true }
@@ -306,6 +310,7 @@ fun MobileMain(vm: AppViewModel) {
             onPrimary = { vm.answerRecordingPrompt(r.id, switch = true); played() }, onSecondary = { vm.answerRecordingPrompt(r.id, switch = false) },
         )
     }
+    if (!pip) IdleOverlays(vm) { playback.core.onStart() }
     if (!pip) reminder?.let { r ->
         Box(Modifier.fillMaxSize().statusBarsPadding().padding(12.dp)) {
             Row(Modifier.fillMaxWidth().clip(PhoneShapes.Card).background(PhoneColors.Reminder).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

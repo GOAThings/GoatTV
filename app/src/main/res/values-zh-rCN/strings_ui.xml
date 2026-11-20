@@ -976,4 +976,26 @@
     <string name="probe_lv_unreachable">无响应</string>
     <string name="probe_lv_empty">为空</string>
     <string name="probe_list_portal">此处无法测试门户列表</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">无人观看时停止</string>
+    <string name="idle_stop_sub">释放服务商连接（多数服务商只允许一路）并节省电量。在此时长内没有遥控器或触摸操作时，会询问你是否还在观看，无人回应则停止频道</string>
+    <string name="idle_stop_2h">2 小时后</string>
+    <string name="idle_stop_4h">4 小时后</string>
+    <string name="idle_stop_6h">6 小时后</string>
+    <string name="idle_prompt_title">还在观看吗？</string>
+    <string name="idle_prompt_sub">播放将在 %1$d 秒后停止</string>
+    <string name="idle_keep">继续观看</string>
+    <string name="idle_stopped_title">因无人观看，播放已停止</string>
+    <string name="idle_watch_again">重新观看</string>
+    <string name="audio_label_original">原声</string>
+    <string name="audio_label_description">音频描述</string>
+    <string name="audio_label_hearing">听障辅助</string>
+    <string name="audio_label_effects">仅效果音</string>
+    <string name="audio_label_mono">单声道</string>
+    <string name="audio_label_stereo">立体声</string>
+    <string name="audio_label_n">音频 %1$s</string>
+    <string name="mobile_data_quality">移动数据下的画质</string>
+    <string name="mobile_data_quality_sub">使用移动数据时，有多种画质的 HLS 频道会采用省流量（最高 720p），以节省你的流量套餐。回到 Wi-Fi 后恢复通常画质。普通 TS 频道不受影响</string>
+    <string name="mobile_data_quality_auto">省流量</string>
+    <string name="mobile_data_quality_same">与 Wi-Fi 相同</string>
 </resources>

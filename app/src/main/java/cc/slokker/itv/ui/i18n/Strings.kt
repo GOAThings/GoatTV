@@ -2,6 +2,7 @@ package cc.slokker.itv.ui.i18n
 
 import cc.slokker.itv.data.GroupCountries
 import cc.slokker.itv.data.SportsHub
+import cc.slokker.itv.media.AudioLabelWords
 import cc.slokker.itv.playback.SourceReliability
 import cc.slokker.itv.playback.SourceStats
 import androidx.core.os.ConfigurationCompat
@@ -1217,6 +1218,28 @@ class Strings(context: Context) {
         if (parts.isNotEmpty()) return parts.joinToString(" · ")
         return if (st.watchedSec >= SourceReliability.STABLE_MIN_SEC) s(R.string.source_history_stable, watched) else null
     }
+
+    // ---- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis ----
+    val idleStop get() = s(R.string.idle_stop)
+    val idleStopSub get() = s(R.string.idle_stop_sub)
+    val idleStop2h get() = s(R.string.idle_stop_2h)
+    val idleStop4h get() = s(R.string.idle_stop_4h)
+    val idleStop6h get() = s(R.string.idle_stop_6h)
+    val idlePromptTitle get() = s(R.string.idle_prompt_title)
+    fun idlePromptSub(seconds: Int) = s(R.string.idle_prompt_sub, seconds)
+    val idleKeep get() = s(R.string.idle_keep)
+    val idleStoppedTitle get() = s(R.string.idle_stopped_title)
+    val idleWatchAgain get() = s(R.string.idle_watch_again)
+    /** Os textos dos nomes das faixas de áudio (ver media/AudioTrackLabel); o "Áudio n" leva o %d por preencher. */
+    val audioLabelWords get() = AudioLabelWords(
+        original = s(R.string.audio_label_original), audioDescription = s(R.string.audio_label_description),
+        hearingImpaired = s(R.string.audio_label_hearing), cleanEffects = s(R.string.audio_label_effects),
+        mono = s(R.string.audio_label_mono), stereo = s(R.string.audio_label_stereo), audioN = s(R.string.audio_label_n, "%d"),
+    )
+    val mobileDataQuality get() = s(R.string.mobile_data_quality)
+    val mobileDataQualitySub get() = s(R.string.mobile_data_quality_sub)
+    val mobileDataQualityAuto get() = s(R.string.mobile_data_quality_auto)
+    val mobileDataQualitySame get() = s(R.string.mobile_data_quality_same)
 
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */

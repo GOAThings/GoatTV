@@ -981,4 +981,26 @@
     <string name="probe_lv_unreachable">Nessuna risposta</string>
     <string name="probe_lv_empty">Vuota</string>
     <string name="probe_list_portal">Le liste portale non si possono provare qui</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Interrompi se nessuno guarda</string>
+    <string name="idle_stop_sub">Libera la connessione al fornitore (la maggior parte ne consente una sola) e risparmia energia. Dopo questo tempo senza telecomando né tocchi, ti chiede se stai ancora guardando e, senza risposta, il canale si ferma</string>
+    <string name="idle_stop_2h">Dopo 2 ore</string>
+    <string name="idle_stop_4h">Dopo 4 ore</string>
+    <string name="idle_stop_6h">Dopo 6 ore</string>
+    <string name="idle_prompt_title">Stai ancora guardando?</string>
+    <string name="idle_prompt_sub">La riproduzione si ferma tra %1$d s</string>
+    <string name="idle_keep">Continua a guardare</string>
+    <string name="idle_stopped_title">La riproduzione si è fermata perché nessuno stava guardando</string>
+    <string name="idle_watch_again">Guarda di nuovo</string>
+    <string name="audio_label_original">Originale</string>
+    <string name="audio_label_description">Audiodescrizione</string>
+    <string name="audio_label_hearing">Per non udenti</string>
+    <string name="audio_label_effects">Solo effetti</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Stereo</string>
+    <string name="audio_label_n">Audio %1$s</string>
+    <string name="mobile_data_quality">Qualità con dati mobili</string>
+    <string name="mobile_data_quality_sub">Con i dati mobili, i canali HLS con più qualità usano Risparmio dati (fino a 720p) per non consumare il piano. Con il Wi-Fi torna la qualità di sempre. I canali TS semplici non cambiano</string>
+    <string name="mobile_data_quality_auto">Risparmia dati</string>
+    <string name="mobile_data_quality_same">Come con il Wi-Fi</string>
 </resources>

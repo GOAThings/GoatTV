@@ -104,4 +104,14 @@ class HlsQualityTest {
         )
         assertEquals(listOf(50.0, 0.0), p.variants.map { it.frameRate })
     }
+
+    @Test
+    fun `mobile data turns any preference but the lowest into data saver`() {
+        val auto = Prefs.MobileDataQuality.AUTO
+        assertEquals(Prefs.HlsQuality.DATA_SAVER, HlsQuality.effectivePreference(Prefs.HlsQuality.AUTO, auto, cellular = true))
+        assertEquals(Prefs.HlsQuality.DATA_SAVER, HlsQuality.effectivePreference(Prefs.HlsQuality.BEST, auto, cellular = true))
+        assertEquals(Prefs.HlsQuality.LOWEST, HlsQuality.effectivePreference(Prefs.HlsQuality.LOWEST, auto, cellular = true))
+        assertEquals(Prefs.HlsQuality.BEST, HlsQuality.effectivePreference(Prefs.HlsQuality.BEST, auto, cellular = false))
+        assertEquals(Prefs.HlsQuality.AUTO, HlsQuality.effectivePreference(Prefs.HlsQuality.AUTO, Prefs.MobileDataQuality.SAME, cellular = true))
+    }
 }

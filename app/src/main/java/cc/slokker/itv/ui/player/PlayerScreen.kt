@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.key
+import cc.slokker.itv.playback.IdleWatch
 import cc.slokker.itv.ui.state.PlaybackState
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -135,6 +136,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
     val catchup by vm.catchup.collectAsStateWithLifecycle()
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val idlePhase by vm.idlePhase.collectAsStateWithLifecycle()
     val current = channel ?: return
     val data = content ?: return
 
@@ -377,8 +379,20 @@ fun PlayerScreen(vm: AppViewModel) {
             override fun next() = vm.zap(1)
 
             override fun previous() = vm.zap(-1)
+
+            override fun onCommand() = vm.idleWatchAgain()
         },
         keepInBackground = false,
+        // Ninguém a ver (definição idle_stop): o canal (e os extra) largam a ligação ao fornecedor.
+        registerIdleStop = { stopSession ->
+            vm.onIdleStop = stopSession?.let { stop ->
+                {
+                    playback.stop()
+                    extraPlaybacks.forEach { it?.stop() }
+                    stop()
+                }
+            }
+        },
     )
 
     /** O que faz um botão de cor (Prefs.KeyAction); false = nada (a tecla segue para quem a quiser). */
@@ -767,6 +781,8 @@ fun PlayerScreen(vm: AppViewModel) {
                     lastInput[0] = SystemClock.uptimeMillis()
                     val code = e.key.nativeKeyCode
                     val ok = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER || code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
+                    // O canal parou porque ninguém via (ecrã "Ver outra vez"): as teclas vão para o botão; Voltar sai como sempre.
+                    if (idlePhase == IdleWatch.STOPPED && code != AndroidKeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
                     // Aviso do temporizador: qualquer tecla mostra que há alguém a ver, e desliga-o.
                     if (sleepWarning != null && code != AndroidKeyEvent.KEYCODE_BACK) {
                         if (e.type == KeyEventType.KeyUp) vm.setSleepTimer(null)
@@ -1356,6 +1372,12 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             sleepWarning?.let { SleepWarning(it, Modifier.align(Alignment.Center)) }
+
+            // "Ainda estás a ver?" e o ecrã de parado (definição idle_stop).
+            IdleOverlays(vm) {
+                playback.onStart()
+                extraPlaybacks.forEach { it?.onStart() }
+            }
 
             if (prefs.netGraph && !showGuide && !showSports && panel == Panel.None) {
                 NetGraph(vm.net, current.name, Modifier.align(Alignment.TopStart))

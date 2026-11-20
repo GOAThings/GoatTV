@@ -981,4 +981,26 @@
     <string name="probe_lv_unreachable">Não respondeu</string>
     <string name="probe_lv_empty">Vazia</string>
     <string name="probe_list_portal">As listas de portal não se testam aqui</string>
+    <!-- Parar se ninguém estiver a ver, nomes das faixas de áudio e qualidade com dados móveis -->
+    <string name="idle_stop">Parar se ninguém estiver a ver</string>
+    <string name="idle_stop_sub">Liberta a ligação ao fornecedor (a maioria só permite uma) e poupa energia. Passado este tempo sem comandos nem toques, pergunta se ainda estás a ver e, sem resposta, o canal pára</string>
+    <string name="idle_stop_2h">Ao fim de 2 horas</string>
+    <string name="idle_stop_4h">Ao fim de 4 horas</string>
+    <string name="idle_stop_6h">Ao fim de 6 horas</string>
+    <string name="idle_prompt_title">Ainda estás a ver?</string>
+    <string name="idle_prompt_sub">O canal pára dentro de %1$d s</string>
+    <string name="idle_keep">Continuar a ver</string>
+    <string name="idle_stopped_title">O canal parou porque ninguém estava a ver</string>
+    <string name="idle_watch_again">Ver outra vez</string>
+    <string name="audio_label_original">Original</string>
+    <string name="audio_label_description">Audiodescrição</string>
+    <string name="audio_label_hearing">Para quem ouve mal</string>
+    <string name="audio_label_effects">Só efeitos</string>
+    <string name="audio_label_mono">Mono</string>
+    <string name="audio_label_stereo">Estéreo</string>
+    <string name="audio_label_n">Áudio %1$s</string>
+    <string name="mobile_data_quality">Qualidade com dados móveis</string>
+    <string name="mobile_data_quality_sub">Com dados móveis, os canais HLS com várias qualidades usam Poupar dados (até 720p) para não gastar o teu plano. Na Wi-Fi volta a qualidade de sempre. Os canais TS simples não mudam</string>
+    <string name="mobile_data_quality_auto">Poupar dados</string>
+    <string name="mobile_data_quality_same">Igual à Wi-Fi</string>
 </resources>
