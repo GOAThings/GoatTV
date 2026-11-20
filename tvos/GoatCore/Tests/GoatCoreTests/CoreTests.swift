@@ -522,6 +522,22 @@ enum CoreTests {
         try expect(PictureAdjust(picture).neutral, false)
         try expect(PictureAdjust(contrast: 5).chromaGain > 1.29, true)
         try expect(PictureAdjust(sharpness: 4).sharpen > 0.59, true)
+        // Aumentar a imagem: desligado por defeito, os valores do Android.
+        try expect(Prefs().upscale, "off")
+        try expect(Prefs(settings: .object(["upscale": "ai"])).upscale, "ai")
+        try expect(Prefs(settings: .object(["upscale": "sharp"])).upscale, "sharp")
+        try expect(Prefs(settings: .object(["upscale": "max"])).upscale, "off")
+        // As decisões do núcleo partilhado: 576p num 4K vale a pena, 1080p num 1080p não; desligado nunca. Uma falha
+        // desliga essa resolução para o resto da sessão.
+        let up = VideoUpscale(setting: "ai")
+        try expect(up.wanted(width: 1024, height: 576, screenWidth: 3840, screenHeight: 2160), true)
+        try expect(up.wanted(width: 1920, height: 1080, screenWidth: 1920, screenHeight: 1080), false)
+        try expect(VideoUpscale(setting: "off").wanted(width: 1024, height: 576, screenWidth: 3840, screenHeight: 2160), false)
+        try expect(up.start(width: 1024, height: 576, screenWidth: 3840, screenHeight: 2160, supported: true), true)
+        try expect(up.target(screenWidth: 3840, screenHeight: 2160).width, 3840)
+        up.fail()
+        try expect(up.active, false)
+        try expect(up.wanted(width: 1024, height: 576, screenWidth: 3840, screenHeight: 2160), false)
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
         // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.

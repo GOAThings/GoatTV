@@ -223,4 +223,11 @@ class AppleUpscale(setting: String, private val memory: AppleUpscaleMemory) {
 /** A memória da app inteira (ver [UpscaleMemory]) para o Swift: uma só, guardada por quem usa. */
 class AppleUpscaleMemory {
     internal val memory = UpscaleMemory()
+
+    /**
+     * Vale a pena mandar o vídeo [width]×[height] (8 bits SDR) pelo caminho que o aumenta, com a definição [setting] e
+     * o ecrã [screenWidth]×[screenHeight] (ver [Upscaling.mode], com o que esta resolução já mostrou aguentar).
+     */
+    fun wanted(setting: String, width: Int, height: Int, screenWidth: Int, screenHeight: Int): Boolean =
+        Upscaling.mode(setting, width, height, screenWidth, screenHeight, ceiling = memory.ceiling(width, height)) != Upscaling.OFF
 }

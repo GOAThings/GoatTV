@@ -139,5 +139,11 @@ class UpscalingTest {
         assertEquals(Upscaling.SHARP, b.start(1280, 720, 3840, 2160, 8, false, supported = true))
         assertEquals(Upscaling.OFF, b.start(1280, 720, 3840, 2160, 8, false, supported = false))
         assertFalse(b.frame(0, 0, 40_000))
+        // O caminho do vídeo: 720p num 4K sim, até esta resolução não aguentar nada; 1080p num 1080p não.
+        assertTrue(memory.wanted(sharp, 1280, 720, 3840, 2160))
+        assertFalse(memory.wanted(sharp, 1920, 1080, 1920, 1080))
+        b.start(1280, 720, 3840, 2160, 8, false, supported = true)
+        b.fail()
+        assertFalse(memory.wanted(sharp, 1280, 720, 3840, 2160))
     }
 }

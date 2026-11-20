@@ -115,6 +115,10 @@ public final class MediaPipeline {
     /// vai também para [onInterlacedVideo] (como progressivo, se não for para desentrelaçar), para quem usa o pipeline
     /// o descodificar e ajustar. Pode mudar com o canal a dar: o caminho só troca numa imagem-chave.
     public var adjustVideo = false
+    /// Aumentar a imagem (Definições → Imagem): diz, pelo tamanho do vídeo (largura, linhas), se vale a pena aumentá-lo.
+    /// Com true, o H.264/HEVC de 8 bits SDR até [PictureAdjust.maxHeight] linhas vai também para [onInterlacedVideo]
+    /// (como os ajustes); decide-se em cada imagem-chave, por isso o vídeo volta direto à camada se deixar de valer.
+    public var upscaleVideo: ((Int, Int) -> Bool)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -133,6 +137,7 @@ public final class MediaPipeline {
     private var videoDeep = false
     /// As linhas do vídeo, pelo SPS (os ajustes da imagem têm um limite, ver [adjustVideo]).
     private var videoLines = 0
+    private var videoWidth = 0
     /// O vídeo está a ir para [onInterlacedVideo] por causa dos ajustes da imagem (decide-se em cada imagem-chave).
     private var adjusting = false
     private var videoClock = TsClock()
@@ -217,6 +222,7 @@ public final class MediaPipeline {
         videoFormat = nil
         videoDeep = false
         videoLines = 0
+        videoWidth = 0
         adjusting = false
         videoClock.reset()
         videoStart.restart()
@@ -399,6 +405,7 @@ public final class MediaPipeline {
                 if changed, let info = AppleMedia.shared.videoInfo(sets: unit.parameterSets, hevc: hevc) {
                     videoDeep = info.bitDepth > 8 || info.isHdr
                     videoLines = Int(info.height)
+                    videoWidth = Int(info.width)
                     onVideoDetails?(VideoDetails(width: Int(info.width), height: Int(info.height), fps: Double(info.fps),
                                                  hdr10: info.isHdr10, hlg: info.isHlg, format: f, interlaced: info.interlaced))
                 }
@@ -410,7 +417,8 @@ public final class MediaPipeline {
         let dts = unit.dts
         let deinterlacing = nal.interlaced && deinterlaceVideo && onInterlacedVideo != nil
         if unit.keyframe {
-            let adjust = adjustVideo && onInterlacedVideo != nil && !videoDeep && videoLines <= PictureAdjust.maxHeight
+            let upscale = upscaleVideo?(videoWidth, videoLines) ?? false
+            let adjust = (adjustVideo || upscale) && onInterlacedVideo != nil && !videoDeep && videoLines <= PictureAdjust.maxHeight
             if adjust != adjusting {
                 adjusting = adjust
                 // O vídeo muda de descodificador (o da app ou o da camada), que começa nesta imagem-chave: as imagens

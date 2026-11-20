@@ -2010,9 +2010,13 @@ private struct MenuTab: View {
                     pick(s.r(key), key, .number(Double(p.pictureValue(key))),
                          s.pictureOptions(key).map { (o: (value: Int, label: String)) -> (JSON?, String) in (.number(Double(o.value)), o.label) })
                 }
+                // Aumentar a imagem: na Apple é o MetalFX, ligado ou não (guarda-se "sharp", um dos valores do Android).
+                Toggle(s.r("upscale"), isOn: Binding(get: { p.upscale != "off" }, set: { model.setPref("upscale", .string($0 ? "sharp" : "off")) }))
                 MenuRow(s.r("picture_reset")) { model.setPrefs(Prefs.pictureReset) }
                 Text(s.r("picture_sub_apple")).font(.footnote).foregroundStyle(Theme.textFaint)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
+                Text(s.r("upscale_sub_apple")).font(.footnote).foregroundStyle(Theme.textFaint)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.bottom, 8)
             }
             // As legendas: a língua e o aspeto (como no Android, ver SettingsCatalog).
             section(s.r("subtitles")) {

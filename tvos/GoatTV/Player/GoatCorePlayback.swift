@@ -242,6 +242,9 @@ final class GoatCorePlayback: NSObject {
     var picture = PictureAdjust() {
         didSet { if picture != oldValue { session?.setPicture(picture) } }
     }
+    /// Aumentar a imagem (Prefs.upscale: "off", "sharp", "ai"; na Apple os dois são o MetalFX, ver InterlacedVideo).
+    /// Só na imagem principal; vale no canal seguinte.
+    var upscale = "off"
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem"); nil se não houver vídeo. A resposta vem
     /// noutra thread.
@@ -283,7 +286,11 @@ final class GoatCorePlayback: NSObject {
         synchronizer.addRenderer(display)
         synchronizer.addRenderer(audioRenderer)
         pip = nil
-        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace, picture: picture)
+        // O ecrã em píxeis, com o lado maior na largura (o do iPhone vem ao alto).
+        let bounds = (view.window?.screen ?? UIScreen.main).nativeBounds.size
+        let screen = (width: Int(max(bounds.width, bounds.height)), height: Int(min(bounds.width, bounds.height)))
+        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace, picture: picture,
+                              upscale: upscale, screen: screen)
         s.rate = userRate
         // As vozes mais claras só misturam o som com canal central quando a saída é estéreo (a TV sem recetor, uns
         // auscultadores); a que leva mais canais fica com eles.
@@ -629,13 +636,25 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private static let resumeAheadSeconds = 10.0
 
     init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer,
-         deinterlace: String, picture: PictureAdjust) {
+         deinterlace: String, picture: PictureAdjust, upscale: String, screen: (width: Int, height: Int)) {
         self.display = display
         self.audio = audio
         self.synchronizer = synchronizer
         self.deinterlace = deinterlace
         self.picture = picture
+        self.screen = screen
+        if upscale != "off" {
+            if InterlacedVideo.metalFXSupported {
+                upscaler = VideoUpscale(setting: upscale)
+            } else {
+                DebugLog.add("GoatCore: upscale: this device has no MetalFX spatial scaler, no upscaling")
+            }
+        }
         super.init()
+        // Com o aumento: o vídeo mais pequeno do que o ecrã vai pelo mesmo caminho (ver MediaPipeline.upscaleVideo).
+        if let up = upscaler {
+            pipeline.upscaleVideo = { w, h in up.wanted(width: w, height: h, screenWidth: screen.width, screenHeight: screen.height) }
+        }
         // O H.264 entrelaçado passa pelo desentrelaçador (ver [interlacedVideo]); desligado, vai como o resto. Com
         // ajustes da imagem, o vídeo de 8 bits SDR vai pelo mesmo caminho (ver MediaPipeline.adjustVideo).
         pipeline.deinterlaceVideo = deinterlace != "off"
@@ -809,6 +828,9 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         queue.async {
             self.cancelled = true
             self.watch?.cancel()
+            self.heldTimer?.cancel()
+            self.heldTimer = nil
+            self.held = []
             try? self.file?.close()
             self.file = nil
             self.hls?.stop()
@@ -910,6 +932,16 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private var interlacedFailed = false
     /// Os ajustes da imagem (só na fila, ver [setPicture]).
     private var picture: PictureAdjust
+    /// O aumento da imagem (nil = desligado, ou sem MetalFX) e o ecrã em píxeis.
+    private var upscaler: VideoUpscale?
+    private let screen: (width: Int, height: Int)
+    /// Com o aumento, as imagens comprimidas para o [interlaced] esperam aqui até faltar [upscaleAhead] para a hora
+    /// delas (pela ordem em que chegam): as imagens aumentadas são grandes (~12 MB uma 4K), e a camada guardava todas as
+    /// que recebe (até 20 s à frente). Assim ficam lá poucas (~15 a 50 por segundo). [heldLast]: o último tempo à espera.
+    private var held: [(sample: CMSampleBuffer, bottomFirst: Bool, progressive: Bool)] = []
+    private var heldLast: CMTime = .invalid
+    private var heldTimer: DispatchSourceTimer?
+    private static let upscaleAhead = 0.3
     /// A última imagem passou pelo [interlaced] (ver [compressedVideo]).
     private var processing = false
 
@@ -927,6 +959,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// saem as imagens que lá estavam à espera.
     private func compressedVideo(_ b: CMSampleBuffer) {
         if processing {
+            // As que esperavam pelo aumento saem primeiro (pela ordem).
+            releaseHeld(all: true)
             processing = false
             for f in interlaced?.finish() ?? [] { video(f) }
         }
@@ -935,9 +969,50 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
 
     private func interlacedVideo(_ b: CMSampleBuffer, bottomFirst: Bool, progressive: Bool) {
         guard !closed else { return }
+        // Com o aumento, à espera da hora (ver [held]); o relógio ainda parado (a primeira imagem) não espera.
+        if upscaler != nil, !interlacedFailed {
+            processing = true
+            held.append((sample: b, bottomFirst: bottomFirst, progressive: progressive))
+            let pts = CMSampleBufferGetPresentationTimeStamp(b)
+            if pts.isValid, !heldLast.isValid || pts > heldLast { heldLast = pts }
+            if heldTimer == nil {
+                let t = DispatchSource.makeTimerSource(queue: queue)
+                t.schedule(deadline: .now() + 0.02, repeating: 0.02)
+                t.setEventHandler { [weak self] in self?.releaseHeld(all: false) }
+                t.resume()
+                heldTimer = t
+            }
+            releaseHeld(all: false)
+            return
+        }
+        decodeOnGPU(b, bottomFirst: bottomFirst, progressive: progressive)
+    }
+
+    /// As imagens à espera cuja hora está a menos de [upscaleAhead] (ou todas, com [all]) vão para o [interlaced].
+    private func releaseHeld(all: Bool) {
+        guard !closed else {
+            held = []
+            heldTimer?.cancel()
+            heldTimer = nil
+            return
+        }
+        let now = synchronizer.currentTime()
+        while let first = held.first {
+            let pts = CMSampleBufferGetPresentationTimeStamp(first.sample)
+            if !all, running, now.isValid, pts.isValid, (pts - now).seconds > Self.upscaleAhead { break }
+            held.removeFirst()
+            decodeOnGPU(first.sample, bottomFirst: first.bottomFirst, progressive: first.progressive)
+        }
+        if held.isEmpty { heldLast = .invalid }
+    }
+
+    private func decodeOnGPU(_ b: CMSampleBuffer, bottomFirst: Bool, progressive: Bool) {
+        guard !closed else { return }
         if interlaced == nil, !interlacedFailed {
             interlaced = InterlacedVideo(fieldRate: deinterlace != "yadif")
             interlaced?.picture = picture
+            interlaced?.upscale = upscaler
+            interlaced?.screen = screen
             interlacedFailed = interlaced == nil
             DebugLog.add(interlaced == nil ? "GoatCore: no GPU video stage (interlaced video or picture adjustments)"
                 : "GoatCore: video through the GPU (deinterlace \(deinterlace), picture \(picture.neutral ? "as is" : "adjusted"))")
@@ -1110,7 +1185,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private func checkBuffer() {
         guard running, !cancelled else { return }
         let now = synchronizer.currentTime()
-        let ahead = hasVideo ? lastVideo : lastAudio
+        // O vídeo à espera do aumento (ver [held]) conta como já estando no leitor.
+        let ahead = hasVideo ? (heldLast.isValid && (!lastVideo.isValid || heldLast > lastVideo) ? heldLast : lastVideo) : lastAudio
         guard ahead.isValid, now.isValid else { return }
         let lead = (ahead - now).seconds
         // Muito à frente: para de ler (a ligação fica à espera, como as filas do Android); retoma a meio.

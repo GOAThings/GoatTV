@@ -64,6 +64,9 @@ public struct Prefs: Equatable, Sendable {
     public var pictureContrast = 0
     public var pictureSaturation = 0
     public var pictureSharpness = 0
+    /// Aumentar a imagem (`upscale`): "off", "sharp" ou "ai", os valores do Android. Na Apple os dois são o MetalFX
+    /// (ver Upscaling no leitor); só no 8 bits SDR mais pequeno do que o ecrã e na imagem principal.
+    public var upscale = "off"
     /// As quatro chaves, para as repor todas de uma vez ("Repor a imagem").
     public static let pictureKeys = ["picture_brightness", "picture_contrast", "picture_saturation", "picture_sharpness"]
     /// Faixa surround por defeito.
@@ -303,6 +306,7 @@ public struct Prefs: Equatable, Sendable {
         pictureContrast = Int(p.pictureContrast)
         pictureSaturation = Int(p.pictureSaturation)
         pictureSharpness = Int(p.pictureSharpness)
+        upscale = p.upscale
         surroundDefault = p.surroundDefault
         audioLanguage = p.audioLanguage
         subtitleLanguage = p.subtitleLanguage

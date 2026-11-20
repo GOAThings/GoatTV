@@ -134,6 +134,8 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var picture = PictureAdjust() {
         didSet { if picture != oldValue, controlsDisplay { goatCorePlayback?.picture = picture } }
     }
+    /// Aumentar a imagem (Prefs.upscale), no GoatCore e só na imagem principal; vale no canal seguinte.
+    @ObservationIgnored var upscale = "off"
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem", só no iPhone). nil se não houver, ou
     /// noutro motor que não o GoatCore (o leitor da Apple e o VLC, a reserva automática). A resposta vem noutra thread.
@@ -1296,6 +1298,7 @@ final class PlayerEngine: NSObject {
         g.passthrough = passthrough
         g.deinterlace = deinterlace
         g.picture = controlsDisplay ? picture : PictureAdjust()
+        g.upscale = controlsDisplay ? upscale : "off"
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil

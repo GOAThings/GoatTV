@@ -813,6 +813,10 @@ struct SettingsPanel: View {
                 pickItem("picture_contrast", subtitle: s.r("picture_sub_apple")),
                 pickItem("picture_saturation", subtitle: s.r("picture_sub_apple")),
                 pickItem("picture_sharpness", subtitle: s.r("picture_sub_apple")),
+                // Aumentar a imagem: na Apple é o MetalFX, ligado ou não (guarda-se "sharp", um dos valores do Android).
+                .toggle("upscale", s.r("upscale"), prefs.upscale != "off", subtitle: s.r("upscale_sub_apple")) {
+                    model.setPref("upscale", .string($0 ? "sharp" : "off"))
+                },
                 .action("picture_reset", s.r("picture_reset")) { model.setPrefs(Prefs.pictureReset) },
                 .header("audio", s.t("Audio", "Áudio")),
                 pickItem("audio_language", subtitle: s.r("audio_language_sub")),
