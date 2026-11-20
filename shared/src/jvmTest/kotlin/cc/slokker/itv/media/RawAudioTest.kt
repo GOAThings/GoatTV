@@ -92,4 +92,30 @@ class RawAudioTest {
         val c = feed(ts, 4096)
         assertTrue(c.tracks.any { it.kind == TrackKind.VIDEO })
     }
+
+    /** Um TS apanhado em qualquer ponto de um pacote (uma ligação a meio do direto) nunca passa por rádio. */
+    @Test
+    fun tsJoinedAnywhereInsideAPacketIsStillTs() {
+        for (name in listOf("h264_opengop", "h264_aac", "hevc_ac3", "mpeg2_mp2", "h264_eac3")) {
+            val ts = javaClass.getResourceAsStream("/ts/$name.ts")!!.readBytes()
+            for (start in listOf(ts.size / 4, ts.size / 2, ts.size * 2 / 3)) {
+                for (inside in 0 until 188) {
+                    val from = start - start % 188 + inside
+                    val c = feed(ts.copyOfRange(from, minOf(ts.size, from + 188 * 3000)), 4096)
+                    assertTrue(c.tracks.any { it.kind == TrackKind.VIDEO }, "$name a partir de $from")
+                }
+            }
+        }
+    }
+
+    /** Uma rádio muito curta (menos do que a espera pelo TS) toca na mesma, ao fechar. */
+    @Test
+    fun shortRadioClipStillPlays() {
+        val c = Collect()
+        val d = StreamDemuxer(c)
+        val clip = mp3Frame() + mp3Frame()
+        d.feed(clip, 0, clip.size)
+        d.flush()
+        assertTrue(c.tracks.any { it.kind == TrackKind.AUDIO })
+    }
 }
