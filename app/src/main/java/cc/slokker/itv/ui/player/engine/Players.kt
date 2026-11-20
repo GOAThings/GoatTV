@@ -85,7 +85,7 @@ internal fun buildPlayer(context: Context, prefs: Prefs): Player {
         val capture = if (DebugEngine.capture) java.io.File(context.cacheDir, "goatcore.ts") else null
         val appContext = context.applicationContext
         return GoatCoreMediaPlayer(softwareVideo, capture, passthrough = prefs.audioPassthrough, needsSdr = { f -> HdrType.needsSdr(appContext, f, prefs.hdr) },
-            udp = UdpTsDataSource.Factory(appContext))
+            udp = UdpTsDataSource.Factory(appContext), audioLevel = prefs.audioLevel)
             .apply { playWhenReady = true }
     }
     val softwareAudio = prefs.audioDecoder == Prefs.Decoder.SOFTWARE
@@ -303,7 +303,7 @@ internal fun Player.loadStream(
             val direct = httpFactory(channel, userAgent, transfer)
             // A pausa do direto: a ligação é do gravador e o motor lê o anel (como o ExoPlayer, ver Timeshift).
             timeshift?.openRing(candidate, direct, gate ?: StreamGate(), reconnectMs)?.let { (url, source) ->
-                return setStream(url, source, hls = false)
+                return setStream(url, source, hls = false, levelKey = candidate.url)
             }
             // O resto pela mesma ligação do ExoPlayer, uma de cada vez.
             setStream(candidate.url, gate?.factory(direct, exclusive = true) ?: direct, candidate.isHls, startMs)

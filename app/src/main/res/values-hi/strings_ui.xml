@@ -873,4 +873,10 @@
     <string name="pro_source_failed">%1$s ने काम करना बंद कर दिया। %2$s चल रहा है।</string>
     <string name="pro_use_list">TV Pro मोड में इस्तेमाल करें</string>
     <string name="pro_use_list_sub">इसके चैनल एक ही सूची में जाते हैं</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">वॉल्यूम बराबर करें</string>
+    <string name="audio_level_sub">हर चैनल पर एक जैसी आवाज़, धीरे-धीरे समायोजित। पासथ्रू से भेजे गए Dolby पर असर नहीं</string>
+    <string name="audio_level_level">बराबर करें</string>
+    <string name="audio_level_night">नाइट मोड</string>
 </resources>

@@ -870,4 +870,10 @@
     <string name="pro_source_failed">%1$s が停止しました。%2$s を再生中。</string>
     <string name="pro_use_list">TV Proモードで使う</string>
     <string name="pro_use_list_sub">このリストのチャンネルを1つのリストに入れます</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">音量の均一化</string>
+    <string name="audio_level_sub">どのチャンネルも同じ音量に、ゆっくり調整します。パススルーのドルビーには効きません</string>
+    <string name="audio_level_level">均一化</string>
+    <string name="audio_level_night">ナイトモード</string>
 </resources>

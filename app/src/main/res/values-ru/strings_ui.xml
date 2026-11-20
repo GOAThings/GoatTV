@@ -877,4 +877,10 @@
     <string name="pro_source_failed">%1$s перестал работать. Воспроизводится %2$s.</string>
     <string name="pro_use_list">Использовать в режиме TV Pro</string>
     <string name="pro_use_list_sub">Её каналы попадают в единый список</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Выравнивание громкости</string>
+    <string name="audio_level_sub">Одинаковая громкость на всех каналах, с плавной подстройкой. Не действует на Dolby при прямом выводе звука</string>
+    <string name="audio_level_level">Выравнивать</string>
+    <string name="audio_level_night">Ночной режим</string>
 </resources>

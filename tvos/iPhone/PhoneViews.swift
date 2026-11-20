@@ -1927,6 +1927,8 @@ private struct MenuTab: View {
                 pick(s.r("audio_language"), "audio_language", .string(p.audioLanguage), [(.string(""), s.r("auto"))] + phoneLanguageOptions)
                 pick(s.r("audio_delay"), "audio_delay_ms", .number(Double(p.audioDelayMs)),
                      Prefs.audioDelayOptions.map { (.number(Double($0)), $0 == 0 ? s.r("off") : String(format: "%+d ms", $0)) })
+                pick(s.r("audio_level"), "audio_level", p.audioLevel,
+                     [("off", s.r("off")), ("level", s.r("audio_level_level")), ("night", s.r("audio_level_night"))])
                 pick(s.r("subtitle_language"), "subtitle_language", .string(p.subtitleLanguage), [(.string(""), s.r("subtitles_off"))] + phoneLanguageOptions)
             }
             section(s.t("Connection", "Ligação")) {

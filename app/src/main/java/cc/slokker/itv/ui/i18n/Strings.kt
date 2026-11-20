@@ -1138,6 +1138,12 @@ class Strings(context: Context) {
     val video get() = s(R.string.video)
     val preferredFormat get() = s(R.string.preferred_format)
 
+    // ---- Nivelar o volume ----
+    val audioLevel get() = s(R.string.audio_level)
+    val audioLevelSub get() = s(R.string.audio_level_sub)
+    val audioLevelLevel get() = s(R.string.audio_level_level)
+    val audioLevelNight get() = s(R.string.audio_level_night)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

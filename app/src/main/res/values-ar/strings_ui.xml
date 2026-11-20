@@ -881,4 +881,10 @@
     <string name="pro_source_failed">توقف %1$s عن العمل. يتم تشغيل %2$s.</string>
     <string name="pro_use_list">استخدامها في وضع TV Pro</string>
     <string name="pro_use_list_sub">تدخل قنواتها في القائمة الواحدة</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">موازنة مستوى الصوت</string>
+    <string name="audio_level_sub">مستوى صوت واحد في كل القنوات، يُضبط تدريجيًا. لا يؤثر على Dolby المُرسل عبر تمرير الصوت</string>
+    <string name="audio_level_level">موازنة</string>
+    <string name="audio_level_night">الوضع الليلي</string>
 </resources>

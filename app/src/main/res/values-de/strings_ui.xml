@@ -873,4 +873,10 @@
     <string name="pro_source_failed">%1$s funktioniert nicht mehr. Es läuft %2$s.</string>
     <string name="pro_use_list">Im TV-Pro-Modus verwenden</string>
     <string name="pro_use_list_sub">Ihre Sender kommen in die eine Liste</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Lautstärke angleichen</string>
+    <string name="audio_level_sub">Gleiche Lautstärke auf allen Sendern, sanft angepasst. Keine Wirkung auf Dolby per Passthrough</string>
+    <string name="audio_level_level">Angleichen</string>
+    <string name="audio_level_night">Nachtmodus</string>
 </resources>

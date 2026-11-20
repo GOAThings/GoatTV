@@ -496,6 +496,9 @@ enum CoreTests {
         try expect(Prefs(settings: .object(["protect_paused": false])).protectPaused, false)
         try expect(Prefs(settings: .object(["audio_delay_ms": 150])).audioDelayMs, 150)
         try expect(Prefs(settings: .object(["audio_delay_ms": 9_000])).audioDelayMs, 1_000)
+        try expect(Prefs().audioLevel, "off")
+        try expect(Prefs(settings: .object(["audio_level": "night"])).audioLevel, "night")
+        try expect(Prefs(settings: .object(["audio_level": "loud"])).audioLevel, "off")
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
         // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.

@@ -183,6 +183,15 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 25, TvSection.AUDIO),
         phone = Place(PhonePage.PLAYBACK, 35, PhoneSection.PICTURE_SOUND),
     )
+    /** Nivelar o volume entre canais (ver media/AudioLeveler); sem efeito no som em passthrough. */
+    val AUDIO_LEVEL = Setting.Choice(
+        Prefs.Key.AUDIO_LEVEL, { it.audioLevel },
+        options = { s -> listOf(Prefs.AudioLevel.OFF to s.off, Prefs.AudioLevel.LEVEL to s.audioLevelLevel, Prefs.AudioLevel.NIGHT to s.audioLevelNight) },
+        read = { it.prefs.audioLevel },
+        subtitle = { it.audioLevelSub },
+        tv = Place(TvPage.PLAYBACK, 27, TvSection.AUDIO),
+        phone = Place(PhonePage.PLAYBACK, 37, PhoneSection.PICTURE_SOUND),
+    )
     /** Telemóvel: só aparece quando o aparelho tem janela pequena (o telemóvel esconde-a sem ela). */
     val PIP = Setting.Toggle(
         Prefs.Key.PIP_ENABLED, { it.pictureInPicture },
@@ -411,7 +420,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LEVEL, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,

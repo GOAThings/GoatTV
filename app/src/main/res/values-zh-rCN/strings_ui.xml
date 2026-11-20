@@ -870,4 +870,10 @@
     <string name="pro_source_failed">%1$s 已停止工作。正在播放 %2$s。</string>
     <string name="pro_use_list">在 TV Pro 模式中使用</string>
     <string name="pro_use_list_sub">其频道会加入同一个列表</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">音量均衡</string>
+    <string name="audio_level_sub">所有频道音量一致，缓慢调整。对音频直通输出的杜比无效</string>
+    <string name="audio_level_level">均衡</string>
+    <string name="audio_level_night">夜间模式</string>
 </resources>

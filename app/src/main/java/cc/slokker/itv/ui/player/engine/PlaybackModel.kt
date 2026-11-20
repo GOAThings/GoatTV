@@ -311,16 +311,18 @@ internal data class PlayerBuild(
     val hdr: String,
     val deinterlace: String,
     val audioDelayMs: Int,
+    val audioLevel: String,
 ) {
     /** As definições com que se cria o player ([buildPlayer] lê só estas). */
     fun applyTo(prefs: Prefs): Prefs = prefs.copy(
         engine = engine, buffer = buffer, decoder = decoder, audioDecoder = audioDecoder, audioPassthrough = audioPassthrough, hdr = hdr,
-        deinterlace = deinterlace, audioDelayMs = audioDelayMs,
+        deinterlace = deinterlace, audioDelayMs = audioDelayMs, audioLevel = audioLevel,
     )
 
     companion object {
         fun of(prefs: Prefs, engine: String, passthrough: Boolean) = PlayerBuild(
             engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough && passthrough, prefs.hdr, prefs.deinterlace, prefs.audioDelayMs,
+            prefs.audioLevel,
         )
     }
 }
