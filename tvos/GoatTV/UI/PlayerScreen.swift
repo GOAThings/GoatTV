@@ -170,6 +170,15 @@ struct PlayerScreen: View {
             // O vídeo: em ecrã inteiro, pequeno no canto com o guia aberto, ou com o segundo canal ao lado.
             videoView(model.player.view, box: box(of: 0), name: model.current?.name, audible: tileCount == 1 || focusTile == 0)
 
+            // Uma rádio (só som): o logótipo, o nome e o programa no lugar da imagem preta (com o principal em grande).
+            if model.isRadio, box(of: 0).size == nil, model.player.state != .failed, let channel = model.current {
+                RadioView(channel: channel, logo: model.logo(for: channel), programme: model.currentProgramme,
+                          label: model.strings.r("radio_label"), playing: model.player.state == .playing && !model.player.paused,
+                          accent: model.prefs.accent)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+
             if !tvGuide {
                 ForEach(Array(model.extras.enumerated()), id: \.element.engine) { i, extra in
                     let p = model.player(of: extra)
