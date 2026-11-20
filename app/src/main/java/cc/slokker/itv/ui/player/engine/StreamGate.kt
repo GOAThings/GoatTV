@@ -9,8 +9,58 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import java.io.IOException
+
+/**
+ * O que se viu das ligações do canal a tocar, sem abrir nenhuma: o código da resposta, se foi redirecionada, o
+ * tempo até ao primeiro byte, e quantas ligações se abriram ou falharam. "Testar este canal" lê isto (e as
+ * estatísticas do motor) durante uns segundos. Escreve-se das threads do player, lê-se da principal.
+ */
+internal class ConnectionProbe(private val clock: () -> Long = SystemClock::elapsedRealtime) {
+    @Volatile private var startAt = 0L
+    @Volatile var status = -1; private set
+    @Volatile var redirected = false; private set
+    @Volatile var firstByteMs = -1L; private set
+    @Volatile var host = ""; private set
+
+    /** Ligações abertas e falhadas desde que o canal abriu (num HLS, cada segmento conta como uma abertura). */
+    @Volatile var opens = 0; private set
+    @Volatile var failures = 0; private set
+
+    /** O código da última resposta de erro, ou -1. */
+    @Volatile var failureStatus = -1; private set
+
+    fun reset() {
+        startAt = 0L; status = -1; redirected = false; firstByteMs = -1L; host = ""
+        opens = 0; failures = 0; failureStatus = -1
+    }
+
+    fun opening() {
+        if (startAt == 0L) startAt = clock()
+    }
+
+    fun opened(requested: Uri?, actual: Uri?, code: Int) {
+        opens++
+        failureStatus = -1
+        if (status < 0) {
+            status = code.takeIf { it > 0 } ?: 200
+            redirected = actual != null && actual != requested
+            host = actual?.host ?: requested?.host.orEmpty()
+        }
+    }
+
+    fun failed(code: Int) {
+        failures++
+        if (code > 0) failureStatus = code
+        if (status < 0 && code > 0) status = code
+    }
+
+    fun firstByte() {
+        if (firstByteMs < 0 && startAt != 0L) firstByteMs = clock() - startAt
+    }
+}
 
 /**
  * Uma ligação ao fornecedor de cada vez (o fornecedor só deixa uma). Ao mudar de canal, de formato ou ao voltar a
@@ -35,8 +85,14 @@ internal class StreamGate(
     private var generation = 0
     private val open = mutableListOf<Gated>()
 
+    /** O que se viu das ligações desta tentativa (para "Testar este canal"). */
+    val probe = ConnectionProbe(clock)
+
     /** Começa uma geração nova (uma tentativa de abrir o canal). */
-    fun next(): Int = synchronized(lock) { ++generation }
+    fun next(): Int {
+        probe.reset()
+        return synchronized(lock) { ++generation }
+    }
 
     /** Ligações abertas agora (de qualquer geração). */
     val openCount: Int get() = synchronized(lock) { open.size }
@@ -114,9 +170,14 @@ internal class StreamGate(
         override fun open(dataSpec: DataSpec): Long {
             waitFor(this) { other -> other !== this && (other.gen < gen || other.gen == gen && (exclusive || other.exclusive)) }
             synchronized(this) { closing = false }
+            probe.opening()
             return try {
-                upstream.open(dataSpec).also { ZapTrace.mark("H") { dataSpec.uri.lastPathSegment.orEmpty() } }
+                upstream.open(dataSpec).also {
+                    probe.opened(dataSpec.uri, upstream.uri, (upstream as? HttpDataSource)?.responseCode ?: -1)
+                    ZapTrace.mark("H") { dataSpec.uri.lastPathSegment.orEmpty() }
+                }
             } catch (e: Throwable) {
+                probe.failed((e as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: -1)
                 // Não abriu: o DefaultHttpDataSource já largou a ligação; não fica a bloquear as seguintes.
                 ZapTrace.mark("H!") { e.toString() }
                 closed(this)
@@ -128,6 +189,7 @@ internal class StreamGate(
             upstream.read(buffer, offset, length).also {
                 if (it > 0 && !readAny) {
                     readAny = true
+                    probe.firstByte()
                     ZapTrace.first("B")
                 }
             }

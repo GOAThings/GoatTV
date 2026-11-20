@@ -76,6 +76,11 @@ class NetMonitor(context: Context) : TransferListener {
     private var link = NetLink()
     private var linkAt = 0L
 
+    /** Bytes que chegaram do servidor desde sempre, e paragens vistas (para "Testar este canal"). */
+    val totalBytes: Long get() = bytes.get()
+    @Volatile var stopsTotal = 0
+        private set
+
     private val _state = MutableStateFlow(NetState())
     val state: StateFlow<NetState> = _state.asStateFlow()
 
@@ -110,6 +115,7 @@ class NetMonitor(context: Context) : TransferListener {
 
     /** O vídeo parou para carregar (ou caiu e voltou a ligar) depois de já estar a dar. */
     fun onStop() {
+        stopsTotal++
         stopTimes.addLast(SystemClock.elapsedRealtime())
     }
 

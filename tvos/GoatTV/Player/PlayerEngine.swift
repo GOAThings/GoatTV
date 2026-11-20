@@ -1360,7 +1360,26 @@ final class PlayerEngine: NSObject {
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil
+        probeOpens += 1
         g.open(url, headers: headers, startMs: ring ? 0 : openStartMs, hls: hls, channel: channel)
+    }
+
+    /// Quantas vezes o GoatCore abriu o canal (a reconexão abre outra vez): "Testar este canal" conta as da janela.
+    @ObservationIgnored private var probeOpens = 0
+
+    /// Para "Testar este canal" (ver ChannelProbe): o que o GoatCore mediu do canal a dar, sem abrir nada. nil quando o
+    /// canal não toca pelo GoatCore (o VLC e os outros motores não contam).
+    func probeSnapshot() -> ChannelProbeSnapshot? {
+        guard backend == .goatcore, let g = goatCorePlayback else { return nil }
+        let real = attempts.indices.contains(index) ? attempts[index].candidate.url : ""
+        let video = g.tracks.first { $0.kind == .video }
+        return ChannelProbeSnapshot(
+            counters: g.probe, totalBytes: g.probeTotalBytes, opens: probeOpens,
+            host: real.isEmpty ? g.probe.host : StreamProbeRules.host(real),
+            videoCodec: video?.codec ?? "", details: g.videoDetails,
+            audio: g.tracks.filter { $0.kind == .audio }.map { ChannelProbe.readable($0.codec) },
+            showing: state == .playing && hasPicture,
+            unsupported: g.failure?.hasPrefix("unsupported") == true)
     }
 
     /// As faixas do GoatCore: só som (sem vídeo) é uma rádio.

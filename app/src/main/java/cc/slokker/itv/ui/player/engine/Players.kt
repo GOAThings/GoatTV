@@ -332,6 +332,7 @@ internal fun Player.loadStream(
     when (this) {
         is VlcPlayer -> setStream(candidate.url, channel?.userAgent ?: userAgent, channel?.referrer, startMs, audioLanguage, textLanguage)
         is GoatCoreMediaPlayer -> {
+            connection = gate?.probe
             if (candidate.isLocal) return setStream(candidate.url, FileDataSource.Factory(), hls = false, startMs = startMs)
             val scheme = candidate.url.substringBefore("://", "").lowercase()
             // As listas das operadoras (multicast): o TS vem em pacotes UDP ou RTP.

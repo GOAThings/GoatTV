@@ -262,6 +262,7 @@ final class GoatCorePlayback: NSObject {
     /// o catch-up do Stalker), o ponto onde começar (ver TsSeek). [channel]: o endereço do canal, para o ganho do
     /// nivelamento do volume (o anel da pausa tem outro); nil = o próprio [url].
     func open(_ url: URL, headers: [String: String], startMs: Int64 = 0, hls: Bool = false, channel: String? = nil) {
+        closedBytes += session?.probe.bytes ?? 0
         stop()
         generation += 1
         let g = generation
@@ -307,6 +308,12 @@ final class GoatCorePlayback: NSObject {
         session = s
         s.start(url, headers: headers, startMs: startMs, hls: hls)
     }
+
+    /// Os números da ligação a dar, e os bytes de todas as ligações desde o primeiro canal (a soma das que já fecharam
+    /// e da atual: uma ligação que cai e volta a abrir não os perde). Ver ChannelProbe.
+    var probe: ProbeCounters { session?.probe ?? ProbeCounters() }
+    var probeTotalBytes: Int64 { closedBytes + (session?.probe.bytes ?? 0) }
+    private var closedBytes: Int64 = 0
 
     func stop() {
         generation += 1
@@ -561,6 +568,22 @@ extension GoatCorePlayback: AVPictureInPictureSampleBufferPlaybackDelegate {
     }
 }
 
+/// O que se viu da ligação do canal a dar, para "Testar este canal" (ver ChannelProbe): só se conta, não se abre nada.
+struct ProbeCounters: Sendable {
+    var host = ""
+    var hls = false
+    /// A hora em que se abriu (uptime, ms).
+    var openedAt: Int64 = 0
+    /// O código da resposta (-1 = ainda não respondeu), os redirecionamentos e os bytes que chegaram.
+    var status = -1
+    var redirects = 0
+    var bytes: Int64 = 0
+    var firstByteMs: Int64 = -1
+    var firstPictureMs: Int64 = -1
+
+    static func nowMs() -> Int64 { Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000) }
+}
+
 /// Uma ligação ao stream e o que se faz com ela, numa fila própria: o pedido HTTP, o pipeline do núcleo partilhado e o
 /// arranque do relógio (o vídeo começa na primeira imagem-chave; o som acerta por ela).
 private final class StreamSession: NSObject, URLSessionDataDelegate {
@@ -604,6 +627,18 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private let synchronizer: AVSampleBufferRenderSynchronizer
     private let queue = DispatchQueue(label: "cc.slokker.goattv.goatcore", qos: .userInteractive)
     private let pipeline = MediaPipeline()
+    /// Ver [ProbeCounters]; escreve-se das filas da rede e do vídeo, lê-se da principal.
+    private let probeLock = OSAllocatedUnfairLock(initialState: ProbeCounters())
+    var probe: ProbeCounters { probeLock.withLock { $0 } }
+
+    private func noteBytes(_ count: Int) {
+        probeLock.withLock {
+            $0.bytes += Int64(count)
+            if $0.firstByteMs < 0, $0.openedAt > 0 { $0.firstByteMs = ProbeCounters.nowMs() - $0.openedAt }
+            // Um HLS não diz o código de cada segmento aqui: se chegam bytes, respondeu bem.
+            if $0.hls, $0.status < 0 { $0.status = 200 }
+        }
+    }
     private let urlSessionLock = OSAllocatedUnfairLock<URLSession?>(initialState: nil)
     /// Já se fechou (de outra thread): nada mais vai para o leitor.
     private let stopped = OSAllocatedUnfairLock(initialState: false)
@@ -741,6 +776,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// Um HLS: a playlist e os segmentos pelo HlsReader, que espera enquanto há muito à frente.
     private func openHls(_ url: URL, headers: [String: String], startMs: Int64) {
         guard !closed else { return }
+        probeLock.withLock { $0 = ProbeCounters(host: url.host ?? "", hls: true, openedAt: ProbeCounters.nowMs()) }
         let reader = HlsReader(url: url, headers: headers)
         reader.startMs = startMs
         reader.primary = primary
@@ -749,6 +785,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         reader.shouldWait = { hold.withLock { $0 } }
         reader.onData = { [weak self] data in
             guard let self else { return }
+            self.noteBytes(data.count)
             self.queue.async { if !self.closed { self.pipeline.feed(data) } }
         }
         reader.onEnd = { [weak self] error in
@@ -804,6 +841,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// Na fila: abre a ligação (a partir de [position], com Range), se entretanto não se fechou.
     private func connect(_ url: URL, headers: [String: String], from position: Int64) {
         guard !closed else { return }
+        probeLock.withLock { $0 = ProbeCounters(host: url.host ?? "", openedAt: ProbeCounters.nowMs()) }
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 15
@@ -872,6 +910,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        if let http = response as? HTTPURLResponse { probeLock.withLock { $0.status = http.statusCode } }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             onEvent?(.httpStatus(http.statusCode))
             fail("HTTP \(http.statusCode)")
@@ -883,7 +922,15 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard !closed else { return }
+        noteBytes(data.count)
         pipeline.feed(data)
+    }
+
+    /// O servidor passou a ligação para outro endereço: segue-se (como antes), e conta-se.
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        probeLock.withLock { $0.redirects += 1 }
+        completionHandler(request)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -1169,6 +1216,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         startTime = time
         running = true
         synchronizer.setRate(userPaused ? 0 : rate, time: time)
+        probeLock.withLock { if $0.firstPictureMs < 0, $0.openedAt > 0 { $0.firstPictureMs = ProbeCounters.nowMs() - $0.openedAt } }
         onEvent?(.started(time))
     }
 

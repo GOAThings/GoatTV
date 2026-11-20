@@ -1264,6 +1264,46 @@ class Strings(context: Context) {
             return Strings(ctx).also { cache = key to it }
         }
     }
+
+    // Testar canal e lista
+    val probeTestChannel get() = s(R.string.probe_test_channel)
+    val probeTestChannelSub get() = s(R.string.probe_test_channel_sub)
+    fun probeTesting(v: Int) = s(R.string.probe_testing, v)
+    val probeAgain get() = s(R.string.probe_again)
+    val probeAnswer get() = s(R.string.probe_answer)
+    fun probeHttp(v: Int) = s(R.string.probe_http, v)
+    val probeRedirected get() = s(R.string.probe_redirected)
+    val probeFirstByte get() = s(R.string.probe_first_byte)
+    val probeFirstPicture get() = s(R.string.probe_first_picture)
+    val probeFormat get() = s(R.string.probe_format)
+    val probeAudio get() = s(R.string.probe_audio)
+    val probeBitrate get() = s(R.string.probe_bitrate)
+    val probeDropped get() = s(R.string.probe_dropped)
+    val probeReconnects get() = s(R.string.probe_reconnects)
+    val probeInterlaced get() = s(R.string.probe_interlaced)
+    val probeHdr get() = s(R.string.probe_hdr)
+    val probeVOk get() = s(R.string.probe_v_ok)
+    fun probeVSlow(v: String) = s(R.string.probe_v_slow, v)
+    fun probeVRefused(v: Int) = s(R.string.probe_v_refused, v)
+    val probeVDrops get() = s(R.string.probe_v_drops)
+    fun probeVDecode(v: String) = s(R.string.probe_v_decode, v)
+    val probeVNopicture get() = s(R.string.probe_v_nopicture)
+    fun probeSeconds(v: String) = s(R.string.probe_seconds, v)
+    val probeUnsupported get() = s(R.string.probe_unsupported)
+    val probeTestList get() = s(R.string.probe_test_list)
+    val probeTestListSub get() = s(R.string.probe_test_list_sub)
+    val probeListTesting get() = s(R.string.probe_list_testing)
+    val probeListPlaylist get() = s(R.string.probe_list_playlist)
+    val probeListGuide get() = s(R.string.probe_list_guide)
+    fun probeListChannels(v: Int) = s(R.string.probe_list_channels, v)
+    fun probeListProgrammes(v: Int) = s(R.string.probe_list_programmes, v)
+    val probeListNoGuide get() = s(R.string.probe_list_no_guide)
+    val probeLvOk get() = s(R.string.probe_lv_ok)
+    val probeLvSlow get() = s(R.string.probe_lv_slow)
+    fun probeLvRefused(v: Int) = s(R.string.probe_lv_refused, v)
+    val probeLvUnreachable get() = s(R.string.probe_lv_unreachable)
+    val probeLvEmpty get() = s(R.string.probe_lv_empty)
+    val probeListPortal get() = s(R.string.probe_list_portal)
 }
 
 /** Textos atuais, para código fora do Compose (ViewModel, fontes de listas). Iniciado no ItvApp. */
