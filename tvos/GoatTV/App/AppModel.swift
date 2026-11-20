@@ -1065,7 +1065,7 @@ final class AppModel {
     }
 
     /// O nome desta TV na conta (aparece em thegoat.systems → Dispositivos).
-    private static func deviceLabel() -> String {
+    static func deviceLabel() -> String {
         let name = UIDevice.current.name
         return name.isEmpty ? "Apple TV" : name
     }
@@ -2727,6 +2727,32 @@ extension AppModel {
     /// O telemóvel escolheu [channel]: como escolhê-lo na lista de canais (o último canal grava-se na mesma).
     func playFromPhone(_ channel: Channel) {
         play(channel, from: groupFor(channel))
+    }
+
+    /// "Enviar para a TV" (ver `TvSend`): abre o canal que a GoatTV do telemóvel estava a ver. Pela lista e chave
+    /// quando esta TV tem essa lista (a mesma conta), senão pelo nome nos canais que se podem ver sem PIN; no Modo TV
+    /// Pro procura-se na lista única. O código da resposta e o nome do canal aberto.
+    func openFromPhone(_ request: TvSend.Request) -> (status: Int, name: String) {
+        guard phoneReady(), let content else { return (TvSend.noLists, "") }
+        let from = request.from.isEmpty ? strings.r("send_from_phone") : strings.r("send_from", request.from)
+        let route = TvSend.route(request, openId: content.playlist.id, playlists: playlists.map(\.id), proOnTv: proMode)
+        if route == .switchList {
+            // A outra lista abre-se e o canal fica pendente até ela carregar (como um canal da Top Shelf).
+            guard let playlist = playlists.first(where: { $0.id == request.playlist }) else { return (TvSend.notFound, "") }
+            pendingOpen = (request.playlist, request.channel)
+            switchPlaylist(playlist)
+            showToast(from)
+            return (TvSend.ok, request.name)
+        }
+        var channel = route == .here ? phoneChannel(request.channel) : nil
+        if channel == nil {
+            let pool = content.channels.filter { PhoneChannelList.allowed(prefs, content.playlist.id, $0) }.map { ChannelMatch.Entry($0, in: content) }
+            channel = TvSend.byName(request.name, pool: pool).flatMap { phoneChannel($0) }
+        }
+        guard let channel else { return (TvSend.notFound, "") }
+        playFromPhone(channel)
+        showToast(from)
+        return (TvSend.ok, channel.name)
     }
 }
 #endif

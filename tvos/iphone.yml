@@ -83,6 +83,9 @@ targets:
         UIBackgroundModes: [audio]
         # "Guardar imagem" no leitor: só para juntar a imagem do canal às Fotografias (nunca para as ler).
         NSPhotoLibraryAddUsageDescription: GoatTV saves the picture of the channel you are watching to your Photos when you tap Save picture.
+        # "Enviar para a TV": procura as TVs com a GoatTV na rede de casa (Bonjour) e diz-lhes que canal abrir.
+        NSLocalNetworkUsageDescription: GoatTV looks for TVs running GoatTV on your home network so you can send them the channel you are watching.
+        NSBonjourServices: [_goattv._tcp]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         CFBundleURLTypes:
           - CFBundleURLName: cc.slokker.goattv

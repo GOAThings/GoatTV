@@ -29,8 +29,11 @@ fun deviceName(context: Context): String {
     return SendToTv.clean(named.orEmpty()).ifEmpty { SendToTv.clean(Build.MODEL.orEmpty()) }
 }
 
-/** Uma TV com a GoatTV encontrada na rede ([pkg] vazio: sem GoatLauncher para a trazer para a frente, ex. Apple TV). */
-data class FoundTv(val name: String, val host: String, val port: Int, val pkg: String)
+/**
+ * Uma TV com a GoatTV encontrada na rede ([pkg] vazio: sem GoatLauncher para a trazer para a frente, ex. Apple TV).
+ * [announced] é o nome com que se anunciou no mDNS, para a tirar quando sai da rede.
+ */
+data class FoundTv(val name: String, val host: String, val port: Int, val pkg: String, val announced: String = "")
 
 /**
  * O lado do telemóvel do "Enviar para a TV" ([SendToTv]): procura as TVs na rede (mDNS, [SendToTv.SERVICE]) e manda
@@ -65,7 +68,7 @@ class TvFinder(private val context: Context) {
             override fun onServiceFound(info: NsdServiceInfo) { found.trySend(info) }
             override fun onServiceLost(info: NsdServiceInfo) {
                 val name = info.serviceName ?: return
-                _tvs.update { list -> list.filterNot { it.name == name && it.host != demoHost } }
+                _tvs.update { list -> list.filterNot { it.announced == name && it.host != demoHost } }
             }
         }
         listener = l
@@ -85,7 +88,7 @@ class TvFinder(private val context: Context) {
         val hello = get(host, port, "/hello")?.let { SendToTv.parseHello(it) }
         // Sem /hello não é uma GoatTV que responda (a do aviso de testes aparece na mesma, pelo endereço).
         if (hello == null && host != demoHost) return
-        val tv = FoundTv(hello?.name?.ifEmpty { null } ?: SendToTv.clean(announced).ifEmpty { host }, host, port, hello?.pkg.orEmpty())
+        val tv = FoundTv(hello?.name?.ifEmpty { null } ?: SendToTv.clean(announced).ifEmpty { host }, host, port, hello?.pkg.orEmpty(), announced)
         _tvs.update { list -> list.filterNot { it.host == host } + tv }
     }
 

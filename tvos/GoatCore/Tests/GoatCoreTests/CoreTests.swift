@@ -60,6 +60,8 @@ enum CoreTests {
         ("providerOutage", providerOutage),
         ("epgFailure", epgFailure),
         ("lanRequestAccepts", lanRequestAccepts),
+        ("lanRequestBody", lanRequestBody),
+        ("tvSend", tvSend),
         ("lanRequestRefuses", lanRequestRefuses),
         ("lanRequestHosts", lanRequestHosts),
         ("lanRequestLimit", lanRequestLimit),

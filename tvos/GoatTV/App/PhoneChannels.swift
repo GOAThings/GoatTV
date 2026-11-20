@@ -16,6 +16,10 @@ import SwiftUI
 ///   GET /logo/<chave>  o logótipo do canal, pedido pela TV ao fornecedor (o telemóvel nunca fala com ele)
 ///   POST /play/<chave> põe o canal a dar, como escolhê-lo na lista. 409 se a GoatTV não estiver à frente (o
 ///                      telemóvel abre-a e tenta outra vez), 404 se não puder ser visto.
+///   GET /hello         quem é esta TV, para o "Enviar para a TV" da GoatTV no telemóvel (`TvSend`).
+///   POST /open         o canal que o telemóvel estava a ver (ids e nome em JSON), aberto das listas desta TV.
+///
+/// Com a porta aberta, anuncia-se na rede como `TvSend.service` (Bonjour), com o nome da Apple TV.
 ///
 /// Só na Apple TV (a app de iPhone não abre porta nenhuma). O tvOS suspende a app em segundo plano, por isso a porta
 /// só está aberta com a app ativa: fecha-se em segundo plano e volta a abrir no regresso. Tudo corre no thread
@@ -77,6 +81,8 @@ final class PhoneChannels {
                 owner.listenerChanged(state)
             }
         }
+        // Sem nome: o Bonjour usa o nome da Apple TV (o das Definições).
+        port.service = NWListener.Service(type: TvSend.service)
         listener = port
         port.start(queue: .main)
     }
@@ -179,9 +185,10 @@ final class PhoneChannels {
             guard !Task.isCancelled else { return }
             link.close()
         }
-        let request = await readHead(link)
+        let read = await readHead(link)
         reading.cancel()
-        guard let request else { return }
+        guard let read else { return }
+        let (request, received) = read
         guard request.allowed else {
             await reply(link, "403 Forbidden", text: "recusado")
             return
@@ -196,22 +203,67 @@ final class PhoneChannels {
             await logo(link, PhoneChannelList.decodeKey(String(path.dropFirst("/logo/".count))))
         } else if method == "POST", path.hasPrefix("/play/") {
             await play(link, PhoneChannelList.decodeKey(String(path.dropFirst("/play/".count))))
+        } else if method == "GET", path == "/hello" {
+            let name = AppModel.deviceLabel()
+            await reply(link, "200 OK", type: "application/json; charset=utf-8",
+                        body: Data(TvSend.hello(name: name, version: model?.appVersion ?? "", pkg: "").utf8))
+        } else if method == "POST", path == "/open" {
+            await open(link, request, Array(received.dropFirst(request.headLength)))
         } else {
             await notFound(link)
         }
     }
 
-    /// Lê até à linha em branco, no máximo `LanRequest.maxHeadBytes`. nil se fechar antes ou não se perceber.
-    private func readHead(_ link: PhoneLink) async -> LanRequest? {
+    /// Lê até à linha em branco, no máximo `LanRequest.maxHeadBytes`. nil se fechar antes ou não se perceber. Com o
+    /// pedido vem tudo o que já chegou (o início do corpo pode vir no mesmo pacote).
+    private func readHead(_ link: PhoneLink) async -> (LanRequest, [UInt8])? {
         var head: [UInt8] = []
         while true {
             let (data, ended) = await link.receive(maximum: LanRequest.maxHeadBytes - head.count)
             if let data { head += data }
             switch LanRequest.scan(head) {
-            case .done(let request): return request
+            case .done(let request): return request.map { ($0, head) }
             case .needMore: if ended { return nil }
             }
         }
+    }
+
+    /// O corpo de `contentLength` bytes (até `TvSend.maxBodyBytes`), a começar pelo que já chegou. nil sem tamanho,
+    /// maior ou cortado.
+    private func readBody(_ link: PhoneLink, _ length: Int, _ start: [UInt8]) async -> String? {
+        guard length > 0, length <= TvSend.maxBodyBytes, start.count <= length else { return nil }
+        var body = start
+        while body.count < length {
+            let (data, ended) = await link.receive(maximum: length - body.count)
+            if let data { body += data }
+            if ended, body.count < length { return nil }
+        }
+        return String(decoding: body, as: UTF8.self)
+    }
+
+    /// Um canal mandado pelo telemóvel ("Enviar para a TV"): primeiro a app à frente, depois as listas, depois o canal.
+    /// A Apple TV não tem GoatLauncher que a traga para a frente: com a app atrás, o telemóvel pede para a abrir.
+    private func open(_ link: PhoneLink, _ request: LanRequest, _ start: [UInt8]) async {
+        let reading = Task {
+            try? await Task.sleep(for: .seconds(PhoneLimits.readSeconds))
+            guard !Task.isCancelled else { return }
+            link.close()
+        }
+        let body = await readBody(link, request.contentLength, start)
+        reading.cancel()
+        guard let body, let sent = TvSend.parse(body) else {
+            await reply(link, TvSend.statusLine(400), text: "pedido")
+            return
+        }
+        let result: (status: Int, name: String)
+        if !inFront {
+            result = (TvSend.notInFront, "")
+        } else if let model {
+            result = model.openFromPhone(sent)
+        } else {
+            result = (TvSend.noLists, "")
+        }
+        await reply(link, TvSend.statusLine(result.status), type: "application/json; charset=utf-8", body: Data(TvSend.opened(result.name).utf8))
     }
 
     private func channels(_ link: PhoneLink) async {

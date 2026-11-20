@@ -276,6 +276,16 @@ struct PhoneMain: View {
         if watch { played() }
     }
 
+    /// O canal foi para uma TV ("Enviar para a TV"): para aqui (larga a ligação ao fornecedor) e volta ao ecrã inicial.
+    private func sentToTv() {
+        stopped = true
+        home = true
+        homeGroup = nil
+        tab = .tv
+        model.closeSecond()
+        model.player.stop()
+    }
+
     /// Abriu-se um canal: sai do ecrã inicial.
     private func played() {
         stopped = false
@@ -381,7 +391,7 @@ struct PhoneMain: View {
         }
         }
         .sheet(item: $epgFor) { GuideSheet(channel: $0).environment(\.played, played) }
-        .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0) }
+        .sheet(item: $playerOption) { PlayerOptionsSheet(player: model.player, option: $0).environment(\.sentToTv, sentToTv) }
         .sheet(isPresented: $showRecordings) { PhoneRecordings().environment(\.played, played) }
         .sheet(isPresented: $showSports) { PhoneSports().environment(\.played, played) }
         // Mudar de canal com uma gravação a decorrer: o fornecedor só deixa uma ligação.
@@ -405,6 +415,7 @@ struct PhoneMain: View {
             Text(model.recordings.prompt?.title ?? "")
         }
         .environment(\.played, played)
+        .environment(\.sentToTv, sentToTv)
         .alert(model.strings.r("enter_pin"), isPresented: Binding(get: { homePinFor != nil }, set: { if !$0 { homePinFor = nil } })) {
             SecureField("PIN", text: $homePin).keyboardType(.numberPad)
             Button("OK") {
@@ -513,6 +524,7 @@ struct PhoneMain: View {
 
 private struct VideoPane: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.sentToTv) private var sentToTv
     let fullscreen: Bool
     let onGuide: () -> Void
     @State private var option: PlayerOption?
@@ -643,6 +655,7 @@ private struct VideoPane: View {
         }
         .sheet(item: $option) {
             PlayerOptionsSheet(player: model.second != nil && focusSecond ? model.secondPlayer : model.player, option: $0)
+                .environment(\.sentToTv, sentToTv)
         }
         .sheet(isPresented: $explaining) {
             if let error = model.playbackError { PlaybackErrorSheet(info: error) { explaining = false } }
@@ -1082,7 +1095,7 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, aspect, quality, backup, sleep
+    case audio, subtitles, aspect, quality, backup, sleep, sendTv
 
     var id: String { rawValue }
     var symbol: String {
@@ -1093,6 +1106,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .quality: "slider.horizontal.3"
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
+        case .sendTv: "tv"
         }
     }
     var key: String {
@@ -1103,6 +1117,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .quality: "hls_quality"
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
+        case .sendTv: "send_to_tv"
         }
     }
 
@@ -1134,6 +1149,8 @@ struct PlayerOptionsSheet: View {
             } else {
                 NavigationStack { PhoneBackupChannelSheet(channel: channel) }
             }
+        } else if option == .sendTv {
+            PhoneSendToTvSheet()
         } else {
             options
         }
@@ -1190,7 +1207,7 @@ struct PlayerOptionsSheet: View {
                     } else {
                         Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint)
                     }
-                case .backup:
+                case .backup, .sendTv:
                     EmptyView()
                 case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }

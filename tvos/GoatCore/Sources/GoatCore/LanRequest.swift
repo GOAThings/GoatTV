@@ -9,6 +9,10 @@ public struct LanRequest: Equatable, Sendable {
     public let path: String
     /// Sem Origin e com um só Host, que é um IP ou um nome de casa (a regra do núcleo partilhado).
     public let allowed: Bool
+    /// O tamanho do corpo (Content-Length), ou -1 sem um válido: aí não se lê corpo.
+    public var contentLength: Int = -1
+    /// Quantos bytes tem a cabeça (até à linha em branco, incluída): o corpo começa aqui.
+    public var headLength: Int = 0
 
     public static let maxHeadBytes = Int(GoatShared.LanRequest.companion.MAX_HEAD_BYTES)
 
@@ -23,7 +27,7 @@ public struct LanRequest: Equatable, Sendable {
         var emptyLine = true
         for (i, byte) in bytes.prefix(maxHeadBytes).enumerated() {
             if byte == 0x0A {
-                if emptyLine { return .done(parse(bytes[...i])) }
+                if emptyLine { return .done(parse(bytes[...i], length: i + 1)) }
                 emptyLine = true
             } else if byte != 0x0D {
                 emptyLine = false
@@ -39,11 +43,12 @@ public struct LanRequest: Equatable, Sendable {
         return nil
     }
 
-    private static func parse(_ head: ArraySlice<UInt8>) -> LanRequest? {
+    private static func parse(_ head: ArraySlice<UInt8>, length: Int) -> LanRequest? {
         // Cada byte um carácter (como no Android): os bytes de fora do ASCII ficam para o decodeKey.
         let text = String(String.UnicodeScalarView(head.map { Unicode.Scalar($0) }))
         guard let request = GoatShared.LanRequest.companion.parse(head: text) else { return nil }
-        return LanRequest(method: request.method, path: request.path, allowed: request.allowed)
+        return LanRequest(method: request.method, path: request.path, allowed: request.allowed,
+                          contentLength: Int(request.contentLength), headLength: length)
     }
 
     /// Um IPv4 ou um IPv6 entre parênteses retos, com ou sem porta. Nunca um nome (nem se tenta resolvê-lo).

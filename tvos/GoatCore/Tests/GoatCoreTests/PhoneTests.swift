@@ -17,6 +17,38 @@ extension CoreTests {
         try expect(request("GET /channels HTTP/1.1", "host: [fe80::1]:6471")?.allowed, true)
     }
 
+    /// O corpo do POST /open ("Enviar para a TV"): o tamanho e onde começa.
+    static func lanRequestBody() throws {
+        let head = "POST /open HTTP/1.1\r\nHost: 10.0.0.2:6471\r\nContent-Length: 12\r\n\r\n"
+        let sent = LanRequest.read(Array((head + "{\"name\":\"x\"}").utf8))
+        try expect(sent?.contentLength, 12)
+        try expect(sent?.headLength, head.utf8.count)
+        try expect(request("GET /hello HTTP/1.1", "Host: 10.0.0.2")?.contentLength, -1)
+    }
+
+    /// "Enviar para a TV": os mesmos casos do SendToTvTest do Android, pela ponte.
+    static func tvSend() throws {
+        let sent = TvSend.parse(TvSend.body(playlist: "p1", channel: "k1", name: "SIC", pro: "", from: "iPhone"))
+        try expect(sent, TvSend.Request(playlist: "p1", channel: "k1", name: "SIC", pro: "", from: "iPhone"))
+        try expect(TvSend.parse("{}"), nil)
+        try expect(TvSend.parseHello(TvSend.hello(name: "Sala", version: "1", pkg: "")), TvSend.Hello(name: "Sala", version: "1", pkg: ""))
+        if let sent {
+            try expect(TvSend.route(sent, openId: "p1", playlists: ["p1"], proOnTv: false), .here)
+            try expect(TvSend.route(sent, openId: "p2", playlists: ["p1", "p2"], proOnTv: false), .switchList)
+            try expect(TvSend.route(sent, openId: "pro:pt", playlists: ["p1"], proOnTv: true), .byName)
+        }
+        let pool = [ChannelMatch.Entry(key: "a", name: "PT: RTP 1 HD", epgId: nil), ChannelMatch.Entry(key: "c", name: "SIC", epgId: nil)]
+        try expect(TvSend.byName("RTP 1", pool: pool), "a")
+        try expect(TvSend.byName("CNN", pool: pool), nil)
+        try expect(TvSend.step(status: 409, attempt: 0, launched: false, canLaunch: false), .done)
+        try expect(TvSend.step(status: 409, attempt: 0, launched: false, canLaunch: true), .launch)
+        try expect(TvSend.step(status: 503, attempt: 0, launched: false, canLaunch: false), .wait)
+        try expect(TvSend.outcome(404), .missing)
+        try expect(TvSend.statusLine(409), "409 Conflict")
+        try expect(TvSend.order(["Sala", "Quarto"], last: "Sala"), [0, 1])
+        try expect(TvSend.parseOpened(TvSend.opened("SIC")), "SIC")
+    }
+
     static func lanRequestRefuses() throws {
         try expect(request("POST /play/1 HTTP/1.1", "Host: 192.168.1.20:6471", "Origin: https://site.example")?.allowed, false)
         try expect(request("POST /play/1 HTTP/1.1", "Host: 192.168.1.20:6471", "ORIGIN: null")?.allowed, false)
