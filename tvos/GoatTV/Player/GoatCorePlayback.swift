@@ -178,6 +178,8 @@ final class GoatCorePlayback: NSObject {
 
     let view = GoatCoreView()
     var onEvent: ((Event) -> Void)?
+    /// Definições → Desentrelaçar ("yadif2x", "yadif" ou "off"): vale para o canal que se abrir a seguir.
+    var deinterlace = "yadif2x"
     /// O código HTTP com que o fornecedor recusou o stream, quando se sabe.
     private(set) var httpStatus: Int?
     /// Porque falhou (para o registo).
@@ -261,7 +263,7 @@ final class GoatCorePlayback: NSObject {
         synchronizer.addRenderer(display)
         synchronizer.addRenderer(audioRenderer)
         pip = nil
-        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer)
+        let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer, deinterlace: deinterlace)
         s.rate = userRate
         s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough)
         s.primary = primary
@@ -598,11 +600,19 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private static let maxAheadSeconds = 20.0
     private static let resumeAheadSeconds = 10.0
 
-    init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer) {
+    init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer,
+         deinterlace: String) {
         self.display = display
         self.audio = audio
         self.synchronizer = synchronizer
+        self.deinterlace = deinterlace
         super.init()
+        // O H.264 entrelaçado passa pelo desentrelaçador (ver [interlacedVideo]); desligado, vai como o resto.
+        if deinterlace != "off" {
+            pipeline.onInterlacedVideo = { [weak self] b, bottomFirst, progressive in
+                self?.interlacedVideo(b, bottomFirst: bottomFirst, progressive: progressive)
+            }
+        }
         pipeline.onTracks = { [weak self] tracks in
             guard let self else { return }
             self.hasVideo = tracks.contains { $0.kind == .video }
@@ -861,10 +871,34 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private var software: SoftwareVideo?
     private var softwareFailed = false
 
+    /// Definições → Desentrelaçar, para o MPEG-2 (o bwdif do SoftwareVideo) e o H.264 entrelaçado (InterlacedVideo).
+    private let deinterlace: String
+
+    /// O H.264 entrelaçado (os 576i e 1080i), descodificado aqui e desentrelaçado na GPU: a camada não o faz.
+    private var interlaced: InterlacedVideo?
+    private var interlacedFailed = false
+
+    private func interlacedVideo(_ b: CMSampleBuffer, bottomFirst: Bool, progressive: Bool) {
+        guard !closed else { return }
+        if interlaced == nil, !interlacedFailed {
+            interlaced = InterlacedVideo(fieldRate: deinterlace != "yadif")
+            interlacedFailed = interlaced == nil
+            DebugLog.add(interlaced == nil ? "GoatCore: interlaced video, no GPU deinterlacer" : "GoatCore: interlaced video, deinterlacing on the GPU (\(deinterlace))")
+        }
+        guard let deinterlacer = interlaced else { return video(b) }
+        guard let frames = deinterlacer.decode(b, bottomFirst: bottomFirst, progressive: progressive) else {
+            // O VideoToolbox não o descodifica à parte: vai como vinha (a camada recomeça na imagem-chave seguinte).
+            interlaced = nil
+            interlacedFailed = true
+            return video(b)
+        }
+        for f in frames { video(f) }
+    }
+
     private func codedVideo(_ v: CodedVideo) {
         guard !closed, !softwareFailed else { return }
         if software == nil {
-            software = SoftwareVideo()
+            software = SoftwareVideo(deinterlace: deinterlace)
             if software == nil {
                 softwareFailed = true
                 fail("unsupported video MPEG2_VIDEO")

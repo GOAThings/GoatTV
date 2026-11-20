@@ -342,8 +342,8 @@
     <string name="engine_aether">AetherEngine (प्रायोगिक)</string>
     <string name="using_vlc">यह चैनल VLC से चल रहा है</string>
     <string name="decoder">वीडियो डिकोडर</string>
-    <string name="deinterlace">डीइंटरलेस (VLC)</string>
-    <string name="deinterlace_sub">576i और 1080i चैनलों के लिए। ExoPlayer के साथ यह टीवी करता है</string>
+    <string name="deinterlace">डीइंटरलेस</string>
+    <string name="deinterlace_sub">576i और 1080i चैनलों के लिए, जब डिकोडर खुद यह नहीं करता</string>
     <string name="deinterlace_smooth">सहज (50/60 फ़्रेम)</string>
     <string name="deinterlace_normal">सामान्य (25/30 फ़्रेम)</string>
     <string name="decoder_hw">हार्डवेयर (सुझाया गया)</string>

@@ -26,6 +26,8 @@ import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
+import cc.slokker.itv.media.Deinterlacing
+import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
 import cc.slokker.itv.media.WebVtt
@@ -64,6 +66,8 @@ class GoatCorePlayer(
     private val audioLevel: String = Prefs.AudioLevel.OFF,
     /** O canal, para começar no ganho com que ele ficou da última vez (ver [levelGains]). */
     private val levelKey: String = "",
+    /** Definições → Desentrelaçar (Prefs.Deinterlace): nos canais entrelaçados, a GPU tira o "pente" (ver [Deinterlacer]). */
+    private val deinterlace: String = cc.slokker.itv.data.Prefs.Deinterlace.OFF,
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -111,7 +115,8 @@ class GoatCorePlayer(
         previous = null
     }
 
-    private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean)
+    /** [scan]: como foi captada ([SCAN_PROGRESSIVE], [SCAN_BOTTOM_FIRST]; 0 = entrelaçada, o campo de cima primeiro). */
+    private class VideoUnit(val data: ByteArray, val ptsUs: Long, val keyframe: Boolean, val scan: Int = SCAN_PROGRESSIVE)
     /** Um bloco de som para o descodificador, com o formato da faixa; [MARK] diz "mudou a faixa". */
     private class AudioUnit(val data: ByteArray, val ptsUs: Long, val format: cc.slokker.itv.media.AudioFormat?)
 
@@ -478,7 +483,8 @@ class GoatCorePlayer(
             if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
             if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) return
             stats.videoUnits++
-            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe))
+            interlacedVideo = mpeg2.interlaced
+            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit)))
             return
         }
         captions(sample.data, samplePts)
@@ -497,9 +503,16 @@ class GoatCorePlayer(
         val pts = unit.pts
         if (!videoStart.pass(unit.keyframe, pts)) return
         stats.videoUnits++
+        interlacedVideo = reader.interlaced
         val data = avccToAnnexB(unit.data)
-        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe))
+        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit)))
     }
+
+    /** O canal é entrelaçado (pelo SPS ou pelo cabeçalho da sequência do MPEG-2), na última imagem lida. */
+    @Volatile private var interlacedVideo = false
+
+    private fun scanOf(unit: cc.slokker.itv.media.VideoUnit): Int =
+        (if (unit.progressive) SCAN_PROGRESSIVE else 0) or (if (unit.bottomFirst) SCAN_BOTTOM_FIRST else 0)
 
     /**
      * O cc_data desta imagem (608 e 708): por ordem de apresentação (umas imagens de folga chegam para as B) ao
@@ -686,7 +699,8 @@ class GoatCorePlayer(
             }
             val c = decoderFor(mime, softwareVideo)
             codec = c
-            c.configure(format, surface, null, 0)
+            deinterlacer = deinterlacerFor(c.name)
+            c.configure(format, deinterlacer?.input ?: surface, null, 0)
             c.start()
             stats.configured = true
             var pending: VideoUnit? = first
@@ -701,6 +715,11 @@ class GoatCorePlayer(
                         b.clear()
                         b.put(unit.data)
                         c.queueInputBuffer(i, 0, unit.data.size, unit.ptsUs, if (unit.keyframe) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0)
+                        if (deinterlacer != null) {
+                            scans[unit.ptsUs] = unit.scan
+                            // Sem saída para estas (descodificador parado, imagens que não sai): não cresce sem fim.
+                            if (scans.size > 64) scans.pollFirstEntry()
+                        }
                         stats.codecInputs++
                         pending = null
                     } else {
@@ -717,6 +736,7 @@ class GoatCorePlayer(
                     val w = if (f.containsKey("crop-right")) f.getInteger("crop-right") - f.getInteger("crop-left") + 1 else f.getInteger(MediaFormat.KEY_WIDTH)
                     val h = if (f.containsKey("crop-bottom")) f.getInteger("crop-bottom") - f.getInteger("crop-top") + 1 else f.getInteger(MediaFormat.KEY_HEIGHT)
                     Log.i(TAG, "video ${w}x$h ${c.name}")
+                    deinterlacer?.setSize(w, h)
                     listener.onVideoSize(w, h, mpeg2?.pixelRatio ?: videoInfo?.pixelRatio ?: 1f)
                 }
             }
@@ -732,7 +752,41 @@ class GoatCorePlayer(
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
+            // Depois do descodificador: a superfície do ecrã fica livre para o canal seguinte.
+            deinterlacer?.let { d ->
+                Log.i(TAG, "deinterlace: ${d.deinterlaced} deinterlaced, ${d.passedThrough} as is")
+                runCatching { d.release() }
+            }
+            deinterlacer = null
         }
+    }
+
+    /** Nos canais entrelaçados: entre o descodificador e o ecrã (ver [deinterlacerFor]). */
+    @Volatile private var deinterlacer: Deinterlacer? = null
+
+    /** Como foi captada cada imagem que entrou no descodificador, pelo tempo dela (para o [deinterlacer]). */
+    private val scans = java.util.TreeMap<Long, Int>()
+
+    /**
+     * O desentrelaçador para este canal e o descodificador [decoder], ou null para o vídeo ir direto ao ecrã: só num
+     * canal entrelaçado de 8 bits (ver Deinterlacing.mode), com a definição ligada, e num descodificador que não o faça
+     * já (o da NVIDIA da SHIELD desentrelaça ele próprio). Nos outros, a GPU desentrelaça e mede se é preciso
+     * (InterlaceVerdict); o que se aprende de cada descodificador fica para os canais seguintes.
+     */
+    private fun deinterlacerFor(decoder: String): Deinterlacer? {
+        val info = videoInfo
+        val mode = Deinterlacing.mode(deinterlace, interlacedVideo, info?.bitDepth ?: 8, info?.isHdr == true)
+        if (mode == Deinterlacing.NONE) return null
+        val known = Deinterlacing.decoder(decoder)
+        if (known == Deinterlacing.DECODER_DEINTERLACES) {
+            Log.i(TAG, "interlaced: $decoder deinterlaces by itself")
+            return null
+        }
+        val verdict = InterlaceVerdict(woven = known == Deinterlacing.DECODER_WOVEN || decoder in wovenDecoders)
+        return runCatching { Deinterlacer(surface, mode, verdict, onWoven = { wovenDecoders += decoder }) }
+            .onSuccess { Log.i(TAG, "interlaced: deinterlacing ($deinterlace) on the GPU, decoder $decoder woven=${verdict.woven}") }
+            .onFailure { Log.w(TAG, "interlaced: no deinterlacer: ${it.message}") }
+            .getOrNull()
     }
 
     /** Mostra a imagem na hora dela pelo relógio (o som, ou o do sistema); atrasada mais de 50 ms, salta-se. */
@@ -741,6 +795,8 @@ class GoatCorePlayer(
         // e o som e as imagens seguintes acertam-se pelo relógio a partir daí.
         if (!firstFrameReported) {
             stats.framesRendered++
+            // Sem hora marcada, a imagem vai com a dela (o tempo do vídeo em ns).
+            scanned(ptsUs, ptsUs * 1000)
             c.releaseOutputBuffer(index, true)
             lastOutputAt = SystemClock.elapsedRealtime()
             lastShownPtsUs = ptsUs
@@ -772,11 +828,24 @@ class GoatCorePlayer(
             c.releaseOutputBuffer(index, false)
         } else {
             stats.framesRendered++
-            c.releaseOutputBuffer(index, System.nanoTime() - late * 1000)
+            val at = System.nanoTime() - late * 1000
+            scanned(ptsUs, at)
+            c.releaseOutputBuffer(index, at)
             lastOutputAt = SystemClock.elapsedRealtime()
             lastShownPtsUs = ptsUs
             if (!firstFrameReported) firstFrame()
         }
+    }
+
+    /** Diz ao [deinterlacer] como foi captada a imagem [ptsUs], que vai sair com a hora [stampNs]. */
+    private fun scanned(ptsUs: Long, stampNs: Long) {
+        val d = deinterlacer ?: return
+        // As que entraram antes desta já saíram (ou não saem): a saída é pela ordem do tempo. Num par de campos que entrou
+        // um a um, o tempo da imagem é o do primeiro.
+        // Sem registo (não devia acontecer): entrelaçada, o campo de cima primeiro (o habitual).
+        val scan = scans[ptsUs] ?: 0
+        scans.headMap(ptsUs, true).clear()
+        d.frame(stampNs, progressive = scan and SCAN_PROGRESSIVE != 0, bottomFirst = scan and SCAN_BOTTOM_FIRST != 0)
     }
 
     /** O tempo do relógio; sem ele ainda, começa o do sistema nesta imagem se não houver som (ou não vier a tempo). */
@@ -1290,6 +1359,13 @@ class GoatCorePlayer(
         private fun annexB(nal: ByteArray) = byteArrayOf(0, 0, 0, 1) + nal
 
         private const val NO_CHANGE = Int.MIN_VALUE
+
+        /** [VideoUnit.scan]: imagem progressiva; entrelaçada com o campo de baixo primeiro. */
+        private const val SCAN_PROGRESSIVE = 1
+        private const val SCAN_BOTTOM_FIRST = 2
+
+        /** Os descodificadores que já se viu darem os campos juntos (ver InterlaceVerdict), enquanto a app está aberta. */
+        private val wovenDecoders: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         private const val MAX_PID = 0x1FFF
         private const val CAPTION_REORDER = 6
 

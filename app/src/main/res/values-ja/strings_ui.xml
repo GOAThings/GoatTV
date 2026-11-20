@@ -342,8 +342,8 @@
     <string name="engine_aether">AetherEngine（試験運用）</string>
     <string name="using_vlc">このチャンネルは VLC で再生しています</string>
     <string name="decoder">映像デコーダー</string>
-    <string name="deinterlace">インターレース解除（VLC）</string>
-    <string name="deinterlace_sub">576i・1080i のチャンネル用。ExoPlayer ではテレビが処理します</string>
+    <string name="deinterlace">インターレース解除</string>
+    <string name="deinterlace_sub">576i・1080i のチャンネル用。デコーダーが処理しない場合に使います</string>
     <string name="deinterlace_smooth">なめらか（50/60 フレーム）</string>
     <string name="deinterlace_normal">標準（25/30 フレーム）</string>
     <string name="decoder_hw">ハードウェア（推奨）</string>

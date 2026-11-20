@@ -1261,6 +1261,7 @@ final class PlayerEngine: NSObject {
         g.rate = speed
         g.audioLevel = audioLevel
         g.passthrough = passthrough
+        g.deinterlace = deinterlace
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil
@@ -1357,8 +1358,11 @@ final class PlayerEngine: NSObject {
             return nil
         case .goatcore:
             // A que o SPS diz (como no Android).
-            guard let fps = goatCorePlayback?.videoDetails?.fps, fps > 1 else { return nil }
-            return FrameRate.snap(fps)
+            guard let details = goatCorePlayback?.videoDetails, details.fps > 1 else { return nil }
+            var fps = FrameRate.snap(details.fps)
+            // Entrelaçado com o desentrelaçamento "suave": cada campo é uma imagem, 50/60 por segundo.
+            if deinterlace == "yadif2x", details.interlaced, abs(fps - 25) < 0.5 || abs(fps - 29.97) < 0.1 || abs(fps - 30) < 0.1 { fps *= 2 }
+            return fps
         case .vlc:
             // A que o stream diz (como no Android, a do formato ganha); sem ela, conta-se as imagens que o VLC mostra.
             if let info = vlcVideoInfo, info.fps > 1 {

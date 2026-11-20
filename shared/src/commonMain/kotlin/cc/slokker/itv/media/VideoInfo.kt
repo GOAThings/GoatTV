@@ -20,6 +20,12 @@ class VideoInfo(
      */
     val sarWidth: Int = 1,
     val sarHeight: Int = 1,
+    /**
+     * As imagens podem vir entrelaçadas (os dois campos, captados com meia imagem de diferença, numa só): no H.264, o
+     * SPS sem frame_mbs_only (PAFF e MBAFF, os 576i e 1080i da TV); no HEVC, o field_seq_flag do VUI. É o que decide se
+     * vale a pena desentrelaçar.
+     */
+    val interlaced: Boolean = false,
 ) {
     /** Largura ÷ altura de um píxel (1 nos quadrados). */
     val pixelRatio: Float get() = if (sarWidth > 0 && sarHeight > 0) sarWidth.toFloat() / sarHeight else 1f
@@ -89,7 +95,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / (2.0 * units)).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5])
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = !frameMbsOnly)
         }.getOrNull()
 
         /** O SPS de HEVC (o NAL inteiro, com os 2 bytes do cabeçalho), ou null se não se perceber. */
@@ -154,6 +160,7 @@ class VideoInfo(
             b.u(1)
             var color = intArrayOf(-1, -1, -1, 0)
             var fps = 0f
+            var fieldSeq = false
             if (b.u(1) == 1) {
                 color = b.signalType()
                 if (b.u(1) == 1) {
@@ -161,7 +168,7 @@ class VideoInfo(
                     b.ue()
                 }
                 b.u(1) // neutral_chroma
-                b.u(1) // field_seq
+                fieldSeq = b.u(1) == 1
                 b.u(1) // frame_field_info
                 if (b.u(1) == 1) repeat(4) { b.ue() } // default_display_window
                 if (b.u(1) == 1) {
@@ -170,7 +177,7 @@ class VideoInfo(
                     if (units > 0) fps = (scale / units.toDouble()).toFloat()
                 }
             }
-            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5])
+            VideoInfo(width, height, fps, depth, color[0], color[1], color[2], color[3] == 1, color[4], color[5], interlaced = fieldSeq)
         }.getOrNull()
 
         private val HIGH_PROFILES = setOf(100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135)

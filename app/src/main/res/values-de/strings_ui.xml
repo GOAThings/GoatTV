@@ -342,8 +342,8 @@
     <string name="engine_aether">AetherEngine (experimentell)</string>
     <string name="using_vlc">Dieser Sender läuft mit VLC</string>
     <string name="decoder">Video-Decoder</string>
-    <string name="deinterlace">Deinterlacing (VLC)</string>
-    <string name="deinterlace_sub">Für 576i- und 1080i-Sender. Mit ExoPlayer macht es der Fernseher</string>
+    <string name="deinterlace">Deinterlacing</string>
+    <string name="deinterlace_sub">Für 576i- und 1080i-Sender, wenn der Decoder es nicht schon selbst macht</string>
     <string name="deinterlace_smooth">Flüssig (50/60 Bilder)</string>
     <string name="deinterlace_normal">Normal (25/30 Bilder)</string>
     <string name="decoder_hw">Hardware (empfohlen)</string>

@@ -7,8 +7,9 @@ import Foundation
 import GoatCore
 
 /// O vídeo MPEG-2 do GoatCore (os canais SD de cabo e satélite: o VideoToolbox não o descodifica), pelo FFmpeg que a
-/// app já traz (o do AetherEngine). Cada imagem passa por um filtro que a desentrelaça (bwdif, a dois campos por
-/// imagem: 50 imagens por segundo num canal de 25, como a TV mostra) e lhe põe os pixels quadrados (o SD tem 720 de
+/// app já traz (o do AetherEngine). Cada imagem passa por um filtro que a desentrelaça (bwdif, pela definição:
+/// "Suave" a dois campos por imagem, 50 imagens por segundo num canal de 25, como a TV mostra; "Normal" uma por
+/// imagem; desligado, nada) e lhe põe os pixels quadrados (o SD tem 720 de
 /// largura para 4:3 ou 16:9), e sai em CMSampleBuffer já descodificado, para o mesmo AVSampleBufferDisplayLayer.
 ///
 /// Não é seguro entre threads: quem usa chama tudo da mesma fila.
@@ -24,9 +25,12 @@ final class SoftwareVideo {
     private var graphKey: [Int32] = []
     private var format: CMVideoFormatDescription?
     private var formatKey: [Int32] = []
+    /// Definições → Desentrelaçar ("yadif2x", "yadif" ou "off", como no Android).
+    private let deinterlace: String
 
     /// nil se o FFmpeg da app não tiver o descodificador.
-    init?() {
+    init?(deinterlace: String = "yadif2x") {
+        self.deinterlace = deinterlace
         guard let decoder = avcodec_find_decoder(AV_CODEC_ID_MPEG2VIDEO), let ctx = avcodec_alloc_context3(decoder) else { return nil }
         ctx.pointee.pkt_timebase = AVRational(num: 1, den: 90_000)
         ctx.pointee.thread_count = 2
@@ -129,7 +133,13 @@ final class SoftwareVideo {
         inputs?.pointee.filter_ctx = dst
         inputs?.pointee.pad_idx = 0
         inputs?.pointee.next = nil
-        let chain = "bwdif=mode=send_field:parity=auto:deint=interlaced,scale=w='trunc(iw*sar/2)*2':h=ih,setsar=1,format=nv12"
+        let bwdif: String
+        switch deinterlace {
+        case "off": bwdif = ""
+        case "yadif": bwdif = "bwdif=mode=send_frame:parity=auto:deint=interlaced,"
+        default: bwdif = "bwdif=mode=send_field:parity=auto:deint=interlaced,"
+        }
+        let chain = bwdif + "scale=w='trunc(iw*sar/2)*2':h=ih,setsar=1,format=nv12"
         guard avfilter_graph_parse_ptr(g, chain, &inputs, &outputs, nil) >= 0, avfilter_graph_config(g, nil) >= 0 else {
             DebugLog.add("GoatCore: MPEG-2 filter did not build")
             avfilter_graph_free(&graph)

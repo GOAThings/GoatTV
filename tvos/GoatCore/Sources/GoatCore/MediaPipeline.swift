@@ -47,6 +47,9 @@ public struct VideoDetails: @unchecked Sendable {
     public let hdr10: Bool
     public let hlg: Bool
     public let format: CMVideoFormatDescription
+    /// O SPS diz que as imagens podem vir entrelaçadas (os 576i e 1080i): a cadência do ecrã dobra com o
+    /// desentrelaçamento "suave" (cada campo uma imagem).
+    public var interlaced = false
 }
 
 /// Uma imagem de vídeo comprimida que o hardware não descodifica (MPEG-2): vai para um descodificador em software.
@@ -101,6 +104,10 @@ public final class MediaPipeline {
     /// O vídeo MPEG-2 (os canais SD de cabo e satélite), comprimido: o VideoToolbox não o descodifica, quem usa o
     /// pipeline descodifica-o com o FFmpeg. Sem quem o faça, o MPEG-2 conta como formato que este motor não toca.
     public var onCodedVideo: ((CodedVideo) -> Void)?
+    /// O H.264 entrelaçado de 8 bits (os 576i e 1080i de cabo e satélite), comprimido, com o campo que foi captado
+    /// primeiro e se a imagem é progressiva: o AVSampleBufferDisplayLayer não desentrelaça, quem usa o pipeline
+    /// descodifica-o e desentrelaça-o. Sem quem o faça (a definição desligada), vai para [onVideo] como o resto.
+    public var onInterlacedVideo: ((CMSampleBuffer, _ bottomFirst: Bool, _ progressive: Bool) -> Void)?
     /// Uma faixa escolhida num formato que este motor ainda não toca (por exemplo vídeo MPEG-2): quem usa passa ao seguinte.
     public var onUnsupported: ((String) -> Void)?
 
@@ -115,6 +122,8 @@ public final class MediaPipeline {
     private var nal: NalReader?
     private var mpeg2: Mpeg2Reader?
     private var videoFormat: CMVideoFormatDescription?
+    /// O vídeo é HDR ou de mais de 8 bits: nunca vai para o desentrelaçador (não há emissões entrelaçadas assim).
+    private var videoDeep = false
     private var videoClock = TsClock()
     /// Só se manda vídeo a partir de uma imagem-chave, sem as imagens que dependem de antes dela (o verde e os borrões).
     private let videoStart = VideoStart()
@@ -195,6 +204,7 @@ public final class MediaPipeline {
         nal = nil
         mpeg2 = nil
         videoFormat = nil
+        videoDeep = false
         videoClock.reset()
         videoStart.restart()
         audio = nil
@@ -374,8 +384,9 @@ public final class MediaPipeline {
                 let changed = videoFormat.map { !CMFormatDescriptionEqual($0, otherFormatDescription: f) } ?? true
                 videoFormat = f
                 if changed, let info = AppleMedia.shared.videoInfo(sets: unit.parameterSets, hevc: hevc) {
+                    videoDeep = info.bitDepth > 8 || info.isHdr
                     onVideoDetails?(VideoDetails(width: Int(info.width), height: Int(info.height), fps: Double(info.fps),
-                                                 hdr10: info.isHdr10, hlg: info.isHlg, format: f))
+                                                 hdr10: info.isHdr10, hlg: info.isHlg, format: f, interlaced: info.interlaced))
                 }
             }
         }
@@ -389,6 +400,11 @@ public final class MediaPipeline {
         if !unit.keyframe, let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: true) as? [NSMutableDictionary] {
             attachments.first?[kCMSampleAttachmentKey_NotSync] = true
             attachments.first?[kCMSampleAttachmentKey_DependsOnOthers] = true
+        }
+        // Entrelaçado: todas as imagens do canal vão para o desentrelaçador (as referências de umas são as outras).
+        if let interlaced = onInterlacedVideo, nal.interlaced, !videoDeep {
+            interlaced(buffer, unit.bottomFirst, unit.progressive)
+            return
         }
         onVideo?(buffer)
     }
