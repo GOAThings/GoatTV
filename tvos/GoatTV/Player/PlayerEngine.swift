@@ -150,6 +150,8 @@ final class PlayerEngine: NSObject {
     }
     /// Aumentar a imagem (Prefs.upscale), no GoatCore e só na imagem principal; vale no canal seguinte.
     @ObservationIgnored var upscale = "off"
+    /// Cortar as barras pretas (Prefs.autoCrop; só o GoatCore, só na imagem principal). Vale no canal seguinte.
+    @ObservationIgnored var autoCrop = false
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem", só no iPhone). nil se não houver, ou
     /// noutro motor que não o GoatCore (o leitor da Apple e o VLC, a reserva automática). A resposta vem noutra thread.
@@ -1357,6 +1359,7 @@ final class PlayerEngine: NSObject {
         g.deinterlace = deinterlace
         g.picture = controlsDisplay ? picture : PictureAdjust()
         g.upscale = controlsDisplay ? upscale : "off"
+        g.autoCrop = controlsDisplay && autoCrop
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil

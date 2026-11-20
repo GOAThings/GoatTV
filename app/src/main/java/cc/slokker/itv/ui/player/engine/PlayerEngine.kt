@@ -198,7 +198,10 @@ internal fun rememberChannelPlayback(
     // Os ajustes da imagem: só na imagem principal, e só o "há ou não há" obriga a outro player (os valores mudam com
     // o canal a dar).
     val look = if (policy.picture) PictureLook.of(prefs) else PictureLook()
-    val build = PlayerBuild.of(prefs, engineName, policy.passthrough, picture = !look.neutral, upscale = if (policy.picture) prefs.upscale else Prefs.Upscale.OFF)
+    val build = PlayerBuild.of(
+        prefs, engineName, policy.passthrough, picture = !look.neutral, upscale = if (policy.picture) prefs.upscale else Prefs.Upscale.OFF,
+        autoCrop = policy.picture && prefs.autoCrop,
+    )
     // Criado (e ligado ao controlador) já aqui, para o ecrã ter o player na mesma composição.
     val engine = remember(build, enabled) {
         if (!enabled) return@remember null

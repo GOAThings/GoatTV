@@ -1009,4 +1009,8 @@
     <string name="mobile_data_quality_sub">على بيانات الجوال، تستخدم قنوات HLS ذات الجودات المتعددة توفير البيانات (حتى 720p) للحفاظ على باقتك. عند العودة إلى Wi-Fi تعود الجودة المعتادة. قنوات TS العادية لا تتغير</string>
     <string name="mobile_data_quality_auto">توفير البيانات</string>
     <string name="mobile_data_quality_same">مثل Wi-Fi</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">إزالة الأشرطة السوداء</string>
+    <string name="auto_crop_sub">تكبير الصورة بالقدر اللازم فقط لإخفاء الأشرطة السوداء الموجودة داخل الصورة (برامج 4:3، أفلام بأشرطة). فقط عندما تكون نسبة العرض إلى الارتفاع على ملاءمة</string>
 </resources>

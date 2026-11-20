@@ -1001,4 +1001,8 @@
     <string name="mobile_data_quality_sub">Mobil veride, birden çok kalitesi olan HLS kanalları paketinizi korumak için Veri tasarrufu (en fazla 720p) kullanır. Wi-Fi\'ye dönünce olağan kalite geri gelir. Düz TS kanalları değişmez</string>
     <string name="mobile_data_quality_auto">Veri tasarrufu</string>
     <string name="mobile_data_quality_same">Wi-Fi ile aynı</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Siyah bantları kaldır</string>
+    <string name="auto_crop_sub">Görüntüdeki siyah bantları (4:3 programlar, bantlı filmler) gizlemeye yetecek kadar yakınlaştırır. Yalnızca En boy oranı Sığdır olduğunda</string>
 </resources>

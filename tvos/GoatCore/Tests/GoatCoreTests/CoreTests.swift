@@ -512,6 +512,8 @@ enum CoreTests {
         try expect(Prefs().audioLevel, "off")
         try expect(Prefs(settings: .object(["audio_level": "night"])).audioLevel, "night")
         try expect(Prefs(settings: .object(["audio_level": "loud"])).audioLevel, "off")
+        try expect(Prefs().autoCrop, false)
+        try expect(Prefs(settings: .object(["auto_crop": true])).autoCrop, true)
         try expect(Prefs().audioVoices, "off")
         try expect(Prefs(settings: .object(["audio_voices": "on"])).audioVoices, "on")
         try expect(Prefs(settings: .object(["audio_voices": "loud"])).audioVoices, "off")

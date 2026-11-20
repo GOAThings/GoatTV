@@ -735,6 +735,7 @@ final class AppModel {
             engine.audioVoices = prefs.audioVoices == "on"
             engine.picture = PictureAdjust(prefs)
             engine.upscale = prefs.upscale
+            engine.autoCrop = prefs.autoCrop
             engine.hdr = prefs.hdr
         }
         // A qualidade dos HLS com várias (o leitor do canal principal também deixa escolher uma à mão).

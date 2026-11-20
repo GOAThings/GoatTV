@@ -852,6 +852,9 @@ struct SettingsPanel: View {
                 pickItem("stream_format"), pickItem("buffer"), pickItem("hls_quality", subtitle: s.r("hls_quality_sub")),
                 pickItem("decoder"), pickItem("deinterlace"),
                 pickItem("aspect"),
+                .toggle("auto_crop", s.r("auto_crop"), prefs.autoCrop, subtitle: s.r("auto_crop_sub")) {
+                    model.setPref("auto_crop", .bool($0))
+                },
                 .toggle("freeze_frame", s.r("freeze_frame"), prefs.freezeFrame, subtitle: s.r("freeze_frame_sub")) {
                     model.setPref("freeze_frame", .bool($0))
                 },

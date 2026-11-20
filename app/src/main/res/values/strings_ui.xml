@@ -1002,4 +1002,8 @@
     <string name="mobile_data_quality_sub">On mobile data, HLS channels with several qualities use Data saver (up to 720p) to spare your plan. Back on Wi-Fi the usual quality returns. Plain TS channels are not affected</string>
     <string name="mobile_data_quality_auto">Save data</string>
     <string name="mobile_data_quality_same">Same as on Wi-Fi</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Remove black bars</string>
+    <string name="auto_crop_sub">Zooms in just enough to hide black bars that are part of the picture (4:3 programmes, letterboxed films). Only with Aspect ratio set to Fit</string>
 </resources>

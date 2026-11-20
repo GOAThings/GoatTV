@@ -1003,4 +1003,8 @@
     <string name="mobile_data_quality_sub">Com dados móveis, os canais HLS com várias qualidades usam Poupar dados (até 720p) para não gastar o teu plano. Na Wi-Fi volta a qualidade de sempre. Os canais TS simples não mudam</string>
     <string name="mobile_data_quality_auto">Poupar dados</string>
     <string name="mobile_data_quality_same">Igual à Wi-Fi</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Cortar barras pretas</string>
+    <string name="auto_crop_sub">Aumenta só o preciso para esconder as barras pretas que vêm na imagem (programas 4:3, filmes com barras). Só com a Proporção em Ajustar</string>
 </resources>

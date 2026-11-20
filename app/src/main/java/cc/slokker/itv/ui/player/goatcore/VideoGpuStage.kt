@@ -13,6 +13,8 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
+import cc.slokker.itv.media.AutoCrop
+import cc.slokker.itv.media.CropRect
 import cc.slokker.itv.media.Deinterlacing
 import cc.slokker.itv.media.InterlaceVerdict
 import cc.slokker.itv.media.PictureLook
@@ -70,6 +72,12 @@ import java.util.concurrent.CountDownLatch
  * de "IA" para "Nítido" e de "Nítido" para nada, e a resolução fica assim para o resto da sessão ([upscaleMemory]).
  * A "IA" precisa de um contexto GLES 3.0 com render para meia precisão: pede-se um quando a definição a quer, e sem
  * ele fica o "Nítido".
+ *
+ * Cortar as barras pretas ([crop], Definições → Cortar barras pretas; ver media/AutoCrop): a última passagem lê só o
+ * rectângulo pedido do quadro (as coordenadas, no vertex shader; não custa nada a mais), e quem mostra põe a vista com
+ * a proporção desse rectângulo. Para se saber onde estão as barras, mais ou menos uma vez por segundo
+ * ([AutoCrop.PROBE_MS]) a textura do descodificador desenha-se numa grelha de [AutoCrop.GRID_COLS]×[AutoCrop.GRID_ROWS]
+ * só com o brilho, que se lê de volta ([onLuma]) depois de a imagem ir para o ecrã (36 KB por segundo).
  */
 internal class VideoGpuStage(
     private val output: Surface,
@@ -86,6 +94,10 @@ internal class VideoGpuStage(
     private val upscaleMemory: UpscaleMemory = UpscaleMemory(),
     /** [ToneMapping]: PQ ou HLG para converter o HDR para SDR aqui, ou NONE. */
     private val toneMap: Int = ToneMapping.NONE,
+    /** Cortar as barras pretas: o rectângulo do quadro a mostrar agora (lido a cada imagem); null = desligado. */
+    private val crop: (() -> CropRect)? = null,
+    /** A grelha do brilho (o Y de 0 a 255, de cima para baixo, [AutoCrop.GRID_COLS]×[AutoCrop.GRID_ROWS]), nesta thread. */
+    private val onLuma: ((ByteArray) -> Unit)? = null,
 ) : SurfaceTexture.OnFrameAvailableListener {
     private val thread = HandlerThread("goatcore-video-gpu").apply { start() }
     private val handler = Handler(thread.looper)
@@ -105,6 +117,11 @@ internal class VideoGpuStage(
     private var pictureH = 0
     private var combTexture = 0
     private var combFbo = 0
+    private var probe = 0
+    private var probeTexture = 0
+    private var probeFbo = 0
+    private var lastProbeNs = 0L
+    private val probePixels: ByteBuffer? = onLuma?.let { ByteBuffer.allocateDirect(AutoCrop.GRID_COLS * AutoCrop.GRID_ROWS * 4).order(ByteOrder.nativeOrder()) }
     private lateinit var texture2d: SurfaceTexture
 
     /** O aumento da imagem (só com a definição ligada); [es3]: o contexto é GLES 3.0. */
@@ -228,6 +245,12 @@ internal class VideoGpuStage(
             finalProgram(true, LEVEL_COLOUR)
         }
         comb = program(VERTEX_COMB, FRAGMENT_COMB)
+        if (onLuma != null) {
+            probeTexture = texture(GLES20.GL_TEXTURE_2D, GLES20.GL_NEAREST)
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, AutoCrop.GRID_COLS, AutoCrop.GRID_ROWS, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null)
+            probeFbo = framebuffer(probeTexture)
+            probe = program(VERTEX_PROBE, FRAGMENT_PROBE)
+        }
 
         texture2d = SurfaceTexture(external)
         texture2d.setOnFrameAvailableListener(this, handler)
@@ -282,6 +305,7 @@ internal class VideoGpuStage(
                 pictureH = h
                 passedThrough++
                 present(look, fromDecoder = true, at, Upscaling.OFF)
+                probeIfDue()
                 return
             }
             if (w != pictureW || h != pictureH) resize(w, h)
@@ -301,6 +325,7 @@ internal class VideoGpuStage(
                 }
             }
             if (up != Upscaling.OFF) govern(w, h)
+            probeIfDue()
         } catch (e: Exception) {
             Log.w(TAG, "video gpu: ${e.javaClass.simpleName} ${e.message}")
         }
@@ -359,6 +384,35 @@ internal class VideoGpuStage(
         pictureFbo = framebuffer(picture)
         pictureW = w
         pictureH = h
+    }
+
+    /**
+     * A grelha do brilho desta imagem para o [onLuma], se já passou [AutoCrop.PROBE_MS] desde a última. Depois do
+     * swap: a leitura espera só pela grelha (e pela imagem que já foi para o ecrã), não atrasa a imagem.
+     */
+    private fun probeIfDue() {
+        val callback = onLuma ?: return
+        val pixels = probePixels ?: return
+        val now = System.nanoTime()
+        if (now - lastProbeNs < AutoCrop.PROBE_MS * 1_000_000L) return
+        lastProbeNs = now
+        val cols = AutoCrop.GRID_COLS
+        val rows = AutoCrop.GRID_ROWS
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, probeFbo)
+        GLES20.glViewport(0, 0, cols, rows)
+        GLES20.glUseProgram(probe)
+        bindExternal(probe)
+        quad(probe)
+        pixels.clear()
+        GLES20.glReadPixels(0, 0, cols, rows, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        // A primeira linha lida é a de baixo da imagem (o y do GL): a grelha vai de cima para baixo.
+        val luma = ByteArray(cols * rows)
+        for (r in 0 until rows) {
+            val from = (rows - 1 - r) * cols
+            for (c in 0 until cols) luma[r * cols + c] = pixels.get((from + c) * 4)
+        }
+        callback(luma)
     }
 
     /** Mede o pente desta imagem (ver [InterlaceVerdict]): a grelha pequena desenha-se e lê-se de volta. */
@@ -431,9 +485,10 @@ internal class VideoGpuStage(
         }
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
         GLES20.glViewport(0, 0, surfaceSize[0], surfaceSize[1])
+        val window = cropUniform()
         if (upMode == Upscaling.SHARP) {
             try {
-                upscaler!!.drawSharp(picture, pictureW, pictureH, look, SHARP_STRENGTH + look.sharpen, ::quad)
+                upscaler!!.drawSharp(picture, pictureW, pictureH, look, SHARP_STRENGTH + look.sharpen, window, ::quad)
                 swap(atNs, timed = true)
                 return
             } catch (e: Throwable) {
@@ -460,6 +515,7 @@ internal class VideoGpuStage(
             GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "bias"), look.bias)
         }
         if (level >= LEVEL_SHARP) GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "sharp"), look.sharpen)
+        GLES20.glUniform4fv(GLES20.glGetUniformLocation(program, "crop"), 1, window, 0)
         quad(program)
         swap(atNs, timed = up != Upscaling.OFF)
     }
@@ -475,6 +531,21 @@ internal class VideoGpuStage(
         }
         EGLExt.eglPresentationTimeANDROID(display, window, atNs)
         EGL14.eglSwapBuffers(display, window)
+    }
+
+    private val cropValues = FloatArray(4)
+
+    /**
+     * O rectângulo a mostrar ([crop]) para o vertex shader da última passagem: (x, y, largura, altura) nas coordenadas
+     * da textura, com o y 0 em baixo; sem corte, a imagem toda.
+     */
+    private fun cropUniform(): FloatArray {
+        val r = crop?.invoke()?.takeUnless { it.isFull } ?: CropRect.FULL
+        cropValues[0] = r.left
+        cropValues[1] = 1f - r.bottom
+        cropValues[2] = r.width
+        cropValues[3] = r.height
+        return cropValues
     }
 
     /** A variante da última passagem: de onde lê ([fromDecoder] ou a imagem de fora) e o que faz ([level]). */
@@ -713,13 +784,36 @@ internal class VideoGpuStage(
             }
         """
 
-        // A última passagem. uv: 0..1 na imagem; as coordenadas passam pela transformação da textura (a do
+        // A grelha do brilho para cortar as barras pretas: cada ponto lê um píxel da textura do descodificador e guarda o
+        // Y (BT.601 sobre o RGB que o amostrador dá, com o preto em 0) no vermelho.
+        const val VERTEX_PROBE = """
+            attribute vec2 position;
+            uniform mat4 st;
+            varying vec2 c;
+            void main() {
+                c = (st * vec4((position + 1.0) * 0.5, 0.0, 1.0)).xy;
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+        """
+
+        const val FRAGMENT_PROBE = """
+            #extension GL_OES_EGL_image_external : require
+            precision mediump float;
+            uniform samplerExternalOES tex;
+            varying vec2 c;
+            void main() {
+                gl_FragColor = vec4(dot(texture2D(tex, c).rgb, vec3(0.299, 0.587, 0.114)), 0.0, 0.0, 1.0);
+            }
+        """
+
+        // A última passagem. uv: 0..1 na imagem (só o rectângulo [crop], ao cortar as barras pretas); as coordenadas passam pela transformação da textura (a do
         // descodificador, ou nenhuma na imagem de fora). n/s/w/e: os quatro vizinhos, a um píxel do vídeo (texel), só
         // lidos pela variante com nitidez.
         const val VERTEX_FINAL = """
             attribute vec2 position;
             uniform mat4 st;
             uniform vec2 texel;
+            uniform vec4 crop;
             varying vec2 c;
             varying vec2 n;
             varying vec2 s;
@@ -727,7 +821,7 @@ internal class VideoGpuStage(
             varying vec2 e;
             vec2 at(vec2 uv) { return (st * vec4(uv, 0.0, 1.0)).xy; }
             void main() {
-                vec2 uv = (position + 1.0) * 0.5;
+                vec2 uv = crop.xy + (position + 1.0) * 0.5 * crop.zw;
                 c = at(uv);
                 n = at(uv + vec2(0.0, texel.y));
                 s = at(uv - vec2(0.0, texel.y));

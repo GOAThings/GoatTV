@@ -998,4 +998,8 @@
     <string name="mobile_data_quality_sub">モバイルデータでは、複数の画質があるHLSチャンネルはデータ節約（最大720p）を使い、通信量を抑えます。Wi-Fiに戻ると通常の画質に戻ります。通常のTSチャンネルは変わりません</string>
     <string name="mobile_data_quality_auto">データ節約</string>
     <string name="mobile_data_quality_same">Wi-Fiと同じ</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">黒帯を除去</string>
+    <string name="auto_crop_sub">映像に含まれる黒帯（4:3 の番組、レターボックスの映画）が隠れるだけ拡大します。アスペクト比が「フィット」のときのみ</string>
 </resources>

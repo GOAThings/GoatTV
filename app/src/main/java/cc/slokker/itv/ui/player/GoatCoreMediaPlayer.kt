@@ -29,7 +29,9 @@ import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.media.AutoCrop
 import cc.slokker.itv.media.Codec
+import cc.slokker.itv.media.CropRect
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TeletextPage
 import cc.slokker.itv.media.VideoInfo
@@ -72,12 +74,60 @@ internal class GoatCoreMediaPlayer(
     private val stereoOutput: () -> Boolean = { true },
     /** Aumentar a imagem (Prefs.Upscale; ver [GoatCorePlayer.upscale]): "off" fora da imagem principal. */
     private val upscale: String = Prefs.Upscale.OFF,
+    /** Cortar as barras pretas (Prefs.autoCrop; ver [GoatCorePlayer.autoCrop]): só na imagem principal. */
+    private val autoCrop: Boolean = false,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /**
      * Definições → Imagem (ver [GoatCorePlayer.picture]): muda-se com o canal a dar. Passar de tudo no 0 para algum
      * ajuste (ou voltar) só vale ao abrir o canal (quem cria o player recria-o, ver PlayerBuild.picture).
      */
     @Volatile var picture: cc.slokker.itv.media.PictureLook = cc.slokker.itv.media.PictureLook()
+
+    /**
+     * A proporção deste canal é Ajustar (Prefs.Aspect.FIT; quem mostra diz qual é, ver rememberChannelAspect): só aí
+     * se cortam as barras pretas. Nos outros modos a imagem já enche o ecrã.
+     */
+    var fitMode: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            applyCrop()
+            invalidateState()
+        }
+
+    /** O tamanho do vídeo como o motor o dá (sem o corte das barras pretas, ver [applyCrop]). */
+    private var baseVideoSize = VideoSize.UNKNOWN
+
+    /** Cortar as barras pretas: a parte do quadro com imagem, a última que o motor disse. */
+    private var activeArea = CropRect.FULL
+
+    /** A vista que leva a imagem (a VideoView, à volta da do vídeo e da que lhe dá a proporção): o "ecrã" do corte. */
+    private var cropBox: android.view.View? = null
+    private val cropBoxLayout = android.view.View.OnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+        if (r - l != or - ol || b - t != ob - ot) {
+            applyCrop()
+            invalidateState()
+        }
+    }
+
+    /**
+     * O corte das barras pretas: o que mostrar do quadro para a parte com imagem encher a vista (AutoCrop.window), para
+     * o motor (a GPU desenha só isso) e para a vista (a proporção do vídeo passa a ser a desse rectângulo: a proporção
+     * do píxel leva a diferença, e a largura e a altura ficam as do vídeo, para quem as mostra).
+     */
+    private fun applyCrop() {
+        val base = baseVideoSize
+        val par = base.pixelWidthHeightRatio.takeIf { it > 0f } ?: 1f
+        val box = cropBox
+        val screen = if (box != null && box.width > 0 && box.height > 0) box.width.toFloat() / box.height else 16f / 9f
+        val window = if (autoCrop && fitMode && base.width > 0 && base.height > 0) {
+            AutoCrop.window(activeArea, base.width * par / base.height, screen)
+        } else {
+            CropRect.FULL
+        }
+        core?.crop = window
+        videoSize = if (window.isFull) base else VideoSize(base.width, base.height, par * window.width / window.height)
+    }
 
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
@@ -237,6 +287,8 @@ internal class GoatCoreMediaPlayer(
             }
         }
         surfaceView = null
+        cropBox?.removeOnLayoutChangeListener(cropBoxLayout)
+        cropBox = null
         textureView?.let { if (it.surfaceTextureListener === textureListener) it.surfaceTextureListener = null }
         textureView = null
         releaseTextureSurface()
@@ -267,6 +319,8 @@ internal class GoatCoreMediaPlayer(
         error = null
         tracks = Tracks.EMPTY
         videoSize = VideoSize.UNKNOWN
+        baseVideoSize = VideoSize.UNKNOWN
+        activeArea = CropRect.FULL
         invalidateState()
     }
 
@@ -281,10 +335,14 @@ internal class GoatCoreMediaPlayer(
         val uri = uri ?: return
         val g = ++generation
         startPositionMs = -1
+        // Um motor novo mede as barras de novo.
+        activeArea = CropRect.FULL
+        applyCrop()
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
             audioLevel = audioLevel, levelKey = levelKey,
             audioDelayMs = audioDelayMs, audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, stereoOutput = stereoOutput,
-            deinterlace = deinterlace, picture = { picture }, upscale = upscale, surfaceSize = ::videoSurfaceSize, needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
+            deinterlace = deinterlace, picture = { picture }, upscale = upscale, surfaceSize = ::videoSurfaceSize, autoCrop = autoCrop,
+            needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrameMs = ms
                 firstFrame = true
@@ -315,7 +373,15 @@ internal class GoatCoreMediaPlayer(
                 playbackState = Player.STATE_ENDED
             }
 
-            override fun onVideoSize(width: Int, height: Int, pixelRatio: Float) = post(g) { videoSize = VideoSize(width, height, pixelRatio) }
+            override fun onVideoSize(width: Int, height: Int, pixelRatio: Float) = post(g) {
+                baseVideoSize = VideoSize(width, height, pixelRatio)
+                applyCrop()
+            }
+
+            override fun onActiveArea(area: CropRect) = post(g) {
+                activeArea = area
+                applyCrop()
+            }
 
             override fun onCaptionsFound() = post(g) {
                 captionsFound = true
@@ -679,6 +745,11 @@ internal class GoatCoreMediaPlayer(
                 textureView = videoOutput
                 videoOutput.surfaceTextureListener = textureListener
                 videoOutput.surfaceTexture?.let { textureSurface = Surface(it) }
+            }
+            if (autoCrop) {
+                // A VideoView: a vista do vídeo está dentro da que lhe dá a proporção, e essa dentro dela.
+                cropBox = ((videoOutput as android.view.View).parent as? android.view.View)?.parent as? android.view.View
+                cropBox?.addOnLayoutChangeListener(cropBoxLayout)
             }
             // O ecrã trocou de vista (acontece logo ao abrir): o descodificador da superfície antiga ficava parado (os do
             // Android só descodificam para uma superfície que alguém mostra), por isso recomeça-se na nova.

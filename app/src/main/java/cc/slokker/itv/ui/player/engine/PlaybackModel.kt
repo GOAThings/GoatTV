@@ -379,18 +379,20 @@ internal data class PlayerBuild(
     val picture: Boolean = false,
     /** Aumentar a imagem (Prefs.Upscale): só na imagem principal ("off" nas outras), decide-se ao criar o player. */
     val upscale: String = Prefs.Upscale.OFF,
+    /** Cortar as barras pretas (Prefs.autoCrop): só na imagem principal, decide-se ao criar o player. */
+    val autoCrop: Boolean = false,
 ) {
     /** As definições com que se cria o player ([buildPlayer] lê só estas). */
     fun applyTo(prefs: Prefs): Prefs = prefs.copy(
         engine = engine, buffer = buffer, decoder = decoder, audioDecoder = audioDecoder, audioPassthrough = audioPassthrough, hdr = hdr,
         deinterlace = deinterlace, audioDelayMs = audioDelayMs, audioLevel = audioLevel,
-        audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, upscale = upscale,
+        audioDelayAuto = audioDelayAuto, audioVoices = audioVoices, upscale = upscale, autoCrop = autoCrop,
     )
 
     companion object {
-        fun of(prefs: Prefs, engine: String, passthrough: Boolean, picture: Boolean = false, upscale: String = Prefs.Upscale.OFF) = PlayerBuild(
+        fun of(prefs: Prefs, engine: String, passthrough: Boolean, picture: Boolean = false, upscale: String = Prefs.Upscale.OFF, autoCrop: Boolean = false) = PlayerBuild(
             engine, prefs.buffer, prefs.decoder, prefs.audioDecoder, prefs.audioPassthrough && passthrough, prefs.hdr, prefs.deinterlace, prefs.audioDelayMs,
-            prefs.audioLevel, prefs.audioDelayAuto, prefs.audioVoices, picture, upscale,
+            prefs.audioLevel, prefs.audioDelayAuto, prefs.audioVoices, picture, upscale, autoCrop,
         )
     }
 }

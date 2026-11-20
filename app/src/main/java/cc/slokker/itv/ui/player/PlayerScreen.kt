@@ -519,6 +519,8 @@ fun PlayerScreen(vm: AppViewModel) {
     LaunchedEffect(aspect, videoView) {
         videoView?.setResizeMode(resizeModeFor(aspect))
     }
+    // As barras pretas só se cortam no modo Ajustar (ver GoatCoreMediaPlayer.fitMode).
+    LaunchedEffect(aspect, player) { (player as? GoatCoreMediaPlayer)?.fitMode = aspect == Prefs.Aspect.FIT }
 
     // O aspeto das legendas, na imagem que as mostra (a do canal principal, também em várias imagens).
     LaunchedEffect(mainView, prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition) {

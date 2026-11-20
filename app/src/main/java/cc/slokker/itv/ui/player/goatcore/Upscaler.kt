@@ -51,9 +51,10 @@ internal class Upscaler(private val es3: Boolean) {
 
     /**
      * Desenha [source] ([w]×[h], a imagem de fora) aumentada no framebuffer que está ligado (o ecrã), com o viewport já
-     * posto, com o realce [strength] e a cor de [look]. Falha (o shader não compila) com uma exceção.
+     * posto, com o realce [strength] e a cor de [look]. [crop]: o rectângulo da imagem a mostrar (x, y, largura, altura
+     * nas coordenadas da textura; ver VideoGpuStage.cropUniform). Falha (o shader não compila) com uma exceção.
      */
-    fun drawSharp(source: Int, w: Int, h: Int, look: PictureLook, strength: Float, quad: (Int) -> Unit) {
+    fun drawSharp(source: Int, w: Int, h: Int, look: PictureLook, strength: Float, crop: FloatArray, quad: (Int) -> Unit) {
         if (phase == 0) phase = phaseTexture()
         val colour = !look.neutral
         val program = sharp.getOrPut(colour) { VideoGpuStage.program(VERTEX_SHARP, fragmentSharp(colour)) }
@@ -69,6 +70,7 @@ internal class Upscaler(private val es3: Boolean) {
         GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "texel"), 1f / w, 1f / h)
         GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "size"), w.toFloat(), h.toFloat())
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "sharp"), strength)
+        GLES20.glUniform4fv(GLES20.glGetUniformLocation(program, "crop"), 1, crop, 0)
         if (colour) {
             GLES20.glUniformMatrix3fv(GLES20.glGetUniformLocation(program, "colour"), 1, false, look.rgbMatrix(), 0)
             GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "bias"), look.bias)
@@ -354,6 +356,7 @@ internal class Upscaler(private val es3: Boolean) {
             attribute vec2 position;
             uniform vec2 texel;
             uniform vec2 size;
+            uniform vec4 crop;
             varying vec2 tb;
             varying vec2 tc;
             varying vec2 te;
@@ -368,7 +371,7 @@ internal class Upscaler(private val es3: Boolean) {
             varying vec2 to;
             varying vec2 ph;
             void main() {
-                vec2 uv = (position + 1.0) * 0.5;
+                vec2 uv = crop.xy + (position + 1.0) * 0.5 * crop.zw;
                 vec2 o = uv - 0.5 * texel;
                 tb = o + vec2(0.0, -1.0) * texel;
                 tc = o + vec2(1.0, -1.0) * texel;

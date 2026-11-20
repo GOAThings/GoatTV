@@ -1001,4 +1001,8 @@
     <string name="mobile_data_quality_sub">मोबाइल डेटा पर, कई गुणवत्ता वाले HLS चैनल आपका प्लान बचाने के लिए डेटा सेवर (अधिकतम 720p) इस्तेमाल करते हैं। Wi-Fi पर लौटने पर सामान्य गुणवत्ता वापस आ जाती है। सादे TS चैनल नहीं बदलते</string>
     <string name="mobile_data_quality_auto">डेटा बचाएँ</string>
     <string name="mobile_data_quality_same">Wi-Fi जैसी ही</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">काली पट्टियाँ हटाएँ</string>
+    <string name="auto_crop_sub">तस्वीर में आने वाली काली पट्टियाँ छिपाने के लिए बस उतना ही ज़ूम करता है (4:3 कार्यक्रम, पट्टियों वाली फ़िल्में)। केवल आस्पेक्ट रेशियो फ़िट पर होने पर</string>
 </resources>

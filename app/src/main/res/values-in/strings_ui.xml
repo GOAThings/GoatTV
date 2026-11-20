@@ -999,4 +999,8 @@
     <string name="mobile_data_quality_sub">Di data seluler, saluran HLS dengan beberapa kualitas memakai Hemat data (hingga 720p) agar paket Anda hemat. Kembali ke Wi-Fi, kualitas biasa kembali. Saluran TS biasa tidak berubah</string>
     <string name="mobile_data_quality_auto">Hemat data</string>
     <string name="mobile_data_quality_same">Sama seperti Wi-Fi</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Hapus bilah hitam</string>
+    <string name="auto_crop_sub">Memperbesar secukupnya untuk menyembunyikan bilah hitam yang ada di gambar (acara 4:3, film dengan bilah). Hanya jika Rasio aspek diatur ke Pas</string>
 </resources>

@@ -55,7 +55,7 @@ class SettingsCatalogTest {
         val k = Prefs.Key
         assertEquals(
             listOf(
-                TvSection.MAIN to listOf("format", k.BUFFER, k.HLS_QUALITY, k.DECODER, k.DEINTERLACE, k.ASPECT, k.FREEZE_FRAME, k.TIMESHIFT, k.PROTECT_PAUSED, k.RECONNECT_SECONDS, k.AFR, k.AFR_FALLBACK, k.HDR),
+                TvSection.MAIN to listOf("format", k.BUFFER, k.HLS_QUALITY, k.DECODER, k.DEINTERLACE, k.ASPECT, k.AUTO_CROP, k.FREEZE_FRAME, k.TIMESHIFT, k.PROTECT_PAUSED, k.RECONNECT_SECONDS, k.AFR, k.AFR_FALLBACK, k.HDR),
                 TvSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, k.UPSCALE, "picture_reset"),
                 TvSection.AUDIO to listOf(k.AUDIO_LANGUAGE, k.AUDIO_PASSTHROUGH, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES, k.AUDIO_DECODER),
                 TvSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
@@ -81,7 +81,7 @@ class SettingsCatalogTest {
         val k = Prefs.Key
         assertEquals(
             listOf(
-                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES),
+                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.AUTO_CROP, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES),
                 PhoneSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, k.UPSCALE, "picture_reset"),
                 PhoneSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
                 PhoneSection.CONNECTION to listOf(k.BUFFER, k.HLS_QUALITY, k.MOBILE_DATA_QUALITY, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY, k.IDLE_STOP),

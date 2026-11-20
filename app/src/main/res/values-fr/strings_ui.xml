@@ -1003,4 +1003,8 @@
     <string name="mobile_data_quality_sub">En données mobiles, les chaînes HLS à plusieurs qualités utilisent Économie de données (jusqu\'à 720p) pour préserver votre forfait. Sur le Wi-Fi, la qualité habituelle revient. Les chaînes TS simples ne changent pas</string>
     <string name="mobile_data_quality_auto">Économiser les données</string>
     <string name="mobile_data_quality_same">Comme en Wi-Fi</string>
+
+    <!-- Cortar barras pretas (auto_crop) -->
+    <string name="auto_crop">Supprimer les bandes noires</string>
+    <string name="auto_crop_sub">Agrandit juste assez pour masquer les bandes noires présentes dans l\'image (programmes 4:3, films au format cinéma). Uniquement avec le format d\'image sur Ajuster</string>
 </resources>
