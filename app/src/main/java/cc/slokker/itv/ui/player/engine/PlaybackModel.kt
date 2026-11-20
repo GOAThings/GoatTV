@@ -241,6 +241,18 @@ internal interface PlaybackHost {
 
     /** Um canal em direto da lista principal deu: ela já não está em baixo. */
     fun onMainPlaying(request: PlaybackRequest) = Unit
+
+    /**
+     * A faixa de [type] (C.TRACK_TYPE_AUDIO/TEXT) escolhida à mão no canal de [request] noutra vez, como o TrackMemory
+     * a guarda ("" = nada; ver ChannelMemory). Ganha às línguas das definições.
+     */
+    fun rememberedTrack(request: PlaybackRequest, type: Int): String = ""
+
+    /** A pessoa escolheu a faixa de [type] à mão: [memo] fica na memória do canal ("" limpa-a). */
+    fun rememberTrack(request: PlaybackRequest, type: Int, memo: String) = Unit
+
+    /** O canal de [request] abriu-se (a memória dele passa a ser a usada há menos tempo). */
+    fun onChannelOpened(request: PlaybackRequest) = Unit
 }
 
 /** Como abrir uma tentativa (ver [loadStream]). */

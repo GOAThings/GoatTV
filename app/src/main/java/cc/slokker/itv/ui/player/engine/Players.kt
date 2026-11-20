@@ -48,6 +48,7 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.playback.TrackMemory
 import cc.slokker.itv.ui.player.GoatCoreMediaPlayer
 import cc.slokker.itv.ui.player.HdrType
 import cc.slokker.itv.ui.player.Timeshift
@@ -244,18 +245,18 @@ internal fun Player.chooseTracks(tracks: Tracks, wish: TrackWish): Set<Int> {
         if (groups.isEmpty()) continue
         decided += type
         val all = groups.flatMap { g -> (0 until g.length).map { g to it } }
-        val infos = all.map { (g, i) ->
-            val f = g.getTrackFormat(i)
-            TrackInfo(
-                f.language, f.label, f.channelCount, g.isTrackSupported(i),
-                selected = g.isTrackSelected(i) && !(type == C.TRACK_TYPE_TEXT && textOff),
-                forced = f.selectionFlags and C.SELECTION_FLAG_FORCED != 0,
-            )
+        val infos = all.map { (g, i) -> g.getTrackFormat(i).trackInfo(g.isTrackSupported(i), g.isTrackSelected(i) && !(type == C.TRACK_TYPE_TEXT && textOff)) }
+        // O que se escolheu à mão neste canal noutra vez ganha às línguas; se a faixa hoje não existe, valem elas.
+        val memo = if (type == C.TRACK_TYPE_AUDIO) wish.audioMemo else wish.textMemo
+        if (type == C.TRACK_TYPE_TEXT && memo == TrackMemory.OFF) {
+            if (!textOff) trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, true).build()
+            continue
         }
-        val index = if (type == C.TRACK_TYPE_AUDIO) {
-            TrackPick.audio(infos, wish.audioLanguage, wish.surround)
-        } else {
-            TrackPick.text(infos, wish.textLanguage)?.takeIf { !infos[it].selected }
+        val remembered = TrackMemory.find(infos, memo)
+        val index = when {
+            remembered != null -> remembered.takeIf { !infos[it].selected }
+            type == C.TRACK_TYPE_AUDIO -> TrackPick.audio(infos, wish.audioLanguage, wish.surround)
+            else -> TrackPick.text(infos, wish.textLanguage)?.takeIf { !infos[it].selected }
         } ?: continue
         val (group, i) = all[index]
         trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -264,6 +265,39 @@ internal fun Player.chooseTracks(tracks: Tracks, wish: TrackWish): Set<Int> {
             .build()
     }
     return decided
+}
+
+/**
+ * A faixa como a escolha automática e a memória do canal a veem ([TrackPick], [TrackMemory]): além da língua e dos
+ * canais, o formato e o que distingue duas faixas iguais (a página do teletexto, a audiodescrição, as legendas para
+ * surdos).
+ */
+internal fun Format.trackInfo(supported: Boolean, selected: Boolean): TrackInfo {
+    val codec = when (sampleMimeType) {
+        MimeTypes.AUDIO_AAC, "audio/mp4a-latm" -> "aac"
+        MimeTypes.AUDIO_AC3 -> "ac3"
+        MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_E_AC3_JOC -> "eac3"
+        MimeTypes.AUDIO_MPEG_L2 -> "mp2"
+        MimeTypes.AUDIO_MPEG -> "mp3"
+        MimeTypes.APPLICATION_DVBSUBS -> "dvb"
+        GoatCoreMediaPlayer.TELETEXT_MIME -> "teletext"
+        MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> "cc"
+        MimeTypes.TEXT_VTT -> "webvtt"
+        else -> null
+    }
+    // A página do teletexto vem na chave da faixa (ver GoatCorePlayer.teletextKey).
+    val page = if (codec == "teletext") id?.removePrefix("goatcore:")?.toIntOrNull()?.let { (it and 0xFFF).toString(16) } else null
+    val role = when {
+        roleFlags and C.ROLE_FLAG_DESCRIBES_VIDEO != 0 -> "ad"
+        roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0 -> "hi"
+        else -> null
+    }
+    return TrackInfo(
+        language, label, channelCount, supported, selected,
+        forced = selectionFlags and C.SELECTION_FLAG_FORCED != 0,
+        codec = codec,
+        detail = listOfNotNull(page, role).joinToString(" ").ifEmpty { null },
+    )
 }
 
 /**

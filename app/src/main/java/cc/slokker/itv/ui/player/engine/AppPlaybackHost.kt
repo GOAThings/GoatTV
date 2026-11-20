@@ -1,5 +1,6 @@
 package cc.slokker.itv.ui.player.engine
 
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Languages
@@ -50,6 +51,24 @@ internal class AppPlaybackHost(
         vm.providerOutage.markDown(member?.playlist?.id ?: data.playlist.id)
     }
     override fun onMainPlaying(request: PlaybackRequest) = vm.providerOutage.clear(latestData().playlist.id)
+
+    // A memória do canal: pela lista aberta e pelo canal que o ecrã mostra (no Modo TV Pro, o da lista única, seja
+    // qual for a fonte a dar; com um failover, o da lista principal).
+    override fun rememberedTrack(request: PlaybackRequest, type: Int): String = vm.channelMemory.memory.let { m ->
+        val list = latestData().playlist.id
+        if (type == C.TRACK_TYPE_AUDIO) m.audio(list, request.shownKey) else m.text(list, request.shownKey)
+    }
+
+    override fun rememberTrack(request: PlaybackRequest, type: Int, memo: String) {
+        val store = vm.channelMemory
+        val list = latestData().playlist.id
+        store.saveIf(if (type == C.TRACK_TYPE_AUDIO) store.memory.setAudio(list, request.shownKey, memo) else store.memory.setText(list, request.shownKey, memo))
+    }
+
+    override fun onChannelOpened(request: PlaybackRequest) {
+        val store = vm.channelMemory
+        store.saveIf(store.memory.touch(latestData().playlist.id, request.shownKey))
+    }
 
     override suspend fun explain(error: PlaybackException, request: PlaybackRequest, format: String?): ErrorInfo {
         val data = latestData()

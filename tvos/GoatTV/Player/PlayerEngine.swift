@@ -186,6 +186,14 @@ final class PlayerEngine: NSObject {
     /// saltos, reconexões). Nas legendas, nil com a escolha feita = desligadas.
     @ObservationIgnored private var manualAudio: (code: String?, name: String)?
     @ObservationIgnored private var manualSubtitle: (code: String?, name: String)?
+    /// A memória do canal (ver ChannelMemory): o áudio e as legendas escolhidos à mão nele noutra vez, como o
+    /// [TrackMemory] os guarda ("" = nada). O leitor pergunta-a ao abrir um canal ([play]) e ela ganha às línguas das
+    /// Definições; se a faixa hoje não existe, valem elas. Só o leitor principal a tem.
+    @ObservationIgnored var channelMemory: ((_ channelKey: String) -> (audio: String, subtitle: String))?
+    /// A pessoa escolheu uma faixa à mão no canal: o que guardar na memória dele ("" limpa-a).
+    @ObservationIgnored var onRememberTrack: ((_ channelKey: String, _ kind: TrackChoice.Kind, _ memo: String) -> Void)?
+    @ObservationIgnored private var rememberedAudio = ""
+    @ObservationIgnored private var rememberedSubtitle = ""
     /// "auto" (HDR quando o canal é HDR) ou "sdr" (a TV fica sempre em SDR).
     @ObservationIgnored var hdr = "auto"
     /// O leitor principal: a sua ligação é a única ao fornecedor (com a das gravações, ver ChannelFeed). O segundo canal
@@ -447,6 +455,9 @@ final class PlayerEngine: NSObject {
         openedKey = channelKey
         openedLive = live
         openedCandidates = candidates
+        let remembered = channelMemory?(channelKey)
+        rememberedAudio = remembered?.audio ?? ""
+        rememberedSubtitle = remembered?.subtitle ?? ""
         if !same {
             manualAudio = nil
             manualSubtitle = nil
@@ -1567,8 +1578,12 @@ extension PlayerEngine {
         }
         guard trackChoice.pending(.audio) else { return }
         trackChoice.done(.audio)
-        let language = audioLanguage.isEmpty ? appLanguage : audioLanguage
-        if let i = TrackPick.audio(options.map(\.info), language: language, surround: preferSurround) { setAudio(options[i].id) }
+        // O que se escolheu à mão neste canal noutra vez ganha à língua; se a faixa hoje não existe, vale a língua.
+        if let i = TrackMemory.find(options.map(\.info), memo: rememberedAudio) {
+            if !options[i].info.selected { setAudio(options[i].id) }
+            return
+        }
+        if let i = TrackPick.audio(options.map(\.info), language: preferredAudioLanguage, surround: preferSurround) { setAudio(options[i].id) }
     }
 
     private func chooseSubtitle() {
@@ -1587,9 +1602,34 @@ extension PlayerEngine {
         }
         guard trackChoice.pending(.text) else { return }
         trackChoice.done(.text)
+        // A memória do canal: desligadas à mão, ou as legendas escolhidas nele (se hoje existirem).
+        if rememberedSubtitle == TrackMemory.off {
+            if options.contains(where: { $0.info.selected }) { setSubtitle(-1) }
+            return
+        }
+        if let i = TrackMemory.find(options.map(\.info), memo: rememberedSubtitle) {
+            if !options[i].info.selected { setSubtitle(options[i].id) }
+            return
+        }
         if let i = TrackPick.text(options.map(\.info), language: subtitleLanguage.isEmpty ? nil : subtitleLanguage), !options[i].info.selected {
             setSubtitle(options[i].id)
         }
+    }
+
+    /// A língua do áudio que vale: a das Definições ou, em "Automático", a da app.
+    private var preferredAudioLanguage: String? { audioLanguage.isEmpty ? appLanguage : audioLanguage }
+
+    /// Uma faixa escolhida à mão no menu ([index] em [options]; -1 = legendas desligadas): fica na memória do canal,
+    /// para ele voltar assim. Devolve false se é a que as regras de sempre davam: a memória do canal limpa-se e deixa
+    /// de ser uma escolha à mão (ao reabrir, as Definições voltam a decidir).
+    private func rememberChoice(_ kind: TrackChoice.Kind, _ options: [TrackOption], _ index: Int) -> Bool {
+        let infos = options.map(\.info)
+        let memo = kind == .audio
+            ? TrackMemory.audioChoice(infos, index: index, language: preferredAudioLanguage, surround: preferSurround)
+            : TrackMemory.textChoice(infos, index: index, language: subtitlesByLanguage && !subtitleLanguage.isEmpty ? subtitleLanguage : nil)
+        if kind == .audio { rememberedAudio = memo } else { rememberedSubtitle = memo }
+        if let key = openedKey { onRememberTrack?(key, kind, memo) }
+        return !memo.isEmpty
     }
 
     /// Volta a escolher as faixas uns instantes depois de abrir (as faixas só se sabem quando o vídeo começa).
@@ -1639,7 +1679,7 @@ extension PlayerEngine {
             }
         case .goatcore:
             return goatCoreAudio.map { t in
-                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected))
+                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected, codec: t.codec))
             }
         }
     }
@@ -1670,7 +1710,8 @@ extension PlayerEngine {
         case .goatcore:
             // As legendas DVB (imagens) e as páginas do teletexto.
             return goatCoreText.map { t in
-                TrackOption(id: t.id, name: t.name, info: TrackInfo(language: t.language, label: t.name, selected: t.selected))
+                TrackOption(id: t.id, name: t.name,
+                            info: TrackInfo(language: t.language, label: t.name, selected: t.selected, codec: t.codec, detail: t.detail))
             }
         }
     }
@@ -1766,23 +1807,39 @@ extension PlayerEngine {
 
     /// As faixas de áudio do GoatCore como o menu as mostra (o id é o PID).
     /// As legendas no GoatCore: a língua e, no teletexto, o número da página ("Português · 888").
-    private var goatCoreText: [(id: Int32, name: String, language: String?, selected: Bool)] {
+    /// [codec] e [detail]: o tipo das legendas e a página do teletexto, para a memória do canal (os nomes do Android,
+    /// ver TrackInfo).
+    private var goatCoreText: [(id: Int32, name: String, language: String?, selected: Bool, codec: String, detail: String?)] {
         guard let g = goatCorePlayback else { return [] }
         return g.textTracks.map { t in
             let language = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 }
             let page = t.isTeletext ? String(t.page, radix: 16) : nil
             let name = t.isCaptions ? "CC1" : [language, page].compactMap { $0 }.joined(separator: " · ")
-            return (Int32(truncatingIfNeeded: t.key), name, t.language, t.key == g.selectedText)
+            let codec = t.isCaptions ? "cc" : (t.isTeletext ? "teletext" : (t.isWebVtt ? "webvtt" : "dvb"))
+            // As legendas para surdos do teletexto (as fechadas não levam detalhe: há uma só).
+            let detail = [page, t.hearingImpaired && !t.isCaptions ? "hi" : nil].compactMap { $0 }.joined(separator: " ")
+            return (Int32(truncatingIfNeeded: t.key), name, t.language, t.key == g.selectedText, codec, detail.isEmpty ? nil : detail)
         }
     }
 
-    private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool)] {
+    private var goatCoreAudio: [(id: Int32, name: String, language: String?, selected: Bool, codec: String?)] {
         guard let g = goatCorePlayback else { return [] }
         let list = g.audioTracks
         let selected = g.selectedAudio ?? list.first?.pid
         return list.enumerated().map { i, t in
             let name = t.language.map { Languages.code($0).map { Languages.displayName($0, locale: self.appLanguage ?? "en") } ?? $0 } ?? "Audio \(i + 1)"
-            return (Int32(t.pid), name, t.language, t.pid == selected)
+            return (Int32(t.pid), name, t.language, t.pid == selected, Self.memoryCodec(t.codec))
+        }
+    }
+
+    /// O formato do áudio pelo nome curto da memória do canal (os mesmos do Android), a partir do do núcleo partilhado.
+    private static func memoryCodec(_ codec: String) -> String? {
+        switch codec {
+        case "AAC_ADTS", "AAC_LATM": return "aac"
+        case "AC3": return "ac3"
+        case "EAC3": return "eac3"
+        case "MPEG_AUDIO": return "mp2"
+        default: return nil
         }
     }
 
@@ -1837,10 +1894,17 @@ extension PlayerEngine {
     }
 
     /// O menu das faixas: a escolha ganha às Definições até mudar de canal.
+    /// Fica na memória do canal ([rememberChoice]); voltar à faixa de sempre limpa-a.
     func selectAudio(_ id: Int32) {
-        trackChoice.onManual(.audio)
-        manualApplied.insert(.audio)
-        manualAudio = audioOptions().first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        let options = audioOptions()
+        if rememberChoice(.audio, options, options.firstIndex { $0.id == id } ?? -1) {
+            trackChoice.onManual(.audio)
+            manualApplied.insert(.audio)
+            manualAudio = options.first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        } else {
+            trackChoice.onAuto(.audio)
+            manualAudio = nil
+        }
         setAudio(id)
     }
 
@@ -1892,10 +1956,17 @@ extension PlayerEngine {
     }
 
     /// O menu das legendas (-1 = desligadas): a escolha ganha às Definições até mudar de canal.
+    /// Fica na memória do canal ([rememberChoice]); voltar ao que as Definições davam limpa-a.
     func selectSubtitle(_ id: Int32) {
-        trackChoice.onManual(.text)
-        manualApplied.insert(.text)
-        manualSubtitle = id < 0 ? nil : subtitleOptions().first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        let options = subtitleOptions()
+        if rememberChoice(.text, options, id < 0 ? -1 : (options.firstIndex { $0.id == id } ?? -1)) {
+            trackChoice.onManual(.text)
+            manualApplied.insert(.text)
+            manualSubtitle = id < 0 ? nil : options.first { $0.id == id }.map { (code: $0.info.code, name: $0.name) }
+        } else {
+            trackChoice.onAuto(.text)
+            manualSubtitle = nil
+        }
         setSubtitle(id)
     }
 

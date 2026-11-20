@@ -11,6 +11,7 @@ import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
 import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
+import cc.slokker.itv.ui.player.OnManualTrack
 import cc.slokker.itv.ui.player.NetVerdict
 import cc.slokker.itv.ui.player.icon
 import cc.slokker.itv.ui.player.mbps
@@ -144,7 +145,7 @@ internal fun settingItems(
     vm: AppViewModel,
     player: Player?,
     playing: Channel?,
-    onManualTrack: (Int) -> Unit,
+    onManualTrack: OnManualTrack,
     push: (Route, String) -> Unit,
     pop: () -> Unit,
     popNested: () -> Unit,
@@ -1083,7 +1084,7 @@ private fun guideLabel(name: String?, country: String?) = listOfNotNull(name, co
 
 // ---- Faixas de áudio e legendas, informação do stream ---------------------------------------
 
-private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: (Int) -> Unit): List<Item> {
+private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: OnManualTrack): List<Item> {
     val options = trackOptions(tracks, type, player, allowOff, onManual)
     if (options.isEmpty()) return listOf(Item.Info("none", I18n.s.noTracks, ""))
     return options.map { o -> Item.Check(o.key, o.label, o.selected, o.details?.takeIf { it.isNotEmpty() }) { o.select() } }

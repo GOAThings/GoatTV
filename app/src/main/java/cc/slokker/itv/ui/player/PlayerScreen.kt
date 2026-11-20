@@ -105,6 +105,7 @@ import cc.slokker.itv.ui.player.engine.cannotDecode
 import cc.slokker.itv.ui.player.engine.videoFormat
 import cc.slokker.itv.ui.player.engine.titleCard
 import cc.slokker.itv.ui.player.engine.status
+import cc.slokker.itv.ui.player.engine.rememberChannelAspect
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
@@ -499,8 +500,10 @@ fun PlayerScreen(vm: AppViewModel) {
         if (bigTile >= tileCount) bigTile = 0
     }
 
-    LaunchedEffect(prefs.aspect, videoView) {
-        videoView?.setResizeMode(resizeModeFor(prefs.aspect))
+    // A proporção deste canal: a escolhida à mão nele (o botão do HUD) ou, sem nenhuma, a das definições.
+    val aspect = rememberChannelAspect(vm, data.playlist.id, current.key, prefs.aspect)
+    LaunchedEffect(aspect, videoView) {
+        videoView?.setResizeMode(resizeModeFor(aspect))
     }
 
     // O aspeto das legendas, na imagem que as mostra (a do canal principal, também em várias imagens).
@@ -1158,12 +1161,13 @@ fun PlayerScreen(vm: AppViewModel) {
                     barFocus = if (pausable) hudFocus else null,
                 ) { live ->
                     HudButtons(
-                        vm, current, live, prefs.aspect, isFavorite, sleepAt,
+                        vm, current, live, aspect, isFavorite, sleepAt,
                         pauseLive = pausable, recording = activeRecordings.any { it.playlistId == data.playlist.id && it.channelKey == current.key },
                         second = extras.isNotEmpty(), canAddChannel = extras.size < PlaybackState.MAX_EXTRAS,
                         backup = catchup == null && (data.pro != null || vm.backupOf(data.playlist.id) != null),
                         pro = data.pro != null,
                         dualLayout = dualLayout, firstFocus = if (pausable) null else hudFocus,
+                        onAspect = { vm.channelMemory.setAspect(data.playlist.id, current.key, it, prefs.aspect) },
                     ) { action ->
                         when (action) {
                             HudAction.AUDIO -> trackPicker = C.TRACK_TYPE_AUDIO

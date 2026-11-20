@@ -82,6 +82,8 @@ import cc.slokker.itv.ui.player.rememberBackupPanel
 import cc.slokker.itv.data.ChannelMatch
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.ui.player.engine.rememberChannelAspect
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.formatTime
 import cc.slokker.itv.ui.common.rememberEpg
@@ -662,7 +664,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep) }
 
 /** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
 @Composable
@@ -674,6 +676,7 @@ private fun PlayerOption.label(): String {
     return when (this) {
         PlayerOption.AUDIO -> s.audio
         PlayerOption.SUBTITLES -> s.subtitles
+        PlayerOption.ASPECT -> s.aspect
         PlayerOption.QUALITY -> s.hlsQuality
         PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
@@ -721,6 +724,21 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                                 MenuRow(setting.title(s), choices[current].second) {
                                     vm.saveSetting(setting, choices[(current + 1) % choices.size].first)
                                 }
+                            }
+                        }
+                    }
+                }
+                // A proporção da imagem só neste canal (fica na memória dele, ver ChannelMemory); a de todos é nas
+                // Definições, e escolher essa outra vez limpa a do canal.
+                PlayerOption.ASPECT -> Section(option.label()) {
+                    val channel = vm.playing.collectAsStateWithLifecycle().value
+                    val list = vm.content.collectAsStateWithLifecycle().value?.playlist?.id
+                    if (channel != null && list != null) {
+                        val aspect = rememberChannelAspect(vm, list, channel.key, prefs.aspect)
+                        listOf(Prefs.Aspect.FIT to s.aspectFit, Prefs.Aspect.ZOOM to s.aspectZoom, Prefs.Aspect.FILL to s.aspectFill).forEach { (value, label) ->
+                            MenuRow(label, null, checked = aspect == value) {
+                                vm.channelMemory.setAspect(list, channel.key, value, prefs.aspect)
+                                onClose()
                             }
                         }
                     }

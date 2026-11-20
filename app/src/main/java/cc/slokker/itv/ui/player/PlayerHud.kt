@@ -39,7 +39,7 @@ internal enum class HudAction { AUDIO, SUBTITLES, RECORD, SECOND_CHANNEL, ADD_CH
  * fechar o segundo canal) faz-se aqui; o que abre ou troca coisas no ecrã vai para [onAction].
  * [live]: o programa a dar; [pauseLive]: há pausa do direto; [second]: há canais extra no ecrã ([canAddChannel]: cabe
  * mais um, até 4); [recording]: este canal está a gravar (o botão pára), senão "Gravar" aparece com a pausa do direto
- * (grava-se do anel dela).
+ * (grava-se do anel dela). [aspect]: a proporção deste canal; o botão muda-a só nele ([onAspect], ver ChannelMemory).
  */
 @Composable
 internal fun HudButtons(
@@ -60,6 +60,7 @@ internal fun HudButtons(
     dualLayout: DualLayout,
     /** O foco ao abrir, quando não vai para a barra de progresso (sem pausa do direto). */
     firstFocus: FocusRequester?,
+    onAspect: (String) -> Unit,
     onAction: (HudAction) -> Unit,
 ) {
     val s = LocalStrings.current
@@ -97,7 +98,7 @@ internal fun HudButtons(
                     Prefs.Aspect.ZOOM -> Prefs.Aspect.FILL
                     else -> Prefs.Aspect.FIT
                 }
-                vm.setPref(Prefs.Key.ASPECT, next)
+                onAspect(next)
             },
         )
         // Pausar o direto é na barra de progresso, por cima (OK nela), ou com Play/Pausa no comando.

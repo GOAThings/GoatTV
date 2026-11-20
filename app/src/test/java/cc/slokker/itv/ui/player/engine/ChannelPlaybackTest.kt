@@ -6,6 +6,7 @@ import androidx.media3.common.Player
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.playback.TrackMemory
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.common.ErrorInfo
@@ -108,6 +109,12 @@ class ChannelPlaybackTest {
         val backupNotices = mutableListOf<String>()
         override suspend fun backupsFor(request: PlaybackRequest): List<BackupStream> { backupAsked++; return backups }
         override fun onBackupPlaying(origin: BackupOrigin) { backupNotices += "${origin.mainName}>${origin.backupName}" }
+        /** A memória dos canais: "canal/tipo" → o que se guardou. */
+        val memory = HashMap<String, String>()
+        override fun rememberedTrack(request: PlaybackRequest, type: Int): String = memory["${request.shownKey}/$type"].orEmpty()
+        override fun rememberTrack(request: PlaybackRequest, type: Int, memo: String) {
+            if (memo.isEmpty()) memory.remove("${request.shownKey}/$type") else memory["${request.shownKey}/$type"] = memo
+        }
         var down = false
         val mainFailures = mutableListOf<PlaybackException>()
         var mainPlaying = 0
@@ -751,16 +758,72 @@ class ChannelPlaybackTest {
         val p = playback()
         p.tuneNow(live())
         p.onTracksChanged(engine)
-        p.onManualTrack(C.TRACK_TYPE_AUDIO)
-        // O mesmo canal noutro ponto (catch-up, um salto): o áudio escolhido à mão fica, as legendas voltam a decidir-se.
+        p.onManualTrack(C.TRACK_TYPE_AUDIO, listOf(TrackInfo("en", null), TrackInfo("pt", null)), 1)
+        // O mesmo canal noutro ponto (catch-up, um salto): o áudio escolhido à mão fica (repõe-se pela memória do canal,
+        // sem a língua das definições), as legendas voltam a decidir-se.
         val cu = Catchup(channel, "Programa", 0L, 3_600_000L)
         p.tuneNow(PlaybackRequest(channel, cu, 0L, listOf(ts)))
         assertNull(engine.lastOptions?.audioLanguage)
         assertEquals("pt", engine.lastOptions?.textLanguage)
         p.onTracksChanged(engine)
-        assertEquals(TrackWish("en", "pt", surround = false, audio = false, text = true), engine.wishes.last())
+        assertEquals(TrackWish("en", "pt", surround = false, audio = true, text = true, audioMemo = "pt;;;0;0"), engine.wishes.last())
         // Outro canal: volta a valer a definição.
         p.tuneNow(PlaybackRequest(channel.copy(key = "k2"), null, 0L, listOf(hls)))
+        assertEquals("en", engine.lastOptions?.audioLanguage)
+        p.onTracksChanged(engine)
+        assertEquals(TrackWish("en", "pt", surround = false), engine.wishes.last())
+    }
+
+    @Test
+    fun aEscolhaAMaoFicaNaMemoriaDoCanalEVoltaComEle() {
+        host.prefs = Prefs(audioLanguage = "en", subtitleLanguage = "pt")
+        val p = playback()
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        val audio = listOf(TrackInfo("en", null, codec = "aac"), TrackInfo("pt", null, codec = "ac3", channels = 6))
+        val text = listOf(TrackInfo("pt", null, codec = "dvb"), TrackInfo("en", null, codec = "dvb"))
+        p.onManualTrack(C.TRACK_TYPE_AUDIO, audio, 1)
+        p.onManualTrack(C.TRACK_TYPE_TEXT, text, -1)
+        assertEquals("pt;ac3;;6;0", host.memory["k1/${C.TRACK_TYPE_AUDIO}"])
+        assertEquals(TrackMemory.OFF, host.memory["k1/${C.TRACK_TYPE_TEXT}"])
+        // Outro dia (um player novo): outro canal não tem memória; neste, o que se escolheu vai no pedido e ganha às línguas.
+        val other = FakeEngine()
+        val p2 = playback(e = other)
+        p2.tuneNow(PlaybackRequest(channel.copy(key = "k2"), null, 0L, listOf(hls)))
+        p2.onTracksChanged(other)
+        assertEquals(TrackWish("en", "pt", surround = false), other.wishes.last())
+        val later = FakeEngine()
+        val p3 = playback(e = later)
+        p3.tuneNow(live())
+        p3.onTracksChanged(later)
+        assertEquals(TrackWish("en", "pt", surround = false, audioMemo = "pt;ac3;;6;0", textMemo = TrackMemory.OFF), later.wishes.last())
+        // A memória põe-se uma vez por abertura, e outra vez quando o canal volta a abrir (também depois de uma
+        // escolha à mão nesta sessão).
+        p3.onTracksChanged(later)
+        assertEquals(1, later.wishes.size)
+        p3.onManualTrack(C.TRACK_TYPE_AUDIO, audio, 1)
+        p3.tuneNow(PlaybackRequest(channel, Catchup(channel, "Programa", 0L, 3_600_000L), 0L, listOf(ts)))
+        p3.onTracksChanged(later)
+        assertEquals(true, later.wishes.last().audio)
+        assertEquals("pt;ac3;;6;0", later.wishes.last().audioMemo)
+    }
+
+    @Test
+    fun escolherOutraVezAFaixaDeSempreLimpaAMemoria() {
+        host.prefs = Prefs(audioLanguage = "en", subtitleLanguage = "pt")
+        val p = playback()
+        p.tuneNow(live())
+        p.onTracksChanged(engine)
+        val audio = listOf(TrackInfo("en", null), TrackInfo("pt", null))
+        val text = listOf(TrackInfo("pt", null), TrackInfo("en", null))
+        p.onManualTrack(C.TRACK_TYPE_AUDIO, audio, 1)
+        p.onManualTrack(C.TRACK_TYPE_TEXT, text, 1)
+        assertEquals(2, host.memory.size)
+        p.onManualTrack(C.TRACK_TYPE_AUDIO, audio, 0)
+        p.onManualTrack(C.TRACK_TYPE_TEXT, text, 0)
+        assertEquals(emptyMap<String, String>(), host.memory)
+        // Já não é uma escolha à mão: ao reabrir o canal, as línguas voltam a decidir.
+        p.tuneNow(PlaybackRequest(channel, Catchup(channel, "Programa", 0L, 3_600_000L), 0L, listOf(ts)))
         assertEquals("en", engine.lastOptions?.audioLanguage)
         p.onTracksChanged(engine)
         assertEquals(TrackWish("en", "pt", surround = false), engine.wishes.last())

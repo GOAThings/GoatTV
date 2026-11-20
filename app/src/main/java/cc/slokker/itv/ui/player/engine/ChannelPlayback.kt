@@ -19,6 +19,7 @@ import cc.slokker.itv.playback.AttemptFailure
 import cc.slokker.itv.playback.NextStep
 import cc.slokker.itv.playback.PlaybackRules
 import cc.slokker.itv.playback.StallCounter
+import cc.slokker.itv.playback.TrackMemory
 import cc.slokker.itv.ui.player.NetMonitor
 import cc.slokker.itv.ui.player.Timeshift
 import kotlinx.coroutines.CoroutineScope
@@ -274,6 +275,7 @@ internal class ChannelPlayback(
         retries = 0
         wasPlaying = false
         tracks.onOpen(request.channel.key)
+        host.onChannelOpened(request)
         retryJob?.cancel()
         backupJob?.cancel()
         stallJob?.cancel()
@@ -663,12 +665,16 @@ internal class ChannelPlayback(
 
     /**
      * As faixas chegaram (ou mudaram): escolhe as que faltam neste canal, uma vez por abertura (a língua preferida e,
-     * na TV, o surround). As escolhidas à mão no menu ([onManualTrack]) ficam até mudar de canal.
+     * na TV, o surround). As escolhidas à mão no menu ([onManualTrack]) ficam até mudar de canal, e as que estão na
+     * memória do canal (escolhidas à mão noutra vez, ver ChannelMemory) põem-se a cada abertura e ganham às línguas.
      */
     fun onTracksChanged(source: StreamEngine) {
-        if (source !== engine || request == null) return
-        val audio = tracks.pending(C.TRACK_TYPE_AUDIO)
-        val text = policy.subtitleLanguage && tracks.pending(C.TRACK_TYPE_TEXT)
+        val req = request
+        if (source !== engine || req == null) return
+        val audioMemo = host.rememberedTrack(req, C.TRACK_TYPE_AUDIO)
+        val textMemo = if (policy.subtitleLanguage) host.rememberedTrack(req, C.TRACK_TYPE_TEXT) else ""
+        val audio = tracks.pending(C.TRACK_TYPE_AUDIO) || (audioMemo.isNotEmpty() && tracks.undecided(C.TRACK_TYPE_AUDIO))
+        val text = policy.subtitleLanguage && (tracks.pending(C.TRACK_TYPE_TEXT) || (textMemo.isNotEmpty() && tracks.undecided(C.TRACK_TYPE_TEXT)))
         if (!audio && !text) return
         val prefs = host.prefs
         val wish = TrackWish(
@@ -677,12 +683,27 @@ internal class ChannelPlayback(
             surround = policy.surroundDefault && prefs.surroundDefault,
             audio = audio,
             text = text,
+            audioMemo = audioMemo,
+            textMemo = textMemo,
         )
         source.chooseTracks(wish).forEach(tracks::done)
     }
 
-    /** O menu das faixas: a escolha de [type] (C.TRACK_TYPE_AUDIO/TEXT) ganha às Definições até mudar de canal. */
-    fun onManualTrack(type: Int) = tracks.onManual(type)
+    /**
+     * O menu das faixas: escolheu-se a faixa [index] de [options] (as de [type], C.TRACK_TYPE_AUDIO/TEXT; -1 = legendas
+     * desligadas). Ganha às Definições e fica na memória do canal, para ele voltar assim; escolher outra vez a que as
+     * regras de sempre davam limpa a memória (e deixa de ser uma escolha à mão).
+     */
+    fun onManualTrack(type: Int, options: List<TrackInfo>, index: Int) {
+        val prefs = host.prefs
+        val memo = if (type == C.TRACK_TYPE_AUDIO) {
+            TrackMemory.audioChoice(options, index, audioLanguage(prefs), policy.surroundDefault && prefs.surroundDefault)
+        } else {
+            TrackMemory.textChoice(options, index, textLanguage(prefs).takeIf { policy.subtitleLanguage })
+        }
+        if (memo.isEmpty()) tracks.onAuto(type) else tracks.onManual(type)
+        request?.let { host.rememberTrack(it, type, memo) }
+    }
 
     /** As faixas chegaram e o player não descodifica o áudio ou o vídeo ([cannotDecode]). */
     fun onUndecodable(source: StreamEngine) {

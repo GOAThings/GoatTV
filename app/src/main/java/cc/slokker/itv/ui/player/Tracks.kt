@@ -15,6 +15,8 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.i18n.I18n
+import cc.slokker.itv.ui.player.engine.TrackInfo
+import cc.slokker.itv.ui.player.engine.trackInfo
 import java.util.Locale
 
 /** Faixas e tamanho do vídeo do stream atual, atualizados quando mudam. */
@@ -42,19 +44,25 @@ internal fun rememberStreamState(player: Player?): StreamState {
 /** Uma faixa de áudio/legendas a escolher (ou "Desligadas"). */
 internal class TrackOption(val key: String, val label: String, val details: String?, val selected: Boolean, val select: () -> Unit)
 
+/** A escolha à mão no menu das faixas: o tipo, as faixas desse tipo e a escolhida (-1 = legendas desligadas). */
+internal typealias OnManualTrack = (type: Int, options: List<TrackInfo>, index: Int) -> Unit
+
 /**
  * As faixas de [type] (áudio ou legendas) para escolher; [allowOff] junta "Desligadas" (legendas). [onManual]: a
- * escolha é à mão (ganha à língua preferida até mudar de canal, ver ChannelPlayback.onManualTrack).
+ * escolha é à mão (ganha à língua preferida e fica na memória do canal, ver ChannelPlayback.onManualTrack).
  */
-internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: (Int) -> Unit = {}): List<TrackOption> {
+internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: Boolean, onManual: OnManualTrack = { _, _, _ -> }): List<TrackOption> {
     val groups = tracks.groups.filter { it.type == type }
     if (player == null || groups.isEmpty()) return emptyList()
     val disabled = player.trackSelectionParameters.disabledTrackTypes.contains(type)
+    // Todas as faixas do tipo (também as que este aparelho não toca), como o ChannelPlayback as vê.
+    val infos = groups.flatMap { g -> (0 until g.length).map { g.getTrackFormat(it).trackInfo(g.isTrackSupported(it), !disabled && g.isTrackSelected(it)) } }
+    var position = 0
     return buildList {
         if (allowOff) {
             add(
                 TrackOption("off", I18n.s.subtitlesOff, null, disabled || groups.none { it.isSelected }) {
-                    onManual(type)
+                    onManual(type, infos, -1)
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(type, true).build()
                 },
             )
@@ -62,12 +70,13 @@ internal fun trackOptions(tracks: Tracks, type: Int, player: Player?, allowOff: 
         var n = 0
         groups.forEach { g ->
             for (i in 0 until g.length) {
+                val at = position++
                 if (!g.isTrackSupported(i)) continue
                 val f = g.getTrackFormat(i)
                 val index = n++
                 add(
                     TrackOption("t:$index", trackLabel(f, index), trackDetails(f), !disabled && g.isTrackSelected(i)) {
-                        onManual(type)
+                        onManual(type, infos, at)
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                             .setTrackTypeDisabled(type, false)
                             .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i))
