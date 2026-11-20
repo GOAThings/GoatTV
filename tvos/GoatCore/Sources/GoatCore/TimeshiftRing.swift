@@ -1,4 +1,5 @@
 import Foundation
+import GoatShared
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -143,14 +144,6 @@ public final class TimeshiftRing: @unchecked Sendable {
 
     /// Um ponto no índice a cada meio segundo de vídeo.
     public static let entryMs: Int64 = 500
-    /// Sem PCR há mais do que isto: o relógio passa a ser o tempo real.
-    static let noPcrMs: Int64 = 1_500
-    /// Entre dois PCR seguidos nunca há mais do que isto (o normal é 40–100 ms).
-    static let maxPcrStepMs: Int64 = 5_000
-    /// O PCR tem 33 bits a 90 kHz: dá a volta a cada ~26,5 h.
-    static let pcrWrapMs: Int64 = (Int64(1) << 33) / 90
-    /// O direto estimado ([liveEdgeMs]) esquece-se 1 ms por cada tantos ms (2 %).
-    static let peakDecay: Int64 = 50
     static let fitAfterMs: Int64 = 60_000
     static let fitMargin = 1.15
     public static let minCapacity: Int64 = 32 * 1024 * 1024
@@ -180,16 +173,10 @@ public final class TimeshiftRing: @unchecked Sendable {
     /// Segmentos já tirados do início: os ids não mudam (um leitor guarda o do seu).
     private var removed = 0
 
-    // Relógio do vídeo.
-    private var media: Int64 = 0
-    private var lastPcr: Int64 = -1
-    private var lastTick: Int64 = 0
-    private var lastPcrAt: Int64 = 0
-    /// O tempo só pelo PCR: o tempo real contado sem PCR é provisório e [media] espera que o PCR o alcance.
-    private var pcrMedia: Int64 = 0
-    /// O maior avanço do vídeo sobre o relógio (ver [liveEdgeMs]) e quando foi.
-    private var peakOffset = Int64.min
-    private var peakAt: Int64 = 0
+    /// Relógio do vídeo, o mesmo do Android (TimeshiftClock, no núcleo partilhado): o tempo gravado, sem contar o
+    /// tempo sem ligação.
+    private let mediaClock = GoatShared.TimeshiftClock()
+    private var media: Int64 { mediaClock.mediaMs }
     private var newSegment = false
     private let scanner = TsScanner()
 
@@ -249,24 +236,8 @@ public final class TimeshiftRing: @unchecked Sendable {
 
     /// O direto como o espectador o vê: num servidor que manda às rajadas, [liveMediaMs] salta o tamanho de cada rajada
     /// e fica parado até à seguinte. Aqui anda com o relógio desde a última rajada (o maior avanço do vídeo sobre o
-    /// relógio, a esquecer devagar), sem saltos e sem nunca ficar atrás do último byte.
-    public var liveEdgeMs: Int64 {
-        locked {
-            guard peakOffset != Int64.min else { return media }
-            let now = clock()
-            return max(media, now + decayedPeak(now))
-        }
-    }
-
-    private func decayedPeak(_ now: Int64) -> Int64 { peakOffset - (now - peakAt) / Self.peakDecay }
-
-    private func notePeak(_ now: Int64) {
-        let offset = media - now
-        if peakOffset == Int64.min || offset >= decayedPeak(now) {
-            peakOffset = offset
-            peakAt = now
-        }
-    }
+    /// relógio, a esquecer devagar), sem saltos, parado sem ligação e sem nunca ficar atrás do último byte.
+    public var liveEdgeMs: Int64 { locked { mediaClock.liveEdgeMs(now: clock()) } }
 
     /// O ponto mais antigo para onde se pode recuar.
     public var oldest: Entry? { locked { head < entries.count ? entries[head] : nil } }
@@ -284,7 +255,7 @@ public final class TimeshiftRing: @unchecked Sendable {
         locked {
             segments.append(written)
             scanner.reset(at: written)
-            lastPcr = -1
+            mediaClock.beginSegment()
             newSegment = true
             lock.broadcast()
         }
@@ -328,14 +299,10 @@ public final class TimeshiftRing: @unchecked Sendable {
         locked {
             written = start + len
             scanner.feed(data)
-            let now = clock()
             // Sem PCR (ou ainda sem ele) o relógio anda com o tempo real em que os dados chegam.
-            if scanner.isTs != false, now - lastPcrAt > Self.noPcrMs {
-                if lastTick != 0 { media += max(0, now - lastTick) }
-                lastTick = now
+            if mediaClock.onData(now: clock(), ts: scanner.isTs != false) {
                 addEntry(newSegment ? segments[segments.count - 1] : scanner.lastPacket)
             }
-            notePeak(now)
             trim()
             fitToAge()
             lock.broadcast()
@@ -355,6 +322,7 @@ public final class TimeshiftRing: @unchecked Sendable {
     /// A ligação caiu ou acabou; [final]: não vem outra, com o erro que a fez cair (nil = fim normal).
     public func endSegment(final: Bool, error: Error? = nil) {
         locked {
+            mediaClock.endSegment(now: clock())
             if final, !finished {
                 finished = true
                 failure = error
@@ -364,31 +332,9 @@ public final class TimeshiftRing: @unchecked Sendable {
     }
 
     private func onPcr(_ offset: Int64, _ pcrMs: Int64) {
-        let now = clock()
-        if lastPcr >= 0 {
-            var d = pcrMs - lastPcr
-            if d < -Self.pcrWrapMs / 2 { d += Self.pcrWrapMs }
-            // O tempo do PCR desde o anterior, e não somado ao tempo real que entretanto se contou sem PCR (num
-            // servidor que manda às rajadas contava-se duas vezes). Um salto (canal trocado no servidor, relógio
-            // reposto): conta o tempo real que passou.
-            if (0...Self.maxPcrStepMs).contains(d) {
-                pcrMedia += d
-                media = max(media, pcrMedia)
-            } else {
-                media += arrival(now)
-                pcrMedia = media
-            }
-        } else {
-            media += arrival(now)
-            pcrMedia = media
-        }
-        lastPcr = pcrMs
-        lastTick = now
-        lastPcrAt = now
+        mediaClock.onPcr(now: clock(), pcrMs: pcrMs)
         addEntry(newSegment ? segments[segments.count - 1] : offset)
     }
-
-    private func arrival(_ now: Int64) -> Int64 { lastTick == 0 ? 0 : max(0, now - lastTick) }
 
     private func addEntry(_ offset: Int64) {
         let last = head < entries.count ? entries[entries.count - 1] : nil
