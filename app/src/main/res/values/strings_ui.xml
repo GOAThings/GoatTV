@@ -874,4 +874,16 @@
     <string name="pro_source_failed">%1$s stopped working. Playing %2$s.</string>
     <string name="pro_use_list">Use in TV Pro mode</string>
     <string name="pro_use_list_sub">Its channels go into the one list</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Subtitle size</string>
+    <string name="size_extra_large">Extra large</string>
+    <string name="subtitle_style">Subtitle style</string>
+    <string name="subtitle_style_sub">Text subtitles only. DVB image subtitles keep their own colours.</string>
+    <string name="subtitle_style_white_shadow">White with shadow</string>
+    <string name="subtitle_style_white_box">White on black</string>
+    <string name="subtitle_style_yellow_shadow">Yellow with shadow</string>
+    <string name="subtitle_style_yellow_box">Yellow on black</string>
+    <string name="subtitle_position">Subtitle position</string>
+    <string name="subtitle_position_normal">Bottom</string>
+    <string name="subtitle_position_raised">Raised (above the info bar)</string>
 </resources>

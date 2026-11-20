@@ -870,4 +870,16 @@
     <string name="pro_source_failed">%1$s 已停止工作。正在播放 %2$s。</string>
     <string name="pro_use_list">在 TV Pro 模式中使用</string>
     <string name="pro_use_list_sub">其频道会加入同一个列表</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">字幕大小</string>
+    <string name="size_extra_large">特大</string>
+    <string name="subtitle_style">字幕样式</string>
+    <string name="subtitle_style_sub">仅适用于文本字幕。DVB 图像字幕保持其原有颜色。</string>
+    <string name="subtitle_style_white_shadow">白色带阴影</string>
+    <string name="subtitle_style_white_box">黑底白字</string>
+    <string name="subtitle_style_yellow_shadow">黄色带阴影</string>
+    <string name="subtitle_style_yellow_box">黑底黄字</string>
+    <string name="subtitle_position">字幕位置</string>
+    <string name="subtitle_position_normal">底部</string>
+    <string name="subtitle_position_raised">较高(信息栏上方)</string>
 </resources>

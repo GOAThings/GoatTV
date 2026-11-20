@@ -873,4 +873,16 @@
     <string name="pro_source_failed">%1$s funktioniert nicht mehr. Es läuft %2$s.</string>
     <string name="pro_use_list">Im TV-Pro-Modus verwenden</string>
     <string name="pro_use_list_sub">Ihre Sender kommen in die eine Liste</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Untertitelgröße</string>
+    <string name="size_extra_large">Sehr groß</string>
+    <string name="subtitle_style">Untertitelstil</string>
+    <string name="subtitle_style_sub">Nur für Text-Untertitel. DVB-Bilduntertitel behalten ihre eigenen Farben.</string>
+    <string name="subtitle_style_white_shadow">Weiß mit Schatten</string>
+    <string name="subtitle_style_white_box">Weiß auf Schwarz</string>
+    <string name="subtitle_style_yellow_shadow">Gelb mit Schatten</string>
+    <string name="subtitle_style_yellow_box">Gelb auf Schwarz</string>
+    <string name="subtitle_position">Untertitelposition</string>
+    <string name="subtitle_position_normal">Unten</string>
+    <string name="subtitle_position_raised">Höher (über der Infoleiste)</string>
 </resources>

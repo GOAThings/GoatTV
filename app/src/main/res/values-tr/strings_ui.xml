@@ -873,4 +873,16 @@
     <string name="pro_source_failed">%1$s çalışmayı durdurdu. %2$s oynatılıyor.</string>
     <string name="pro_use_list">TV Pro modunda kullan</string>
     <string name="pro_use_list_sub">Kanalları tek listeye girer</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Altyazı boyutu</string>
+    <string name="size_extra_large">Çok büyük</string>
+    <string name="subtitle_style">Altyazı stili</string>
+    <string name="subtitle_style_sub">Yalnızca metin altyazılar. Görüntü tabanlı DVB altyazılar kendi renklerini korur.</string>
+    <string name="subtitle_style_white_shadow">Gölgeli beyaz</string>
+    <string name="subtitle_style_white_box">Siyah üzerine beyaz</string>
+    <string name="subtitle_style_yellow_shadow">Gölgeli sarı</string>
+    <string name="subtitle_style_yellow_box">Siyah üzerine sarı</string>
+    <string name="subtitle_position">Altyazı konumu</string>
+    <string name="subtitle_position_normal">Altta</string>
+    <string name="subtitle_position_raised">Daha yukarıda (bilgi çubuğunun üstünde)</string>
 </resources>

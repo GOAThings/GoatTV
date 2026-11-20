@@ -8,6 +8,8 @@ import cc.slokker.itv.data.recording.RecordingSpace
 import cc.slokker.itv.data.recording.Schedule
 import cc.slokker.itv.data.recording.ScheduledRecording
 import cc.slokker.itv.data.recording.SeriesRule
+import cc.slokker.itv.playback.SubtitleLook
+import cc.slokker.itv.playback.SubtitleRect
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -72,6 +74,21 @@ object AppleBridge {
 
     fun settingsRebase(server: String, base: String, local: String): String =
         SettingsPatch.rebase(obj(server), obj(base), obj(local)).toString()
+
+    // ---- O aspeto das legendas ([SubtitleLook]) ---------------------------------------------------
+
+    fun subtitleScale(size: String): Double = SubtitleLook.scale(size).toDouble()
+
+    fun subtitleGap(position: String): Double = SubtitleLook.gap(position).toDouble()
+
+    fun subtitleBoxed(style: String): Boolean = SubtitleLook.boxed(style)
+
+    /** A cor do texto em ARGB. */
+    fun subtitleTextColor(style: String): Long = SubtitleLook.textColor(style)
+
+    /** [SubtitleLook.place], tudo em fração do ecrã do emissor. */
+    fun subtitlePlace(x: Double, y: Double, width: Double, height: Double, size: String, position: String): SubtitleRect =
+        SubtitleLook.place(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), size, position)
 
     private fun obj(json: String): JsonObject =
         runCatching { Json.parseToJsonElement(json) as? JsonObject }.getOrNull() ?: JsonObject(emptyMap())

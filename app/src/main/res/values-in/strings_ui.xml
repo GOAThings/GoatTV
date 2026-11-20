@@ -871,4 +871,16 @@
     <string name="pro_source_failed">%1$s berhenti berfungsi. Memutar %2$s.</string>
     <string name="pro_use_list">Pakai di mode TV Pro</string>
     <string name="pro_use_list_sub">Salurannya masuk ke satu daftar</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Ukuran subtitle</string>
+    <string name="size_extra_large">Sangat besar</string>
+    <string name="subtitle_style">Gaya subtitle</string>
+    <string name="subtitle_style_sub">Hanya subtitle teks. Subtitle gambar DVB tetap memakai warnanya sendiri.</string>
+    <string name="subtitle_style_white_shadow">Putih dengan bayangan</string>
+    <string name="subtitle_style_white_box">Putih di atas hitam</string>
+    <string name="subtitle_style_yellow_shadow">Kuning dengan bayangan</string>
+    <string name="subtitle_style_yellow_box">Kuning di atas hitam</string>
+    <string name="subtitle_position">Posisi subtitle</string>
+    <string name="subtitle_position_normal">Bawah</string>
+    <string name="subtitle_position_raised">Lebih tinggi (di atas bilah info)</string>
 </resources>

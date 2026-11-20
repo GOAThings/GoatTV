@@ -23,6 +23,35 @@ final class GoatCoreView: UIView {
         return l
     }()
 
+    /// O aspeto das legendas (Definições → Legendas; ver Prefs.SubtitleSize, SubtitleStyle e SubtitlePosition). O
+    /// tamanho e o sítio valem para todas; a cor e o fundo só para as de texto (as imagens DVB trazem as cores delas).
+    private var subtitleSize = Prefs.SubtitleSize.normal
+    private var subtitleStyle = Prefs.SubtitleStyle.whiteBox
+    private var subtitlePosition = Prefs.SubtitlePosition.normal
+
+    /// Muda o aspeto das legendas. No padrão fica o de sempre: branco numa caixa preta, 1/22 da altura, 8 % acima do fundo.
+    func setSubtitleLook(size: String, style: String, position: String) {
+        guard size != subtitleSize || style != subtitleStyle || position != subtitlePosition else { return }
+        subtitleSize = size
+        subtitleStyle = style
+        subtitlePosition = position
+        let argb = Prefs.SubtitleStyle.textColor(style)
+        subtitle.textColor = UIColor(red: CGFloat((argb >> 16) & 0xFF) / 255, green: CGFloat((argb >> 8) & 0xFF) / 255,
+                                     blue: CGFloat(argb & 0xFF) / 255, alpha: 1)
+        if Prefs.SubtitleStyle.boxed(style) {
+            subtitle.backgroundColor = UIColor.black.withAlphaComponent(0.75)
+            subtitle.layer.shadowOpacity = 0
+        } else {
+            // Sem fundo: uma sombra preta à volta das letras, para se lerem em qualquer imagem.
+            subtitle.backgroundColor = .clear
+            subtitle.layer.shadowColor = UIColor.black.cgColor
+            subtitle.layer.shadowOffset = CGSize(width: 0, height: 1)
+            subtitle.layer.shadowRadius = 3
+            subtitle.layer.shadowOpacity = 1
+        }
+        setNeedsLayout()
+    }
+
     /// As imagens das legendas DVB, no ecrã do emissor (ver [showSubtitleImages]).
     private let imageLayer = UIView()
     private var images: SubtitleImages?
@@ -99,20 +128,31 @@ final class GoatCoreView: UIView {
         displayLayer.frame = bounds
         CATransaction.commit()
         // O tamanho da letra acompanha o do vídeo (no ecrã inteiro e no Picture in Picture da app).
-        subtitle.font = .systemFont(ofSize: max(12, bounds.height / 22), weight: .medium)
+        subtitle.font = .systemFont(ofSize: max(12, bounds.height / 22 * CGFloat(Prefs.SubtitleSize.scale(subtitleSize))), weight: .medium)
         let maxWidth = bounds.width * 0.9
         let size = subtitle.sizeThatFits(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
         let width = min(maxWidth, size.width + 16)
-        subtitle.frame = CGRect(x: (bounds.width - width) / 2, y: bounds.height * 0.92 - size.height, width: width, height: size.height)
+        let bottom = bounds.height * (1 - CGFloat(Prefs.SubtitlePosition.gap(subtitlePosition)))
+        subtitle.frame = CGRect(x: (bounds.width - width) / 2, y: max(0, bottom - size.height), width: width, height: size.height)
         // As imagens DVB: o ecrã do emissor (720×576, ou o que ele disser) é a imagem do vídeo.
         imageLayer.frame = bounds
         if let page = images, page.displayWidth > 0, page.displayHeight > 0 {
             let rect = videoRect
             let sx = rect.width / CGFloat(page.displayWidth)
             let sy = rect.height / CGFloat(page.displayHeight)
+            let w = Double(page.displayWidth), h = Double(page.displayHeight)
+            let asSent = subtitleSize == Prefs.SubtitleSize.normal && subtitlePosition == Prefs.SubtitlePosition.normal
             for (v, i) in zip(imageLayer.subviews, page.images.filter { Self.cgImage($0) != nil }) {
-                v.frame = CGRect(x: rect.minX + CGFloat(i.x) * sx, y: rect.minY + CGFloat(i.y) * sy,
-                                 width: CGFloat(i.width) * sx, height: CGFloat(i.height) * sy)
+                if asSent {
+                    v.frame = CGRect(x: rect.minX + CGFloat(i.x) * sx, y: rect.minY + CGFloat(i.y) * sy,
+                                     width: CGFloat(i.width) * sx, height: CGFloat(i.height) * sy)
+                    continue
+                }
+                // Com o tamanho e o sítio escolhidos (ver SubtitleLook.place no núcleo partilhado).
+                let r = Prefs.SubtitlePosition.place(x: Double(i.x) / w, y: Double(i.y) / h, width: Double(i.width) / w,
+                                                     height: Double(i.height) / h, size: subtitleSize, position: subtitlePosition)
+                v.frame = CGRect(x: rect.minX + CGFloat(r.x) * rect.width, y: rect.minY + CGFloat(r.y) * rect.height,
+                                 width: CGFloat(r.width) * rect.width, height: CGFloat(r.height) * rect.height)
             }
         }
     }

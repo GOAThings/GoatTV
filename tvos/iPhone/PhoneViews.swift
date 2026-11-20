@@ -1130,6 +1130,12 @@ struct PlayerOptionsSheet: View {
                     ForEach(tracks, id: \.id) { track in
                         row(track.id < 0 ? s.r("subtitles_off") : track.name, track.id == player.currentSubtitle) { player.selectSubtitle(track.id) }
                     }
+                    // O atalho do aspeto das legendas: cada linha passa à opção seguinte, sem fechar.
+                    Section(s.r("settings_appearance")) {
+                        lookRow("subtitle_size", model.prefs.subtitleSize)
+                        lookRow("subtitle_style", model.prefs.subtitleStyle)
+                        lookRow("subtitle_position", model.prefs.subtitlePosition)
+                    }
                 case .backup:
                     EmptyView()
                 case .sleep:
@@ -1144,6 +1150,22 @@ struct PlayerOptionsSheet: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(s.r("cancel")) { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// Uma linha do aspeto das legendas: mostra a opção escolhida e passa à seguinte.
+    private func lookRow(_ key: String, _ current: String) -> some View {
+        let s = model.strings
+        let options = s.subtitleLookOptions(key)
+        let i = options.firstIndex { $0.value == current } ?? 0
+        return Button {
+            model.setPref(key, .string(options[(i + 1) % options.count].value))
+        } label: {
+            HStack {
+                Text(s.r(key)).foregroundStyle(Theme.text)
+                Spacer()
+                Text(options[i].label).foregroundStyle(Theme.textFaint)
+            }
+        }
     }
 
     private func row(_ title: String, _ checked: Bool, action: @escaping () -> Void) -> some View {
@@ -1927,7 +1949,13 @@ private struct MenuTab: View {
                 pick(s.r("audio_language"), "audio_language", .string(p.audioLanguage), [(.string(""), s.r("auto"))] + phoneLanguageOptions)
                 pick(s.r("audio_delay"), "audio_delay_ms", .number(Double(p.audioDelayMs)),
                      Prefs.audioDelayOptions.map { (.number(Double($0)), $0 == 0 ? s.r("off") : String(format: "%+d ms", $0)) })
+            }
+            // As legendas: a língua e o aspeto (como no Android, ver SettingsCatalog).
+            section(s.r("subtitles")) {
                 pick(s.r("subtitle_language"), "subtitle_language", .string(p.subtitleLanguage), [(.string(""), s.r("subtitles_off"))] + phoneLanguageOptions)
+                pick(s.r("subtitle_size"), "subtitle_size", p.subtitleSize, s.subtitleLookOptions("subtitle_size").map { ($0.value, $0.label) })
+                pick(s.r("subtitle_style"), "subtitle_style", p.subtitleStyle, s.subtitleLookOptions("subtitle_style").map { ($0.value, $0.label) })
+                pick(s.r("subtitle_position"), "subtitle_position", p.subtitlePosition, s.subtitleLookOptions("subtitle_position").map { ($0.value, $0.label) })
             }
             section(s.t("Connection", "Ligação")) {
                 pick(s.r("buffer"), "buffer", p.buffer, bufferOptions)

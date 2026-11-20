@@ -875,4 +875,16 @@
     <string name="pro_source_failed">%1$s parou de funcionar. Passando %2$s.</string>
     <string name="pro_use_list">Usar no Modo TV Pro</string>
     <string name="pro_use_list_sub">Os canais dela entram na lista única</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Tamanho das legendas</string>
+    <string name="size_extra_large">Muito grande</string>
+    <string name="subtitle_style">Estilo das legendas</string>
+    <string name="subtitle_style_sub">Só nas legendas em texto. As legendas DVB em imagem mantêm as cores delas.</string>
+    <string name="subtitle_style_white_shadow">Branco com sombra</string>
+    <string name="subtitle_style_white_box">Branco em fundo preto</string>
+    <string name="subtitle_style_yellow_shadow">Amarelo com sombra</string>
+    <string name="subtitle_style_yellow_box">Amarelo em fundo preto</string>
+    <string name="subtitle_position">Posição das legendas</string>
+    <string name="subtitle_position_normal">Em baixo</string>
+    <string name="subtitle_position_raised">Mais acima (por cima da barra de informação)</string>
 </resources>

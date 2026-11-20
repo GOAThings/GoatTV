@@ -4,6 +4,7 @@ package cc.slokker.itv.ui.player
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Outline
 import android.os.Build
 import android.os.Handler
@@ -18,9 +19,13 @@ import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.ui.geometry.Rect
 import androidx.core.graphics.createBitmap
+import cc.slokker.itv.data.Prefs
+import cc.slokker.itv.playback.SubtitleLook
 import androidx.media3.common.Player
+import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.SubtitleView
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,8 +52,50 @@ class VideoView(context: Context, overlay: Boolean = false, rounded: Boolean = f
         surfaceView?.let { player.setVideoSurfaceView(it) } ?: player.setVideoTextureView(textureView)
     }
 
-    /** Legendas (DVB, teletexto, CEA-608), por cima do vídeo e com a mesma proporção. */
+    /** Legendas (DVB, teletexto, CEA-608), por cima do vídeo e com a mesma proporção. Mostram-se com [showCues]. */
     val subtitleView = SubtitleView(context)
+
+    /** O aspeto escolhido nas definições (Prefs.subtitleSize/Style/Position; ver SubtitleLook). */
+    private var look = Triple(Prefs.SubtitleSize.NORMAL, Prefs.SubtitleStyle.WHITE_BOX, Prefs.SubtitlePosition.NORMAL)
+
+    /** As últimas legendas, como chegaram (para as redesenhar quando o aspeto muda). */
+    private var lastCues: List<Cue> = emptyList()
+
+    /**
+     * Muda o aspeto das legendas: o tamanho e o sítio valem para todas, a cor e o fundo só para as de texto. No padrão
+     * fica o de sempre do SubtitleView (branco numa caixa preta, 5,33 % da altura, 8 % acima do fundo).
+     */
+    fun setSubtitleLook(size: String, style: String, position: String) {
+        val next = Triple(size, style, position)
+        if (next == look) return
+        look = next
+        val color = SubtitleLook.textColor(style).toInt()
+        subtitleView.setStyle(
+            if (SubtitleLook.boxed(style)) {
+                CaptionStyleCompat(color, Color.BLACK, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_NONE, Color.WHITE, null)
+            } else {
+                CaptionStyleCompat(color, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW, Color.BLACK, null)
+            },
+        )
+        subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * SubtitleLook.scale(size))
+        subtitleView.setBottomPaddingFraction(SubtitleLook.gap(position))
+        showCues(lastCues)
+    }
+
+    /** Mostra [cues] com o aspeto escolhido: as imagens (DVB) crescem e sobem aqui, o texto pelo estilo do SubtitleView. */
+    fun showCues(cues: List<Cue>) {
+        lastCues = cues
+        val (size, _, position) = look
+        subtitleView.setCues(cues.map { if (it.bitmap != null) placeBitmap(it, size, position) else it })
+    }
+
+    private fun placeBitmap(cue: Cue, size: String, position: String): Cue {
+        // O DvbParser dá tudo em fração do ecrã do emissor, a partir do canto de cima à esquerda; sem isso, fica como vem.
+        if (cue.position == Cue.DIMEN_UNSET || cue.line == Cue.DIMEN_UNSET || cue.size == Cue.DIMEN_UNSET || cue.bitmapHeight == Cue.DIMEN_UNSET) return cue
+        if (cue.lineType != Cue.LINE_TYPE_FRACTION || cue.positionAnchor != Cue.ANCHOR_TYPE_START || cue.lineAnchor != Cue.ANCHOR_TYPE_START) return cue
+        val r = SubtitleLook.place(cue.position, cue.line, cue.size, cue.bitmapHeight, size, position)
+        return cue.buildUpon().setPosition(r.x).setLine(r.y, Cue.LINE_TYPE_FRACTION).setSize(r.width).setBitmapHeight(r.height).build()
+    }
 
     private val frame = AspectRatioFrameLayout(context).apply {
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT

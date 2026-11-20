@@ -101,6 +101,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         playback.view?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
+    LaunchedEffect(playback.view, prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition) {
+        playback.view?.setSubtitleLook(prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition)
+    }
+
     LaunchedEffect(player, playback.view) {
         val view = playback.view ?: return@LaunchedEffect
         view.attach(player)
@@ -111,7 +115,7 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         val listener = object : Player.Listener {
             // Legendas do ExoPlayer: como na TV, desenha-as a SubtitleView por cima do vídeo (o VLC desenha as suas).
             override fun onCues(cueGroup: CueGroup) {
-                playback.view?.subtitleView?.setCues(cueGroup.cues)
+                playback.view?.showCues(cueGroup.cues)
             }
 
             override fun onVideoSizeChanged(size: VideoSize) {

@@ -119,6 +119,10 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var deinterlace = "yadif2x"
     /// O atraso do som (Prefs.audioDelayMs), no VLC.
     @ObservationIgnored var audioDelayMs = 0
+    /// O aspeto das legendas do GoatCore (Prefs.subtitleSize, subtitleStyle e subtitlePosition).
+    @ObservationIgnored var subtitleLook = (size: Prefs.SubtitleSize.normal, style: Prefs.SubtitleStyle.whiteBox, position: Prefs.SubtitlePosition.normal) {
+        didSet { goatCorePlayback?.view.setSubtitleLook(size: subtitleLook.size, style: subtitleLook.style, position: subtitleLook.position) }
+    }
     /// A velocidade no catch-up e atrás do direto (1; 1,25; 1,5; 2): volta a 1 noutro canal e ao chegar ao direto.
     var speed: Float = 1 {
         didSet {
@@ -280,6 +284,7 @@ final class PlayerEngine: NSObject {
         view.insertSubview(g.view, belowSubview: freezeView)
         g.onEvent = { [weak self] event in self?.goatCoreEvent(event) }
         g.onPipEnded = { [weak self] in self?.onPipEnded?() }
+        g.view.setSubtitleLook(size: subtitleLook.size, style: subtitleLook.style, position: subtitleLook.position)
         goatCorePlayback = g
         return g
     }

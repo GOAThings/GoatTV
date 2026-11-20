@@ -870,4 +870,16 @@
     <string name="pro_source_failed">%1$s が停止しました。%2$s を再生中。</string>
     <string name="pro_use_list">TV Proモードで使う</string>
     <string name="pro_use_list_sub">このリストのチャンネルを1つのリストに入れます</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">字幕のサイズ</string>
+    <string name="size_extra_large">特大</string>
+    <string name="subtitle_style">字幕のスタイル</string>
+    <string name="subtitle_style_sub">テキスト字幕のみ。DVB の画像字幕は元の色のままです。</string>
+    <string name="subtitle_style_white_shadow">白(影付き)</string>
+    <string name="subtitle_style_white_box">黒地に白</string>
+    <string name="subtitle_style_yellow_shadow">黄(影付き)</string>
+    <string name="subtitle_style_yellow_box">黒地に黄</string>
+    <string name="subtitle_position">字幕の位置</string>
+    <string name="subtitle_position_normal">下</string>
+    <string name="subtitle_position_raised">高め(情報バーの上)</string>
 </resources>

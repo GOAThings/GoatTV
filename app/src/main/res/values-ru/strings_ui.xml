@@ -877,4 +877,16 @@
     <string name="pro_source_failed">%1$s перестал работать. Воспроизводится %2$s.</string>
     <string name="pro_use_list">Использовать в режиме TV Pro</string>
     <string name="pro_use_list_sub">Её каналы попадают в единый список</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Размер субтитров</string>
+    <string name="size_extra_large">Очень крупный</string>
+    <string name="subtitle_style">Стиль субтитров</string>
+    <string name="subtitle_style_sub">Только для текстовых субтитров. Субтитры DVB в виде изображений сохраняют свои цвета.</string>
+    <string name="subtitle_style_white_shadow">Белый с тенью</string>
+    <string name="subtitle_style_white_box">Белый на чёрном</string>
+    <string name="subtitle_style_yellow_shadow">Жёлтый с тенью</string>
+    <string name="subtitle_style_yellow_box">Жёлтый на чёрном</string>
+    <string name="subtitle_position">Положение субтитров</string>
+    <string name="subtitle_position_normal">Внизу</string>
+    <string name="subtitle_position_raised">Выше (над информационной панелью)</string>
 </resources>

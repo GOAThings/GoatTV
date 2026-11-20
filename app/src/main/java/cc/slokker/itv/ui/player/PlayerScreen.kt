@@ -460,6 +460,11 @@ fun PlayerScreen(vm: AppViewModel) {
         videoView?.setResizeMode(resizeModeFor(prefs.aspect))
     }
 
+    // O aspeto das legendas, na imagem que as mostra (a do canal principal, também em várias imagens).
+    LaunchedEffect(mainView, prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition) {
+        mainView?.setSubtitleLook(prefs.subtitleSize, prefs.subtitleStyle, prefs.subtitlePosition)
+    }
+
     // O que é só da TV (o resto dos eventos trata-o o ChannelPlayback, também as faixas): proporção, AFR, legendas.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -476,7 +481,7 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             override fun onCues(cueGroup: CueGroup) {
-                latestMainView?.subtitleView?.setCues(cueGroup.cues)
+                latestMainView?.showCues(cueGroup.cues)
             }
         }
         player.addListener(listener)
@@ -1289,6 +1294,11 @@ fun PlayerScreen(vm: AppViewModel) {
                     options = trackOptions(stream.tracks, type, player, allowOff = type == C.TRACK_TYPE_TEXT, onManual = playback::onManualTrack),
                     onPicked = { trackPicker = null },
                     modifier = Modifier.align(Alignment.Center),
+                    footer = if (type == C.TRACK_TYPE_TEXT) {
+                        { SubtitleLookRows(vm, prefs) }
+                    } else {
+                        null
+                    },
                 )
             }
 

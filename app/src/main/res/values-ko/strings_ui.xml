@@ -870,4 +870,16 @@
     <string name="pro_source_failed">%1$s 이(가) 작동을 멈췄습니다. %2$s 재생 중.</string>
     <string name="pro_use_list">TV Pro 모드에서 사용</string>
     <string name="pro_use_list_sub">이 목록의 채널이 하나의 목록에 들어갑니다</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">자막 크기</string>
+    <string name="size_extra_large">아주 크게</string>
+    <string name="subtitle_style">자막 스타일</string>
+    <string name="subtitle_style_sub">텍스트 자막에만 적용됩니다. DVB 이미지 자막은 원래 색을 유지합니다.</string>
+    <string name="subtitle_style_white_shadow">흰색, 그림자</string>
+    <string name="subtitle_style_white_box">검은 바탕에 흰색</string>
+    <string name="subtitle_style_yellow_shadow">노란색, 그림자</string>
+    <string name="subtitle_style_yellow_box">검은 바탕에 노란색</string>
+    <string name="subtitle_position">자막 위치</string>
+    <string name="subtitle_position_normal">아래</string>
+    <string name="subtitle_position_raised">위쪽 (정보 표시줄 위)</string>
 </resources>

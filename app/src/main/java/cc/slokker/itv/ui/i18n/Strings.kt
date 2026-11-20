@@ -1138,6 +1138,19 @@ class Strings(context: Context) {
     val video get() = s(R.string.video)
     val preferredFormat get() = s(R.string.preferred_format)
 
+    // ---- O aspeto das legendas ----
+    val subtitleSize get() = s(R.string.subtitle_size)
+    val sizeExtraLarge get() = s(R.string.size_extra_large)
+    val subtitleStyle get() = s(R.string.subtitle_style)
+    val subtitleStyleSub get() = s(R.string.subtitle_style_sub)
+    val subtitleStyleWhiteShadow get() = s(R.string.subtitle_style_white_shadow)
+    val subtitleStyleWhiteBox get() = s(R.string.subtitle_style_white_box)
+    val subtitleStyleYellowShadow get() = s(R.string.subtitle_style_yellow_shadow)
+    val subtitleStyleYellowBox get() = s(R.string.subtitle_style_yellow_box)
+    val subtitlePosition get() = s(R.string.subtitle_position)
+    val subtitlePositionNormal get() = s(R.string.subtitle_position_normal)
+    val subtitlePositionRaised get() = s(R.string.subtitle_position_raised)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

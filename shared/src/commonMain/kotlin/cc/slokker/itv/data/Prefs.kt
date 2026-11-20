@@ -44,6 +44,12 @@ data class Prefs(
     val audioLanguage: String = "",
     /** A língua das legendas (ISO 639-1); vazio = desligadas (menos as que o canal marca como forçadas). */
     val subtitleLanguage: String = "",
+    /** O tamanho das legendas (todas, as imagens DVB também; ver SubtitleLook). */
+    val subtitleSize: String = SubtitleSize.NORMAL,
+    /** A cor e o fundo das legendas em texto (teletexto, WebVTT, CEA-608/708); as imagens DVB ficam como vêm. */
+    val subtitleStyle: String = SubtitleStyle.WHITE_BOX,
+    /** Onde ficam as legendas: em baixo, como sempre, ou mais acima (por cima da barra de informação). */
+    val subtitlePosition: String = SubtitlePosition.NORMAL,
     /** Telemóvel: o vídeo continua numa janela pequena ao sair da app. */
     val pipEnabled: Boolean = false,
     val audioDecoder: String = Decoder.HARDWARE,
@@ -229,6 +235,9 @@ data class Prefs(
         const val SURROUND_DEFAULT = "surround_default"
         const val AUDIO_LANGUAGE = "audio_language"
         const val SUBTITLE_LANGUAGE = "subtitle_language"
+        const val SUBTITLE_SIZE = "subtitle_size"
+        const val SUBTITLE_STYLE = "subtitle_style"
+        const val SUBTITLE_POSITION = "subtitle_position"
         const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
         const val AUDIO_DELAY = "audio_delay_ms"
@@ -456,6 +465,20 @@ data class Prefs(
         const val NUMBER = "number"; const val NAME = "name"
         val ALL = setOf(NUMBER, NAME)
     }
+    object SubtitleSize {
+        const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large"; const val EXTRA_LARGE = "extra_large"
+        val ALL = setOf(SMALL, NORMAL, LARGE, EXTRA_LARGE)
+    }
+    /** O padrão é o branco numa caixa preta, que era o aspeto de sempre (o SubtitleView do Media3 e a UILabel da Apple). */
+    object SubtitleStyle {
+        const val WHITE_SHADOW = "white_shadow"; const val WHITE_BOX = "white_box"
+        const val YELLOW_SHADOW = "yellow_shadow"; const val YELLOW_BOX = "yellow_box"
+        val ALL = setOf(WHITE_SHADOW, WHITE_BOX, YELLOW_SHADOW, YELLOW_BOX)
+    }
+    object SubtitlePosition {
+        const val NORMAL = "normal"; const val RAISED = "raised"
+        val ALL = setOf(NORMAL, RAISED)
+    }
     object TextSize {
         const val SMALL = "small"; const val NORMAL = "normal"; const val LARGE = "large"
         val ALL = setOf(SMALL, NORMAL, LARGE)
@@ -509,6 +532,9 @@ data class Prefs(
                 surroundDefault = bool(Key.SURROUND_DEFAULT, d.surroundDefault),
                 audioLanguage = language(s, Key.AUDIO_LANGUAGE),
                 subtitleLanguage = language(s, Key.SUBTITLE_LANGUAGE),
+                subtitleSize = str(Key.SUBTITLE_SIZE, d.subtitleSize, SubtitleSize.ALL),
+                subtitleStyle = str(Key.SUBTITLE_STYLE, d.subtitleStyle, SubtitleStyle.ALL),
+                subtitlePosition = str(Key.SUBTITLE_POSITION, d.subtitlePosition, SubtitlePosition.ALL),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),

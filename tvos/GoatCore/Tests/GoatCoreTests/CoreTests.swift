@@ -496,6 +496,15 @@ enum CoreTests {
         try expect(Prefs(settings: .object(["protect_paused": false])).protectPaused, false)
         try expect(Prefs(settings: .object(["audio_delay_ms": 150])).audioDelayMs, 150)
         try expect(Prefs(settings: .object(["audio_delay_ms": 9_000])).audioDelayMs, 1_000)
+        // O aspeto das legendas: o de sempre por defeito, as chaves do Android.
+        try expect(Prefs().subtitleStyle, Prefs.SubtitleStyle.whiteBox)
+        let look = Prefs(settings: .object(["subtitle_size": "extra_large", "subtitle_style": "yellow_shadow", "subtitle_position": "raised"]))
+        try expect(look.subtitleSize, Prefs.SubtitleSize.extraLarge)
+        try expect(look.subtitleStyle, Prefs.SubtitleStyle.yellowShadow)
+        try expect(look.subtitlePosition, Prefs.SubtitlePosition.raised)
+        try expect(Prefs.SubtitleSize.scale(Prefs.SubtitleSize.normal), 1)
+        try expect(Prefs.SubtitleStyle.boxed(Prefs.SubtitleStyle.whiteBox), true)
+        try expect(Prefs.SubtitleStyle.textColor(Prefs.SubtitleStyle.yellowBox), 0xFFFF_FF00)
         try expect(Prefs().reminderSwitch, false)
         try expect(Prefs(settings: .object(["reminder_switch": true])).reminderSwitch, true)
         // A lista de reserva (as mesmas chaves do Android): nunca a própria lista; "off" vale como escolha à mão.

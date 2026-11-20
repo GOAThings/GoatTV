@@ -145,7 +145,31 @@ object SettingsCatalog {
         read = { it.prefs.subtitleLanguage },
         subtitle = { it.subtitleLanguageSub },
         tv = Place(TvPage.PLAYBACK, 10, TvSection.SUBTITLES),
-        phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.PICTURE_SOUND),
+        phone = Place(PhonePage.PLAYBACK, 10, PhoneSection.SUBTITLES),
+    )
+    /** O tamanho vale para todas as legendas (as imagens DVB também); ver SubtitleLook. */
+    val SUBTITLE_SIZE = Setting.Choice(
+        Prefs.Key.SUBTITLE_SIZE, { it.subtitleSize },
+        options = ::subtitleSizes,
+        read = { it.prefs.subtitleSize },
+        tv = Place(TvPage.PLAYBACK, 20, TvSection.SUBTITLES),
+        phone = Place(PhonePage.PLAYBACK, 20, PhoneSection.SUBTITLES),
+    )
+    /** A cor e o fundo: só nas legendas em texto (as imagens DVB trazem as cores do emissor). */
+    val SUBTITLE_STYLE = Setting.Choice(
+        Prefs.Key.SUBTITLE_STYLE, { it.subtitleStyle },
+        options = ::subtitleStyles,
+        read = { it.prefs.subtitleStyle },
+        subtitle = { it.subtitleStyleSub },
+        tv = Place(TvPage.PLAYBACK, 30, TvSection.SUBTITLES),
+        phone = Place(PhonePage.PLAYBACK, 30, PhoneSection.SUBTITLES),
+    )
+    val SUBTITLE_POSITION = Setting.Choice(
+        Prefs.Key.SUBTITLE_POSITION, { it.subtitlePosition },
+        options = ::subtitlePositions,
+        read = { it.prefs.subtitlePosition },
+        tv = Place(TvPage.PLAYBACK, 40, TvSection.SUBTITLES),
+        phone = Place(PhonePage.PLAYBACK, 40, PhoneSection.SUBTITLES),
     )
     // ---- Gravações ----
 
@@ -411,7 +435,7 @@ object SettingsCatalog {
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
         STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
-        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
+        SURROUND, AUDIO_DELAY, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,
         EPG_IN_LIST, RECORD_PADDING_BEFORE, RECORD_PADDING_AFTER,
@@ -452,6 +476,25 @@ object SettingsCatalog {
         Prefs.KeyAction.SLEEP -> s.sleepTimer
         else -> s.none
     }
+
+    fun subtitleSizes(s: Strings) = listOf<Pair<Any?, String>>(
+        Prefs.SubtitleSize.SMALL to s.sizeSmall,
+        Prefs.SubtitleSize.NORMAL to s.sizeNormal,
+        Prefs.SubtitleSize.LARGE to s.sizeLarge,
+        Prefs.SubtitleSize.EXTRA_LARGE to s.sizeExtraLarge,
+    )
+
+    fun subtitleStyles(s: Strings) = listOf<Pair<Any?, String>>(
+        Prefs.SubtitleStyle.WHITE_SHADOW to s.subtitleStyleWhiteShadow,
+        Prefs.SubtitleStyle.WHITE_BOX to s.subtitleStyleWhiteBox,
+        Prefs.SubtitleStyle.YELLOW_SHADOW to s.subtitleStyleYellowShadow,
+        Prefs.SubtitleStyle.YELLOW_BOX to s.subtitleStyleYellowBox,
+    )
+
+    fun subtitlePositions(s: Strings) = listOf<Pair<Any?, String>>(
+        Prefs.SubtitlePosition.NORMAL to s.subtitlePositionNormal,
+        Prefs.SubtitlePosition.RAISED to s.subtitlePositionRaised,
+    )
 
     private fun decoders(s: Strings) = listOf<Pair<Any?, String>>(Prefs.Decoder.HARDWARE to s.decoderHw, Prefs.Decoder.SOFTWARE to s.decoderSw)
 
@@ -507,6 +550,7 @@ enum class PhonePage { PLAYBACK, CHANNELS, GUIDE, APPEARANCE }
 enum class PhoneSection(val title: ((Strings) -> String)?) {
     MAIN(null),
     PICTURE_SOUND({ it.settingsPictureSound }),
+    SUBTITLES({ it.subtitles }),
     CONNECTION({ it.settingsConnection }),
     ADVANCED({ it.settingsAdvanced }),
     RECORDINGS({ it.recordings }),

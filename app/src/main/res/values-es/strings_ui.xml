@@ -875,4 +875,16 @@
     <string name="pro_source_failed">%1$s dejó de funcionar. Reproduciendo %2$s.</string>
     <string name="pro_use_list">Usar en el modo TV Pro</string>
     <string name="pro_use_list_sub">Sus canales entran en la lista única</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">Tamaño de los subtítulos</string>
+    <string name="size_extra_large">Muy grande</string>
+    <string name="subtitle_style">Estilo de los subtítulos</string>
+    <string name="subtitle_style_sub">Solo subtítulos de texto. Los subtítulos DVB en imagen mantienen sus colores.</string>
+    <string name="subtitle_style_white_shadow">Blanco con sombra</string>
+    <string name="subtitle_style_white_box">Blanco sobre negro</string>
+    <string name="subtitle_style_yellow_shadow">Amarillo con sombra</string>
+    <string name="subtitle_style_yellow_box">Amarillo sobre negro</string>
+    <string name="subtitle_position">Posición de los subtítulos</string>
+    <string name="subtitle_position_normal">Abajo</string>
+    <string name="subtitle_position_raised">Más arriba (sobre la barra de información)</string>
 </resources>

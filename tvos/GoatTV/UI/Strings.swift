@@ -1,4 +1,5 @@
 import Foundation
+import GoatCore
 
 /// Os textos da app. Por agora em inglês e português (o idioma das definições da conta, ou o do Apple TV).
 struct Strings {
@@ -145,3 +146,20 @@ enum AndroidStrings {
     }()
 }
 
+
+extension Strings {
+    /// As opções do aspeto das legendas ("subtitle_size", "subtitle_style" ou "subtitle_position"), com os textos:
+    /// as mesmas do Android (SettingsCatalog), nas Definições e no atalho do painel das legendas.
+    func subtitleLookOptions(_ key: String) -> [(value: String, label: String)] {
+        switch key {
+        case "subtitle_size":
+            return [(Prefs.SubtitleSize.small, r("size_small")), (Prefs.SubtitleSize.normal, r("size_normal")),
+                    (Prefs.SubtitleSize.large, r("size_large")), (Prefs.SubtitleSize.extraLarge, r("size_extra_large"))]
+        case "subtitle_style":
+            return [(Prefs.SubtitleStyle.whiteShadow, r("subtitle_style_white_shadow")), (Prefs.SubtitleStyle.whiteBox, r("subtitle_style_white_box")),
+                    (Prefs.SubtitleStyle.yellowShadow, r("subtitle_style_yellow_shadow")), (Prefs.SubtitleStyle.yellowBox, r("subtitle_style_yellow_box"))]
+        default:
+            return [(Prefs.SubtitlePosition.normal, r("subtitle_position_normal")), (Prefs.SubtitlePosition.raised, r("subtitle_position_raised"))]
+        }
+    }
+}

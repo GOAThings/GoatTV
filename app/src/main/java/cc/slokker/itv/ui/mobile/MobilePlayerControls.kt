@@ -1,5 +1,8 @@
 package cc.slokker.itv.ui.mobile
 
+import cc.slokker.itv.ui.settings.SettingValues
+import cc.slokker.itv.ui.settings.SettingsCatalog
+import cc.slokker.itv.ui.settings.saveSetting
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxScope
@@ -667,6 +670,7 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
     val s = LocalStrings.current
     val tracks = rememberStreamState(playback.player).tracks
     val sleepAt by vm.sleepAt.collectAsStateWithLifecycle()
+    val prefs by vm.prefs.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize().background(PhoneColors.Scrim).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)) {
         Column(
@@ -688,6 +692,19 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                             MenuRow(o.label, null, checked = o.selected) {
                                 o.select()
                                 onClose()
+                            }
+                        }
+                    }
+                    // O atalho do aspeto das legendas: cada linha passa à opção seguinte, sem fechar.
+                    if (text) {
+                        val values = SettingValues(prefs, null)
+                        Section(null) {
+                            listOf(SettingsCatalog.SUBTITLE_SIZE, SettingsCatalog.SUBTITLE_STYLE, SettingsCatalog.SUBTITLE_POSITION).forEach { setting ->
+                                val choices = setting.phoneOptions(s)
+                                val current = choices.indexOfFirst { it.first == setting.read(values) }.coerceAtLeast(0)
+                                MenuRow(setting.title(s), choices[current].second) {
+                                    vm.saveSetting(setting, choices[(current + 1) % choices.size].first)
+                                }
                             }
                         }
                     }

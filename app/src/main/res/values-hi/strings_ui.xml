@@ -873,4 +873,16 @@
     <string name="pro_source_failed">%1$s ने काम करना बंद कर दिया। %2$s चल रहा है।</string>
     <string name="pro_use_list">TV Pro मोड में इस्तेमाल करें</string>
     <string name="pro_use_list_sub">इसके चैनल एक ही सूची में जाते हैं</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">सबटाइटल का आकार</string>
+    <string name="size_extra_large">बहुत बड़ा</string>
+    <string name="subtitle_style">सबटाइटल की शैली</string>
+    <string name="subtitle_style_sub">केवल टेक्स्ट सबटाइटल के लिए। DVB इमेज सबटाइटल अपने रंग रखते हैं।</string>
+    <string name="subtitle_style_white_shadow">सफ़ेद, छाया के साथ</string>
+    <string name="subtitle_style_white_box">काले पर सफ़ेद</string>
+    <string name="subtitle_style_yellow_shadow">पीला, छाया के साथ</string>
+    <string name="subtitle_style_yellow_box">काले पर पीला</string>
+    <string name="subtitle_position">सबटाइटल की जगह</string>
+    <string name="subtitle_position_normal">नीचे</string>
+    <string name="subtitle_position_raised">ऊपर (जानकारी पट्टी के ऊपर)</string>
 </resources>

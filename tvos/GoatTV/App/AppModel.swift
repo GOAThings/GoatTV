@@ -691,6 +691,7 @@ final class AppModel {
             engine.softwareDecoder = prefs.decoder == "sw"
             engine.deinterlace = prefs.deinterlace
             engine.audioDelayMs = prefs.audioDelayMs
+            engine.subtitleLook = (size: prefs.subtitleSize, style: prefs.subtitleStyle, position: prefs.subtitlePosition)
             engine.hdr = prefs.hdr
         }
         for engine in extraPlayers {

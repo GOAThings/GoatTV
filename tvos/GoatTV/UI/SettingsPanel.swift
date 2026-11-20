@@ -721,13 +721,16 @@ struct SettingsPanel: View {
 
         case .subtitles:
             let tracks = model.player.subtitleTracks
-            if tracks.isEmpty { return [.info("none", s.t("No subtitles", "Sem legendas"), "")] }
+            // O atalho do aspeto das legendas, por baixo das faixas (as mesmas linhas de Definições → Player → Legendas).
+            let look: [Item] = [.header("hlook", s.r("settings_appearance")),
+                                pickItem("subtitle_size"), pickItem("subtitle_style"), pickItem("subtitle_position")]
+            if tracks.isEmpty { return [.info("none", s.t("No subtitles", "Sem legendas"), "")] + look }
             return tracks.map { (track: PlayerEngine.Track) -> Item in
                 .check("s\(track.id)", track.id < 0 ? s.t("Off", "Desligadas") : track.name, track.id == model.player.currentSubtitle) {
                     model.player.selectSubtitle(track.id)
                     back()
                 }
-            }
+            } + look
 
         case .streamInfo:
             guard let channel = model.current else { return [] }
@@ -790,6 +793,9 @@ struct SettingsPanel: View {
                 pickItem("audio_delay_ms", subtitle: s.r("audio_delay_sub")),
                 .header("hsubs", s.r("subtitles")),
                 pickItem("subtitle_language", subtitle: s.r("subtitle_language_sub")),
+                pickItem("subtitle_size"),
+                pickItem("subtitle_style", subtitle: s.r("subtitle_style_sub")),
+                pickItem("subtitle_position"),
                 .header("hrec", s.r("recordings")),
                 pickItem("record_padding_before_min", subtitle: s.r("recording_padding_sub")),
                 pickItem("record_padding_after_min", subtitle: s.r("recording_padding_sub")),
@@ -1632,6 +1638,11 @@ struct SettingsPanel: View {
             return (s.r("audio_language"), [o(.string(""), s.r("auto"))] + languageOptions(), .string(p.audioLanguage))
         case "subtitle_language":
             return (s.r("subtitle_language"), [o(.string(""), s.r("subtitles_off"))] + languageOptions(), .string(p.subtitleLanguage))
+        // O aspeto das legendas (as mesmas chaves e opções do Android, ver SettingsCatalog).
+        case "subtitle_size", "subtitle_style", "subtitle_position":
+            let options = s.subtitleLookOptions(key)
+            let current = key == "subtitle_size" ? p.subtitleSize : key == "subtitle_style" ? p.subtitleStyle : p.subtitlePosition
+            return (s.r(key), options.map { o(.string($0.value), $0.label) }, .string(current))
         case "record_padding_before_min", "record_padding_after_min":
             let before = key == "record_padding_before_min"
             return (s.r(before ? "recording_padding_before" : "recording_padding_after"),

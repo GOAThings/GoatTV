@@ -55,7 +55,11 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import cc.slokker.itv.data.Catchup
 import cc.slokker.itv.data.Channel
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.Reminder
+import cc.slokker.itv.ui.settings.SettingValues
+import cc.slokker.itv.ui.settings.SettingsCatalog
+import cc.slokker.itv.ui.settings.saveSetting
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.common.ChannelLogo
 import cc.slokker.itv.ui.common.KeyHint
@@ -381,7 +385,14 @@ internal fun SleepPicker(current: Long?, onPick: (Int?) -> Unit, modifier: Modif
 
 /** Escolha da faixa de áudio ou das legendas (no HUD). */
 @Composable
-internal fun TrackPicker(title: String, options: List<TrackOption>, onPicked: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TrackPicker(
+    title: String,
+    options: List<TrackOption>,
+    onPicked: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Linhas por baixo das faixas (nas legendas, o atalho do aspeto: [SubtitleLookRows]). */
+    footer: (@Composable () -> Unit)? = null,
+) {
     val s = LocalStrings.current
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusWithRetry(focus) }
@@ -415,6 +426,27 @@ internal fun TrackPicker(title: String, options: List<TrackOption>, onPicked: ()
                 },
             )
         }
+        footer?.invoke()
+    }
+}
+
+/**
+ * O atalho do aspeto das legendas, por baixo das faixas: o tamanho, o estilo e o sítio, cada linha passa à opção
+ * seguinte sem fechar (as mesmas definições de Definições → Legendas).
+ */
+@Composable
+internal fun SubtitleLookRows(vm: AppViewModel, prefs: Prefs) {
+    val s = LocalStrings.current
+    val values = SettingValues(prefs, null)
+    Spacer(Modifier.height(8.dp))
+    for (setting in listOf(SettingsCatalog.SUBTITLE_SIZE, SettingsCatalog.SUBTITLE_STYLE, SettingsCatalog.SUBTITLE_POSITION)) {
+        val options = setting.options(s)
+        val current = options.indexOfFirst { it.first == setting.read(values) }.coerceAtLeast(0)
+        GlassRow(
+            onClick = { vm.saveSetting(setting, options[(current + 1) % options.size].first) },
+            title = setting.title(s),
+            subtitle = options[current].second,
+        )
     }
 }
 

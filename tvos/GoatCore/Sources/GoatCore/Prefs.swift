@@ -57,6 +57,12 @@ public struct Prefs: Equatable, Sendable {
     public var audioLanguage = ""
     /// A língua das legendas (ISO 639-1); vazio = sem legendas além das que o stream marca.
     public var subtitleLanguage = ""
+    /// O tamanho das legendas (`subtitle_size`; as imagens DVB também): [SubtitleSize].
+    public var subtitleSize = SubtitleSize.normal
+    /// A cor e o fundo das legendas em texto (`subtitle_style`): [SubtitleStyle]. O padrão é o aspeto de sempre.
+    public var subtitleStyle = SubtitleStyle.whiteBox
+    /// Onde ficam as legendas (`subtitle_position`): em baixo ou mais acima, por cima da barra de informação.
+    public var subtitlePosition = SubtitlePosition.normal
     /// Escala da interface, em % (80–120).
     public var uiScale = 100
     // Mudança de canal
@@ -192,6 +198,33 @@ public struct Prefs: Equatable, Sendable {
     public enum Startup { public static let last = "last", list = "list" }
     public enum PhoneStartup { public static let home = "home", last = "last" }
     public enum Sort { public static let number = "number", name = "name" }
+    /// O aspeto das legendas: as contas são as do núcleo partilhado (SubtitleLook), iguais às do Android.
+    public enum SubtitleSize {
+        public static let small = "small", normal = "normal", large = "large", extraLarge = "extra_large"
+        public static let all = [small, normal, large, extraLarge]
+        /// O tamanho em relação ao normal.
+        public static func scale(_ size: String) -> Double { AppleBridge.shared.subtitleScale(size: size) }
+    }
+    public enum SubtitleStyle {
+        public static let whiteShadow = "white_shadow", whiteBox = "white_box", yellowShadow = "yellow_shadow", yellowBox = "yellow_box"
+        public static let all = [whiteShadow, whiteBox, yellowShadow, yellowBox]
+        /// O texto numa caixa preta (senão, sem fundo e com sombra).
+        public static func boxed(_ style: String) -> Bool { AppleBridge.shared.subtitleBoxed(style: style) }
+        /// A cor do texto em ARGB.
+        public static func textColor(_ style: String) -> UInt32 { UInt32(truncatingIfNeeded: AppleBridge.shared.subtitleTextColor(style: style)) }
+    }
+    public enum SubtitlePosition {
+        public static let normal = "normal", raised = "raised"
+        public static let all = [normal, raised]
+        /// A distância do fundo do vídeo ao fundo das legendas, em fração da altura.
+        public static func gap(_ position: String) -> Double { AppleBridge.shared.subtitleGap(position: position) }
+        /// Onde fica uma imagem DVB (tudo em fração do ecrã do emissor) com o tamanho e o sítio escolhidos.
+        public static func place(x: Double, y: Double, width: Double, height: Double, size: String, position: String)
+            -> (x: Double, y: Double, width: Double, height: Double) {
+            let r = AppleBridge.shared.subtitlePlace(x: x, y: y, width: width, height: height, size: size, position: position)
+            return (Double(r.x), Double(r.y), Double(r.width), Double(r.height))
+        }
+    }
     public enum TextSize {
         public static let small = "small", normal = "normal", large = "large"
         public static func scale(_ size: String) -> Double { size == small ? 0.9 : (size == large ? 1.15 : 1) }
@@ -251,6 +284,9 @@ public struct Prefs: Equatable, Sendable {
         surroundDefault = p.surroundDefault
         audioLanguage = p.audioLanguage
         subtitleLanguage = p.subtitleLanguage
+        subtitleSize = p.subtitleSize
+        subtitleStyle = p.subtitleStyle
+        subtitlePosition = p.subtitlePosition
         uiScale = Int(p.uiScale)
         upDown = p.upDown
         reverseZap = p.reverseZap

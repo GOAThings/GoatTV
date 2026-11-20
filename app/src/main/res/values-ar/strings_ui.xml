@@ -881,4 +881,16 @@
     <string name="pro_source_failed">توقف %1$s عن العمل. يتم تشغيل %2$s.</string>
     <string name="pro_use_list">استخدامها في وضع TV Pro</string>
     <string name="pro_use_list_sub">تدخل قنواتها في القائمة الواحدة</string>
+    <!-- Subtitle appearance -->
+    <string name="subtitle_size">حجم الترجمة</string>
+    <string name="size_extra_large">كبير جدًا</string>
+    <string name="subtitle_style">نمط الترجمة</string>
+    <string name="subtitle_style_sub">للترجمة النصية فقط. تحتفظ ترجمات DVB المصوّرة بألوانها.</string>
+    <string name="subtitle_style_white_shadow">أبيض مع ظل</string>
+    <string name="subtitle_style_white_box">أبيض على أسود</string>
+    <string name="subtitle_style_yellow_shadow">أصفر مع ظل</string>
+    <string name="subtitle_style_yellow_box">أصفر على أسود</string>
+    <string name="subtitle_position">موضع الترجمة</string>
+    <string name="subtitle_position_normal">في الأسفل</string>
+    <string name="subtitle_position_raised">أعلى (فوق شريط المعلومات)</string>
 </resources>
