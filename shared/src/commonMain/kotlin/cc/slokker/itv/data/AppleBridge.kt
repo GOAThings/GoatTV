@@ -11,6 +11,9 @@ import cc.slokker.itv.data.recording.SeriesRule
 import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.playback.PictureName
 import cc.slokker.itv.playback.ChannelMemory
+import cc.slokker.itv.playback.SourceHistory
+import cc.slokker.itv.playback.SourceReliability
+import cc.slokker.itv.playback.SourceStats
 import cc.slokker.itv.playback.SubtitleLook
 import cc.slokker.itv.playback.SubtitleRect
 import kotlinx.datetime.TimeZone
@@ -271,6 +274,30 @@ object AppleBridge {
 
     /** A memória dos canais guardada neste aparelho ([text] é o que o `encode` deu; null = vazia). */
     fun channelMemoryDecode(text: String?): ChannelMemory = ChannelMemory.decode(text)
+
+    // ---- A fiabilidade de cada fonte (SourceHistory) ----
+
+    /** O historial das fontes guardado neste aparelho ([text] é o que o `encode` deu; null = vazio). */
+    fun sourceHistoryDecode(text: String?, nowMs: Long): SourceHistory = SourceHistory.decode(text, nowMs)
+
+    /** A chave de uma fonte: a lista e o canal nela. */
+    fun sourceKey(playlistId: String, channelKey: String): String = SourceHistory.key(playlistId, channelKey)
+
+    /**
+     * As posições de [keys] (as chaves das fontes; "" = sem chave) pela ordem em que se abrem: as más no fim e, entre
+     * vizinhas do mesmo [tiers] (a qualidade), as mais fiáveis primeiro. Sem historial, é a ordem de entrada.
+     */
+    fun sourceOrder(history: SourceHistory, keys: List<String>, tiers: List<Int>, nowMs: Long): List<Int> =
+        SourceReliability.orderIndices(keys.map { if (it.isEmpty()) SourceReliability.NEUTRAL else history.score(it, nowMs) }, tiers)
+
+    /** O que a fonte somou esta semana, ou null sem nada. */
+    fun sourceStats(history: SourceHistory, key: String, nowMs: Long): SourceStats? = history.stats(key, nowMs)
+
+    /** O tempo a ver como se diz ("35 min", "2 h 30 min"). */
+    fun sourceWatchedLabel(seconds: Long): String = SourceReliability.watchedLabel(seconds)
+
+    /** Abaixo de quantos segundos vistos, sem falhas nem quedas, ainda não se diz que a fonte é estável. */
+    fun sourceStableMinSec(): Long = SourceReliability.STABLE_MIN_SEC
 
     private fun zone(id: String): TimeZone = runCatching { TimeZone.of(id) }.getOrDefault(TimeZone.UTC)
 

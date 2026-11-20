@@ -13,6 +13,7 @@ import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.data.catchupCandidates
 import cc.slokker.itv.data.streamCandidates
+import cc.slokker.itv.playback.SourceHistory
 import cc.slokker.itv.ui.common.ErrorInfo
 
 /**
@@ -87,11 +88,18 @@ internal class PlaybackRequest(
 ) {
     val live: Boolean get() = catchup == null
 
+    /**
+     * A fonte que este pedido abre, para o historial de fiabilidade (SourceHistory.key: a lista e o canal nela; no Modo
+     * TV Pro, a fonte e não o canal da lista única); "" nos pedidos sem fonte (gravações).
+     */
+    var source: String = ""
+        internal set
+
     /** A chave do canal que o ecrã mostra (o da lista principal, também quando dá o da reserva). */
     val shownKey: String get() = backup?.main?.channel?.key ?: channel.key
 
     /** O mesmo pedido, a dar no lugar de [origin]. */
-    fun asBackup(origin: BackupOrigin) = PlaybackRequest(channel, catchup, archiveStartMs, candidates, freshLinks, origin)
+    fun asBackup(origin: BackupOrigin) = PlaybackRequest(channel, catchup, archiveStartMs, candidates, freshLinks, origin).also { it.source = source }
 
     companion object {
         /**
@@ -107,13 +115,25 @@ internal class PlaybackRequest(
             stalker: StalkerLinks?,
             correctionMin: Int = 0,
         ): PlaybackRequest {
-            // Modo TV Pro: o canal abre-se na lista da melhor fonte (as outras são os failovers, ver backupStreams).
+            // Modo TV Pro: a fonte é a que dá (a de `resolve`), não o canal da lista única.
             content.pro?.let { pro ->
                 val (member, source) = pro.resolve(channel.key).firstOrNull() ?: return PlaybackRequest(channel, null, 0L, emptyList())
                 android.util.Log.i("GoatTV", "Pro: ${channel.name} da lista ${member.playlist.name} (${source.name})")
                 val shown = ProContent.asShown(source, channel)
-                return of(member, shown, catchup?.let { if (it.channel.key == channel.key) it.copy(channel = shown) else it }, streamFormat, stalker, correctionMin)
+                return build(member, shown, catchup?.let { if (it.channel.key == channel.key) it.copy(channel = shown) else it }, streamFormat, stalker, correctionMin)
+                    .also { it.source = SourceHistory.key(member.playlist.id, source.key) }
             }
+            return build(content, channel, catchup, streamFormat, stalker, correctionMin).also { it.source = SourceHistory.key(content.playlist.id, channel.key) }
+        }
+
+        private fun build(
+            content: PlaylistContent,
+            channel: Channel,
+            catchup: Catchup?,
+            streamFormat: String?,
+            stalker: StalkerLinks?,
+            correctionMin: Int,
+        ): PlaybackRequest {
             val playlist = content.playlist
             // Uma gravação no disco: o ficheiro, a começar no ponto pedido (o ExoPlayer salta dentro dele).
             catchup?.recording?.let { file ->
@@ -141,7 +161,14 @@ internal class PlaybackRequest(
  * Um failover: o pedido para ele e o nome das duas listas (para o aviso). [sameList]: é outro canal da própria lista
  * principal (e [backupName] é então o nome dele).
  */
-internal class BackupStream(val request: PlaybackRequest, val mainName: String, val backupName: String, val sameList: Boolean = false) {
+internal class BackupStream(
+    val request: PlaybackRequest,
+    val mainName: String,
+    val backupName: String,
+    val sameList: Boolean = false,
+    /** A fonte tem um historial claramente mau (SourceHistory): não se abre primeiro por ela. */
+    val bad: Boolean = false,
+) {
     /** Como aparece no cartão de erro: "RTP 1 HD (BackupTV)", ou só o canal se for da própria lista. */
     val label: String get() = if (sameList) backupName else "${request.channel.name} ($backupName)"
 }
@@ -164,6 +191,8 @@ internal class BackupOrigin(
     val failed: List<String> = emptyList(),
     /** Este, como aparece no cartão de erro. */
     val label: String = backupName,
+    /** Passou-se à outra versão sem a principal ter falhado (o historial dela era mau): sem aviso. */
+    val quiet: Boolean = false,
 ) {
     /** Este é o [position].º dos [total] failovers (a cápsula "A tentar um failover"). */
     val position: Int get() = failed.size + 1
@@ -243,6 +272,21 @@ internal interface PlaybackHost {
 
     /** Um canal em direto da lista principal deu: ela já não está em baixo. */
     fun onMainPlaying(request: PlaybackRequest) = Unit
+
+    /**
+     * A fonte de [request] (direto) tem um historial claramente mau (SourceHistory) e há outra versão do canal na
+     * própria lista a dar no lugar dela: abre-se essa primeiro (a má fica para o fim, não de fora).
+     */
+    fun sourceUnreliable(request: PlaybackRequest): Boolean = false
+
+    /** A fonte de [request] (direto) abriu ([ok]) ou não abriu. */
+    fun onSourceOpened(request: PlaybackRequest, ok: Boolean) = Unit
+
+    /** A ligação da fonte de [request] caiu depois de dar (ou o direto ficou preso). */
+    fun onSourceDrop(request: PlaybackRequest) = Unit
+
+    /** A pessoa viu [seconds] s da fonte de [request]. */
+    fun onSourceWatched(request: PlaybackRequest, seconds: Long) = Unit
 
     /**
      * A faixa de [type] (C.TRACK_TYPE_AUDIO/TEXT) escolhida à mão no canal de [request] noutra vez, como o TrackMemory

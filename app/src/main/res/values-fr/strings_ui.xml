@@ -936,4 +936,10 @@
     <string name="upscale_sub">Rend plus nette la vidéo plus petite que l’écran. Consomme plus d’énergie ; l’IA demande un appareil puissant et revient en arrière seule si elle ne suit pas</string>
     <string name="upscale_shield">Sur les box avec leur propre mise à l’échelle par IA (NVIDIA SHIELD), celle du système ne fonctionne que si ceci est désactivé et les réglages de l’image à zéro, car l’image va alors directement du décodeur à l’écran</string>
     <string name="upscale_sub_apple">Rend plus nette la vidéo plus petite que l’écran avec Apple MetalFX. Consomme plus d’énergie. Indisponible sur les appareils sans MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d coupures en %2$s cette semaine</string>
+    <string name="source_history_drop_one">1 coupure en %1$s cette semaine</string>
+    <string name="source_history_failed">%1$d ouvertures sur %2$d ont échoué cette semaine</string>
+    <string name="source_history_stable">Aucune coupure en %1$s cette semaine</string>
 </resources>

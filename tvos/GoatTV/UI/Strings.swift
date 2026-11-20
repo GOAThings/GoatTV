@@ -55,6 +55,12 @@ struct Strings {
         return Strings.fill(text, args)
     }
 
+    /// O mesmo com os argumentos já numa lista (para quem os recebe de outra função).
+    func r(_ key: String, list args: [String]) -> String {
+        let text = AndroidStrings.table[lang]?[key] ?? AndroidStrings.table["en"]?[key] ?? key
+        return Strings.fill(text, args)
+    }
+
     /// Um plural do Android (`streams_limit`): "one" com 1, senão "other".
     func plural(_ key: String, _ n: Int) -> String {
         let table = AndroidStrings.table[lang] ?? AndroidStrings.table["en"] ?? [:]

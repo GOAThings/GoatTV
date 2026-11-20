@@ -957,7 +957,11 @@ private fun FailoverRow(state: BackupPanelState, choices: AppViewModel.BackupCho
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("${index + 1}", color = ItvColors.TextFaint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(26.dp))
-        Text(c.name, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(c.name, color = ItvColors.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // O que se passou com esta fonte esta semana (ver SourceHistory).
+            state.history(f, s)?.let { Text(it, color = ItvColors.TextFaint, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        }
         Text(
             state.source(f, s), color = ItvColors.TextDim, fontSize = 12.sp, maxLines = 1,
             modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 2.dp),

@@ -111,6 +111,8 @@ final class AppModel {
     /// Os failovers do canal a dar: o que está a abrir, os que faltam (pela ordem) e os que já falharam (ver [failoverFailed]).
     var failoverNow: FailoverStream?
     var failoverQueue: [FailoverStream] = []
+    /// O failover que está a abrir é por a fonte da principal ter um historial mau (e não por ter falhado): sem aviso.
+    @ObservationIgnored var failoverQuiet = false
     var failoversFailed: [String] = []
     @ObservationIgnored private var secondContents: [String: PlaylistContent] = [:]
     /// A última vista de cada lista do segundo canal (ou da reserva), para não a refazer a cada pedido.
@@ -122,6 +124,8 @@ final class AppModel {
     @ObservationIgnored var proSet: ProSet?
     /// As fontes do Modo TV Pro que falharam há pouco (só nesta TV).
     let proHealth = ProHealth()
+    /// A fiabilidade de cada fonte (as quedas, as aberturas falhadas, o tempo a ver), só neste aparelho (ver SourceHistory).
+    let sourceHistory = SourceHistory()
     /// O que se escolheu à mão em cada canal (o áudio, as legendas e a proporção), só neste aparelho (ver ChannelMemory).
     let channelMemory = ChannelMemory()
     /// A proporção da imagem do canal a dar: a escolhida à mão nele ou, sem nenhuma, a das definições.
@@ -272,6 +276,9 @@ final class AppModel {
             if kind == .audio { self.channelMemory.setAudio(list, key, memo) } else { self.channelMemory.setText(list, key, memo) }
         }
         // A lista principal desistiu do canal: o mesmo canal na lista de reserva (ver BackupPlaylist.swift).
+        player.onSourceOpened = { [weak self] key, ok in self?.sourceHistory.recordOpen(key, ok: ok) }
+        player.onSourceDrop = { [weak self] key in self?.sourceHistory.recordDrop(key) }
+        player.onSourceWatched = { [weak self] key, seconds in self?.sourceHistory.recordWatched(key, seconds: seconds) }
         player.onStartFailed = { [weak self] status in self?.startFailover(status: status) ?? false }
         player.skipMain = { [weak self] in self?.skipToBackup() ?? false }
         player.onBackupPlaying = { [weak self] in self?.backupPlaying() }
@@ -1230,7 +1237,7 @@ final class AppModel {
         let result = await Task.detached(priority: .userInitiated) { ProLineup.build(lineupId, members: viewed) }.value
         guard generation == sessionGeneration, prefs.proLineup == lineupId else { return }
         if !result.nearMisses.isEmpty { DebugLog.add("Pro: in More channels, close to the table: " + result.nearMisses.prefix(60).joined(separator: " | ")) }
-        let built = ProContent.build(lineupId, members: viewed, result: result, health: proHealth, strings: strings)
+        let built = ProContent.build(lineupId, members: viewed, result: result, health: proHealth, history: sourceHistory, strings: strings)
         DebugLog.add("Pro: \(built.content.channels.count) channels in \(built.content.categories.count) groups")
         if built.content.channels.isEmpty {
             if content == nil || !quiet { screen = .error(strings.errPlaylistEmpty(target.name)) }
@@ -1378,7 +1385,7 @@ final class AppModel {
             let source = src.channel
             defer { updateWatching() }
             player.play(candidates, channelKey: channel.key, live: true, userAgent: source.userAgent ?? prefs.userAgent,
-                        referrer: source.referrer, pausable: true,
+                        referrer: source.referrer, pausable: true, sourceKey: mainSourceKey(channel),
                         linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: source) } : nil)
         }
         saveLast(channel, watched: false)

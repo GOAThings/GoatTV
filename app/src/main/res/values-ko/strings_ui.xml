@@ -931,4 +931,10 @@
     <string name="upscale_sub">화면보다 작은 영상을 더 선명하게 보여 줍니다. 전력을 더 씁니다. AI는 성능 좋은 기기가 필요하며 따라가지 못하면 스스로 되돌아갑니다</string>
     <string name="upscale_shield">자체 AI 업스케일링이 있는 박스(NVIDIA SHIELD)에서는 이 항목이 꺼져 있고 화면 조정이 0일 때만 시스템 업스케일러가 작동합니다. 그때 영상이 디코더에서 화면으로 바로 가기 때문입니다</string>
     <string name="upscale_sub_apple">Apple MetalFX로 화면보다 작은 영상을 더 선명하게 보여 줍니다. 전력을 더 씁니다. MetalFX가 없는 기기에서는 사용할 수 없습니다</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">이번 주 %2$s 동안 %1$d번 끊김</string>
+    <string name="source_history_drop_one">이번 주 %1$s 동안 1번 끊김</string>
+    <string name="source_history_failed">이번 주 %2$d번 중 %1$d번 열기 실패</string>
+    <string name="source_history_stable">이번 주 %1$s 동안 끊김 없음</string>
 </resources>

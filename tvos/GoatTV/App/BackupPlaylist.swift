@@ -37,6 +37,8 @@ struct BackupChoices {
     let manual: Bool
     /// As outras versões do canal na própria lista (ChannelMatch.mainPrefix), com "Juntar versões": o automático tenta-as primeiro.
     var variants: [String] = []
+    /// A ordem automática pela fiabilidade de cada fonte (nil sem historial: a ordem de sempre); ver AppModel.orderFailovers.
+    var automaticOrder: (([String]) -> [String])?
 
     var autoChannel: Channel? { auto.index.flatMap { content.channels.indices.contains($0) ? content.channels[$0] : nil } }
 
@@ -57,7 +59,8 @@ struct BackupChoices {
     var failovers: [String] {
         let chosen = choice?.filter { channel(of: $0) != nil } ?? []
         if choice?.isEmpty == true || !chosen.isEmpty { return chosen }
-        return variants + (manual ? [] : (autoChannel.map { [$0.key] } ?? []))
+        let auto = variants + (manual ? [] : (autoChannel.map { [$0.key] } ?? []))
+        return automaticOrder?(auto) ?? auto
     }
 
     /// "Nenhum": este canal não muda de lista.
@@ -101,6 +104,10 @@ struct FailoverStream {
     let channel: Channel
     let candidates: [StreamCandidate]
     let sameList: Bool
+    /// A fonte no historial de fiabilidade (SourceHistory.key); "" sem chave.
+    var sourceKey: String = ""
+    /// O historial da fonte é claramente mau: não se abre primeiro por ela.
+    var bad: Bool = false
 
     /// Como aparece no cartão de erro: "RTP 1 HD (BackupTV)", ou só o canal se for da própria lista.
     var label: String { sameList ? channel.name : "\(channel.name) (\(playlist.name))" }
@@ -201,16 +208,23 @@ extension AppModel {
         let m: ChannelMatcher
         if let content { m = await matcher(for: content) } else { m = ChannelMatcher([]) }
         let manual = backupManual(id)
-        let list = ChannelMatch.failovers(ChannelMatch.Entry(channel, in: main), m, chosen: chosen ?? backupChoice(id, channel.key), manual: manual,
-                                          variants: main.variants[channel.key] ?? []) { main.byKey[$0] != nil }
+        let picked = chosen ?? backupChoice(id, channel.key)
+        let found = ChannelMatch.failovers(ChannelMatch.Entry(channel, in: main), m, chosen: picked, manual: manual,
+                                           variants: main.variants[channel.key] ?? []) { main.byKey[$0] != nil }
+        // A ordem automática segue a fiabilidade de cada fonte; a que a pessoa escolheu à mão não se mexe.
+        let list = picked == nil ? orderFailovers(found, main: main, backup: content) : found
         let mainDown = providerOutage.isDown(id, now: Self.uptimeMs())
         let streams: [FailoverStream] = list.compactMap { f in
             if let key = ChannelMatch.mainKey(of: f) {
                 guard !mainDown, let c = main.byKey[key] else { return nil }
-                return FailoverStream(playlist: main.playlist, channel: c, candidates: candidates(main, c), sameList: true)
+                let source = SourceHistory.key(main.playlist.id, key)
+                return FailoverStream(playlist: main.playlist, channel: c, candidates: candidates(main, c), sameList: true,
+                                      sourceKey: source, bad: sourceHistory.isBad(source))
             }
             guard !busy, let content, let c = content.byKey[f] else { return nil }
-            return FailoverStream(playlist: content.playlist, channel: c, candidates: candidates(content, c), sameList: false)
+            let source = SourceHistory.key(content.playlist.id, f)
+            return FailoverStream(playlist: content.playlist, channel: c, candidates: candidates(content, c), sameList: false,
+                                  sourceKey: source, bad: sourceHistory.isBad(source))
         }
         DebugLog.add(streams.isEmpty
             ? "Backup: no failover for \"\(channel.name)\"\(manual ? " (manual)" : "")"
@@ -236,6 +250,7 @@ extension AppModel {
         let channel = stream.channel
         failoverNow = stream
         player.playBackup(stream.candidates, userAgent: channel.userAgent ?? prefs.userAgent, referrer: channel.referrer,
+                          sourceKey: stream.sourceKey.isEmpty ? nil : stream.sourceKey,
                           linkResolver: playlist.type == .stalker ? { await stalker.candidates(playlist, channel: channel) } : nil)
     }
 
@@ -256,6 +271,7 @@ extension AppModel {
     /// O direto da lista principal não abriu: procura os failovers dele (o leitor espera pela resposta). Uma recusa da
     /// conta ou do servidor ([status]) marca a lista como em baixo (ver [skipToBackup]).
     func startFailover(status: Int?) -> Bool {
+        failoverQuiet = false
         // Sem lista de reserva, as outras versões do canal (com "Juntar versões") também são failovers.
         guard catchup == nil, let content, let channel = current,
               proMode || backupOf(content.playlist.id) != nil || content.variants[channel.key] != nil else { return false }
@@ -319,16 +335,66 @@ extension AppModel {
 
     /// A lista principal esteve em baixo há pouco: o canal novo vai logo aos failovers, sem esperar pelas tentativas de
     /// sempre (sem nenhum — os da própria lista não contam —, tenta-se a principal).
+    ///
+    /// Também quando a fonte do canal tem um historial claramente mau (SourceHistory) e a própria lista tem outra versão
+    /// dele ("Juntar versões"): essa dá primeiro, sem aviso, se também não for má; a má fica para o fim (se as outras
+    /// falharem, volta-se a ela).
     func skipToBackup() -> Bool {
-        guard catchup == nil, let content, let channel = current, backupOf(content.playlist.id) != nil,
-              providerOutage.isDown(content.playlist.id, now: Self.uptimeMs()) else { return false }
+        guard catchup == nil, let content, let channel = current else { return false }
+        let outage = backupOf(content.playlist.id) != nil && providerOutage.isDown(content.playlist.id, now: Self.uptimeMs())
+        let unreliable = !outage && !proMode && !(content.variants[channel.key] ?? []).isEmpty
+            && sourceHistory.isBad(SourceHistory.key(content.playlist.id, channel.key))
+        guard outage || unreliable else { return false }
         Task { [weak self] in
             guard let self else { return }
             let streams = await self.backupStreams(content, channel)
             guard self.current?.key == channel.key, self.catchup == nil else { return }
+            if unreliable {
+                guard let first = streams.first, first.sameList, !first.bad else { self.player.openMain(); return }
+                self.failoverQuiet = true
+            }
             if streams.isEmpty { self.player.openMain() } else { self.openFailovers(streams) }
         }
         return true
+    }
+
+    /// A chave no historial da fonte que dá (ou vai dar) o canal [channel] da lista aberta: no Modo TV Pro, a melhor
+    /// fonte (a lista dela e o canal dela); fora dele, a própria lista e o canal.
+    func mainSourceKey(_ channel: Channel) -> String? {
+        guard let content else { return nil }
+        if proMode, let pro = proSet {
+            return pro.resolve(channel.key).first.map { pro.sourceKey($0.member, $0.channel) }
+        }
+        return SourceHistory.key(content.playlist.id, channel.key)
+    }
+
+    /// A linha da fiabilidade da fonte [key] esta semana ("3 quedas em 2 h esta semana"); nil sem nada para dizer.
+    func sourceLine(_ key: String) -> String? {
+        sourceHistory.line(key) { resource, args in strings.r(resource, list: args) }
+    }
+
+    /// A linha da fiabilidade do failover [f] de [choices].
+    func failoverHistory(_ choices: BackupChoices, _ f: String) -> String? {
+        guard let key = failoverSourceKey(f, main: choices.main, backup: choices.content) else { return nil }
+        return sourceLine(key)
+    }
+
+    /// A chave no historial do failover [f] (da lista principal, com ChannelMatch.mainPrefix, ou da reserva).
+    func failoverSourceKey(_ f: String, main: PlaylistContent?, backup: PlaylistContent?) -> String? {
+        if let key = ChannelMatch.mainKey(of: f) { return main.map { SourceHistory.key($0.playlist.id, key) } }
+        return backup.map { SourceHistory.key($0.playlist.id, f) }
+    }
+
+    /// Os failovers automáticos [list] pela fiabilidade: entre os da mesma qualidade, o mais fiável primeiro; os de
+    /// historial claramente mau no fim (nunca de fora). Sem historial, a mesma ordem. [main] é a lista principal (os
+    /// failovers dela têm ChannelMatch.mainPrefix) e [backup] a reserva.
+    func orderFailovers(_ list: [String], main: PlaylistContent?, backup: PlaylistContent?) -> [String] {
+        let keys = list.map { failoverSourceKey($0, main: main, backup: backup) ?? "" }
+        let tiers = list.map { f -> Int in
+            guard let key = ChannelMatch.mainKey(of: f), let name = main?.byKey[key]?.name else { return -1 }
+            return ChannelMatch.parse(name).quality
+        }
+        return sourceHistory.order(keys: keys, tiers: tiers).map { list[$0] }
     }
 
     /// Um canal em direto da lista principal deu: ela já não está em baixo.
@@ -358,7 +424,9 @@ extension AppModel {
     func backupPlaying() {
         guard let content, let stream = failoverNow else { return }
         // No Modo TV Pro, o aviso diz a fonte que falhou e a que está a dar (as duas podem ser da mesma lista).
-        if let failed = proBackupPlaying() {
+        if failoverQuiet {
+            failoverQuiet = false
+        } else if let failed = proBackupPlaying() {
             showToast(strings.r("pro_source_failed", failed, stream.label))
         } else if stream.sameList {
             showToast(strings.r("backup_playing_channel", current?.name ?? "", stream.channel.name))
@@ -370,6 +438,7 @@ extension AppModel {
     /// "Experimentar agora": dá já os failovers [failovers] (pela ordem) no lugar do canal a ver; o próximo canal volta
     /// à principal.
     func tryBackup(_ failovers: [String]) {
+        failoverQuiet = false
         guard let content, let channel = current, !failovers.isEmpty else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -405,7 +474,8 @@ extension AppModel {
         }
         return BackupChoices(mainId: id, backup: backup, content: backupContent, main: mainContent, auto: auto, similar: similar,
                              similarMain: similarMain, choice: backupChoice(id, channel.key), manual: backupManual(id),
-                             variants: (mainContent?.variants[channel.key] ?? []).map(ChannelMatch.mainFailover))
+                             variants: (mainContent?.variants[channel.key] ?? []).map(ChannelMatch.mainFailover),
+                             automaticOrder: { [weak self] list in self?.orderFailovers(list, main: mainContent, backup: backupContent) ?? list })
     }
 
     /// Pesquisa nos canais da reserva e da própria lista (pelo nome, sem acentos nem maiúsculas): os da reserva primeiro,

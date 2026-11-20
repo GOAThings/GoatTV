@@ -931,4 +931,10 @@
     <string name="upscale_sub">让小于屏幕的视频更清晰。耗电更多；AI 需要性能足够的设备，跟不上时会自动退回</string>
     <string name="upscale_shield">在自带 AI 放大的盒子上（NVIDIA SHIELD），只有此项关闭且画面调整为零时系统放大才起作用，因为这时画面直接从解码器送到屏幕</string>
     <string name="upscale_sub_apple">使用 Apple MetalFX 让小于屏幕的视频更清晰。耗电更多。没有 MetalFX 的设备上不可用</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">本周在 %2$s 内中断 %1$d 次</string>
+    <string name="source_history_drop_one">本周在 %1$s 内中断 1 次</string>
+    <string name="source_history_failed">本周 %2$d 次打开中失败 %1$d 次</string>
+    <string name="source_history_stable">本周 %1$s 内无中断</string>
 </resources>

@@ -935,4 +935,10 @@
     <string name="upscale_sub">Makes video smaller than the screen look sharper. Uses more power; AI needs a capable device and switches back by itself when it cannot keep up</string>
     <string name="upscale_shield">On boxes with their own AI upscaling (NVIDIA SHIELD), the system upscaler only works while this is Off and the picture adjustments are at zero, because then the picture goes straight from the decoder to the screen</string>
     <string name="upscale_sub_apple">Makes video smaller than the screen look sharper with Apple MetalFX. Uses more power. Not available on devices without MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d drops in %2$s this week</string>
+    <string name="source_history_drop_one">1 drop in %1$s this week</string>
+    <string name="source_history_failed">%1$d of %2$d opens failed this week</string>
+    <string name="source_history_stable">No drops in %1$s this week</string>
 </resources>

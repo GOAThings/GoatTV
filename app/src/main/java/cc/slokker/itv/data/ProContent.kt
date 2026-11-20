@@ -1,5 +1,8 @@
 package cc.slokker.itv.data
 
+import cc.slokker.itv.playback.SourceHistory
+import cc.slokker.itv.playback.SourceReliability
+import cc.slokker.itv.playback.SourceStats
 import cc.slokker.itv.ui.i18n.I18n
 
 /**
@@ -10,6 +13,7 @@ class ProSet(
     val members: Map<String, PlaylistContent>,
     private val sources: Map<String, List<ProLineup.Ref>>,
     private val store: ProHealthStore? = null,
+    private val history: SourceHistoryStore? = null,
 ) {
     /** Sem [store] (testes): as que falharam só contam enquanto este ProSet existir. */
     private val health = store?.health ?: ProHealth()
@@ -17,10 +21,29 @@ class ProSet(
     // Com o nome do canal: a versão dele ("ᴴᴰ") também conta (ver ProHealth.variantOf).
     private fun down(playlistId: String, channel: Channel) = health.isDown(playlistId, channel.key, System.currentTimeMillis(), channel.name)
 
+    /** Uma fonte do canal: a referência da tabela (a qualidade), a lista e o canal dela. */
+    private class Found(val ref: ProLineup.Ref, val member: PlaylistContent, val channel: Channel)
+
+    /**
+     * As fontes do canal [key] que ainda existem, da melhor para a pior. As que falharam há pouco (ProHealth) vão para o
+     * fim, e em cada grupo as claramente más segundo o historial (SourceHistory) também; entre fontes da mesma
+     * qualidade, a mais fiável primeiro. Sem historial, é a ordem da tabela.
+     */
+    private fun ordered(key: String): List<Found> {
+        val found = sources[key].orEmpty().mapNotNull { r ->
+            members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { Found(r, m, it) } }
+        }
+        val now = System.currentTimeMillis()
+        fun sort(list: List<Found>) = SourceReliability.order(list, history?.history, now, { it.ref.quality }, { SourceHistory.key(it.ref.playlistId, it.ref.key) })
+        val (down, up) = found.partition { down(it.member.playlist.id, it.channel) }
+        return sort(up) + sort(down)
+    }
+
     /** As fontes do canal [key] que ainda existem, como (lista, canal dela), da melhor para a pior (as que falharam no fim). */
-    fun resolve(key: String): List<Pair<PlaylistContent, Channel>> = sources[key].orEmpty().mapNotNull { r ->
-        members[r.playlistId]?.let { m -> m.byKey[r.key]?.let { m to it } }
-    }.sortedBy { (m, c) -> down(m.playlist.id, c) }
+    fun resolve(key: String): List<Pair<PlaylistContent, Channel>> = ordered(key).map { it.member to it.channel }
+
+    /** O que se sabe da fiabilidade da fonte [channel] de [member] esta semana (ver SourceHistory); null sem nada. */
+    fun stats(member: PlaylistContent, channel: Channel): SourceStats? = history?.history?.stats(SourceHistory.key(member.playlist.id, channel.key), System.currentTimeMillis())
 
     /** A fonte [channel] de [member] falhou (cai sempre, ou não abre): durante uns dias as outras vêm antes (ProHealth). */
     fun demote(member: PlaylistContent, channel: Channel) {
@@ -37,10 +60,7 @@ class ProSet(
     fun isDown(member: PlaylistContent, channel: Channel): Boolean = down(member.playlist.id, channel)
 
     /** A qualidade (pelo nome, ChannelMatch.Quality) da fonte que vai dar o canal [key] (a primeira de [resolve]), ou null. */
-    fun quality(key: String): Int? = sources[key].orEmpty()
-        .mapNotNull { r -> members[r.playlistId]?.byKey?.get(r.key)?.let { r to it } }
-        .sortedBy { (r, c) -> down(r.playlistId, c) }
-        .firstOrNull()?.first?.quality
+    fun quality(key: String): Int? = ordered(key).firstOrNull()?.ref?.quality
 
     /** Quantas fontes tem o canal [key]. */
     fun count(key: String): Int = sources[key]?.size ?: 0
@@ -59,7 +79,7 @@ object ProContent {
      * nome e o número da tabela, e com o logótipo e o guia da melhor fonte que os tenha (o guia, de preferência, da
      * lista cujo guia se usa: o da primeira que tem um).
      */
-    fun build(lineupId: String, members: List<PlaylistContent>, store: ProHealthStore? = null): PlaylistContent {
+    fun build(lineupId: String, members: List<PlaylistContent>, store: ProHealthStore? = null, history: SourceHistoryStore? = null): PlaylistContent {
         val lineup = ProLineup.lineup(lineupId)
         val country = lineup?.country ?: lineupId
         val sources = members.map { m ->
@@ -69,7 +89,7 @@ object ProContent {
         // Os nomes que faltam à tabela (só nomes de canais, sem links), para os acrescentar.
         ProLineup.nearMisses(lineup, result).takeIf { it.isNotEmpty() }?.let { android.util.Log.i("GoatTV", "Pro: em Mais canais, parecidos com a tabela: " + it.take(60).joinToString(" | ")) }
         val guide = members.firstOrNull { it.guideUrl != null }
-        val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources }, store)
+        val set = ProSet(members.associateBy { it.playlist.id }, result.channels.associate { it.id to it.sources }, store, history)
         val channels = result.channels.mapIndexedNotNull { i, pc ->
             val found = set.resolve(pc.id)
             val first = found.firstOrNull()?.second ?: return@mapIndexedNotNull null

@@ -2317,7 +2317,13 @@ private struct PhoneBackupChannelSheet: View {
                         ForEach(Array(failovers.enumerated()), id: \.element) { i, f in
                             HStack(spacing: 12) {
                                 Text("\(i + 1)").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.textFaint).frame(width: 22)
-                                Text(choices.channel(of: f)?.name ?? "").foregroundStyle(Theme.text).lineLimit(1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(choices.channel(of: f)?.name ?? "").foregroundStyle(Theme.text).lineLimit(1)
+                                    // O que se passou com a fonte esta semana (ver SourceHistory).
+                                    if let history = model.failoverHistory(choices, f) {
+                                        Text(history).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(2)
+                                    }
+                                }
                                 Spacer(minLength: 8)
                                 PhoneSourceTag(text: model.failoverSource(choices, f))
                             }
@@ -2555,6 +2561,8 @@ private struct PhoneProSourcesSheet: View {
                                 Text([AppModel.qualityLabel(src.quality), src.playlistName].compactMap { $0 }.joined(separator: " · "))
                                     .foregroundStyle(Theme.text).lineLimit(1)
                                 Text(src.channelName).font(.footnote).foregroundStyle(Theme.textDim).lineLimit(1)
+                                // O que se passou com a fonte esta semana (ver SourceHistory).
+                                if let history = src.history { Text(history).font(.footnote).foregroundStyle(Theme.textFaint).lineLimit(2) }
                             }
                             Spacer(minLength: 0)
                             if src.down { Text(s.r("pro_source_down")).font(.footnote).foregroundStyle(Color(red: 1, green: 0.42, blue: 0.42)) }

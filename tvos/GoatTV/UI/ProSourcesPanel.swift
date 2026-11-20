@@ -25,7 +25,7 @@ struct ProSourcesPanel: View {
                             HStack(spacing: 18) {
                                 Text("\(src.index + 1)").font(Fonts.rowValue.monospacedDigit()).opacity(0.6).frame(width: 40, alignment: .leading)
                                 RowContent(title: [AppModel.qualityLabel(src.quality), src.playlistName].compactMap { $0 }.joined(separator: " · "),
-                                           subtitle: src.channelName) {
+                                           subtitle: [src.channelName, src.history].compactMap { $0 }.joined(separator: " · ")) {
                                     if src.down {
                                         Text(s.r("pro_source_down")).font(Fonts.rowSubtitle).foregroundStyle(Color(red: 1, green: 0.42, blue: 0.42))
                                     }

@@ -185,7 +185,7 @@ struct BackupChannelPanel: View {
     private func failoverRow(_ index: Int, _ f: String, _ choices: BackupChoices) -> some View {
         let isMoving = moving == f
         return Button { moving = isMoving ? nil : f } label: {
-            RowContent(title: "\(index + 1).  " + (choices.channel(of: f)?.name ?? ""), subtitle: nil) {
+            RowContent(title: "\(index + 1).  " + (choices.channel(of: f)?.name ?? ""), subtitle: model.failoverHistory(choices, f)) {
                 if isMoving {
                     Text(model.strings.r("moving")).font(Fonts.rowValue).foregroundStyle(Theme.sky)
                 } else {

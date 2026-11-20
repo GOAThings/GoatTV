@@ -942,4 +942,10 @@
     <string name="upscale_sub">يجعل الفيديو الأصغر من الشاشة أكثر وضوحًا. يستهلك طاقة أكثر؛ الذكاء الاصطناعي يحتاج جهازًا قادرًا ويعود تلقائيًا إذا لم يواكب</string>
     <string name="upscale_shield">في الأجهزة التي لها تكبير خاص بالذكاء الاصطناعي (NVIDIA SHIELD)، لا يعمل تكبير النظام إلا عندما يكون هذا متوقفًا وتعديلات الصورة على الصفر، لأن الصورة حينها تذهب مباشرة من فك الترميز إلى الشاشة</string>
     <string name="upscale_sub_apple">يجعل الفيديو الأصغر من الشاشة أكثر وضوحًا باستخدام Apple MetalFX. يستهلك طاقة أكثر. غير متاح في الأجهزة بدون MetalFX</string>
+
+    <!-- Fiabilidade de cada fonte (SourceHistory): a linha nos painéis das fontes -->
+    <string name="source_history_drops">%1$d انقطاعات في %2$s هذا الأسبوع</string>
+    <string name="source_history_drop_one">انقطاع واحد في %1$s هذا الأسبوع</string>
+    <string name="source_history_failed">فشل فتح %1$d من %2$d مرات هذا الأسبوع</string>
+    <string name="source_history_stable">لا انقطاعات في %1$s هذا الأسبوع</string>
 </resources>

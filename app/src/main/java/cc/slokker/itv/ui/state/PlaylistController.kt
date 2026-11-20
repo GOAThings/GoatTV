@@ -11,6 +11,7 @@ import cc.slokker.itv.data.PlaylistContent
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.ProContent
 import cc.slokker.itv.data.ProHealthStore
+import cc.slokker.itv.data.SourceHistoryStore
 import cc.slokker.itv.data.ProLineup
 import cc.slokker.itv.data.ProfileRepository
 import cc.slokker.itv.data.RefreshTracker
@@ -52,6 +53,8 @@ class PlaylistController(
     private val proMembers: () -> List<Playlist> = { emptyList() },
     /** Modo TV Pro: as fontes que falharam, guardadas nesta TV (null nos testes). */
     private val proHealth: ProHealthStore? = null,
+    /** A fiabilidade de cada fonte (ver SourceHistory): desempata as fontes do Modo TV Pro (null nos testes). */
+    private val sourceHistory: SourceHistoryStore? = null,
     /** Chegaram canais novos da lista aberta ([guideChanged]: o guia dela também mudou). */
     private val onRefreshed: (fresh: PlaylistContent, guideChanged: Boolean) -> Unit,
 ) {
@@ -212,7 +215,7 @@ class PlaylistController(
         if (ok.isEmpty()) error(I18n.s.errPlaylistEmpty(playlist.name).title)
         // Cada lista com as opções dela (nomes limpos, variantes juntas), como apareceria sozinha.
         val viewed = ok.map { ContentView.apply(it, ContentView.options(prefs.value, it.playlist.id)) }
-        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed, proHealth) }
+        return withContext(Dispatchers.Default) { ProContent.build(ProLineup.lineupIdOf(playlist.id), viewed, proHealth, sourceHistory) }
     }
 
     /** Os nomes dos grupos de cada lista (da cache), para os países do Modo TV Pro: lê-se uma vez por sessão. */
