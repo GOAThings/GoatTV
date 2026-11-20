@@ -42,6 +42,13 @@ internal class Upscaler(private val es3: Boolean) {
     private var out = 0
     private var outFbo = 0
 
+    /** O formato das texturas da rede: meia precisão, ou 32 bits se a meia precisão não passar no teste ([selfTest]). */
+    private var floatFormat = GLES30.GL_RGBA16F
+    private var floatType = GLES30.GL_HALF_FLOAT
+
+    /** Já se viu, nesta sessão, se a rede dá a imagem certa neste aparelho ([selfTest]). */
+    private var tested = false
+
     /**
      * Desenha [source] ([w]×[h], a imagem de fora) aumentada no framebuffer que está ligado (o ecrã), com o viewport já
      * posto, com o realce [strength] e a cor de [look]. Falha (o shader não compila) com uma exceção.
@@ -83,29 +90,11 @@ internal class Upscaler(private val es3: Boolean) {
             var stale = 0
             while (stale++ < 8 && GLES20.glGetError() != GLES20.GL_NO_ERROR) continue
             val list = passes ?: build().also { passes = it }
-            if (w != lowW || h != lowH) allocate(list, w, h)
-            for (p in list) {
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, floatFbos[p.output])
-                GLES20.glViewport(0, 0, w, h)
-                GLES20.glUseProgram(p.program)
-                p.inputs.forEachIndexed { unit, input ->
-                    GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
-                    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, if (input < 0) source else floats[input])
-                    GLES20.glUniform1i(p.samplers[unit], unit)
-                }
-                GLES30.glUniform2i(p.lim, w - 1, h - 1)
-                quad(p.program)
+            if (!tested) {
+                tested = true
+                if (!selfTest(list, quad)) error("the network gives a wrong picture on this GPU")
             }
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outFbo)
-            GLES20.glViewport(0, 0, w * 2, h * 2)
-            GLES20.glUseProgram(combine)
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, floats[list.last().output])
-            GLES20.glUniform1i(GLES20.glGetUniformLocation(combine, "sub"), 0)
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, source)
-            GLES20.glUniform1i(GLES20.glGetUniformLocation(combine, "pic"), 1)
-            quad(combine)
+            run(list, source, w, h, quad)
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
             val error = GLES20.glGetError()
             check(error == GLES20.GL_NO_ERROR) { "gl error $error" }
@@ -114,6 +103,78 @@ internal class Upscaler(private val es3: Boolean) {
             aiReady = false
             broken = true
             throw e
+        }
+    }
+
+    /** As passagens e a junção (o Y da rede com a cor de [source]) para a textura [out], 2× maior. */
+    private fun run(list: List<AiPass>, source: Int, w: Int, h: Int, quad: (Int) -> Unit) {
+        if (w != lowW || h != lowH) allocate(list, w, h)
+        GLES20.glDisable(GLES20.GL_DITHER)
+        for (p in list) {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, floatFbos[p.output])
+            GLES20.glViewport(0, 0, w, h)
+            GLES20.glUseProgram(p.program)
+            p.inputs.forEachIndexed { unit, input ->
+                GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, if (input < 0) source else floats[input])
+                GLES20.glUniform1i(p.samplers[unit], unit)
+            }
+            GLES30.glUniform2i(p.lim, w - 1, h - 1)
+            quad(p.program)
+        }
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outFbo)
+        GLES20.glViewport(0, 0, w * 2, h * 2)
+        GLES20.glUseProgram(combine)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, floats[list.last().output])
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(combine, "sub"), 0)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, source)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(combine, "pic"), 1)
+        quad(combine)
+        GLES20.glEnable(GLES20.GL_DITHER)
+    }
+
+    /**
+     * A rede numa imagem cinzenta pequena: tem de sair o mesmo cinzento. Na SHIELD (2026-11-20) a imagem saiu lavada e
+     * com uma grelha, que é o que dá a rede quando as texturas do meio guardam só de 0 a 1 em 8 bits (os valores
+     * negativos perdem-se). Tenta-se a meia precisão e depois os 32 bits; se nenhum der, a "IA" não se usa aqui.
+     */
+    private fun selfTest(list: List<AiPass>, quad: (Int) -> Unit): Boolean {
+        val size = 16
+        val grey = 26 // ~0,1: onde a falta dos negativos mais se nota
+        val pixels = ByteBuffer.allocateDirect(size * size * 4)
+        repeat(size * size) { pixels.put(grey.toByte()).put(grey.toByte()).put(grey.toByte()).put(255.toByte()) }
+        pixels.flip()
+        val image = VideoGpuStage.texture(GLES20.GL_TEXTURE_2D, GLES20.GL_LINEAR)
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, size, size, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        val result = ByteBuffer.allocateDirect(size * 2 * size * 2 * 4)
+        try {
+            for ((format, type) in listOf(GLES30.GL_RGBA16F to GLES30.GL_HALF_FLOAT, GLES30.GL_RGBA32F to GLES20.GL_FLOAT)) {
+                floatFormat = format
+                floatType = type
+                val ok = runCatching {
+                    freeTextures()
+                    run(list, image, size, size, quad)
+                    result.clear()
+                    GLES20.glReadPixels(0, 0, size * 2, size * 2, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, result)
+                    check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
+                    // Longe das bordas (lá a rede vê o que se repetiu da borda).
+                    var worst = 0
+                    for (y in 8 until size * 2 - 8) for (x in 8 until size * 2 - 8) {
+                        val v = result.get((y * size * 2 + x) * 4).toInt() and 0xFF
+                        worst = maxOf(worst, kotlin.math.abs(v - grey))
+                    }
+                    worst <= 3
+                }.getOrDefault(false)
+                android.util.Log.i("GoatCore", "upscale: ai self-test with ${if (format == GLES30.GL_RGBA16F) "RGBA16F" else "RGBA32F"}: ${if (ok) "ok" else "wrong picture"}")
+                if (ok) return true
+            }
+            return false
+        } finally {
+            freeTextures()
+            GLES20.glDeleteTextures(1, intArrayOf(image), 0)
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
         }
     }
 
@@ -133,7 +194,7 @@ internal class Upscaler(private val es3: Boolean) {
         floats = IntArray(count) { VideoGpuStage.texture(GLES20.GL_TEXTURE_2D, GLES20.GL_NEAREST) }
         floatFbos = IntArray(count) { i ->
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, floats[i])
-            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA16F, w, h, 0, GLES20.GL_RGBA, GLES30.GL_HALF_FLOAT, null)
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, floatFormat, w, h, 0, GLES20.GL_RGBA, floatType, null)
             VideoGpuStage.framebuffer(floats[i])
         }
         out = VideoGpuStage.texture(GLES20.GL_TEXTURE_2D, GLES20.GL_LINEAR)
@@ -248,12 +309,8 @@ internal class Upscaler(private val es3: Boolean) {
         private const val NETWORK = "/goatcore/FSRCNNX_x2_8-0-4-1.glsl"
 
         /** A rede falhou neste aparelho: não se volta a tentar até a app fechar. */
-        /**
-         * A "IA" ainda não está pronta: na SHIELD (2026-11-20) a imagem saiu com as cores lavadas e uma grelha de
-         * pontos (a junção da luma 2× com a cor está errada). Até se corrigir, "IA" faz o mesmo que "Nítido" e não
-         * aparece nas Definições.
-         */
-        const val AI_READY = false
+        /** A "IA" está disponível (falso esconde-a nas Definições e faz o mesmo que "Nítido"). */
+        const val AI_READY = true
 
         @Volatile var broken = !AI_READY
 
