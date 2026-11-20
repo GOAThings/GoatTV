@@ -37,6 +37,9 @@ import cc.slokker.itv.media.Upscaling
 import cc.slokker.itv.media.VideoInfo
 import cc.slokker.itv.media.VideoStart
 import cc.slokker.itv.media.WebVtt
+import cc.slokker.itv.media.ZapStages
+import cc.slokker.itv.ui.player.engine.PLAYER_LOGS
+import cc.slokker.itv.ui.player.engine.ZapTrace
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -194,6 +197,18 @@ class GoatCorePlayer(
     @Volatile private var running = true
     private val openedAt = SystemClock.elapsedRealtime()
     private var threads = emptyList<Thread>()
+
+    /**
+     * As etapas do arranque do canal, com os ms de cada uma (só no debug e no staging, tag GoatZap; ver
+     * media/ZapStages): para medir na TV o que demora cada passo da mudança de canal. Escrevem-se de várias threads.
+     */
+    private val zapStages = if (PLAYER_LOGS) ZapStages(openedAt) else null
+
+    private fun zap(stage: String, detail: () -> String = { "" }) {
+        val z = zapStages ?: return
+        val line = synchronized(z) { if (z.reached(stage)) null else z.mark(stage, SystemClock.elapsedRealtime(), detail()) } ?: return
+        Log.d(ZAP_TAG, line)
+    }
 
     // Rede (só a thread da rede).
     private var nal: NalReader? = null
@@ -370,14 +385,18 @@ class GoatCorePlayer(
             override fun onTracks(tracks: List<TsTrack>) = tracksChanged(tracks)
             override fun onSample(track: TsTrack, sample: TsSample) = sample(track, sample)
         })
+        this.demuxer = demuxer
         try {
             val out = capture?.let { runCatching { java.io.FileOutputStream(it) }.getOrNull() }
             var captured = 0L
-            input().use { stream ->
+            zap("open")
+            // A ligação: a espera pela do canal anterior (o portão), o pedido e os cabeçalhos da resposta.
+            input().also { zap("connected") }.use { stream ->
                 val buf = ByteArray(64 * 1024)
                 while (running) {
                     val n = stream.read(buf)
                     if (n < 0) break
+                    if (n > 0) zap("first byte")
                     if (out != null && captured < 12L * 1024 * 1024) {
                         out.write(buf, 0, n)
                         captured += n
@@ -418,8 +437,12 @@ class GoatCorePlayer(
         if (running) Thread.sleep(500)
     }
 
+    /** O demuxer da thread da rede (para o registo do arranque: os pacotes guardados antes do PMT). */
+    private var demuxer: StreamDemuxer? = null
+
     private fun tracksChanged(tracks: List<TsTrack>) {
         allTracks = tracks
+        zap("tracks") { tracks.joinToString(" ") { it.codec.name } + " (${demuxer?.replayedPackets ?: 0} early packets replayed)" }
         Log.i(TAG, "tracks " + tracks.joinToString { "${it.codec}${it.language?.let { l -> "/$l" } ?: ""}" })
         listener.onTracks(tracks)
         val video = tracks.firstOrNull { it.kind == TrackKind.VIDEO }
@@ -437,6 +460,7 @@ class GoatCorePlayer(
                 }
                 else -> fail("unsupported video ${video.codec}", unsupported = true)
             }
+            videoKnown = video.codec == Codec.H264 || video.codec == Codec.HEVC || mpeg2 != null
         }
         // Lê-se o som de todas as faixas que se sabem ler (para poder mudar de uma para outra a meio).
         val audios = tracks.filter { it.kind == TrackKind.AUDIO && mimeOf(it.codec) != null }
@@ -495,10 +519,20 @@ class GoatCorePlayer(
         }
     }
 
+    /** As imagens que chegaram antes da primeira que se pode mostrar (o canal apanhado a meio de um GOP). */
+    private var skippedBeforeKey = 0
+
+    /** Vai para a fila do vídeo a primeira imagem-chave (para o registo do arranque). */
+    private fun firstKey(unit: VideoUnit) {
+        if (zapStages == null || !unit.keyframe) return
+        zap("keyframe") { "$videoMime ${unit.data.size} B, $skippedBeforeKey frames skipped before it" }
+    }
+
     private fun video(sample: TsSample) {
         val reader = nal
         val mpeg2 = mpeg2
         if (reader == null && mpeg2 == null) return
+        zap("video pes")
         val samplePts = videoClock.unwrap(sample.pts)
         if (videoClock.jumped) {
             stats.jumps++
@@ -513,10 +547,13 @@ class GoatCorePlayer(
             // MPEG-2: a imagem vai como vem; o cabeçalho da sequência é o csd-0.
             val unit = mpeg2.next(sample.data, samplePts, samplePts)
             if (unit.parameterSets.isNotEmpty()) csd = unit.parameterSets
-            if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) return
+            if (csd.isEmpty() || !videoStart.pass(unit.keyframe, unit.pts)) {
+                if (stats.videoUnits == 0) skippedBeforeKey++
+                return
+            }
             stats.videoUnits++
             interlacedVideo = mpeg2.interlaced
-            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit)))
+            queueVideo(VideoUnit(unit.data, unit.pts * 100 / 9, unit.keyframe, scanOf(unit)).also(::firstKey))
             return
         }
         captions(sample.data, samplePts)
@@ -531,14 +568,19 @@ class GoatCorePlayer(
             csd = sets
             if (changed) spsInfo(unit.parameterSets)
         }
-        if (csd.isEmpty()) return
         val pts = unit.pts
-        if (!videoStart.pass(unit.keyframe, pts)) return
+        if (csd.isEmpty() || !videoStart.pass(unit.keyframe, pts)) {
+            if (stats.videoUnits == 0) skippedBeforeKey++
+            return
+        }
         stats.videoUnits++
         interlacedVideo = reader.interlaced
         val data = avccToAnnexB(unit.data)
-        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit)))
+        queueVideo(VideoUnit(inBand?.plus(data) ?: data, pts * 100 / 9, unit.keyframe, scanOf(unit)).also(::firstKey))
     }
+
+    /** O PMT já disse o formato do vídeo e há com que o ler ([videoMime] certo): o descodificador pode criar-se. */
+    @Volatile private var videoKnown = false
 
     /** O canal é entrelaçado (pelo SPS ou pelo cabeçalho da sequência do MPEG-2), na última imagem lida. */
     @Volatile private var interlacedVideo = false
@@ -707,13 +749,29 @@ class GoatCorePlayer(
     private fun videoLoop() {
         var codec: MediaCodec? = null
         try {
-            // A primeira imagem-chave com os parâmetros: é com ela que se configura.
+            // A primeira imagem-chave com os parâmetros: é com ela que se configura. Enquanto não chega (o canal apanhado
+            // a meio de um GOP: até segundos), o descodificador já se cria, mal o PMT diz o formato (e o do canal anterior
+            // já o largou): na imagem-chave só falta configurá-lo.
             var first: VideoUnit
+            var earlyMime: String? = null
             while (true) {
-                first = takenVideo(videoQueue.take())!!
+                val unit = takenVideo(videoQueue.poll(10, TimeUnit.MILLISECONDS))
+                if (unit == null) {
+                    if (earlyMime == null && videoKnown) {
+                        waitPrevious()
+                        val m = videoMime
+                        earlyMime = m
+                        codec = runCatching { decoderFor(m, softwareVideo) }.getOrNull()
+                        zap("decoder") { "${codec?.name ?: "failed"}, created before the keyframe" }
+                    }
+                    continue
+                }
+                first = unit
                 if (first.keyframe) break
             }
+            val waitStart = SystemClock.elapsedRealtime()
             waitPrevious()
+            zap("previous engine") { "waited ${SystemClock.elapsedRealtime() - waitStart} ms" }
             val mime = videoMime
             val format = MediaFormat.createVideoFormat(mime, 1920, 1080)
             if (mime == MediaFormat.MIMETYPE_VIDEO_MPEG2) {
@@ -739,13 +797,19 @@ class GoatCorePlayer(
                     format.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
                 }
             }
-            val c = decoderFor(mime, softwareVideo)
+            // O criado antes só serve se o formato não mudou entretanto (outro PMT).
+            val c = codec?.takeIf { earlyMime == mime } ?: run {
+                codec?.let { runCatching { it.release() } }
+                codec = null
+                decoderFor(mime, softwareVideo).also { zap("decoder") { "${it.name}, created at the keyframe" } }
+            }
             codec = c
             deinterlacer = gpuStageFor(c.name)
             c.configure(format, deinterlacer?.input ?: surface, null, 0)
             hdrToSdr(c, format)
             c.start()
             stats.configured = true
+            zap("configured") { "${c.name}${if (deinterlacer != null) " + gpu stage" else ""}" }
             var pending: VideoUnit? = first
             val info = MediaCodec.BufferInfo()
             while (running) {
@@ -772,6 +836,7 @@ class GoatCorePlayer(
                 val o = c.dequeueOutputBuffer(info, 5_000)
                 if (o >= 0) {
                     stats.codecOutputs++
+                    if (stats.codecOutputs == 1) zap("decoded") { "after ${stats.codecInputs} inputs" }
                     render(c, o, info.presentationTimeUs)
                 } else if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                     stats.codecFormatChanges++
@@ -1019,6 +1084,9 @@ class GoatCorePlayer(
         firstFrameReported = true
         val ms = SystemClock.elapsedRealtime() - openedAt
         Log.i(TAG, "first frame in $ms ms")
+        zap("picture")
+        // No registo do Zap (desde a tecla), como o primeiro frame do ExoPlayer.
+        ZapTrace.first("R1", "goatcore")
         listener.onFirstFrame(ms)
     }
 
@@ -1354,6 +1422,7 @@ class GoatCorePlayer(
                         audioTrack = t
                         t.setVolume(volume)
                         if (!paused) t.play()
+                        zap("audio") { "${f.codec}" }
                     }
                     val buf = c.getOutputBuffer(o)!!
                     val pcm = ByteArray(info.size)
@@ -1415,6 +1484,7 @@ class GoatCorePlayer(
                         audioTrack = t
                         t.setVolume(volume)
                         if (!paused) t.play()
+                        zap("audio") { "${f.codec} ffmpeg" }
                     }
                     t.write(pcm, 0, processPcm(pcm, dec.sampleRate, dec.channels))
                     audioClock.sample(t, dec.sampleRate)
@@ -1528,6 +1598,7 @@ class GoatCorePlayer(
                     bitstreamTrack = t
                     t.setVolume(volume)
                     if (!paused && speed == 1f) t.play()
+                    zap("audio") { "${f.codec} passthrough" }
                 }
                 // Fora de 1× o som em bruto não acompanha a imagem: não se escreve.
                 if (speed != 1f) continue
@@ -1604,6 +1675,9 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+
+        /** O registo das etapas do arranque (ver [zapStages]). */
+        private const val ZAP_TAG = "GoatZap"
 
         /** O ganho do nivelamento de cada canal (pelo endereço), enquanto a app está aberta. */
         private val levelGains = java.util.concurrent.ConcurrentHashMap<String, Float>()

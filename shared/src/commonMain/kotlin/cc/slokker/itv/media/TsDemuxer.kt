@@ -61,6 +61,22 @@ class TsDemuxer(private val listener: TsListener) {
     private val counters = HashMap<Int, Int>()
     private val gaps = HashSet<Int>()
 
+    /**
+     * Os pacotes que chegam antes do primeiro PMT (ainda não se sabe de que faixa são): guardam-se e, mal se sabem as
+     * faixas, leem-se como se chegassem agora. Um canal apanhado a meio (ou um servidor que começa na imagem-chave
+     * sem mandar antes o PAT e o PMT) traz a imagem-chave antes do PMT: perdida, a imagem só começava na seguinte
+     * (um GOP inteiro, 0,5 a 5 s). null depois do primeiro PMT (o resto do canal passa como sempre passou).
+     */
+    private var early: ByteArray? = ByteArray(PACKET * 256)
+    private var earlyLen = 0
+
+    /** O PID do PMT cujos pacotes guardados já se leram (o PAT chegou depois deles). */
+    private var earlyPmtPid = -1
+
+    /** Quantos pacotes de faixas, guardados antes do PMT, se leram depois dele (para o registo do arranque). */
+    var replayedPackets = 0
+        private set
+
     /** Junta [len] bytes de [data] a partir de [off]: o que formar pacotes inteiros é lido já. */
     fun feed(data: ByteArray, off: Int, len: Int) {
         if (pendingLen + len > pending.size) pending = pending.copyOf(maxOf(pending.size * 2, pendingLen + len))
@@ -130,9 +146,14 @@ class TsDemuxer(private val listener: TsListener) {
         pes.clear()
         counters.clear()
         gaps.clear()
+        early = ByteArray(PACKET * 256)
+        earlyLen = 0
+        earlyPmtPid = -1
+        replayedPackets = 0
     }
 
-    private fun packet(p: ByteArray, i: Int) {
+    /** [replaying]: um pacote guardado antes do PMT, lido agora (não se volta a guardar). */
+    private fun packet(p: ByteArray, i: Int, replaying: Boolean = false) {
         if (p[i + 1].toInt() and 0x80 != 0) return // transport_error_indicator: o pacote veio estragado.
         val start = p[i + 1].toInt() and 0x40 != 0
         val pid = ((p[i + 1].toInt() and 0x1F) shl 8) or (p[i + 2].toInt() and 0xFF)
@@ -157,11 +178,65 @@ class TsDemuxer(private val listener: TsListener) {
             pid == PAT_PID -> section(pid, p, payload, end, start)
             pid == pmtPid -> section(pid, p, payload, end, start)
             else -> {
-                val track = tracks[pid] ?: return
-                media(track, p, payload, end, start, counter, randomAccess, marked)
+                val track = tracks[pid]
+                if (track != null) {
+                    media(track, p, payload, end, start, counter, randomAccess, marked)
+                } else if (!replaying) {
+                    keep(p, i)
+                }
             }
         }
+        if (!replaying && early != null && (tracks.isNotEmpty() || pmtPid >= 0 && pmtPid != earlyPmtPid)) replayEarly()
     }
+
+    /** Guarda o pacote em [i] para quando se souberem as faixas (só antes do primeiro PMT, ver [early]). */
+    private fun keep(p: ByteArray, i: Int) {
+        var held = early ?: return
+        if (earlyLen + PACKET > held.size) {
+            if (held.size >= EARLY_MAX) {
+                // Sem PMT há tanto tempo: fica a metade mais recente (a imagem-chave que interessa é a mais nova).
+                val half = earlyLen / 2 / PACKET * PACKET
+                held.copyInto(held, 0, half, earlyLen)
+                earlyLen -= half
+            } else {
+                held = held.copyOf(minOf(held.size * 2, EARLY_MAX))
+                early = held
+            }
+        }
+        p.copyInto(held, earlyLen, i, i + PACKET)
+        earlyLen += PACKET
+    }
+
+    /**
+     * Lê os pacotes guardados antes do PMT: primeiro os do PMT (o PAT, que diz qual é, pode vir depois dele) e, já com
+     * as faixas, os delas, pela ordem em que chegaram (antes do pacote seguinte da rede).
+     */
+    private fun replayEarly() {
+        val held = early ?: return
+        if (pmtPid >= 0 && pmtPid != earlyPmtPid) {
+            earlyPmtPid = pmtPid
+            var at = 0
+            while (at < earlyLen) {
+                if (pidAt(held, at) == earlyPmtPid) packet(held, at, replaying = true)
+                at += PACKET
+            }
+        }
+        if (tracks.isEmpty()) return
+        early = null
+        val n = earlyLen
+        earlyLen = 0
+        var at = 0
+        while (at < n) {
+            val pid = pidAt(held, at)
+            if (pid != PAT_PID && pid != pmtPid && pid != earlyPmtPid && pid in tracks) {
+                replayedPackets++
+                packet(held, at, replaying = true)
+            }
+            at += PACKET
+        }
+    }
+
+    private fun pidAt(p: ByteArray, i: Int): Int = ((p[i + 1].toInt() and 0x1F) shl 8) or (p[i + 2].toInt() and 0xFF)
 
     // ---- PES --------------------------------------------------------------------------------
 
@@ -432,6 +507,9 @@ class TsDemuxer(private val listener: TsListener) {
         private const val SYNC = 0x47.toByte()
         private const val PAT_PID = 0
         private const val NULL_PID = 0x1FFF
+
+        /** O máximo guardado antes do PMT (~3 MB: segundos de um canal HD; o PMT vem várias vezes por segundo). */
+        private const val EARLY_MAX = PACKET * 16384
 
         /** Um PTS ou DTS (33 bits em 5 bytes, com bits de marcação pelo meio). */
         internal fun timestamp(d: ByteArray, at: Int): Long =

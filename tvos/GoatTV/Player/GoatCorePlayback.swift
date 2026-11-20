@@ -670,6 +670,20 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private static let maxAheadSeconds = 20.0
     private static let resumeAheadSeconds = 10.0
 
+    #if DEBUG
+    /// As etapas do arranque do canal (o GoatZap do Android): só nas versões de testes, só na fila.
+    private var zap: ZapTimeline?
+    #endif
+
+    /// Regista a etapa [stage] do arranque, com os ms desde a anterior (só nas versões de testes; na fila).
+    private func zapMark(_ stage: String, _ detail: @autoclosure () -> String = "") {
+        #if DEBUG
+        let now = ProbeCounters.nowMs()
+        if zap == nil { zap = ZapTimeline(startMs: now) }
+        if let line = zap?.mark(stage, nowMs: now, detail: detail()) { DebugLog.add("GoatZap: \(line)") }
+        #endif
+    }
+
     init(display: AVSampleBufferDisplayLayer, audio: AVSampleBufferAudioRenderer, synchronizer: AVSampleBufferRenderSynchronizer,
          deinterlace: String, picture: PictureAdjust, upscale: String, screen: (width: Int, height: Int)) {
         self.display = display
@@ -699,6 +713,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         }
         pipeline.onTracks = { [weak self] tracks in
             guard let self else { return }
+            self.zapMark("tracks", tracks.map(\.codec).joined(separator: " ") + " (\(self.pipeline.replayedPackets) early packets replayed)")
             self.hasVideo = tracks.contains { $0.kind == .video }
             self.hasAudio = tracks.contains { $0.kind == .audio }
             self.onEvent?(.tracks(tracks))
@@ -722,7 +737,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     }
 
     func start(_ url: URL, headers: [String: String], startMs: Int64, hls: Bool) {
-        queue.async { self.startWatch() }
+        queue.async {
+            self.zapMark("open")
+            self.startWatch()
+        }
         if hls {
             queue.async { self.openHls(url, headers: headers, startMs: startMs) }
             return
@@ -786,7 +804,11 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         reader.onData = { [weak self] data in
             guard let self else { return }
             self.noteBytes(data.count)
-            self.queue.async { if !self.closed { self.pipeline.feed(data) } }
+            self.queue.async {
+                guard !self.closed else { return }
+                self.zapMark("first byte")
+                self.pipeline.feed(data)
+            }
         }
         reader.onEnd = { [weak self] error in
             guard let self else { return }
@@ -911,6 +933,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         if let http = response as? HTTPURLResponse { probeLock.withLock { $0.status = http.statusCode } }
+        zapMark("connected", "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             onEvent?(.httpStatus(http.statusCode))
             fail("HTTP \(http.statusCode)")
@@ -923,6 +946,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard !closed else { return }
         noteBytes(data.count)
+        zapMark("first byte")
         pipeline.feed(data)
     }
 
@@ -1190,6 +1214,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         }
         b = delayed(b)
         audio.enqueue(b)
+        zapMark("audio")
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
         if pts.isValid, !lastAudio.isValid || pts > lastAudio { lastAudio = pts }
         // Um canal só de som (rádio): o relógio começa no primeiro som.
@@ -1216,6 +1241,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         startTime = time
         running = true
         synchronizer.setRate(userPaused ? 0 : rate, time: time)
+        zapMark(hasVideo ? "picture" : "sound", "first sample to the renderer, clock started")
         probeLock.withLock { if $0.firstPictureMs < 0, $0.openedAt > 0 { $0.firstPictureMs = ProbeCounters.nowMs() - $0.openedAt } }
         onEvent?(.started(time))
     }
