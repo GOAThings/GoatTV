@@ -885,4 +885,10 @@
     <string name="subtitle_position">Untertitelposition</string>
     <string name="subtitle_position_normal">Unten</string>
     <string name="subtitle_position_raised">Höher (über der Infoleiste)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Lautstärke angleichen</string>
+    <string name="audio_level_sub">Gleiche Lautstärke auf allen Sendern, sanft angepasst. Keine Wirkung auf Dolby per Passthrough</string>
+    <string name="audio_level_level">Angleichen</string>
+    <string name="audio_level_night">Nachtmodus</string>
 </resources>

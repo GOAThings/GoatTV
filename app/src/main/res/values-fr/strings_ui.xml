@@ -887,4 +887,10 @@
     <string name="subtitle_position">Position des sous-titres</string>
     <string name="subtitle_position_normal">En bas</string>
     <string name="subtitle_position_raised">Plus haut (au-dessus de la barre d\'infos)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Égaliser le volume</string>
+    <string name="audio_level_sub">Le même volume sur toutes les chaînes, ajusté en douceur. Sans effet sur le Dolby en passthrough</string>
+    <string name="audio_level_level">Égaliser</string>
+    <string name="audio_level_night">Mode nuit</string>
 </resources>

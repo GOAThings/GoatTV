@@ -9,7 +9,9 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.media.AudioFrameReader
+import cc.slokker.itv.media.AudioLeveler
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.Mpeg2Reader
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.GoatCoreFfmpegAudio
@@ -58,6 +60,10 @@ class GoatCorePlayer(
      * HdrType.needsSdr.
      */
     private val needsSdr: (VideoInfo) -> Boolean = { false },
+    /** Nivelar o volume ([Prefs.AudioLevel]): só no PCM que sai daqui (em passthrough não se mexe no som). */
+    private val audioLevel: String = Prefs.AudioLevel.OFF,
+    /** O canal, para começar no ganho com que ele ficou da última vez (ver [levelGains]). */
+    private val levelKey: String = "",
 ) {
     interface Listener {
         fun onFirstFrame(ms: Long)
@@ -960,6 +966,8 @@ class GoatCorePlayer(
             return true
         }
         var track: AudioTrack? = null
+        var pcmRate = f.sampleRate
+        var pcmChannels = f.channels
         try {
             c.configure(format, null, null, 0)
             c.start()
@@ -988,7 +996,9 @@ class GoatCorePlayer(
                     val out = c.outputFormat
                     if (audioTrack === track) audioTrack = null
                     track?.release()
-                    track = newTrack(out.getInteger(MediaFormat.KEY_SAMPLE_RATE), out.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
+                    pcmRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    pcmChannels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    track = newTrack(pcmRate, pcmChannels)
                     if (audioBasePtsUs != Long.MIN_VALUE) audioBasePtsUs = Long.MIN_VALUE
                 } else if (o >= 0) {
                     val t = track ?: newTrack(f.sampleRate, f.channels).also { track = it }
@@ -1008,6 +1018,7 @@ class GoatCorePlayer(
                     buf.position(info.offset)
                     buf.get(pcm)
                     c.releaseOutputBuffer(o, false)
+                    levelerFor(pcmRate, pcmChannels)?.processPcm16(pcm, 0, pcm.size)
                     t.write(pcm, 0, pcm.size)
                     audioClock.sample(t)
                     stats.audioFrames++
@@ -1022,6 +1033,7 @@ class GoatCorePlayer(
             fail("audio decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = initial && audioTrack == null, cause = e)
             return false
         } finally {
+            rememberLevel()
             if (audioTrack === track) audioTrack = null
             runCatching { track?.stop() }
             runCatching { track?.release() }
@@ -1063,6 +1075,7 @@ class GoatCorePlayer(
                         t.setVolume(volume)
                         if (!paused) t.play()
                     }
+                    levelerFor(dec.sampleRate, dec.channels)?.processPcm16(pcm, 0, pcm.size)
                     t.write(pcm, 0, pcm.size)
                     audioClock.sample(t)
                     stats.audioFrames++
@@ -1078,11 +1091,36 @@ class GoatCorePlayer(
             fail("ffmpeg audio: ${e.javaClass.simpleName} ${e.message}", unsupported = initial && audioTrack == null, cause = e)
             return false
         } finally {
+            rememberLevel()
             if (audioTrack === track) audioTrack = null
             runCatching { track?.stop() }
             runCatching { track?.release() }
             runCatching { dec.release() }
         }
+    }
+
+    // Nivelar o volume (só na thread do som): um por faixa, refeito se o PCM mudar de frequência ou de canais.
+    private var leveler: AudioLeveler? = null
+    private var levelerFormat = 0L
+
+    /** O nivelamento para o PCM de [rate] Hz e [channels] canais, ou null (desligado). */
+    private fun levelerFor(rate: Int, channels: Int): AudioLeveler? {
+        if (audioLevel == Prefs.AudioLevel.OFF || channels <= 0) return null
+        val key = rate.toLong() shl 8 or channels.toLong()
+        leveler?.let { if (levelerFormat == key) return it }
+        rememberLevel()
+        levelerFormat = key
+        return AudioLeveler(rate, channels, night = audioLevel == Prefs.AudioLevel.NIGHT, startGainDb = levelGains[levelKey] ?: Float.NaN)
+            .also { leveler = it }
+    }
+
+    /** Guarda o ganho a que o canal chegou (se chegou a ouvir-se), para o próximo zap começar nele. */
+    private fun rememberLevel() {
+        val l = leveler ?: return
+        leveler = null
+        if (l.measuredLufs.isNaN()) return
+        if (levelGains.size > 500) levelGains.clear()
+        levelGains[levelKey] = l.gainDb
     }
 
     /** Passthrough: os blocos AC-3/E-AC-3 vão tal como vêm para o AudioTrack (a TV ou o recetor descodificam). */
@@ -1188,6 +1226,9 @@ class GoatCorePlayer(
 
     companion object {
         private const val TAG = "GoatCore"
+
+        /** O ganho do nivelamento de cada canal (pelo endereço), enquanto a app está aberta. */
+        private val levelGains = java.util.concurrent.ConcurrentHashMap<String, Float>()
 
         /** Este som toca neste aparelho: descodificador do sistema, o FFmpeg da app, ou em bruto pelo HDMI. */
         fun playable(codec: Codec, passthrough: Boolean): Boolean {

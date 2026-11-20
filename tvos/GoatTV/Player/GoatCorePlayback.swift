@@ -221,6 +221,10 @@ final class GoatCorePlayback: NSObject {
     var onPipEnded: (() -> Void)?
     /// O Picture in Picture pergunta de outra thread se está em pausa.
     nonisolated(unsafe) private var pausedForPip = false
+    /// Nivelar o volume (Prefs.audioLevel: "off", "level", "night"; ver AudioLeveling). Vale no canal seguinte.
+    var audioLevel = "off"
+    /// O passthrough (Prefs.audioPassthrough): o AC-3/E-AC-3 não se nivela, segue para o recetor como vem.
+    var passthrough = true
 
     override init() {
         super.init()
@@ -228,8 +232,9 @@ final class GoatCorePlayback: NSObject {
     }
 
     /// Abre [url] com estes cabeçalhos (o User-Agent e o Referer da lista). [startMs]: num TS gravado (as gravações,
-    /// o catch-up do Stalker), o ponto onde começar (ver TsSeek).
-    func open(_ url: URL, headers: [String: String], startMs: Int64 = 0, hls: Bool = false) {
+    /// o catch-up do Stalker), o ponto onde começar (ver TsSeek). [channel]: o endereço do canal, para o ganho do
+    /// nivelamento do volume (o anel da pausa tem outro); nil = o próprio [url].
+    func open(_ url: URL, headers: [String: String], startMs: Int64 = 0, hls: Bool = false, channel: String? = nil) {
         stop()
         generation += 1
         let g = generation
@@ -256,6 +261,7 @@ final class GoatCorePlayback: NSObject {
         pip = nil
         let s = StreamSession(display: display, audio: audioRenderer, synchronizer: synchronizer)
         s.rate = userRate
+        s.leveling = AudioLeveling(mode: audioLevel, channel: channel ?? url.absoluteString, passthrough: passthrough)
         selectedAudio = nil
         selectedText = nil
         s.onEvent = { [weak self] event in
@@ -548,6 +554,9 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         didSet { queue.async { if self.running { self.synchronizer.setRate(self.rate, time: self.synchronizer.currentTime()) } } }
     }
 
+    /// Nivelar o volume (nil = desligado): definido antes de [start], depois só na fila.
+    var leveling: AudioLeveling?
+
     private let display: AVSampleBufferDisplayLayer
     private let audio: AVSampleBufferAudioRenderer
     private let synchronizer: AVSampleBufferRenderSynchronizer
@@ -758,6 +767,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             self.file = nil
             self.hls?.stop()
             self.hls = nil
+            self.leveling?.finish()
         }
     }
 
@@ -771,6 +781,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         queue.async {
             self.pipeline.audioPid = pid
             self.audio.flush()
+            self.leveling?.reset()
             self.lastAudio = .invalid
         }
     }
@@ -906,6 +917,13 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             }
             DebugLog.add("GoatCore: audio renderer interrupted, resuming")
             audio.flush()
+            leveling?.reset()
+        }
+        var b = b
+        if let leveling {
+            // Nivelado (já em PCM); nil enquanto o descodificador ainda não deu som.
+            guard let levelled = leveling.process(b) else { return }
+            b = levelled
         }
         audio.enqueue(b)
         let pts = CMSampleBufferGetPresentationTimeStamp(b)

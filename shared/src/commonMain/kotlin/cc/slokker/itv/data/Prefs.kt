@@ -55,6 +55,8 @@ data class Prefs(
     val audioDecoder: String = Decoder.HARDWARE,
     /** Atraso do som em ms (sincronia labial): + o som mais tarde, − mais cedo; 0 = nenhum. */
     val audioDelayMs: Int = 0,
+    /** Nivelar o volume entre canais ([AudioLevel]): desligado, nivelar ou modo noite. Não mexe no som em passthrough. */
+    val audioLevel: String = AudioLevel.OFF,
     /** Canais HDR: em HDR quando a TV aceita, ou sempre convertidos para SDR (ver HdrType). */
     val hdr: String = Hdr.AUTO,
     /** Velocidade e buffer num canto do vídeo (Definições → Canal atual → Ligação). */
@@ -241,6 +243,7 @@ data class Prefs(
         const val PIP_ENABLED = "pip_enabled"
         const val AUDIO_DECODER = "audio_decoder"
         const val AUDIO_DELAY = "audio_delay_ms"
+        const val AUDIO_LEVEL = "audio_level"
         const val HDR = "hdr"
         const val NET_GRAPH = "net_graph"
         const val NET_WARNINGS = "net_warnings"
@@ -330,6 +333,12 @@ data class Prefs(
     /** Atraso do som (as opções das definições vão de −300 a +500). */
     object AudioDelay {
         const val MAX_MS = 1_000
+    }
+
+    /** Nivelar o volume (ver media/AudioLeveler): desligado, nivelar, ou nivelar e comprimir (modo noite). */
+    object AudioLevel {
+        const val OFF = "off"; const val LEVEL = "level"; const val NIGHT = "night"
+        val ALL = setOf(OFF, LEVEL, NIGHT)
     }
 
     object Deinterlace {
@@ -538,6 +547,7 @@ data class Prefs(
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),
+                audioLevel = str(Key.AUDIO_LEVEL, d.audioLevel, AudioLevel.ALL),
                 hdr = str(Key.HDR, d.hdr, Hdr.ALL),
                 netGraph = bool(Key.NET_GRAPH, d.netGraph),
                 netWarnings = bool(Key.NET_WARNINGS, d.netWarnings),

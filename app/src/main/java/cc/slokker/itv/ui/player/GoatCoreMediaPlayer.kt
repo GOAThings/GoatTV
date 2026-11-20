@@ -28,6 +28,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
+import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.media.Codec
 import cc.slokker.itv.media.TrackKind
 import cc.slokker.itv.media.TeletextPage
@@ -56,6 +57,8 @@ internal class GoatCoreMediaPlayer(
     private val needsSdr: (Format) -> Boolean = { false },
     /** Os canais em UDP/RTP (ver [cc.slokker.itv.ui.player.goatcore.UdpTsDataSource]). */
     val udp: DataSource.Factory? = null,
+    /** Nivelar o volume (Prefs.AudioLevel; ver [GoatCorePlayer.audioLevel]). */
+    private val audioLevel: String = Prefs.AudioLevel.OFF,
 ) : SimpleBasePlayer(Looper.getMainLooper()) {
     /** O que o SPS do canal diz (tamanho, cadência, cor): vai na faixa de vídeo (selo HDR, AFR, a TV em HDR). */
     private var videoInfo: VideoInfo? = null
@@ -66,6 +69,8 @@ internal class GoatCoreMediaPlayer(
     private val main = Handler(Looper.getMainLooper())
 
     private var source: DataSource.Factory? = null
+    /** O canal, para o ganho do nivelamento (ver [setStream]). */
+    private var levelKey = ""
     private var uri: Uri? = null
     private var hls = false
     private var mediaItem: MediaItem? = null
@@ -163,12 +168,14 @@ internal class GoatCoreMediaPlayer(
 
     /**
      * A stream a tocar: [source] é a ligação (a do ExoPlayer, com o portão); começa com [prepare]. [startMs]: num TS
-     * gravado, o ponto onde começar.
+     * gravado, o ponto onde começar. [levelKey]: o canal para o nivelamento do volume (o anel da pausa tem outro
+     * endereço; sem ele, um salto no anel fica com o canal que já estava).
      */
-    fun setStream(url: String, source: DataSource.Factory, hls: Boolean, startMs: Long = 0L) {
+    fun setStream(url: String, source: DataSource.Factory, hls: Boolean, startMs: Long = 0L, levelKey: String? = null) {
         stopCore()
         this.source = source
         this.uri = Uri.parse(url)
+        this.levelKey = levelKey ?: if (url.startsWith("timeshift:")) this.levelKey else url
         this.hls = hls
         this.startMs = startMs
         firstPts = -1L
@@ -198,6 +205,7 @@ internal class GoatCoreMediaPlayer(
         val g = ++generation
         startPositionMs = -1
         val player = GoatCorePlayer(surface, softwareVideo = softwareVideo, capture = capture, previous = closing, passthrough = passthrough,
+            audioLevel = audioLevel, levelKey = levelKey,
             needsSdr = { info -> needsSdr(videoFormat(info).build()) }, listener = object : GoatCorePlayer.Listener {
             override fun onFirstFrame(ms: Long) = post(g) {
                 firstFrame = true

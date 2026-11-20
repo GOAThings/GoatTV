@@ -887,4 +887,10 @@
     <string name="subtitle_position">Posição das legendas</string>
     <string name="subtitle_position_normal">Em baixo</string>
     <string name="subtitle_position_raised">Mais acima (por cima da barra de informação)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Nivelar volume</string>
+    <string name="audio_level_sub">O mesmo volume em todos os canais, ajustado aos poucos. Sem efeito no Dolby em passthrough</string>
+    <string name="audio_level_level">Nivelar</string>
+    <string name="audio_level_night">Modo noite</string>
 </resources>

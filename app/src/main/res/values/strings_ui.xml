@@ -886,4 +886,10 @@
     <string name="subtitle_position">Subtitle position</string>
     <string name="subtitle_position_normal">Bottom</string>
     <string name="subtitle_position_raised">Raised (above the info bar)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Volume levelling</string>
+    <string name="audio_level_sub">The same loudness on every channel, adjusted gently. No effect on Dolby sent by passthrough</string>
+    <string name="audio_level_level">Level</string>
+    <string name="audio_level_night">Night mode</string>
 </resources>

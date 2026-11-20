@@ -885,4 +885,10 @@
     <string name="subtitle_position">Altyazı konumu</string>
     <string name="subtitle_position_normal">Altta</string>
     <string name="subtitle_position_raised">Daha yukarıda (bilgi çubuğunun üstünde)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Ses seviyesi dengeleme</string>
+    <string name="audio_level_sub">Tüm kanallarda aynı ses seviyesi, yavaşça ayarlanır. Ses geçişiyle (passthrough) giden Dolby\'yi etkilemez</string>
+    <string name="audio_level_level">Dengele</string>
+    <string name="audio_level_night">Gece modu</string>
 </resources>

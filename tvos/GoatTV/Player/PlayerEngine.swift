@@ -123,6 +123,8 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var subtitleLook = (size: Prefs.SubtitleSize.normal, style: Prefs.SubtitleStyle.whiteBox, position: Prefs.SubtitlePosition.normal) {
         didSet { goatCorePlayback?.view.setSubtitleLook(size: subtitleLook.size, style: subtitleLook.style, position: subtitleLook.position) }
     }
+    /// Nivelar o volume (Prefs.audioLevel), no GoatCore (ver AudioLeveling).
+    @ObservationIgnored var audioLevel = "off"
     /// A velocidade no catch-up e atrás do direto (1; 1,25; 1,5; 2): volta a 1 noutro canal e ao chegar ao direto.
     var speed: Float = 1 {
         didSet {
@@ -1246,9 +1248,12 @@ final class PlayerEngine: NSObject {
         g.isMuted = muted
         g.setAspect(aspect)
         g.rate = speed
+        g.audioLevel = audioLevel
+        g.passthrough = passthrough
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
-        g.open(url, headers: headers, startMs: ring ? 0 : openStartMs, hls: hls)
+        let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil
+        g.open(url, headers: headers, startMs: ring ? 0 : openStartMs, hls: hls, channel: channel)
     }
 
     private func goatCoreEvent(_ event: GoatCorePlayback.Event) {

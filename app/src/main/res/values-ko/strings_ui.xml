@@ -882,4 +882,10 @@
     <string name="subtitle_position">자막 위치</string>
     <string name="subtitle_position_normal">아래</string>
     <string name="subtitle_position_raised">위쪽 (정보 표시줄 위)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">음량 평준화</string>
+    <string name="audio_level_sub">모든 채널의 음량을 같게, 천천히 맞춰요. 패스스루로 보내는 Dolby에는 적용되지 않아요</string>
+    <string name="audio_level_level">평준화</string>
+    <string name="audio_level_night">야간 모드</string>
 </resources>

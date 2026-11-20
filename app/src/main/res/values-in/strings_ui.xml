@@ -883,4 +883,10 @@
     <string name="subtitle_position">Posisi subtitle</string>
     <string name="subtitle_position_normal">Bawah</string>
     <string name="subtitle_position_raised">Lebih tinggi (di atas bilah info)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Ratakan volume</string>
+    <string name="audio_level_sub">Volume sama di semua saluran, disesuaikan perlahan. Tidak berpengaruh pada Dolby lewat passthrough</string>
+    <string name="audio_level_level">Ratakan</string>
+    <string name="audio_level_night">Mode malam</string>
 </resources>

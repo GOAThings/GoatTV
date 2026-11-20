@@ -893,4 +893,10 @@
     <string name="subtitle_position">موضع الترجمة</string>
     <string name="subtitle_position_normal">في الأسفل</string>
     <string name="subtitle_position_raised">أعلى (فوق شريط المعلومات)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">موازنة مستوى الصوت</string>
+    <string name="audio_level_sub">مستوى صوت واحد في كل القنوات، يُضبط تدريجيًا. لا يؤثر على Dolby المُرسل عبر تمرير الصوت</string>
+    <string name="audio_level_level">موازنة</string>
+    <string name="audio_level_night">الوضع الليلي</string>
 </resources>

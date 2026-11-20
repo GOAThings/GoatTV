@@ -885,4 +885,10 @@
     <string name="subtitle_position">सबटाइटल की जगह</string>
     <string name="subtitle_position_normal">नीचे</string>
     <string name="subtitle_position_raised">ऊपर (जानकारी पट्टी के ऊपर)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">वॉल्यूम बराबर करें</string>
+    <string name="audio_level_sub">हर चैनल पर एक जैसी आवाज़, धीरे-धीरे समायोजित। पासथ्रू से भेजे गए Dolby पर असर नहीं</string>
+    <string name="audio_level_level">बराबर करें</string>
+    <string name="audio_level_night">नाइट मोड</string>
 </resources>

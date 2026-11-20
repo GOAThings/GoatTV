@@ -1151,6 +1151,12 @@ class Strings(context: Context) {
     val subtitlePositionNormal get() = s(R.string.subtitle_position_normal)
     val subtitlePositionRaised get() = s(R.string.subtitle_position_raised)
 
+    // ---- Nivelar o volume ----
+    val audioLevel get() = s(R.string.audio_level)
+    val audioLevelSub get() = s(R.string.audio_level_sub)
+    val audioLevelLevel get() = s(R.string.audio_level_level)
+    val audioLevelNight get() = s(R.string.audio_level_night)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

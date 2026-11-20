@@ -889,4 +889,10 @@
     <string name="subtitle_position">Положение субтитров</string>
     <string name="subtitle_position_normal">Внизу</string>
     <string name="subtitle_position_raised">Выше (над информационной панелью)</string>
+
+    <!-- Nivelar o volume (audio_level) -->
+    <string name="audio_level">Выравнивание громкости</string>
+    <string name="audio_level_sub">Одинаковая громкость на всех каналах, с плавной подстройкой. Не действует на Dolby при прямом выводе звука</string>
+    <string name="audio_level_level">Выравнивать</string>
+    <string name="audio_level_night">Ночной режим</string>
 </resources>

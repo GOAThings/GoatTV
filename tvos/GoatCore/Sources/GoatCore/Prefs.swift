@@ -51,6 +51,8 @@ public struct Prefs: Equatable, Sendable {
     public var audioDelayMs = 0
     /// As opções do atraso do som (as mesmas do Android).
     public static let audioDelayOptions = [-300, -200, -150, -100, -50, 0, 50, 100, 150, 200, 300, 400, 500]
+    /// Nivelar o volume entre canais: "off", "level" ou "night" (nivelar e comprimir). Só no som que a app descodifica.
+    public var audioLevel = "off"
     /// Faixa surround por defeito.
     public var surroundDefault = false
     /// A língua preferida do áudio (ISO 639-1); vazio = automático (a da app, quando o canal a tem).
@@ -281,6 +283,7 @@ public struct Prefs: Equatable, Sendable {
         timeshift = p.timeshift
         protectPaused = p.protectPaused
         audioDelayMs = Int(p.audioDelayMs)
+        audioLevel = p.audioLevel
         surroundDefault = p.surroundDefault
         audioLanguage = p.audioLanguage
         subtitleLanguage = p.subtitleLanguage
