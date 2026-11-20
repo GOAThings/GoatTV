@@ -20,6 +20,7 @@ import cc.slokker.itv.data.Updater
 import cc.slokker.itv.IPTV_USER_AGENT
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.SharingStarted
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.i18n.I18n
@@ -1595,6 +1596,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { playback.playing.collect { updateWatching() } }
         viewModelScope.launch { playback.catchup.collect { updateWatching() } }
         viewModelScope.launch { prefs.collect { p -> recordings.setPadding(p.recordPaddingBeforeMin, p.recordPaddingAfterMin) } }
+        // A qualidade dos HLS: a definição vale em todos; a escolha à mão no leitor só até se mudar de canal.
+        viewModelScope.launch { prefs.collect { p -> cc.slokker.itv.ui.player.goatcore.HlsQualityControl.preference = p.hlsQuality } }
+        viewModelScope.launch {
+            playback.playing.map { it?.key }.distinctUntilChanged().collect { cc.slokker.itv.ui.player.goatcore.HlsQualityControl.clearPin() }
+        }
         // As séries marcam os programas novos que o guia vai trazendo.
         recordings.guide = { playlistId, key -> content.value?.takeIf { it.playlist.id == playlistId }?.byKey?.get(key)?.let(::guideEntries) }
         viewModelScope.launch { guide.version.collect { recordings.expandSeries(::seriesInstance) } }

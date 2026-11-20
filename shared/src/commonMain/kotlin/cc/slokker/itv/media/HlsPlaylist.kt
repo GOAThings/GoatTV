@@ -10,7 +10,7 @@ class HlsRendition(val uri: String, val language: String?) {
  * Uma qualidade de uma playlist HLS principal: a playlist dela, o débito, (se o disser) a altura da imagem, o grupo de
  * áudio ([audioGroup], o atributo AUDIO) e, quando o áudio vem em playlists à parte, as do grupo ([audio], a DEFAULT
  * primeiro). Vazio em [audio]: o áudio vem dentro dos segmentos. [subtitles]: as legendas WebVTT à parte (grupo
- * SUBTITLES), a DEFAULT primeiro.
+ * SUBTITLES), a DEFAULT primeiro. [frameRate]: o FRAME-RATE, quando o diz (0 = não diz).
  */
 class HlsVariant(
     val uri: String,
@@ -20,6 +20,7 @@ class HlsVariant(
     val audioGroup: String? = null,
     val audio: List<HlsRendition> = emptyList(),
     val subtitles: List<HlsRendition> = emptyList(),
+    val frameRate: Double = 0.0,
 ) {
     /** A playlist do áudio principal, quando vem à parte. */
     val audioUri: String? get() = audio.firstOrNull()?.uri
@@ -130,7 +131,10 @@ class HlsPlaylist(
                     pendingVariant != null -> {
                         val a = pendingVariant
                         val height = a["RESOLUTION"]?.substringAfter('x', "")?.toIntOrNull() ?: 0
-                        variants += HlsVariant(resolve(base, line), a["BANDWIDTH"]?.toLongOrNull() ?: 0, height, a["CODECS"], a["AUDIO"])
+                        variants += HlsVariant(
+                            resolve(base, line), a["BANDWIDTH"]?.toLongOrNull() ?: 0, height, a["CODECS"], a["AUDIO"],
+                            frameRate = a["FRAME-RATE"]?.toDoubleOrNull() ?: 0.0,
+                        )
                         subtitleGroups += a["SUBTITLES"]
                         pendingVariant = null
                     }
@@ -157,7 +161,7 @@ class HlsPlaylist(
                 val separate = v.audioGroup?.let { audio[it] }?.takeIf { r -> r.isNotEmpty() && r.none { it.first == null } }
                 val subs = subtitleGroups.getOrNull(i)?.let { subtitles[it] }.orEmpty()
                 if (separate == null && subs.isEmpty()) v
-                else HlsVariant(v.uri, v.bandwidth, v.height, v.codecs, v.audioGroup, separate?.let(::ordered).orEmpty(), ordered(subs))
+                else HlsVariant(v.uri, v.bandwidth, v.height, v.codecs, v.audioGroup, separate?.let(::ordered).orEmpty(), ordered(subs), v.frameRate)
             }
             return HlsPlaylist(withAudio, segments, target, ended, unsupported)
         }

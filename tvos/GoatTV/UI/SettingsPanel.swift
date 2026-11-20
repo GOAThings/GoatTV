@@ -11,6 +11,8 @@ struct SettingsPanel: View {
         case current
         case audio
         case subtitles
+        /// A qualidade do HLS a dar: Automático ou uma fixa até mudar de canal (só com mais de uma).
+        case hlsQuality
         case streamInfo
         case general
         case playback
@@ -620,6 +622,7 @@ struct SettingsPanel: View {
         case .current: return s.t("Current channel", "Canal atual")
         case .audio: return s.t("Audio", "Áudio")
         case .subtitles: return s.t("Subtitles", "Legendas")
+        case .hlsQuality: return s.r("hls_quality")
         case .streamInfo: return s.t("Stream info", "Informação do stream")
         case .general: return s.t("General", "Geral")
         case .playback: return s.t("Playback", "Reprodução")
@@ -706,6 +709,11 @@ struct SettingsPanel: View {
                 pickItem("aspect"),
                 .nav("info", s.t("Stream info", "Informação do stream"), to: .streamInfo),
             ]
+            // Só num HLS com mais de uma qualidade (como no Android, a seguir às legendas).
+            if let q = player.hlsQuality, !q.options.isEmpty {
+                let value = q.options.first { $0.index == q.selected }?.label ?? s.r("auto")
+                list.insert(.nav("hls_quality", s.r("hls_quality"), value: value, to: .hlsQuality), at: 4)
+            }
             list += guideItems(channel)
             return list
 
@@ -732,6 +740,19 @@ struct SettingsPanel: View {
                 }
             } + look
 
+        case .hlsQuality:
+            guard let q = model.player.hlsQuality, !q.options.isEmpty else { return [.info("none", s.r("no_tracks"), "")] }
+            let auto = Item.check("q-1", s.r("auto"), q.selected < 0, subtitle: q.label) {
+                model.player.selectHlsQuality(-1)
+                back()
+            }
+            return [auto] + q.options.map { (option: HlsQualityControl.Now.Option) -> Item in
+                .check("q\(option.index)", option.label, option.index == q.selected) {
+                    model.player.selectHlsQuality(option.index)
+                    back()
+                }
+            }
+
         case .streamInfo:
             guard let channel = model.current else { return [] }
             let group = model.content?.categoryName(channel.categoryId) ?? channel.categoryId
@@ -743,6 +764,10 @@ struct SettingsPanel: View {
             ]
             // Com os números dos canais escondidos, também aqui.
             if prefs.showNumbers { list.insert(.info("num", s.t("Number", "Número"), "\(channel.num)"), at: 2) }
+            // A qualidade do HLS a dar (das várias da playlist), e se foi escolhida à mão.
+            if let q = model.player.hlsQuality, q.labels.count > 1, let label = q.label {
+                list.insert(.info("hls", s.r("hls_quality_title"), q.pinned >= 0 ? label : "\(label) · \(s.r("auto"))"), at: 1)
+            }
             for (i, detail) in model.player.streamDetails.enumerated() {
                 let title = detail.0 == "video" ? s.t("Video", "Vídeo") : (detail.0 == "audio" ? s.t("Audio", "Áudio") : "Bitrate")
                 list.append(.info("d\(i)", title, detail.1))
@@ -766,7 +791,8 @@ struct SettingsPanel: View {
                       "Liga Igualar a frame rate nas definições do Apple TV (Vídeo e áudio → Igualar conteúdo)")
                 : s.r("afr_sub")
             return [
-                pickItem("stream_format"), pickItem("buffer"), pickItem("decoder"), pickItem("deinterlace"),
+                pickItem("stream_format"), pickItem("buffer"), pickItem("hls_quality", subtitle: s.r("hls_quality_sub")),
+                pickItem("decoder"), pickItem("deinterlace"),
                 pickItem("aspect"),
                 .toggle("freeze_frame", s.r("freeze_frame"), prefs.freezeFrame, subtitle: s.r("freeze_frame_sub")) {
                     model.setPref("freeze_frame", .bool($0))
@@ -1538,6 +1564,11 @@ struct SettingsPanel: View {
             return (s.r("deinterlace"),
                     [o("yadif2x", s.r("deinterlace_smooth")), o("yadif", s.r("deinterlace_normal")), o("off", s.r("off"))],
                     .string(p.deinterlace))
+        case "hls_quality":
+            return (s.r("hls_quality_title"),
+                    [o("auto", s.r("auto")), o("best", s.r("hls_quality_best")), o("data_saver", s.r("hls_quality_data_saver")),
+                     o("lowest", s.r("hls_quality_lowest"))],
+                    .string(p.hlsQuality))
         case "hdr":
             return (s.t("HDR channels", "Canais HDR"),
                     [o("auto", s.t("In HDR when the TV supports it", "Em HDR quando a TV aceita")), o("sdr", s.t("Always in SDR", "Sempre em SDR"))],

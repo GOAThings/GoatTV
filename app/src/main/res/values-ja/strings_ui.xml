@@ -888,4 +888,11 @@
     <string name="audio_level_sub">どのチャンネルも同じ音量に、ゆっくり調整します。パススルーのドルビーには効きません</string>
     <string name="audio_level_level">均一化</string>
     <string name="audio_level_night">ナイトモード</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">画質</string>
+    <string name="hls_quality_title">HLS の画質</string>
+    <string name="hls_quality_sub">複数の画質がある HLS チャンネル用。プレーヤーで視聴中のチャンネルの画質を選ぶこともできます</string>
+    <string name="hls_quality_best">最高</string>
+    <string name="hls_quality_data_saver">データ節約（720p まで）</string>
+    <string name="hls_quality_lowest">最低</string>
 </resources>

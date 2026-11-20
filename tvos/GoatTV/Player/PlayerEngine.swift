@@ -190,6 +190,10 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var ownsProviderConnection = true
     /// Só o leitor principal muda o modo da TV (o segundo canal não).
     @ObservationIgnored var controlsDisplay = true
+    /// A qualidade do HLS a dar no leitor principal (ver HlsQualityControl): o menu "Qualidade" (só com mais de uma) e a
+    /// informação do stream. nil num TS, noutro motor ou no segundo canal.
+    private(set) var hlsQuality: HlsQualityControl.Now?
+    @ObservationIgnored private var hlsQualityObserver: NSObjectProtocol?
     /// Mantém a última imagem do canal anterior até o novo começar.
     @ObservationIgnored var freezeFrame = true
     /// O tempo do leitor já é o do stream novo. Antes disso, é o do anterior.
@@ -362,6 +366,12 @@ final class PlayerEngine: NSObject {
         avPlayer.allowsExternalPlayback = false
         vlc.delegate = self
         vlc.drawable = vlcView
+        hlsQualityObserver = NotificationCenter.default.addObserver(forName: HlsQualityControl.changed, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.hlsQuality = self.controlsDisplay ? HlsQualityControl.shared.now : nil
+            }
+        }
         // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
         timeshift.onReconnect = { [weak self] attempt, at, wait, dropped in
             guard let self else { return }
@@ -1245,6 +1255,7 @@ final class PlayerEngine: NSObject {
             if let referrer, !referrer.isEmpty { headers["Referer"] = referrer }
         }
         let g = goatCore
+        g.primary = controlsDisplay
         g.isMuted = muted
         g.setAspect(aspect)
         g.rate = speed
@@ -1488,6 +1499,12 @@ extension PlayerEngine {
         }
         paused.toggle()
         ringClock()
+    }
+
+    /// Fixa a qualidade [index] do HLS a dar (de [hlsQuality]) até se mudar de canal; -1 volta ao Automático.
+    func selectHlsQuality(_ index: Int) {
+        guard controlsDisplay else { return }
+        HlsQualityControl.shared.pin(index)
     }
 
     /// Altura do vídeo ("1080p"), quando já se sabe.

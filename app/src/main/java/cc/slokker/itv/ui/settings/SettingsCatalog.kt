@@ -50,6 +50,22 @@ object SettingsCatalog {
         tv = Place(TvPage.PLAYBACK, 20),
         phone = Place(PhonePage.PLAYBACK, 10, PhoneSection.CONNECTION),
     )
+    /** Os canais HLS com várias qualidades (ver media/HlsQuality); no leitor escolhe-se uma à mão, só para o canal. */
+    val HLS_QUALITY = Setting.Choice(
+        Prefs.Key.HLS_QUALITY, { it.hlsQualityTitle },
+        options = { s ->
+            listOf(
+                Prefs.HlsQuality.AUTO to s.auto,
+                Prefs.HlsQuality.BEST to s.hlsQualityBest,
+                Prefs.HlsQuality.DATA_SAVER to s.hlsQualityDataSaver,
+                Prefs.HlsQuality.LOWEST to s.hlsQualityLowest,
+            )
+        },
+        read = { it.prefs.hlsQuality },
+        subtitle = { it.hlsQualitySub },
+        tv = Place(TvPage.PLAYBACK, 25),
+        phone = Place(PhonePage.PLAYBACK, 15, PhoneSection.CONNECTION),
+    )
     val DECODER = Setting.Choice(
         Prefs.Key.DECODER, { it.decoder },
         options = ::decoders,
@@ -443,7 +459,7 @@ object SettingsCatalog {
 
     /** Por esta ordem não quer dizer nada: cada página ordena pelas suas posições. */
     val ALL: List<Setting> = listOf(
-        STREAM_FORMAT, BUFFER, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
+        STREAM_FORMAT, BUFFER, HLS_QUALITY, DECODER, DEINTERLACE, ASPECT, FREEZE_FRAME, TIMESHIFT, PROTECT_PAUSED, RECONNECT, AFR, AFR_FALLBACK, HDR, PASSTHROUGH,
         SURROUND, AUDIO_DELAY, AUDIO_LEVEL, AUDIO_LANGUAGE, SUBTITLE_LANGUAGE, SUBTITLE_SIZE, SUBTITLE_STYLE, SUBTITLE_POSITION, AUDIO_DECODER, PIP, USER_AGENT, AUTO_START, EXIT_CONFIRM, UP_DOWN, REVERSE_ZAP, ZAP_DELAY, KEY_RED, KEY_GREEN, KEY_YELLOW, KEY_BLUE, REMINDER_SWITCH, EPG_PAST, EPG_FUTURE, INFO_SECONDS, STARTUP, PHONE_STARTUP,
         BACK_ACTION, LANGUAGE, UI_SCALE, TEXT_SIZE, SHOW_NUMBERS, SHOW_LOGOS, LOGO_SOURCE, SORT, VISIBLE_GROUPS, PANEL_STYLE, PANEL_WIDTH,
         ACCENT, OUTLINE_COLOR, GLASS_OPACITY, PANEL_TIMEOUT, EPG_REFRESH, PLAYLIST_REFRESH, EPG_OFFSET, CATCHUP_OFFSET,

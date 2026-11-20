@@ -891,4 +891,11 @@
     <string name="audio_level_sub">Gleiche Lautstärke auf allen Sendern, sanft angepasst. Keine Wirkung auf Dolby per Passthrough</string>
     <string name="audio_level_level">Angleichen</string>
     <string name="audio_level_night">Nachtmodus</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Qualität</string>
+    <string name="hls_quality_title">HLS-Qualität</string>
+    <string name="hls_quality_sub">Für HLS-Sender mit mehreren Qualitäten. Im Player lässt sich auch eine für den laufenden Sender wählen</string>
+    <string name="hls_quality_best">Beste</string>
+    <string name="hls_quality_data_saver">Datensparmodus (bis 720p)</string>
+    <string name="hls_quality_lowest">Niedrigste</string>
 </resources>

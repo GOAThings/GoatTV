@@ -15,9 +15,10 @@ import cc.slokker.itv.media.TsRemuxer
  * Um canal HLS como se fosse uma ligação a um stream seguido (ver [HlsInputStream]): o gravador da pausa do direto
  * (ChannelFeed) grava-o no anel como grava um .ts, e o GoatCore pausa e recua num HLS como num .ts. Os segmentos vêm
  * pelo [upstream] (a ligação do fornecedor), um de cada vez. Os segmentos em fMP4 saem passados a TS ([TsRemuxer]),
- * para o anel e as gravações os lerem como os outros.
+ * para o anel e as gravações os lerem como os outros. [primary]: o canal principal (o menu da qualidade, ver
+ * [HlsQualityControl]); as gravações não.
  */
-class HlsDataSource(private val upstream: DataSource.Factory) : BaseDataSource(true) {
+class HlsDataSource(private val upstream: DataSource.Factory, private val primary: Boolean = false) : BaseDataSource(true) {
     private var stream: HlsInputStream? = null
     private var uri: Uri? = null
     private val ready = ArrayDeque<ByteArray>()
@@ -29,7 +30,7 @@ class HlsDataSource(private val upstream: DataSource.Factory) : BaseDataSource(t
     override fun open(dataSpec: DataSpec): Long {
         uri = dataSpec.uri
         transferInitializing(dataSpec)
-        stream = HlsInputStream(upstream, dataSpec.uri.toString())
+        stream = HlsInputStream(upstream, dataSpec.uri.toString(), primary = primary)
         ready.clear()
         readyAt = 0
         ended = false
@@ -78,7 +79,7 @@ class HlsDataSource(private val upstream: DataSource.Factory) : BaseDataSource(t
         uri = null
     }
 
-    class Factory(private val upstream: DataSource.Factory) : DataSource.Factory {
-        override fun createDataSource(): DataSource = HlsDataSource(upstream)
+    class Factory(private val upstream: DataSource.Factory, private val primary: Boolean = false) : DataSource.Factory {
+        override fun createDataSource(): DataSource = HlsDataSource(upstream, primary)
     }
 }

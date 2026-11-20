@@ -888,4 +888,11 @@
     <string name="audio_level_sub">所有频道音量一致，缓慢调整。对音频直通输出的杜比无效</string>
     <string name="audio_level_level">均衡</string>
     <string name="audio_level_night">夜间模式</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">画质</string>
+    <string name="hls_quality_title">HLS 画质</string>
+    <string name="hls_quality_sub">适用于有多种画质的 HLS 频道。也可以在播放器中为正在观看的频道选择画质</string>
+    <string name="hls_quality_best">最佳</string>
+    <string name="hls_quality_data_saver">省流量（最高 720p）</string>
+    <string name="hls_quality_lowest">最低</string>
 </resources>

@@ -22,6 +22,7 @@ import cc.slokker.itv.ui.player.textLabel
 import cc.slokker.itv.ui.player.audioLabel
 import cc.slokker.itv.ui.player.trackOptions
 import cc.slokker.itv.ui.player.rememberStreamState
+import cc.slokker.itv.ui.player.goatcore.HlsQualityControl
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -162,7 +163,8 @@ internal fun settingItems(
         Route.Subtitles -> trackItems(rememberStreamState(player).tracks, C.TRACK_TYPE_TEXT, player, allowOff = true, onManualTrack)
         Route.StreamInfo -> {
             val format by vm.streamFormat.collectAsStateWithLifecycle()
-            streamInfo(player, format)
+            val hls by HlsQualityControl.now.collectAsStateWithLifecycle()
+            streamInfo(player, format, hls)
         }
         Route.Connection -> connectionItems(vm, player, nav)
         Route.Playback, Route.General, Route.Zapping, Route.Appearance, Route.Theme, Route.Guide -> prefPageItems(route, vm, nav)
@@ -236,6 +238,7 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val epgMappings by vm.epgMappings.collectAsStateWithLifecycle()
     val tracks = rememberStreamState(player).tracks
+    val hls by HlsQualityControl.now.collectAsStateWithLifecycle()
     val s = LocalStrings.current
     val push = nav.push
     return buildList {
@@ -250,6 +253,11 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
             },
         )
         add(Item.Nav("subs", s.subtitles, tracks.textLabel(player)) { push(Route.Subtitles, "subs") })
+        // Só num HLS com mais de uma qualidade: Automático (a definição) ou uma fixa até mudar de canal.
+        hls?.takeIf { it.options.isNotEmpty() }?.let { q ->
+            val options = listOf<Pair<Any?, String>>(-1 to s.auto) + q.options.map { it.index to it.label }
+            add(nav.pick("hls_quality", s.hlsQuality, options, q.selected) { HlsQualityControl.pin(it as Int) })
+        }
         add(nav.choice(SettingsCatalog.ASPECT, SettingValues(prefs, null), s))
         add(Item.Nav("info", s.streamInfo) { push(Route.StreamInfo, "info") })
         val net by vm.net.state.collectAsStateWithLifecycle()
@@ -1081,7 +1089,7 @@ private fun trackItems(tracks: Tracks, type: Int, player: Player?, allowOff: Boo
     return options.map { o -> Item.Check(o.key, o.label, o.selected, o.details?.takeIf { it.isNotEmpty() }) { o.select() } }
 }
 
-private fun streamInfo(player: Player?, format: String?): List<Item> {
+private fun streamInfo(player: Player?, format: String?, hls: HlsQualityControl.Now? = null): List<Item> {
     if (player == null) return emptyList()
     val video = player.videoSize
     val tracks = player.currentTracks
@@ -1098,6 +1106,10 @@ private fun streamInfo(player: Player?, format: String?): List<Item> {
         },
         a?.let {
             Item.Info("acodec", I18n.s.audio, listOfNotNull(codecName(it.sampleMimeType), channelsLabel(it.channelCount), it.sampleRate.takeIf { r -> r > 0 }?.let { r -> "${r / 1000} kHz" }).joinToString(" · "))
+        },
+        // A qualidade do HLS a dar (das várias da playlist), e se foi escolhida à mão.
+        hls?.takeIf { it.variants.size > 1 }?.let { q ->
+            q.label?.let { label -> Item.Info("hls", I18n.s.hlsQualityTitle, if (q.pinned >= 0) label else "$label · ${I18n.s.auto}") }
         },
         Item.Info("buffer", I18n.s.buffer, "${player.totalBufferedDuration / 1000} s"),
         Item.Info("fmt", I18n.s.preferredFormat, when (format) { StreamFormat.TS -> "TS"; StreamFormat.HLS -> "HLS"; else -> I18n.s.auto }),

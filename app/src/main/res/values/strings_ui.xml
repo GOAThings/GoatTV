@@ -892,4 +892,11 @@
     <string name="audio_level_sub">The same loudness on every channel, adjusted gently. No effect on Dolby sent by passthrough</string>
     <string name="audio_level_level">Level</string>
     <string name="audio_level_night">Night mode</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Quality</string>
+    <string name="hls_quality_title">HLS quality</string>
+    <string name="hls_quality_sub">For HLS channels with several qualities. In the player you can also pick one for the channel you are watching</string>
+    <string name="hls_quality_best">Best</string>
+    <string name="hls_quality_data_saver">Data saver (up to 720p)</string>
+    <string name="hls_quality_lowest">Lowest</string>
 </resources>

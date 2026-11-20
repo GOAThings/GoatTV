@@ -899,4 +899,11 @@
     <string name="audio_level_sub">مستوى صوت واحد في كل القنوات، يُضبط تدريجيًا. لا يؤثر على Dolby المُرسل عبر تمرير الصوت</string>
     <string name="audio_level_level">موازنة</string>
     <string name="audio_level_night">الوضع الليلي</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">الجودة</string>
+    <string name="hls_quality_title">جودة HLS</string>
+    <string name="hls_quality_sub">لقنوات HLS ذات الجودات المتعددة. يمكنك أيضًا اختيار جودة للقناة التي تشاهدها من المشغل</string>
+    <string name="hls_quality_best">الأفضل</string>
+    <string name="hls_quality_data_saver">توفير البيانات (حتى 720p)</string>
+    <string name="hls_quality_lowest">الأدنى</string>
 </resources>

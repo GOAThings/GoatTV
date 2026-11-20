@@ -445,6 +445,8 @@ final class TimeshiftRecorder: NSObject, URLSessionDataDelegate, @unchecked Send
         refused = nil
         if hls, let url = request.url {
             let reader = HlsReader(url: url, headers: request.allHTTPHeaderFields ?? [:])
+            // A pausa do direto é só do canal principal: o menu da qualidade é dele.
+            reader.primary = true
             let remux = HlsToTs()
             self.remux = remux
             reader.onData = { [weak self] data in

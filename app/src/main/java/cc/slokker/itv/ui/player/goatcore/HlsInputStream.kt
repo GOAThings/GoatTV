@@ -13,6 +13,8 @@ import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
 import cc.slokker.itv.media.HlsMerger
 import cc.slokker.itv.media.HlsPlaylist
+import cc.slokker.itv.media.HlsQuality
+import cc.slokker.itv.media.HlsQualityPlan
 import cc.slokker.itv.media.HlsRange
 import cc.slokker.itv.media.HlsSegment
 import cc.slokker.itv.media.HlsVariant
@@ -27,7 +29,7 @@ import javax.crypto.spec.SecretKeySpec
 class UnsupportedStream(why: String) : IOException(why)
 
 /**
- * Um canal HLS lido como um só stream: a playlist (a principal escolhe a qualidade mais alta) e os segmentos, um
+ * Um canal HLS lido como um só stream: a playlist (a principal escolhe a qualidade pelo [HlsQualityControl]) e os segmentos, um
  * atrás do outro, pela mesma ligação do resto ([source], uma de cada vez). Num direto começa três segmentos antes do
  * fim e vai relendo a playlist. Nos fMP4, o segmento de inicialização vai à frente sempre que muda (fica um MP4
  * fragmentado seguido). Os segmentos cifrados com AES-128 decifram-se aqui; as outras cifras (SAMPLE-AES…) não:
@@ -41,6 +43,8 @@ class HlsInputStream(
     private val startMs: Long = 0,
     /** Num VOD aberto a meio: onde começa (ms) o segmento por onde se começou. */
     private val onStart: (Long) -> Unit = {},
+    /** O canal principal: tem o menu da qualidade e a escolha à mão (ver [HlsQualityControl]). */
+    private val primary: Boolean = false,
 ) : InputStream() {
     private var current: InputStream? = null
     // A última chave lida (a mesma serve muitos segmentos seguidos).
@@ -50,6 +54,9 @@ class HlsInputStream(
     // As qualidades da playlist principal (da mais baixa à mais alta) e a que se lê; ver [measured].
     private var variants: List<HlsVariant> = emptyList()
     private var level = -1
+    /** O plano da qualidade (ver [HlsQualityControl.plan]) e a versão do controlo com que se fez. */
+    private var plan = HlsQualityPlan(0, 0, 0)
+    private var planVersion = -1
     private var slow = 0
     private var fast = 0
 
@@ -104,9 +111,12 @@ class HlsInputStream(
             var playlist = HlsPlaylist.parse(fetch(base), base)
             if (playlist.isMaster) {
                 playlist.unsupported?.let { throw UnsupportedStream("HLS: $it") }
-                // Começa na qualidade mais alta (é uma TV); desce e sobe com a rede (ver [measured]).
-                variants = playlist.variants.sortedBy { it.bandwidth }
-                level = variants.lastIndex
+                // Começa onde o plano diz (no Automático, a mais alta: é uma TV); desce e sobe com a rede (ver [measured]).
+                variants = HlsQuality.ordered(playlist.variants)
+                planVersion = HlsQualityControl.version
+                plan = HlsQualityControl.plan(url, variants, primary)
+                level = plan.start
+                if (primary) HlsQualityControl.publish(this@HlsInputStream, url, variants, level)
                 base = variants[level].uri
                 // O áudio à parte: as línguas todas (até [MAX_AUDIO]), para o menu do áudio as ter como num TS.
                 val v = variants[level]
@@ -182,6 +192,8 @@ class HlsInputStream(
                     reload()
                     continue
                 }
+                // A definição ou a escolha à mão mudaram: refaz-se o plano (pode mudar já de qualidade).
+                if (main && replan()) continue
                 val segment = pending.removeFirst()
                 nextSequence = segment.sequence + 1
                 // O moov antes dos segmentos que o usam (lido inteiro: é pequeno, e a ligação é uma de cada vez).
@@ -211,25 +223,41 @@ class HlsInputStream(
      * do que dura uma vez) → a qualidade que caiba; folga grande quatro vezes seguidas → uma acima.
      */
     private fun measured(bytes: Int, ms: Long, seconds: Double) {
-        if (variants.size < 2 || seconds <= 0) return
+        if (variants.size < 2 || seconds <= 0 || plan.fixed) return
         val ratio = ms / (seconds * 1000)
         val bps = bytes * 8 * 1000.0 / ms.coerceAtLeast(1)
         if (ratio > 1.0 || (ratio > 0.8 && ++slow >= 2)) {
-            val fits = variants.indexOfLast { it.bandwidth <= bps * 0.7 }.coerceAtLeast(0)
+            val fits = variants.indexOfLast { it.bandwidth <= bps * 0.7 }.coerceIn(plan.lowest, plan.highest)
             if (fits < level) switchTo(fits) else slow = 0
             return
         }
         if (ratio <= 0.8) slow = 0
-        if (level < variants.lastIndex && ratio < 0.3 && bps > variants[level + 1].bandwidth * 1.5) {
+        if (level < plan.highest && ratio < 0.3 && bps > variants[level + 1].bandwidth * 1.5) {
             if (++fast >= 4) switchTo(level + 1)
         } else {
             fast = 0
         }
     }
 
+    /**
+     * Com a versão do [HlsQualityControl] mudada: o plano novo e, se a qualidade a ler ficou de fora (ou a escolha à
+     * mão é outra), muda para a do início dele. true se mudou (os segmentos pendentes saíram).
+     */
+    private fun replan(): Boolean {
+        val v = HlsQualityControl.version
+        if (v == planVersion || variants.isEmpty()) return false
+        planVersion = v
+        plan = HlsQualityControl.plan(url, variants, primary)
+        if (primary) HlsQualityControl.publish(this, url, variants, level)
+        if (level in plan.lowest..plan.highest && !(plan.fixed && level != plan.start)) return false
+        switchTo(plan.start)
+        return true
+    }
+
     private fun switchTo(next: Int) {
         Log.i("GoatCore", "HLS ${variants[level].bandwidth / 1000} → ${variants[next].bandwidth / 1000} kbit/s")
         level = next
+        if (primary) HlsQualityControl.publish(this, url, variants, level)
         video.mediaUrl = variants[next].uri
         slow = 0
         fast = 0
@@ -300,6 +328,7 @@ class HlsInputStream(
     }
 
     override fun close() {
+        HlsQualityControl.closed(this)
         runCatching { current?.close() }
         current = null
     }

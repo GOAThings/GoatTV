@@ -60,6 +60,8 @@ internal class PlayerEngine(
 
     init {
         player.addListener(listener)
+        // Só o canal principal tem a pausa do direto: é também o que tem o menu da qualidade dos HLS.
+        (player as? GoatCoreMediaPlayer)?.primary = timeshift != null
     }
 
     override val isVlc: Boolean get() = player is VlcPlayer

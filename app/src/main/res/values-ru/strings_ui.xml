@@ -895,4 +895,11 @@
     <string name="audio_level_sub">Одинаковая громкость на всех каналах, с плавной подстройкой. Не действует на Dolby при прямом выводе звука</string>
     <string name="audio_level_level">Выравнивать</string>
     <string name="audio_level_night">Ночной режим</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Качество</string>
+    <string name="hls_quality_title">Качество HLS</string>
+    <string name="hls_quality_sub">Для каналов HLS с несколькими вариантами качества. В плеере можно также выбрать качество для текущего канала</string>
+    <string name="hls_quality_best">Лучшее</string>
+    <string name="hls_quality_data_saver">Экономия трафика (до 720p)</string>
+    <string name="hls_quality_lowest">Самое низкое</string>
 </resources>

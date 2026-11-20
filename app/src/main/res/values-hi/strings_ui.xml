@@ -891,4 +891,11 @@
     <string name="audio_level_sub">हर चैनल पर एक जैसी आवाज़, धीरे-धीरे समायोजित। पासथ्रू से भेजे गए Dolby पर असर नहीं</string>
     <string name="audio_level_level">बराबर करें</string>
     <string name="audio_level_night">नाइट मोड</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">गुणवत्ता</string>
+    <string name="hls_quality_title">HLS गुणवत्ता</string>
+    <string name="hls_quality_sub">कई गुणवत्ताओं वाले HLS चैनलों के लिए। प्लेयर में आप देखे जा रहे चैनल के लिए भी एक चुन सकते हैं</string>
+    <string name="hls_quality_best">सर्वश्रेष्ठ</string>
+    <string name="hls_quality_data_saver">डेटा बचत (720p तक)</string>
+    <string name="hls_quality_lowest">सबसे कम</string>
 </resources>

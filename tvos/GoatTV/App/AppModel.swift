@@ -47,7 +47,10 @@ final class AppModel {
     private(set) var email: String?
     private(set) var deviceName: String?
 
-    private(set) var current: Channel?
+    private(set) var current: Channel? {
+        // A qualidade do HLS escolhida à mão no leitor só vale até se mudar de canal.
+        didSet { if oldValue?.key != current?.key { HlsQualityControl.shared.clearPin() } }
+    }
     /// O canal que se via antes (seta direita volta a ele), só se lá se ficou uns segundos.
     private(set) var previous: Channel?
     /// O grupo de onde se escolheu o canal: ↑/↓ andam dentro dele.
@@ -695,6 +698,8 @@ final class AppModel {
             engine.audioLevel = prefs.audioLevel
             engine.hdr = prefs.hdr
         }
+        // A qualidade dos HLS com várias (o leitor do canal principal também deixa escolher uma à mão).
+        HlsQualityControl.shared.preference = prefs.hlsQuality
         for engine in extraPlayers {
             engine.controlsDisplay = false
             engine.ownsProviderConnection = false

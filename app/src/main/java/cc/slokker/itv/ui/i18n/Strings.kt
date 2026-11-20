@@ -1157,6 +1157,14 @@ class Strings(context: Context) {
     val audioLevelLevel get() = s(R.string.audio_level_level)
     val audioLevelNight get() = s(R.string.audio_level_night)
 
+    // ---- Qualidade HLS ----
+    val hlsQuality get() = s(R.string.hls_quality)
+    val hlsQualityTitle get() = s(R.string.hls_quality_title)
+    val hlsQualitySub get() = s(R.string.hls_quality_sub)
+    val hlsQualityBest get() = s(R.string.hls_quality_best)
+    val hlsQualityDataSaver get() = s(R.string.hls_quality_data_saver)
+    val hlsQualityLowest get() = s(R.string.hls_quality_lowest)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

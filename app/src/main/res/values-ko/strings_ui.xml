@@ -888,4 +888,11 @@
     <string name="audio_level_sub">모든 채널의 음량을 같게, 천천히 맞춰요. 패스스루로 보내는 Dolby에는 적용되지 않아요</string>
     <string name="audio_level_level">평준화</string>
     <string name="audio_level_night">야간 모드</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">화질</string>
+    <string name="hls_quality_title">HLS 화질</string>
+    <string name="hls_quality_sub">여러 화질이 있는 HLS 채널용입니다. 플레이어에서 보고 있는 채널의 화질을 고를 수도 있습니다</string>
+    <string name="hls_quality_best">최고</string>
+    <string name="hls_quality_data_saver">데이터 절약 (최대 720p)</string>
+    <string name="hls_quality_lowest">최저</string>
 </resources>

@@ -891,4 +891,11 @@
     <string name="audio_level_sub">Tüm kanallarda aynı ses seviyesi, yavaşça ayarlanır. Ses geçişiyle (passthrough) giden Dolby\'yi etkilemez</string>
     <string name="audio_level_level">Dengele</string>
     <string name="audio_level_night">Gece modu</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Kalite</string>
+    <string name="hls_quality_title">HLS kalitesi</string>
+    <string name="hls_quality_sub">Birden çok kalitesi olan HLS kanalları için. Oynatıcıda izlediğiniz kanal için de bir kalite seçebilirsiniz</string>
+    <string name="hls_quality_best">En iyi</string>
+    <string name="hls_quality_data_saver">Veri tasarrufu (720p\'ye kadar)</string>
+    <string name="hls_quality_lowest">En düşük</string>
 </resources>

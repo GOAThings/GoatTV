@@ -893,4 +893,11 @@
     <string name="audio_level_sub">Le même volume sur toutes les chaînes, ajusté en douceur. Sans effet sur le Dolby en passthrough</string>
     <string name="audio_level_level">Égaliser</string>
     <string name="audio_level_night">Mode nuit</string>
+    <!-- HLS quality -->
+    <string name="hls_quality">Qualité</string>
+    <string name="hls_quality_title">Qualité HLS</string>
+    <string name="hls_quality_sub">Pour les chaînes HLS avec plusieurs qualités. Dans le lecteur, vous pouvez aussi en choisir une pour la chaîne en cours</string>
+    <string name="hls_quality_best">La meilleure</string>
+    <string name="hls_quality_data_saver">Économie de données (jusqu\'à 720p)</string>
+    <string name="hls_quality_lowest">La plus basse</string>
 </resources>
