@@ -62,6 +62,9 @@ final class PlayerEngine: NSObject {
     /// Caiu depois de estar a dar: a tentativa de voltar a ligar (1, 2…; 0 = não caiu). Volta a 0 quando dá ou se muda
     /// de canal (a cápsula no canto mostra-a, como no Android).
     private(set) var reconnects = 0
+    /// As ligações que caíram e voltaram a abrir desde que se abriu o canal (não volta a 0 quando dá, como
+    /// [reconnects]): "Informação do stream". Os failovers do mesmo canal continuam a conta.
+    @ObservationIgnored private(set) var sessionReconnects = 0
     /// Quando é a próxima tentativa de voltar a ligar (nil = a tentar agora) e quanto se espera por ela.
     private(set) var nextTryAt: Date?
     private(set) var retryDelay: TimeInterval = 0
@@ -416,6 +419,7 @@ final class PlayerEngine: NSObject {
         // O gravador da pausa do direto volta a ligar sozinho quando a ligação cai: a cápsula conta as tentativas.
         timeshift.onReconnect = { [weak self] attempt, at, wait, dropped in
             guard let self else { return }
+            if attempt == 1 { self.sessionReconnects += 1 }
             self.reconnects = attempt
             self.retryDelay = wait
             self.nextTryAt = at
@@ -494,6 +498,7 @@ final class PlayerEngine: NSObject {
         if !same {
             manualAudio = nil
             manualSubtitle = nil
+            sessionReconnects = 0
             stalls.clear()
             streamAudioOnly = nil
         }
@@ -871,6 +876,7 @@ final class PlayerEngine: NSObject {
         case .reconnect:
             state = .opening
             reconnects += 1
+            sessionReconnects += 1
             scheduleRetry(reconnecting: true)
         case .giveUp:
             showFailure()
@@ -1380,6 +1386,60 @@ final class PlayerEngine: NSObject {
             audio: g.tracks.filter { $0.kind == .audio }.map { ChannelProbe.readable($0.codec) },
             showing: state == .playing && hasPicture,
             unsupported: g.failure?.hasPrefix("unsupported") == true)
+    }
+
+    /// A fonte que está a dar no historial de fiabilidade (SourceHistory.key: "lista|canal"), ou nil.
+    var playingSourceKey: String? { openedSource }
+
+    /// Para "Informação do stream" (ver StreamStatsMonitor): o que o leitor sabe do canal a dar, sem abrir nada. O
+    /// [bitrate] leva a amostra deste segundo. A fonte (a lista e o failover) junta-a o AppModel.
+    func statsMeasure(bitrate: StreamStatsRules.Bitrate) -> StreamStatsRules.Measure {
+        var m = StreamStatsRules.Measure()
+        m.engine = backendName
+        // O GoatCore é o motor; os outros só tocam o que ele não consegue.
+        m.fallback = backend != .goatcore
+        m.reconnects = sessionReconnects
+        m.container = format.map { $0 == StreamFormat.hls ? "HLS" : "TS" } ?? ""
+        if let q = hlsQuality, q.labels.count > 1, let label = q.label {
+            m.hlsVariant = label
+            m.hlsPinned = q.pinned >= 0
+        }
+        m.audioTrack = audioTracks.first { $0.id == currentAudio }?.name ?? ""
+        guard backend == .goatcore, let g = goatCorePlayback else {
+            bitrate.clear()
+            if backend == .vlc, let info = vlcVideoInfo {
+                m.width = info.width
+                m.height = info.height
+                m.fps = Float(info.fps)
+            }
+            return m
+        }
+        let c = g.probe
+        bitrate.add(atMs: ProbeCounters.nowMs(), totalBytes: g.probeTotalBytes)
+        m.bitrateKbps = bitrate.kbps
+        m.container = c.hls ? "HLS" : "TS"
+        let video = g.tracks.first { $0.kind == .video }
+        m.videoCodec = video?.codec ?? ""
+        if let d = g.videoDetails {
+            m.width = d.width
+            m.height = d.height
+            m.fps = Float(d.fps)
+            m.interlaced = d.interlaced ? 1 : 0
+            m.hdrTransfer = d.hdr10 ? 16 : (d.hlg ? 18 : -1)
+            m.videoProfile = d.profile
+            m.videoLevel = d.level
+            m.bitDepth = d.bitDepth
+        }
+        m.deinterlacing = c.deinterlacing
+        m.upscaling = c.upscaling
+        let audio = g.audioTracks.first { $0.pid == (g.selectedAudio ?? g.audioTracks.first?.pid) }
+        m.audioCodec = audio?.codec ?? ""
+        m.audioChannels = audio?.channels ?? 0
+        m.audioSampleRate = audio?.sampleRate ?? 0
+        m.bufferMs = c.bufferMs
+        // A camada da Apple mostra o que lhe chega: não conta imagens deitadas fora nem erros do descodificador.
+        m.concealedFrames = g.concealedFrames
+        return m
     }
 
     /// As faixas do GoatCore: só som (sem vídeo) é uma rádio.

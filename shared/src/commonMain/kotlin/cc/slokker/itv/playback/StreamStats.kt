@@ -64,8 +64,8 @@ class StreamStatsWords(
     val deinterlacing: String,
     val upscaling: String,
     val toneMapping: String,
-    val none: String,
-    val auto: String,
+    val nothing: String,
+    val automatic: String,
     val fallback: String,
     val failover: String,
 )
@@ -104,7 +104,7 @@ object StreamStats {
     fun container(i: StreamStatsInput, w: StreamStatsWords): String {
         if (i.container.isEmpty()) return ""
         if (i.hlsVariant.isEmpty()) return i.container
-        return listOfNotNull(i.container, i.hlsVariant, w.auto.takeIf { !i.hlsPinned }).joinToString(" · ")
+        return listOfNotNull(i.container, i.hlsVariant, w.automatic.takeIf { !i.hlsPinned }).joinToString(" · ")
     }
 
     /** "H.264 High@L4.0 · 8-bit", "HEVC Main 10@L5.1 · 10-bit", "MPEG-2". */
@@ -130,7 +130,7 @@ object StreamStats {
             w.upscaling.takeIf { i.upscaling },
             w.toneMapping.takeIf { i.toneMapping },
         )
-        return if (on.isEmpty()) w.none else on.joinToString(" · ")
+        return if (on.isEmpty()) w.nothing else on.joinToString(" · ")
     }
 
     /** O nome por extenso de um codec do núcleo partilhado; o resto fica como vem. */

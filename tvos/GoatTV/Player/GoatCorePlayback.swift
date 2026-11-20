@@ -313,6 +313,9 @@ final class GoatCorePlayback: NSObject {
     /// e da atual: uma ligação que cai e volta a abrir não os perde). Ver ChannelProbe.
     var probe: ProbeCounters { session?.probe ?? ProbeCounters() }
     var probeTotalBytes: Int64 { closedBytes + (session?.probe.bytes ?? 0) }
+    /// Imagens remendadas pelo descodificador (dados que faltavam). Gancho para o contador de ocultação, que ainda não
+    /// existe: até lá, 0.
+    var concealedFrames: Int { 0 }
     private var closedBytes: Int64 = 0
 
     func stop() {
@@ -580,6 +583,11 @@ struct ProbeCounters: Sendable {
     var bytes: Int64 = 0
     var firstByteMs: Int64 = -1
     var firstPictureMs: Int64 = -1
+    /// Para "Informação do stream": o vídeo já no leitor à frente do relógio (ms, -1 = ainda não se sabe), e o que se
+    /// está a fazer à imagem (desentrelaçar, aumentar).
+    var bufferMs: Int64 = -1
+    var deinterlacing = false
+    var upscaling = false
 
     static func nowMs() -> Int64 { Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000) }
 }
@@ -1006,6 +1014,10 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// saem as imagens que lá estavam à espera.
     private func compressedVideo(_ b: CMSampleBuffer) {
         if processing {
+            probeLock.withLock {
+                $0.deinterlacing = false
+                $0.upscaling = false
+            }
             // As que esperavam pelo aumento saem primeiro (pela ordem).
             releaseHeld(all: true)
             processing = false
@@ -1070,7 +1082,17 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             // O VideoToolbox não o descodifica à parte: vai como vinha (a camada recomeça na imagem-chave seguinte).
             interlaced = nil
             interlacedFailed = true
+            probeLock.withLock {
+                $0.deinterlacing = false
+                $0.upscaling = false
+            }
             return video(b)
+        }
+        let deinterlacing = !progressive && deinterlace != "off"
+        let upscaling = deinterlacer.isUpscaling
+        probeLock.withLock {
+            $0.deinterlacing = deinterlacing
+            $0.upscaling = upscaling
         }
         for f in frames { video(f) }
     }
@@ -1237,6 +1259,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         let ahead = hasVideo ? (heldLast.isValid && (!lastVideo.isValid || heldLast > lastVideo) ? heldLast : lastVideo) : lastAudio
         guard ahead.isValid, now.isValid else { return }
         let lead = (ahead - now).seconds
+        if lead.isFinite { probeLock.withLock { $0.bufferMs = Int64(max(0, lead) * 1000) } }
         // Muito à frente: para de ler (a ligação fica à espera, como as filas do Android); retoma a meio.
         if !suspended, lead > Self.maxAheadSeconds {
             suspended = true

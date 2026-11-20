@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class StreamStatsTest {
     private val words = StreamStatsWords(
         progressive = "Progressive", interlaced = "Interlaced", deinterlacing = "Deinterlacing", upscaling = "Upscaling",
-        toneMapping = "HDR to SDR", none = "None", auto = "Auto", fallback = "fallback", failover = "failover",
+        toneMapping = "HDR to SDR", nothing = "None", automatic = "Auto", fallback = "fallback", failover = "failover",
     )
 
     private fun input(

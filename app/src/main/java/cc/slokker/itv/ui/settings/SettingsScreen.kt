@@ -9,7 +9,6 @@ import android.net.Uri
 import java.util.Locale
 import cc.slokker.itv.ui.ReportState
 import cc.slokker.itv.ui.UpdateState
-import cc.slokker.itv.ui.player.channelsLabel
 import cc.slokker.itv.ui.player.codecName
 import cc.slokker.itv.ui.player.OnManualTrack
 import cc.slokker.itv.ui.player.NetVerdict
@@ -49,7 +48,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
-import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import cc.slokker.itv.BuildConfig
@@ -64,7 +62,6 @@ import cc.slokker.itv.data.PlaylistForm
 import cc.slokker.itv.data.PlaylistType
 import cc.slokker.itv.data.kind
 import cc.slokker.itv.data.Prefs
-import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.ui.AppViewModel
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.i18n.I18n
@@ -72,7 +69,6 @@ import cc.slokker.itv.ui.i18n.LocalStrings
 import cc.slokker.itv.ui.i18n.maskEmail
 import cc.slokker.itv.ui.i18n.Strings
 import cc.slokker.itv.ui.player.HdrType
-import cc.slokker.itv.ui.player.dynamicRangeLabel
 import kotlinx.coroutines.launch
 
 /** Nome da origem dos logótipos: a lista, o guia de cada canal, ou o país (pelo código). */

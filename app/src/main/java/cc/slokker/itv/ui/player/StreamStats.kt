@@ -105,7 +105,7 @@ internal class StreamStatsMeter {
 
 internal fun Strings.statsWords() = StreamStatsWords(
     progressive = statsProgressive, interlaced = statsInterlaced, deinterlacing = statsDeinterlacing, upscaling = statsUpscaling,
-    toneMapping = statsToneMapping, none = none, auto = auto, fallback = statsFallback, failover = statsFailover,
+    toneMapping = statsToneMapping, nothing = none, automatic = auto, fallback = statsFallback, failover = statsFailover,
 )
 
 /** O título de uma linha ([StreamStatsRow.key] é o nome da string). */

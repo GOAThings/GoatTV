@@ -54,6 +54,8 @@ final class InterlacedVideo {
     /// O vídeo para que se decidiu o aumento (largura, altura), e se se aumenta.
     private var upscaleKey: [Int] = []
     private var upscaling = false
+    /// O vídeo está a ser aumentado agora (para "Informação do stream").
+    var isUpscaling: Bool { upscaling && (upscale?.active ?? false) }
     #if canImport(MetalFX)
     private var scaler: MTLFXSpatialScaler?
     #endif
