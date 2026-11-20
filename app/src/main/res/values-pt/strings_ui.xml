@@ -875,4 +875,6 @@
     <string name="pro_source_failed">%1$s deixou de dar. A dar %2$s.</string>
     <string name="pro_use_list">Usar no Modo TV Pro</string>
     <string name="pro_use_list_sub">Os canais dela entram na lista única</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Rádio</string>
 </resources>

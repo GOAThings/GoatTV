@@ -25,6 +25,8 @@
          desligado; a notificação mostra-se no Android 13+ se o utilizador deixar. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Rádio no telemóvel: o som continua em segundo plano com a notificação de media (ver RadioService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Gravações marcadas: acordar a app à hora certa com ela fechada. Até ao Android 12 vem dada; no 13+ o
@@ -85,6 +87,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Recording a live TV stream the user chose to record to a local file" />
+        </service>
+
+        <!-- A notificação de media da rádio (telemóvel). Só a própria app se liga a ele. -->
+        <service
+            android:name=".ui.player.RadioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
         </service>
 
         <receiver

@@ -870,4 +870,6 @@
     <string name="pro_source_failed">%1$s 이(가) 작동을 멈췄습니다. %2$s 재생 중.</string>
     <string name="pro_use_list">TV Pro 모드에서 사용</string>
     <string name="pro_use_list_sub">이 목록의 채널이 하나의 목록에 들어갑니다</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">라디오</string>
 </resources>

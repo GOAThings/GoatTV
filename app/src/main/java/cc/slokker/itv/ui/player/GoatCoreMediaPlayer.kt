@@ -99,6 +99,20 @@ internal class GoatCoreMediaPlayer(
     private var chosenText = -1
     private var startPositionMs = -1L
 
+    /**
+     * O endereço que já se viu ser só de som (uma rádio: ver RadioRules). Nele o motor não precisa da imagem: continua
+     * sem ela (o telemóvel em segundo plano, o ecrã bloqueado) e volta a abrir sem ela (a reconexão em segundo plano).
+     */
+    private var audioOnlyUrl: String? = null
+
+    /** O canal a tocar é só de som. */
+    val audioOnly: Boolean get() = audioOnlyUrl != null && audioOnlyUrl == uri?.toString()
+
+    /** Uma superfície que ninguém mostra, para abrir uma rádio sem a imagem (o motor pede uma; só o vídeo a usa). */
+    private var blank: Pair<SurfaceTexture, Surface>? = null
+
+    private fun blankSurface(): Surface = (blank ?: SurfaceTexture(0).let { it to Surface(it) }.also { blank = it }).second
+
     /** O formato do vídeo a tocar (o do SPS: tamanho, cadência e cor), como o ExoPlayer.videoFormat. */
     val videoFormat: Format?
         get() = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO }?.getTrackFormat(0)
@@ -123,7 +137,9 @@ internal class GoatCoreMediaPlayer(
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
 
         // Sem superfície o descodificador não tem onde desenhar: pára, e o leitor volta a abrir quando voltar.
+        // Uma rádio não desenha nada: continua.
         override fun surfaceDestroyed(holder: SurfaceHolder) {
+            if (audioOnly) return
             stopCore()
             if (playbackState != Player.STATE_IDLE) pendingStart = true
         }
@@ -138,8 +154,10 @@ internal class GoatCoreMediaPlayer(
         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {}
 
         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-            stopCore()
-            if (playbackState != Player.STATE_IDLE) pendingStart = true
+            if (!audioOnly) {
+                stopCore()
+                if (playbackState != Player.STATE_IDLE) pendingStart = true
+            }
             releaseTextureSurface()
             return true
         }
@@ -187,7 +205,7 @@ internal class GoatCoreMediaPlayer(
     }
 
     private fun start() {
-        val surface = (textureSurface ?: surfaceView?.holder?.surface)?.takeIf { it.isValid }
+        val surface = (textureSurface ?: surfaceView?.holder?.surface)?.takeIf { it.isValid } ?: if (audioOnly) blankSurface() else null
         if (surface == null) {
             pendingStart = true
             return
@@ -206,6 +224,8 @@ internal class GoatCoreMediaPlayer(
 
             override fun onTracks(tracks: List<TsTrack>) = post(g) {
                 tsTracks = tracks
+                val url = uri?.toString()
+                if (cc.slokker.itv.playback.RadioRules.audioOnlyTracks(tracks)) audioOnlyUrl = url else if (audioOnlyUrl == url) audioOnlyUrl = null
                 this@GoatCoreMediaPlayer.tracks = tracksOf(tracks)
             }
 
@@ -527,14 +547,20 @@ internal class GoatCoreMediaPlayer(
         stopCore()
         pendingStart = false
         detachOutput()
+        blank?.let { (texture, surface) ->
+            surface.release()
+            texture.release()
+        }
+        blank = null
         main.removeCallbacksAndMessages(null)
         return Futures.immediateVoidFuture()
     }
 
     override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> {
         if (videoOutput != surfaceView && videoOutput != textureView && (videoOutput is SurfaceView || videoOutput is TextureView)) {
-            // Parar antes de largar a Surface antiga (o descodificador ainda desenha nela).
-            if (core != null) {
+            // Parar antes de largar a Surface antiga (o descodificador ainda desenha nela). Uma rádio não desenha:
+            // continua a dar, sem recomeçar.
+            if (core != null && !audioOnly) {
                 stopCore()
                 pendingStart = true
             }
@@ -556,8 +582,8 @@ internal class GoatCoreMediaPlayer(
 
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> {
         if (videoOutput == null || videoOutput == surfaceView || videoOutput == textureView) {
-            // Parar antes de largar a Surface da TextureView (o descodificador ainda desenha nela).
-            if (core != null) {
+            // Parar antes de largar a Surface da TextureView (o descodificador ainda desenha nela). Uma rádio continua.
+            if (core != null && !audioOnly) {
                 stopCore()
                 pendingStart = true
             }

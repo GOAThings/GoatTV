@@ -873,4 +873,6 @@
     <string name="pro_source_failed">%1$s çalışmayı durdurdu. %2$s oynatılıyor.</string>
     <string name="pro_use_list">TV Pro modunda kullan</string>
     <string name="pro_use_list_sub">Kanalları tek listeye girer</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">Radyo</string>
 </resources>

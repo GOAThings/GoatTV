@@ -110,6 +110,10 @@ import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.PlaybackPolicy
 import cc.slokker.itv.ui.player.engine.AppPlaybackHost
 import cc.slokker.itv.ui.common.focusWithRetry
+import cc.slokker.itv.ui.common.LocalChannelLogos
+import cc.slokker.itv.ui.common.rememberEpg
+import cc.slokker.itv.ui.common.rememberNow
+import cc.slokker.itv.data.at
 
 /** Painel lateral: fechado, canais do grupo, ou grupos (no mesmo sítio). */
 internal enum class Panel { None, Channels, Groups }
@@ -336,6 +340,45 @@ fun PlayerScreen(vm: AppViewModel) {
         panelGroup = selectedGroup
         panel = Panel.Channels
     }
+
+    // Um canal só de som (uma rádio): o ecrã da rádio em vez da imagem preta (ver RadioView).
+    val radio = rememberIsRadio(player, current, data.categoryName(current.categoryId))
+    val sessionNow = rememberNow()
+    val sessionEpg = rememberEpg(current, vm::cachedEpg, vm::epgFor)
+    val programme = catchup?.title ?: sessionEpg.at(sessionNow)?.title
+    // A sessão de media: Play/Pausa e os botões ⏮ ⏭ de outros comandos, e o Assistente ("OK Google, pausa", "seguinte").
+    // A pausa é a do direto (ou a do catch-up); sem ela, pára o stream e "continuar" volta ao direto.
+    PlayerMediaSession(
+        player,
+        SessionInfo(current.key, current.name, programme, LocalChannelLogos.current[current.key] ?: current.logo, radio),
+        object : SessionControls {
+            override val canPause: Boolean get() = archive != null || tsActive()
+
+            override fun play() {
+                val target = archive ?: ring.takeIf { tsActive() }
+                if (target != null) {
+                    if (seek.paused) seek.togglePause(target)
+                } else {
+                    player.play()
+                }
+            }
+
+            override fun pause() {
+                val target = archive ?: ring.takeIf { tsActive() } ?: return
+                infoVisible = false
+                if (!seek.paused) seek.togglePause(target)
+            }
+
+            override fun stop() = playback.stop()
+
+            override fun resume() = playback.onStart()
+
+            override fun next() = vm.zap(1)
+
+            override fun previous() = vm.zap(-1)
+        },
+        keepInBackground = false,
+    )
 
     /** O que faz um botão de cor (Prefs.KeyAction); false = nada (a tecla segue para quem a quiser). */
     fun runKeyAction(action: String): Boolean {
@@ -994,6 +1037,10 @@ fun PlayerScreen(vm: AppViewModel) {
 
                     // Última imagem do canal anterior, até o novo mostrar o primeiro frame (sem ecrã preto).
                     if (order.first() == 0) playback.freeze?.let { Image(it, contentDescription = null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                    // Uma rádio: o logótipo, o nome e o programa no lugar da imagem preta.
+                    if (order.first() == 0 && radio && playback.failure == null) {
+                        RadioView(current, programme, playing = playback.playing && !seek.paused, compact = multi)
+                    }
                 }
 
                 // Os canais extra: as imagens pequenas (por cima da grande) ou os outros lugares do dividido.

@@ -33,6 +33,14 @@ import cc.slokker.itv.ui.player.engine.PlaybackRequest
 import cc.slokker.itv.ui.player.engine.aspectOrNull
 import cc.slokker.itv.ui.player.engine.rememberChannelPlayback
 import cc.slokker.itv.ui.player.engine.resizeModeFor
+import cc.slokker.itv.ui.player.PlayerMediaSession
+import cc.slokker.itv.ui.player.SessionControls
+import cc.slokker.itv.ui.player.SessionInfo
+import cc.slokker.itv.ui.player.rememberIsRadio
+import cc.slokker.itv.ui.common.LocalChannelLogos
+import cc.slokker.itv.ui.common.rememberEpg
+import cc.slokker.itv.ui.common.rememberNow
+import cc.slokker.itv.data.at
 
 /** O que a interface do telemóvel precisa de saber do leitor: o [ChannelPlayback] (o mesmo da TV) e a imagem. */
 @Stable
@@ -58,6 +66,14 @@ internal class MobilePlayback(val core: ChannelPlayback, viewState: MutableState
 
     /** A velocidade no catch-up e atrás do direto (ver PlaybackSpeed); a 1× em direto. */
     var speed by mutableFloatStateOf(1f)
+
+    /** O canal é só de som (uma rádio, ver RadioView): continua com a app em segundo plano e o ecrã bloqueado. */
+    var radio by mutableStateOf(false)
+        internal set
+
+    /** O programa a dar (o guia, ou o do catch-up), para a rádio e a sessão de media. */
+    var programme by mutableStateOf<String?>(null)
+        internal set
 }
 
 /**
@@ -131,12 +147,46 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
         if (core.timeshift?.feed?.url != url && core.request?.live == true) core.retry()
     }
 
+    // Um canal só de som (uma rádio): o ecrã da rádio, e o som continua em segundo plano (com a notificação de media).
+    playback.radio = rememberIsRadio(player, channel, data.categoryName(channel.categoryId))
+    val now = rememberNow()
+    val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
+    playback.programme = catchup?.title ?: epg.at(now)?.title
+    // A sessão de media: os botões do auricular e do relógio, o Assistente, e na rádio a notificação (ver RadioService).
+    // A pausa é a do ecrã (a do direto ou a do catch-up); sem pausa do direto, pára o stream e "continuar" volta ao direto.
+    PlayerMediaSession(
+        player,
+        SessionInfo(channel.key, channel.name, playback.programme, LocalChannelLogos.current[channel.key] ?: channel.logo, playback.radio),
+        object : SessionControls {
+            override val canPause: Boolean get() = catchup != null || playback.timeshift.available
+
+            override fun play() = if (catchup == null) playback.timeshift.resume(player) else player.play()
+
+            override fun pause() = player.pause()
+
+            override fun stop() = core.stop()
+
+            override fun resume() = core.onStart()
+
+            override fun next() = vm.zap(1)
+
+            override fun previous() = vm.zap(-1)
+        },
+        keepInBackground = playback.radio && active && playback.failure == null,
+    )
+    val latestRadio by rememberUpdatedState(playback.radio && active)
+
     LifecycleStartEffect(core) {
         if (latestActive) {
             core.onStart()
             vm.onPlayerVisible(true)
         }
         onStopOrDispose {
+            // A rádio continua com a app em segundo plano ou o ecrã bloqueado (a notificação de media fica).
+            if (latestRadio && lifecycle.currentState != androidx.lifecycle.Lifecycle.State.DESTROYED) {
+                vm.flushLastChannel()
+                return@onStopOrDispose
+            }
             vm.onPlayerVisible(false)
             core.stop()
             vm.flushLastChannel()

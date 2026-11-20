@@ -870,4 +870,6 @@
     <string name="pro_source_failed">%1$s が停止しました。%2$s を再生中。</string>
     <string name="pro_use_list">TV Proモードで使う</string>
     <string name="pro_use_list_sub">このリストのチャンネルを1つのリストに入れます</string>
+    <!-- Rádio (canais só de som) e sessão de media -->
+    <string name="radio_label">ラジオ</string>
 </resources>

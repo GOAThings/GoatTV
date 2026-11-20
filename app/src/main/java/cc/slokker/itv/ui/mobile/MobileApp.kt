@@ -97,7 +97,8 @@ fun MobileMain(vm: AppViewModel) {
     val mini = nav.mini(landscape)
     val pipAction = if (prefs.pipEnabled && main?.pipSupported == true) main::enterPip else null
     // Nas Definições o canal está fechado: não há nada para levar para a janela pequena.
-    val pipOnLeave = prefs.pipEnabled && video
+    // Uma rádio não vai para a janela pequena: continua só com o som (e a notificação de media).
+    val pipOnLeave = prefs.pipEnabled && video && !playback.radio
     DisposableEffect(main, pipOnLeave) {
         main?.setPipOnLeave(pipOnLeave)
         onDispose { main?.setPipOnLeave(false) }
