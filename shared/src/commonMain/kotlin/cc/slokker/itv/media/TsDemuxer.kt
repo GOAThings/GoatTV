@@ -29,8 +29,19 @@ data class TsTrack(
  * Uma unidade de uma faixa (um PES inteiro: uma imagem, um ou mais blocos de áudio, uma legenda). [pts] e [dts] no
  * relógio do TS (90 kHz, 33 bits, como vêm), ou -1 sem eles. [randomAccess]: o TS marca que se pode começar aqui.
  * [discontinuity]: faltaram pacotes antes desta (ou o fornecedor marcou um salto no relógio).
+ * [corrupt]: faltaram dados antes desta (não um salto marcado): perdeu-se pelo menos uma unidade desta faixa, que não
+ * saiu; no vídeo, as imagens que dependiam dela vêm estragadas (ver [ErrorConcealment]). [lostNonReference]: as que se
+ * perderam eram só imagens de que nenhuma outra depende (B), pelo que se viu delas.
  */
-class TsSample(val pts: Long, val dts: Long, val data: ByteArray, val randomAccess: Boolean, val discontinuity: Boolean)
+class TsSample(
+    val pts: Long,
+    val dts: Long,
+    val data: ByteArray,
+    val randomAccess: Boolean,
+    val discontinuity: Boolean,
+    val corrupt: Boolean = false,
+    val lostNonReference: Boolean = false,
+)
 
 /** Quem recebe o que o [TsDemuxer] tira do stream (na thread que o alimenta). */
 interface TsListener {
@@ -60,6 +71,13 @@ class TsDemuxer(private val listener: TsListener) {
     /** O último continuity_counter de cada faixa, e as faixas em que faltaram pacotes desde o último PES. */
     private val counters = HashMap<Int, Int>()
     private val gaps = HashSet<Int>()
+    /** Nas faixas de [gaps]: o que se perdeu eram só imagens de que nenhuma outra depende (ver [ErrorConcealment.nonReference]). */
+    private val harmless = HashMap<Int, Boolean>()
+    /**
+     * PES seguidos mais curtos do que o cabeçalho diz sem faltar nenhum pacote, por faixa: há muxers que escrevem mal o
+     * tamanho, e então deixa de contar como perda (só o continuity_counter manda).
+     */
+    private val shortRuns = HashMap<Int, Int>()
 
     /**
      * Os pacotes que chegam antes do primeiro PMT (ainda não se sabe de que faixa são): guardam-se e, mal se sabem as
@@ -102,6 +120,7 @@ class TsDemuxer(private val listener: TsListener) {
                 // Perdeu-se o passo: o que estava a meio já não se pode juntar.
                 for ((pid, unit) in pes) {
                     unit.broken = true
+                    unit.lost = UNKNOWN
                     gaps += pid
                 }
                 continue
@@ -146,6 +165,8 @@ class TsDemuxer(private val listener: TsListener) {
         pes.clear()
         counters.clear()
         gaps.clear()
+        harmless.clear()
+        shortRuns.clear()
         early = ByteArray(PACKET * 256)
         earlyLen = 0
         earlyPmtPid = -1
@@ -154,9 +175,14 @@ class TsDemuxer(private val listener: TsListener) {
 
     /** [replaying]: um pacote guardado antes do PMT, lido agora (não se volta a guardar). */
     private fun packet(p: ByteArray, i: Int, replaying: Boolean = false) {
-        if (p[i + 1].toInt() and 0x80 != 0) return // transport_error_indicator: o pacote veio estragado.
         val start = p[i + 1].toInt() and 0x40 != 0
         val pid = ((p[i + 1].toInt() and 0x1F) shl 8) or (p[i + 2].toInt() and 0xFF)
+        if (p[i + 1].toInt() and 0x80 != 0) {
+            // transport_error_indicator: o pacote veio estragado. Não entra (nem o contador, que também pode vir mal); se o
+            // PID é o de uma faixa, o PES dela perdeu um pacote.
+            if (pid in tracks) lose(pid, 1)
+            return
+        }
         if (pid == NULL_PID) return
         val control = (p[i + 3].toInt() shr 4) and 3
         val counter = p[i + 3].toInt() and 0x0F
@@ -245,7 +271,11 @@ class TsDemuxer(private val listener: TsListener) {
         var len = 0
         var randomAccess = false
         var discontinuity = false
+        var corrupt = false
+        var lostNonReference = false
         var broken = false
+        /** Quantos pacotes se perderam a meio deste ([UNKNOWN] sem se saber). */
+        var lost = 0
         /** O tamanho que o cabeçalho do PES diz (0 = até ao próximo, como no vídeo). */
         var expected = 0
 
@@ -260,18 +290,20 @@ class TsDemuxer(private val listener: TsListener) {
     private fun media(track: TsTrack, p: ByteArray, from: Int, to: Int, start: Boolean, counter: Int, randomAccess: Boolean, marked: Boolean) {
         val pid = track.pid
         val last = counters[pid]
-        if (last == counter && !start) return // Pacote repetido (é permitido uma vez).
+        // Pacote repetido (é permitido uma vez, também o do início de um PES): não é perda nem entra outra vez.
+        if (last == counter && !marked) return
         counters[pid] = counter
+        // Com o discontinuity_indicator, o contador pode saltar: não é perda.
+        if (last != null && counter != (last + 1) and 0x0F && !marked) lose(pid, (counter - last - 1) and 0x0F)
         var unit = pes[pid]
-        if (last != null && counter != (last + 1) and 0x0F) {
-            unit?.broken = true
-            gaps += pid
-        }
         if (start) {
             if (unit != null) emit(pid, unit)
             val next = Pes()
             next.randomAccess = randomAccess
-            next.discontinuity = marked || gaps.remove(pid)
+            val lostBefore = gaps.remove(pid)
+            next.discontinuity = marked || lostBefore
+            next.corrupt = lostBefore
+            next.lostNonReference = lostBefore && harmless.remove(pid) == true
             next.add(p, from, to)
             if (next.len >= 6 && next.data[0].toInt() == 0 && next.data[1].toInt() == 0 && next.data[2].toInt() == 1) {
                 val length = ((next.data[4].toInt() and 0xFF) shl 8) or (next.data[5].toInt() and 0xFF)
@@ -290,10 +322,47 @@ class TsDemuxer(private val listener: TsListener) {
         }
     }
 
+    /** Faltaram [packets] pacotes na faixa [pid] (0 = não se sabe quantos): o PES a meio já não serve. */
+    private fun lose(pid: Int, packets: Int) {
+        val unit = pes[pid]
+        if (unit == null) {
+            // Não havia PES a meio: o que se perdeu pode ter sido o início de um (de qualquer tipo).
+            harmless[pid] = false
+        } else {
+            unit.broken = true
+            unit.lost = if (packets <= 0 || unit.lost == UNKNOWN) UNKNOWN else unit.lost + packets
+        }
+        gaps += pid
+    }
+
     private fun emit(pid: Int, unit: Pes) {
         val track = tracks[pid] ?: return
-        // Faltaram pacotes no meio: não sai (o seguinte desta faixa vem com discontinuity).
-        if (unit.broken) return
+        // Mais curto do que o cabeçalho diz: faltou o fim (a não ser que este muxer escreva sempre mal o tamanho).
+        if (!unit.broken && unit.expected > 0 && unit.len < unit.expected) {
+            val run = (shortRuns[pid] ?: 0) + 1
+            shortRuns[pid] = run
+            if (run <= SHORT_RUNS_TRUSTED) {
+                unit.broken = true
+                unit.lost = UNKNOWN
+                gaps += pid
+            }
+        } else if (!unit.broken && unit.expected > 0) {
+            shortRuns.remove(pid)
+        }
+        // Faltaram pacotes no meio: não sai (o seguinte desta faixa vem com discontinuity e corrupt).
+        if (unit.broken) {
+            if (track.kind == TrackKind.VIDEO) {
+                // Poucos pacotes perdidos numa imagem que se vê que é B: as outras não dependem dela.
+                val d = unit.data
+                val body = if (unit.len >= 9 && d[0].toInt() == 0 && d[1].toInt() == 0 && d[2].toInt() == 1) 9 + (d[8].toInt() and 0xFF) else -1
+                val few = unit.lost in 1..MAX_HARMLESS_PACKETS
+                val ok = few && body in 0 until unit.len && ErrorConcealment.nonReference(track.codec, d, body, unit.len)
+                harmless[pid] = (harmless[pid] ?: true) && ok
+            } else {
+                harmless[pid] = false
+            }
+            return
+        }
         val d = unit.data
         val n = if (unit.expected > 0) minOf(unit.len, unit.expected) else unit.len
         if (n < 9 || d[0].toInt() != 0 || d[1].toInt() != 0 || d[2].toInt() != 1) return
@@ -309,7 +378,7 @@ class TsDemuxer(private val listener: TsListener) {
         if (flags and 0x40 != 0 && headerEnd >= 19) dts = timestamp(d, 14)
         if (dts < 0) dts = pts
         val body = d.copyOfRange(headerEnd, n)
-        listener.onSample(track, TsSample(pts, dts, body, unit.randomAccess, unit.discontinuity))
+        listener.onSample(track, TsSample(pts, dts, body, unit.randomAccess, unit.discontinuity, unit.corrupt, unit.lostNonReference))
     }
 
     // ---- PSI (PAT, PMT) ----------------------------------------------------------------------
@@ -507,6 +576,11 @@ class TsDemuxer(private val listener: TsListener) {
         private const val SYNC = 0x47.toByte()
         private const val PAT_PID = 0
         private const val NULL_PID = 0x1FFF
+        private const val UNKNOWN = -1
+        /** Até quantos pacotes perdidos numa imagem B ainda se sabe que foi só ela (mais do que isso pode ter levado o início da seguinte). */
+        private const val MAX_HARMLESS_PACKETS = 3
+        /** PES curtos seguidos que ainda contam como perda (depois, o muxer é que escreve mal o tamanho). */
+        private const val SHORT_RUNS_TRUSTED = 3
 
         /** O máximo guardado antes do PMT (~3 MB: segundos de um canal HD; o PMT vem várias vezes por segundo). */
         private const val EARLY_MAX = PACKET * 16384

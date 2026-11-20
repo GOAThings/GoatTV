@@ -2,6 +2,7 @@ import AudioToolbox
 import CoreMedia
 import Foundation
 import GoatShared
+import os
 
 /// Uma faixa do canal aberto no motor GoatCore, como o núcleo partilhado a viu no PMT.
 public struct MediaTrack: Equatable, Sendable {
@@ -150,6 +151,10 @@ public final class MediaPipeline {
     private var videoClock = TsClock()
     /// Só se manda vídeo a partir de uma imagem-chave, sem as imagens que dependem de antes dela (o verde e os borrões).
     private let videoStart = VideoStart()
+    /// Faltaram dados: fica a última imagem boa até à próxima imagem-chave (ver ErrorConcealment). Sempre ligado.
+    private let conceal = ErrorConcealment(capTicks: ErrorConcealment.companion.CAP_TICKS)
+    /// Imagens que não foram para o descodificador por faltarem dados (para o painel das estatísticas).
+    public var concealedFrames: Int { Int(conceal.dropped) }
     private var audio: AudioFrameReader?
     private var audioReaderPid: Int?
     private var audioFormat: CMAudioFormatDescription?
@@ -236,6 +241,7 @@ public final class MediaPipeline {
         adjusting = false
         videoClock.reset()
         videoStart.restart()
+        conceal.reset()
         audio = nil
         audioReaderPid = nil
         audioFormat = nil
@@ -401,10 +407,12 @@ public final class MediaPipeline {
             recentText = [:]
             onJump?()
         }
-        // Faltaram dados (a imagem que vinha não chegou inteira): espera-se pela próxima imagem-chave.
-        if sample.discontinuity { videoStart.restart() }
+        concealLoss(sample)
         let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
         readCaptions(sample.data, pts: samplePts)
+        // Um canal com intra refresh (sem imagens I) só diz por onde se pode voltar com o SEI recovery point.
+        let recovery = conceal.concealing && ErrorConcealment.companion.recoveryPoint(
+            hevc: videoPid.flatMap { p in tracks.first { $0.pid == p } }?.codec == "HEVC", d: sample.data)
         // Numa imagem entrelaçada por campos, sai com o segundo campo (os dois juntos, com os tempos do primeiro).
         guard let unit = nal.next(annexB: sample.data, pts: samplePts, dts: sampleDts) else { return }
         if !unit.parameterSets.isEmpty {
@@ -437,7 +445,7 @@ public final class MediaPipeline {
                 if !deinterlacing { videoStart.restart() }
             }
         }
-        guard videoStart.pass(keyframe: unit.keyframe, pts: pts) else { return }
+        guard videoStart.pass(keyframe: unit.keyframe, pts: pts), concealed(keyframe: unit.keyframe || recovery, pts: pts) else { return }
         let data = AppleMedia.shared.data(bytes: unit.data) as Data
         guard let buffer = Self.sampleBuffer(data, format: format, pts: pts, dts: dts, duration: .invalid, samples: 1, packetSizes: nil) else { return }
         if !unit.keyframe, let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: true) as? [NSMutableDictionary] {
@@ -463,12 +471,13 @@ public final class MediaPipeline {
             recentText = [:]
             onJump?()
         }
-        if sample.discontinuity { videoStart.restart() }
+        concealLoss(sample)
         let sampleDts = sample.dts == sample.pts ? samplePts : videoClock.unwrap(ts: sample.dts)
         let cc = ClosedCaptions.shared.ccData(data: sample.data, hevc: false, mpeg2: true)
         if cc.size > 0 || !captionQueue.isEmpty { queueCaptions(cc, pts: samplePts) }
         let unit = mpeg2.next(data: sample.data, pts: samplePts, dts: sampleDts)
-        guard let header = mpeg2.sequenceHeader, videoStart.pass(keyframe: unit.keyframe, pts: unit.pts) else { return }
+        guard let header = mpeg2.sequenceHeader, videoStart.pass(keyframe: unit.keyframe, pts: unit.pts),
+              concealed(keyframe: unit.keyframe, pts: unit.pts) else { return }
         var data = AppleMedia.shared.data(bytes: unit.data) as Data
         // Uma imagem I sem o cabeçalho da sequência (há emissores que só o mandam de vez em quando): leva-o à frente,
         // para o descodificador poder começar nela.
@@ -476,6 +485,26 @@ public final class MediaPipeline {
             data = (AppleMedia.shared.data(bytes: header) as Data) + data
         }
         onCodedVideo?(CodedVideo(data: data, pts: unit.pts, dts: unit.dts, keyframe: unit.keyframe))
+    }
+
+    /// Faltaram dados antes desta imagem (não um salto marcado pelo fornecedor, que se descodifica na mesma): ver
+    /// ErrorConcealment. Num MP4 fragmentado, a discontinuity é um moov novo: recomeça numa imagem-chave.
+    private func concealLoss(_ sample: TsSample) {
+        if sample.corrupt { conceal.lost(onlyNonReference: sample.lostNonReference) }
+        if sample.discontinuity, !sample.corrupt, demuxer.isMp4 { videoStart.restart() }
+    }
+
+    /// ErrorConcealment.pass e, nas versões de testes, o registo de cada espera.
+    private func concealed(keyframe: Bool, pts: Int64) -> Bool {
+        let waiting = conceal.concealing
+        let pass = conceal.pass(keyframe: keyframe, pts: pts)
+        #if DEBUG
+        if waiting, !conceal.concealing {
+            os_log("GoatConceal: held %ld frames, resumed on %{public}@; dropped=%ld capped=%ld",
+                   Int(conceal.lastRun), keyframe ? "keyframe" : "cap", Int(conceal.dropped), Int(conceal.capped))
+        }
+        #endif
+        return pass
     }
 
     static func videoFormat(_ sets: [Data], hevc: Bool) -> CMVideoFormatDescription? {
