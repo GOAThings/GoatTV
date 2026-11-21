@@ -1024,4 +1024,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">काली पट्टियाँ हटाएँ</string>
     <string name="auto_crop_sub">तस्वीर में आने वाली काली पट्टियाँ छिपाने के लिए बस उतना ही ज़ूम करता है (4:3 कार्यक्रम, पट्टियों वाली फ़िल्में)। केवल आस्पेक्ट रेशियो फ़िट पर होने पर</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">बैकग्राउंड में सुनें</string>
+    <string name="background_audio_sub">ऐप बैकग्राउंड में हो या स्क्रीन लॉक हो, तब चैनल केवल आवाज़ के साथ चलता रहता है, सूचना में चैनल और कार्यक्रम दिखते हैं। ऐप खोलने पर तस्वीर लौट आती है</string>
 </resources>

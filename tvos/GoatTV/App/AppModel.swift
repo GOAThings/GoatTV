@@ -2598,9 +2598,13 @@ final class AppModel {
         #if os(iOS)
         // Uma rádio continua só com o som (em segundo plano e com o ecrã bloqueado: os controlos ficam no ecrã bloqueado).
         keptForRadio = !keptForPip && isRadio && player.state != .idle
+        // "Ouvir em segundo plano": qualquer canal continua só com o som (a imagem pára, a ligação fica). O PiP ganha.
+        keptForSound = !keptForPip && !keptForRadio && backgroundAudioOn && player.canPlaySoundOnly && player.state != .idle
         #endif
         if keptForRadio {
             // A rádio continua.
+        } else if keptForSound {
+            player.soundOnly = true
         } else if keptForPip {
             player.onPipEnded = { [weak self] in
                 guard let self, self.backgrounded else { return }
@@ -2612,11 +2616,23 @@ final class AppModel {
         backgrounded = true
     }
 
-    @ObservationIgnored private var backgrounded = false
+    @ObservationIgnored private(set) var backgrounded = false
     /// Ao ir para segundo plano o canal estava no Picture in Picture e continuou a dar.
     @ObservationIgnored private var keptForPip = false
     /// Ao ir para segundo plano dava uma rádio, que continuou (só o iPhone).
     @ObservationIgnored private var keptForRadio = false
+    /// Ao ir para segundo plano o canal continuou só com o som ("Ouvir em segundo plano", só o iPhone).
+    @ObservationIgnored private var keptForSound = false
+
+    /// "Ouvir em segundo plano" escolhido no leitor do iPhone, só até a app fechar; nil = o das definições.
+    private(set) var backgroundAudioSession: Bool?
+
+    /// Com a app em segundo plano, um canal com imagem continua só com o som (o da sessão, ou Prefs.backgroundAudio).
+    var backgroundAudioOn: Bool { backgroundAudioSession ?? prefs.backgroundAudio }
+
+    func setBackgroundAudioSession(_ on: Bool) {
+        backgroundAudioSession = on
+    }
 
     /// De volta à app: o canal (ou o catch-up) volta a dar.
     func didBecomeActive() {
@@ -2624,8 +2640,12 @@ final class AppModel {
         checkForUpdate()
         guard backgrounded else { return }
         backgrounded = false
-        // Voltou do Picture in Picture (ou da rádio em segundo plano): o canal nunca parou.
-        if keptForPip || keptForRadio, player.state != .idle {
+        // A imagem volta já (na imagem-chave do momento), também no canal que se abrir a seguir.
+        let keptSound = keptForSound
+        keptForSound = false
+        player.soundOnly = false
+        // Voltou do Picture in Picture (ou da rádio, ou do som em segundo plano): o canal nunca parou.
+        if keptForPip || keptForRadio || keptSound, player.state != .idle {
             keptForPip = false
             keptForRadio = false
             return

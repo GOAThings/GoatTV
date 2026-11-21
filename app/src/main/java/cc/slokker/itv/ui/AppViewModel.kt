@@ -273,6 +273,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _sleepAt = MutableStateFlow<Long?>(null)
     val sleepAt: StateFlow<Long?> = _sleepAt.asStateFlow()
 
+    /**
+     * "Ouvir em segundo plano" ligado ou desligado no leitor do telemóvel, só até a app fechar; null = o das definições
+     * (Prefs.backgroundAudio).
+     */
+    private val _backgroundAudioSession = MutableStateFlow<Boolean?>(null)
+    val backgroundAudioSession: StateFlow<Boolean?> = _backgroundAudioSession.asStateFlow()
+
+    fun setBackgroundAudioSession(on: Boolean) {
+        _backgroundAudioSession.value = on
+    }
+
     /** Lembretes de programas (só nesta TV). */
     private val reminderList = Reminders(viewModelScope, c.cache, { content.value?.playlist?.id }, ::showToast)
     val reminders: StateFlow<List<Reminder>> = reminderList.reminders

@@ -1021,4 +1021,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">去除黑边</string>
     <string name="auto_crop_sub">仅放大到恰好隐藏画面中自带的黑边（4:3 节目、带黑边的电影）。仅在画面比例为“适应”时生效</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">后台收听</string>
+    <string name="background_audio_sub">应用在后台或屏幕锁定时，频道仅以声音继续播放，通知中显示频道和节目。打开应用后画面立即恢复</string>
 </resources>

@@ -61,6 +61,11 @@ data class Prefs(
     val subtitlePosition: String = SubtitlePosition.NORMAL,
     /** Telemóvel: o vídeo continua numa janela pequena ao sair da app. */
     val pipEnabled: Boolean = false,
+    /**
+     * Telemóvel: com a app em segundo plano ou o ecrã bloqueado, qualquer canal continua só com o som (a imagem pára,
+     * a ligação fica); a notificação de media tem o canal e o programa. Na TV não se aplica.
+     */
+    val backgroundAudio: Boolean = false,
     val audioDecoder: String = Decoder.HARDWARE,
     /** Atraso do som em ms (sincronia labial): + o som mais tarde, − mais cedo; 0 = nenhum. */
     val audioDelayMs: Int = 0,
@@ -278,6 +283,7 @@ data class Prefs(
         const val SUBTITLE_STYLE = "subtitle_style"
         const val SUBTITLE_POSITION = "subtitle_position"
         const val PIP_ENABLED = "pip_enabled"
+        const val BACKGROUND_AUDIO = "background_audio"
         const val AUDIO_DECODER = "audio_decoder"
         const val AUDIO_DELAY = "audio_delay_ms"
         const val AUDIO_LEVEL = "audio_level"
@@ -629,6 +635,7 @@ data class Prefs(
                 subtitleStyle = str(Key.SUBTITLE_STYLE, d.subtitleStyle, SubtitleStyle.ALL),
                 subtitlePosition = str(Key.SUBTITLE_POSITION, d.subtitlePosition, SubtitlePosition.ALL),
                 pipEnabled = bool(Key.PIP_ENABLED, d.pipEnabled),
+                backgroundAudio = bool(Key.BACKGROUND_AUDIO, d.backgroundAudio),
                 audioDecoder = str(Key.AUDIO_DECODER, d.audioDecoder, Decoder.ALL),
                 audioDelayMs = int(Key.AUDIO_DELAY, d.audioDelayMs).coerceIn(-AudioDelay.MAX_MS, AudioDelay.MAX_MS),
                 audioLevel = str(Key.AUDIO_LEVEL, d.audioLevel, AudioLevel.ALL),

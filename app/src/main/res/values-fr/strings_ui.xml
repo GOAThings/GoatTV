@@ -1026,4 +1026,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Supprimer les bandes noires</string>
     <string name="auto_crop_sub">Agrandit juste assez pour masquer les bandes noires présentes dans l\'image (programmes 4:3, films au format cinéma). Uniquement avec le format d\'image sur Ajuster</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Écouter en arrière-plan</string>
+    <string name="background_audio_sub">Avec l\'app en arrière-plan ou l\'écran verrouillé, la chaîne continue en son seul, avec la chaîne et le programme dans la notification. L\'image revient à l\'ouverture de l\'app</string>
 </resources>

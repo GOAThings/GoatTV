@@ -1026,4 +1026,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Rimuovi bande nere</string>
     <string name="auto_crop_sub">Ingrandisce solo quanto basta per nascondere le bande nere presenti nell\'immagine (programmi 4:3, film con bande). Solo con Formato immagine su Adatta</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Ascolta in background</string>
+    <string name="background_audio_sub">Con l\'app in background o lo schermo bloccato, il canale continua solo con l\'audio, con canale e programma nella notifica. L\'immagine torna quando apri l\'app</string>
 </resources>

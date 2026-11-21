@@ -1022,4 +1022,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Hapus bilah hitam</string>
     <string name="auto_crop_sub">Memperbesar secukupnya untuk menyembunyikan bilah hitam yang ada di gambar (acara 4:3, film dengan bilah). Hanya jika Rasio aspek diatur ke Pas</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Dengarkan di latar belakang</string>
+    <string name="background_audio_sub">Saat aplikasi di latar belakang atau layar terkunci, saluran tetap berjalan hanya dengan suara, dengan saluran dan acara di notifikasi. Gambar kembali saat Anda membuka aplikasi</string>
 </resources>

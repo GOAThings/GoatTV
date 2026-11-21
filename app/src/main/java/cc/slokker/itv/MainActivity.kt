@@ -212,8 +212,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (inPip && !isInPictureInPictureMode) pipEndedAt = android.os.SystemClock.elapsedRealtime()
         inPip = isInPictureInPictureMode
     }
+
+    /** Quando saiu da janela pequena (elapsedRealtime; 0 = nunca). */
+    private var pipEndedAt = 0L
+
+    /**
+     * Está na janela pequena, ou acabou de sair dela: a app a parar agora é a janela pequena a fechar (fechá-la pára o
+     * canal, mesmo com "Ouvir em segundo plano"; a janela pequena ganha).
+     */
+    val pipClosing: Boolean
+        get() = inPip || android.os.SystemClock.elapsedRealtime() - pipEndedAt < 1_500
 
     private fun openLink(intent: Intent?) {
         HomeScreen.parseLink(intent?.data)?.let { (playlist, channel) -> vm.openLink(playlist, channel) }

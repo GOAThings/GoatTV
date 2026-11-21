@@ -1021,4 +1021,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">검은 띠 제거</string>
     <string name="auto_crop_sub">화면에 들어 있는 검은 띠(4:3 프로그램, 레터박스 영화)가 사라질 만큼만 확대합니다. 화면 비율이 맞춤일 때만</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">백그라운드에서 듣기</string>
+    <string name="background_audio_sub">앱이 백그라운드에 있거나 화면이 잠겨 있으면 채널이 소리만으로 계속 재생되고, 알림에 채널과 프로그램이 표시됩니다. 앱을 열면 화면이 돌아옵니다</string>
 </resources>

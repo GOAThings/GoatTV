@@ -81,7 +81,7 @@ class SettingsCatalogTest {
         val k = Prefs.Key
         assertEquals(
             listOf(
-                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.AUTO_CROP, k.PIP_ENABLED, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES),
+                PhoneSection.PICTURE_SOUND to listOf(k.ASPECT, k.AUTO_CROP, k.PIP_ENABLED, k.BACKGROUND_AUDIO, k.AUDIO_LANGUAGE, k.SURROUND_DEFAULT, k.AUDIO_DELAY, k.AUDIO_DELAY_AUTO, k.AUDIO_LEVEL, k.AUDIO_VOICES),
                 PhoneSection.PICTURE to listOf(k.PICTURE_BRIGHTNESS, k.PICTURE_CONTRAST, k.PICTURE_SATURATION, k.PICTURE_SHARPNESS, k.UPSCALE, "picture_reset"),
                 PhoneSection.SUBTITLES to listOf(k.SUBTITLE_LANGUAGE, k.SUBTITLE_SIZE, k.SUBTITLE_STYLE, k.SUBTITLE_POSITION),
                 PhoneSection.CONNECTION to listOf(k.BUFFER, k.HLS_QUALITY, k.MOBILE_DATA_QUALITY, k.RECONNECT_SECONDS, k.TIMESHIFT, k.PROTECT_PAUSED, k.ZAP_DELAY, k.IDLE_STOP),
@@ -105,7 +105,7 @@ class SettingsCatalogTest {
         assertTrue(Prefs.Key.AFR in tvOnly && Prefs.Key.AFR_FALLBACK in tvOnly && Prefs.Key.HDR in tvOnly && Prefs.Key.UI_SCALE in tvOnly)
         // O atraso ao mudar de canal vale nos dois (o telemóvel também muda de canal a deslizar).
         assertTrue(SettingsCatalog.ZAP_DELAY.tv != null && SettingsCatalog.ZAP_DELAY.phone != null)
-        assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.MOBILE_DATA_QUALITY, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)
+        assertEquals(setOf(Prefs.Key.PIP_ENABLED, Prefs.Key.BACKGROUND_AUDIO, Prefs.Key.MOBILE_DATA_QUALITY, Prefs.Key.PHONE_STARTUP, Prefs.Key.PLAYLIST_REFRESH, "visible_groups"), phoneOnly)
     }
 
     @Test

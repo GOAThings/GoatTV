@@ -194,6 +194,34 @@ internal class GoatCoreMediaPlayer(
     /** O canal a tocar é só de som. */
     val audioOnly: Boolean get() = audioOnlyUrl != null && audioOnlyUrl == uri?.toString()
 
+    /**
+     * "Ouvir em segundo plano" (telemóvel; Prefs.backgroundAudio): sem a superfície (a app em segundo plano, o ecrã
+     * bloqueado), o motor fica só com o som e a ligação, sem descodificar a imagem (ver [GoatCorePlayer.setVideoOutput]);
+     * com ela de volta, a imagem volta na imagem-chave do momento. Desligado, sem superfície o motor pára (como sempre).
+     */
+    var backgroundAudio = false
+
+    /** Sem superfície, o motor continua só com o som (uma rádio, ou um canal com imagem e [backgroundAudio]). */
+    private val keepsSound: Boolean get() = audioOnly || backgroundAudio
+
+    /** A superfície da vista ligada agora, se o sistema a tem (null em segundo plano). */
+    private fun liveSurface(): Surface? = (textureSurface ?: surfaceView?.holder?.surface)?.takeIf { it.isValid }
+
+    /** Larga a imagem do motor a dar, que continua com o som; true se o fez (senão, quem chama pára o motor). */
+    private fun soundOnly(): Boolean {
+        val c = core ?: return false
+        if (!backgroundAudio || audioOnly) return false
+        c.setVideoOutput(null)
+        return true
+    }
+
+    /** O motor a dar sem imagem volta a tê-la, na superfície que a vista tem agora. */
+    private fun videoBack() {
+        val c = core ?: return
+        if (!c.videoOff) return
+        liveSurface()?.let { c.setVideoOutput(it) }
+    }
+
     /** Uma superfície que ninguém mostra, para abrir uma rádio sem a imagem (o motor pede uma; só o vídeo a usa). */
     private var blank: Pair<SurfaceTexture, Surface>? = null
 
@@ -242,7 +270,7 @@ internal class GoatCoreMediaPlayer(
 
     private val surfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
-            if (pendingStart) start()
+            if (pendingStart) start() else videoBack()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
@@ -250,7 +278,7 @@ internal class GoatCoreMediaPlayer(
         // Sem superfície o descodificador não tem onde desenhar: pára, e o leitor volta a abrir quando voltar.
         // Uma rádio não desenha nada: continua.
         override fun surfaceDestroyed(holder: SurfaceHolder) {
-            if (audioOnly) return
+            if (audioOnly || soundOnly()) return
             stopCore()
             if (playbackState != Player.STATE_IDLE) pendingStart = true
         }
@@ -259,13 +287,13 @@ internal class GoatCoreMediaPlayer(
     private val textureListener = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
             textureSurface = Surface(texture)
-            if (pendingStart) start()
+            if (pendingStart) start() else videoBack()
         }
 
         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {}
 
         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-            if (!audioOnly) {
+            if (!audioOnly && !soundOnly()) {
                 stopCore()
                 if (playbackState != Player.STATE_IDLE) pendingStart = true
             }
@@ -352,7 +380,10 @@ internal class GoatCoreMediaPlayer(
     }
 
     private fun start() {
-        val surface = (textureSurface ?: surfaceView?.holder?.surface)?.takeIf { it.isValid } ?: if (audioOnly) blankSurface() else null
+        // Sem a superfície (em segundo plano: a reconexão, o canal seguinte no ecrã bloqueado), uma rádio ou um canal com
+        // "Ouvir em segundo plano" abre na mesma, sem imagem.
+        val shown = liveSurface()
+        val surface = shown ?: if (keepsSound) blankSurface() else null
         if (surface == null) {
             pendingStart = true
             return
@@ -423,6 +454,8 @@ internal class GoatCoreMediaPlayer(
             override fun onCues(atUs: Long, cues: List<androidx.media3.common.text.Cue>, durationUs: Long) = showCues(g, atUs, cues, durationUs)
         })
         core = player
+        // Um canal com imagem aberto sem a superfície: a imagem só começa quando ela voltar (ver [videoBack]).
+        if (shown == null && !audioOnly) player.setVideoOutput(null)
         adaptive = adaptiveUrl?.let { url ->
             val key = cc.slokker.itv.playback.AdaptiveBuffer.providerKey(url)
             cc.slokker.itv.playback.AdaptiveBuffer(adaptiveMemory.startLevel(key)).also { adaptiveKey = key }
@@ -815,7 +848,7 @@ internal class GoatCoreMediaPlayer(
         if (videoOutput != surfaceView && videoOutput != textureView && (videoOutput is SurfaceView || videoOutput is TextureView)) {
             // Parar antes de largar a Surface antiga (o descodificador ainda desenha nela). Uma rádio não desenha:
             // continua a dar, sem recomeçar.
-            if (core != null && !audioOnly) {
+            if (core != null && !audioOnly && !soundOnly()) {
                 stopCore()
                 pendingStart = true
             }
@@ -839,7 +872,7 @@ internal class GoatCoreMediaPlayer(
             }
             // O ecrã trocou de vista (acontece logo ao abrir): o descodificador da superfície antiga ficava parado (os do
             // Android só descodificam para uma superfície que alguém mostra), por isso recomeça-se na nova.
-            if (pendingStart) start()
+            if (pendingStart) start() else videoBack()
         }
         return Futures.immediateVoidFuture()
     }
@@ -847,7 +880,7 @@ internal class GoatCoreMediaPlayer(
     override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> {
         if (videoOutput == null || videoOutput == surfaceView || videoOutput == textureView) {
             // Parar antes de largar a Surface da TextureView (o descodificador ainda desenha nela). Uma rádio continua.
-            if (core != null && !audioOnly) {
+            if (core != null && !audioOnly && !soundOnly()) {
                 stopCore()
                 pendingStart = true
             }

@@ -142,6 +142,11 @@ object ItvIcons {
         icon("Pip", "M19,7h-8v6h8L19,7zM21,3L3,3c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,1.98 2,1.98h18c1.1,0 2,-0.88 2,-1.98L23,5c0,-1.1 -0.9,-2 -2,-2zM21,19.01L3,19.01L3,4.98h18v14.03z")
     }
 
+    /** Ouvir em segundo plano (só o som). */
+    val Headset: ImageVector by lazy {
+        icon("Headset", "M12,1c-4.97,0 -9,4.03 -9,9v7c0,1.66 1.34,3 3,3h3v-8H5v-2c0,-3.87 3.13,-7 7,-7s7,3.13 7,7v2h-4v8h3c1.66,0 3,-1.34 3,-3v-7c0,-4.97 -4.03,-9 -9,-9z")
+    }
+
     /** Ecrã dividido. */
     val Split: ImageVector by lazy {
         icon("Split", "M10,18h5V5h-5v13zm-6,0h5V5H4v13zM16,5v13h5V5h-5z")

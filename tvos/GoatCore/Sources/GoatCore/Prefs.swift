@@ -47,6 +47,9 @@ public struct Prefs: Equatable, Sendable {
     public var mobileDataQuality = "auto"
     /// Parar se ninguém estiver a ver: "off", "2h", "4h" ou "6h" sem comandos (ver GoatShared.IdleWatch).
     public var idleStop = "off"
+    /// iPhone: com a app em segundo plano ou o ecrã bloqueado, qualquer canal continua só com o som (a imagem pára, a
+    /// ligação fica). No Apple TV não se aplica.
+    public var backgroundAudio = false
     /// Desentrelaçar no VLC (só tvOS): "yadif2x", "yadif" ou "off".
     public var deinterlace = "yadif2x"
     /// Passthrough de áudio (Dolby/DTS para o recetor ou a TV).
@@ -307,6 +310,7 @@ public struct Prefs: Equatable, Sendable {
         hlsQuality = p.hlsQuality
         mobileDataQuality = p.mobileDataQuality
         idleStop = p.idleStop
+        backgroundAudio = p.backgroundAudio
         deinterlace = p.deinterlace
         audioPassthrough = p.audioPassthrough
         freezeFrame = p.freezeFrame

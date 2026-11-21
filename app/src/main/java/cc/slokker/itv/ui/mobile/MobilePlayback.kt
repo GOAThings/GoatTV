@@ -74,6 +74,14 @@ internal class MobilePlayback(val core: ChannelPlayback, viewState: MutableState
     var radio by mutableStateOf(false)
         internal set
 
+    /**
+     * "Ouvir em segundo plano" (Prefs.backgroundAudio, ou o escolhido no leitor só nesta sessão): com a app em segundo
+     * plano ou o ecrã bloqueado, um canal com imagem continua só com o som (só no GoatCore, que larga a imagem sem
+     * largar a ligação).
+     */
+    var backgroundAudio by mutableStateOf(false)
+        internal set
+
     /** O programa a dar (o guia, ou o do catch-up), para a rádio e a sessão de media. */
     var programme by mutableStateOf<String?>(null)
         internal set
@@ -165,16 +173,23 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
     // Um canal só de som (uma rádio): o ecrã da rádio, e o som continua em segundo plano (com a notificação de media).
     playback.radio = rememberIsRadio(player, channel, data.categoryName(channel.categoryId))
+    // Ouvir em segundo plano: qualquer canal continua só com o som, como a rádio; a imagem pára (ver GoatCoreMediaPlayer).
+    val sessionAudio by vm.backgroundAudioSession.collectAsStateWithLifecycle()
+    playback.backgroundAudio = (sessionAudio ?: prefs.backgroundAudio) && player is GoatCoreMediaPlayer
+    LaunchedEffect(player, playback.backgroundAudio) { (player as? GoatCoreMediaPlayer)?.backgroundAudio = playback.backgroundAudio }
     val now = rememberNow()
     val epg = rememberEpg(channel, vm::cachedEpg, vm::epgFor)
     playback.programme = catchup?.title ?: epg.at(now)?.title
     // A sessão de media: os botões do auricular e do relógio, o Assistente, e na rádio a notificação (ver RadioService).
     // A pausa é a do ecrã (a do direto ou a do catch-up); sem pausa do direto, pára o stream e "continuar" volta ao direto.
+    // Com a app em segundo plano, a pausa não serve (ninguém a vê e a ligação ficava aberta): pára o stream e liberta-a.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     PlayerMediaSession(
         player,
         SessionInfo(channel.key, channel.name, playback.programme, LocalChannelLogos.current[channel.key] ?: channel.logo, playback.radio),
         object : SessionControls {
-            override val canPause: Boolean get() = catchup != null || playback.timeshift.available
+            override val canPause: Boolean
+                get() = (catchup != null || playback.timeshift.available) && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
 
             override fun play() = if (catchup == null) playback.timeshift.resume(player) else player.play()
 
@@ -190,11 +205,13 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
 
             override fun onCommand() = vm.idleWatchAgain()
         },
-        keepInBackground = playback.radio && active && playback.failure == null,
+        keepInBackground = (playback.radio || playback.backgroundAudio) && active && playback.failure == null,
         // Ninguém a ver (definição idle_stop): larga a ligação já, mesmo com o ecrã bloqueado (e a rádio sai da notificação).
         registerIdleStop = { stopSession -> vm.onIdleStop = stopSession?.let { stop -> { core.stop(); stop() } } },
     )
     val latestRadio by rememberUpdatedState(playback.radio && active)
+    val latestBackground by rememberUpdatedState(playback.backgroundAudio && active)
+    val main = androidx.compose.ui.platform.LocalContext.current as? cc.slokker.itv.MainActivity
 
     LifecycleStartEffect(core) {
         if (latestActive && vm.idlePhase.value != IdleWatch.STOPPED) {
@@ -202,8 +219,10 @@ internal fun rememberMobilePlayback(vm: AppViewModel, channel: Channel, data: Pl
             vm.onPlayerVisible(true)
         }
         onStopOrDispose {
-            // A rádio continua com a app em segundo plano ou o ecrã bloqueado (a notificação de media fica).
-            if (latestRadio && lifecycle.currentState != androidx.lifecycle.Lifecycle.State.DESTROYED) {
+            // A rádio continua com a app em segundo plano ou o ecrã bloqueado (a notificação de media fica). Com "Ouvir em
+            // segundo plano", qualquer canal, só com o som; mas fechar a janela pequena pára (a janela pequena ganha).
+            val keep = latestRadio || (latestBackground && main?.pipClosing != true)
+            if (keep && lifecycle.currentState != androidx.lifecycle.Lifecycle.State.DESTROYED) {
                 vm.flushLastChannel()
                 return@onStopOrDispose
             }

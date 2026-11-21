@@ -309,6 +309,12 @@ final class GoatCorePlayback: NSObject {
     /// Cortar as barras pretas (Prefs.autoCrop; ver BlackBarDetector e GoatCoreView.activeArea). Só na imagem principal;
     /// vale no canal seguinte.
     var autoCrop = false
+    /// Só o som ("Ouvir em segundo plano" no iPhone em segundo plano; Prefs.backgroundAudio): a ligação e o som
+    /// continuam, o vídeo não se descodifica nem vai para a camada; ao voltar, a imagem volta na imagem-chave do momento.
+    /// Fica para os canais seguintes (o seguinte no ecrã bloqueado também abre só com o som).
+    var videoOff = false {
+        didSet { if videoOff != oldValue { session?.setVideoOff(videoOff) } }
+    }
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem"); nil se não houver vídeo. A resposta vem
     /// noutra thread.
@@ -377,6 +383,7 @@ final class GoatCorePlayback: NSObject {
             Task { @MainActor in self?.sessionEvent(event, generation: g) }
         }
         session = s
+        if videoOff { s.setVideoOff(true) }
         s.start(url, headers: headers, startMs: startMs, hls: hls)
     }
 
@@ -1011,6 +1018,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
             self.heldTimer?.cancel()
             self.heldTimer = nil
             self.held = []
+            self.parked = []
             try? self.file?.close()
             self.file = nil
             self.hls?.stop()
@@ -1108,6 +1116,89 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         onEvent?(.failed(why))
     }
 
+    // MARK: Só o som
+
+    /// O vídeo que chega sem imagem, pelo caminho por onde ia (ver [park]).
+    private enum ParkedVideo {
+        case compressed(CMSampleBuffer)
+        case interlaced(CMSampleBuffer, bottomFirst: Bool, progressive: Bool)
+        case coded(CodedVideo)
+
+        var pts: CMTime {
+            switch self {
+            case .compressed(let b), .interlaced(let b, _, _): CMSampleBufferGetPresentationTimeStamp(b)
+            case .coded(let v): CMTime(value: v.pts, timescale: 90_000)
+            }
+        }
+
+        var isKey: Bool {
+            switch self {
+            case .compressed(let b), .interlaced(let b, _, _): StreamSession.isSync(b)
+            case .coded(let v): v.keyframe
+            }
+        }
+    }
+
+    /// Ver GoatCorePlayback.videoOff (só na fila).
+    private var videoOff = false
+    /// Sem imagem: o vídeo desde a última imagem-chave que já passou no relógio (para a imagem voltar logo, sem esperar
+    /// pela seguinte nem pelo que está à frente); o anterior sai.
+    private var parked: [ParkedVideo] = []
+    private static let maxParked = 1_500
+
+    func setVideoOff(_ off: Bool) {
+        queue.async { self.applyVideoOff(off) }
+    }
+
+    private func applyVideoOff(_ off: Bool) {
+        guard off != videoOff, !closed else { return }
+        videoOff = off
+        DebugLog.add(off ? "GoatCore: video off (sound only)" : "GoatCore: video on")
+        // Em qualquer dos sentidos, o que a camada e os descodificadores tinham já não serve.
+        held = []
+        heldLast = .invalid
+        heldTimer?.cancel()
+        heldTimer = nil
+        interlaced?.reset()
+        software?.reset()
+        display.flush()
+        recentVideo.removeAll()
+        if off { return }
+        // A imagem volta: o que ficou desde a imagem-chave do momento entra pelo caminho de sempre.
+        let list = parked
+        parked = []
+        waitSync = false
+        for v in list {
+            switch v {
+            case .compressed(let b): compressedVideo(b)
+            case .interlaced(let b, let bottomFirst, let progressive): interlacedVideo(b, bottomFirst: bottomFirst, progressive: progressive)
+            case .coded(let c): codedVideo(c)
+            }
+        }
+    }
+
+    /// Guarda [v] enquanto não há imagem (ver [parked]).
+    private func park(_ v: ParkedVideo) {
+        guard !closed else { return }
+        let pts = v.pts
+        if pts.isValid, !lastVideo.isValid || pts > lastVideo { lastVideo = pts }
+        if v.isKey, !parked.isEmpty {
+            let now = synchronizer.currentTime()
+            if now.isValid, let cut = parked.lastIndex(where: { $0.isKey && $0.pts.isValid && $0.pts <= now }), cut > 0 {
+                parked.removeFirst(cut)
+            }
+        }
+        parked.append(v)
+        // Demais (um relógio que saltou, um canal sem imagens-chave): sai o mais antigo, até à imagem-chave seguinte.
+        if parked.count > Self.maxParked {
+            if let next = parked.dropFirst().firstIndex(where: { $0.isKey }) {
+                parked.removeFirst(next)
+            } else {
+                parked.removeFirst(parked.count - Self.maxParked)
+            }
+        }
+    }
+
     // MARK: Amostras e relógio
 
     private var closed: Bool { cancelled || stopped.withLock { $0 } }
@@ -1167,6 +1258,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     /// O vídeo comprimido, direto para a camada. Se até aqui passava pela GPU (os ajustes voltaram ao 0), primeiro
     /// saem as imagens que lá estavam à espera.
     private func compressedVideo(_ b: CMSampleBuffer) {
+        if videoOff { return park(.compressed(b)) }
         if processing {
             probeLock.withLock {
                 $0.deinterlacing = false
@@ -1182,6 +1274,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
 
     private func interlacedVideo(_ b: CMSampleBuffer, bottomFirst: Bool, progressive: Bool) {
         guard !closed else { return }
+        if videoOff { return park(.interlaced(b, bottomFirst: bottomFirst, progressive: progressive)) }
         // Com o aumento, à espera da hora (ver [held]); o relógio ainda parado (a primeira imagem) não espera.
         if upscaler != nil, !interlacedFailed {
             processing = true
@@ -1253,6 +1346,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
 
     private func codedVideo(_ v: CodedVideo) {
         guard !closed, !softwareFailed else { return }
+        if videoOff { return park(.coded(v)) }
         if software == nil {
             software = SoftwareVideo(deinterlace: deinterlace)
             if software == nil {
@@ -1344,7 +1438,7 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         }
     }
 
-    private static func isSync(_ b: CMSampleBuffer) -> Bool {
+    fileprivate static func isSync(_ b: CMSampleBuffer) -> Bool {
         guard let a = CMSampleBufferGetSampleAttachmentsArray(b, createIfNecessary: false) as? [[CFString: Any]], let first = a.first else { return true }
         return (first[kCMSampleAttachmentKey_NotSync] as? Bool) != true
     }
@@ -1377,8 +1471,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         zapMark("audio")
         let pts = CMSampleBufferGetPresentationTimeStamp(b)
         if pts.isValid, !lastAudio.isValid || pts > lastAudio { lastAudio = pts }
-        // Um canal só de som (rádio): o relógio começa no primeiro som.
-        if startTime == nil, !hasVideo, pts.isValid { begin(at: pts) }
+        // Um canal só de som (rádio), ou aberto sem imagem: o relógio começa no primeiro som.
+        if startTime == nil, !hasVideo || videoOff, pts.isValid { begin(at: pts) }
     }
 
     /// O som com o atraso pedido nas definições: o mesmo bloco com o tempo dele mais [audioDelay] (o relógio é o
@@ -1420,7 +1514,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         guard running, !cancelled else { return }
         let now = synchronizer.currentTime()
         // O vídeo à espera do aumento (ver [held]) conta como já estando no leitor.
-        let ahead = hasVideo ? (heldLast.isValid && (!lastVideo.isValid || heldLast > lastVideo) ? heldLast : lastVideo) : lastAudio
+        // Sem imagem, conta o som (o vídeo à espera em [parked] não está no leitor).
+        let ahead = hasVideo && !videoOff ? (heldLast.isValid && (!lastVideo.isValid || heldLast > lastVideo) ? heldLast : lastVideo) : lastAudio
         guard ahead.isValid, now.isValid else { return }
         let lead = (ahead - now).seconds
         let concealed = pipeline.concealedFrames
