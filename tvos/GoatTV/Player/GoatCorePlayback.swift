@@ -674,6 +674,16 @@ struct ProbeCounters: Sendable {
     var upscaling = false
     /// As imagens que não se mostraram depois de faltarem dados (ver ErrorConcealment).
     var concealed = 0
+    /// Para o FreezeWatch (ver PlayerEngine): até onde já se mostrou o vídeo e se tocou o som (ms no relógio do leitor;
+    /// o relógio, ou o último que chegou, se ficou para trás; -1 = ainda nada), as amostras que o demuxer tirou, se está
+    /// a esconder uma falha de dados, se o relógio parou à espera de dados, e as faixas que o canal tem.
+    var videoShownMs: Int64 = -1
+    var audioPlayedMs: Int64 = -1
+    var samples: Int64 = 0
+    var concealing = false
+    var waiting = false
+    var hasVideo = false
+    var hasAudio = false
 
     static func nowMs() -> Int64 { Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000) }
 }
@@ -1424,9 +1434,29 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         guard ahead.isValid, now.isValid else { return }
         let lead = (ahead - now).seconds
         let concealed = pipeline.concealedFrames
+        // Até onde chegou o que se vê e o que se ouve: o relógio, ou o último que chegou se esse ficou para trás.
+        func reached(_ last: CMTime) -> Int64 {
+            guard last.isValid else { return -1 }
+            let t = (now > last ? last : now).seconds
+            return t.isFinite ? Int64(t * 1000) : -1
+        }
+        let shown = hasVideo ? reached(ahead) : -1
+        let played = reached(lastAudio)
+        let samples = pipeline.samples
+        let concealing = pipeline.concealing
+        let waiting = stalled
+        let video = hasVideo
+        let sound = hasAudio
         probeLock.withLock {
             if lead.isFinite { $0.bufferMs = Int64(max(0, lead) * 1000) }
             $0.concealed = concealed
+            $0.videoShownMs = shown
+            $0.audioPlayedMs = played
+            $0.samples = samples
+            $0.concealing = concealing
+            $0.waiting = waiting
+            $0.hasVideo = video
+            $0.hasAudio = sound
         }
         // Muito à frente: para de ler (a ligação fica à espera, como as filas do Android); retoma a meio.
         if !suspended, lead > Self.maxAheadSeconds {

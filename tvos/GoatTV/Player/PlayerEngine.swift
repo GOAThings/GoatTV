@@ -252,6 +252,11 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored private var stallTask: Task<Void, Never>?
     /// As vezes que o direto deste canal ficou preso (à segunda em pouco tempo, vai-se aos failovers).
     @ObservationIgnored private let stalls = StallCounter()
+    /// O canal "congelado" com a ligação a dar (ver [watchFreeze]) e as vezes que congelou (à segunda em pouco tempo,
+    /// como as paragens, vai-se aos failovers).
+    @ObservationIgnored private let freezeWatch = FreezeWatch()
+    @ObservationIgnored private let freezes = StallCounter()
+    @ObservationIgnored private var freezeTask: Task<Void, Never>?
     /// Quando a ligação do canal caiu (uptime, ms), no último minuto (ver [dropped]).
     @ObservationIgnored private var drops: [Int64] = []
     static let dropWindowMs: Int64 = 60_000
@@ -505,6 +510,7 @@ final class PlayerEngine: NSObject {
             manualSubtitle = nil
             sessionReconnects = 0
             stalls.clear()
+            freezes.clear()
             streamAudioOnly = nil
         }
         drops.removeAll()
@@ -696,6 +702,7 @@ final class PlayerEngine: NSObject {
 
     private func stopBackends() {
         stallTask?.cancel()
+        freezeTask?.cancel()
         criteriaTask?.cancel()
         openTask?.cancel()
         timeshiftTicker?.cancel()
@@ -918,6 +925,51 @@ final class PlayerEngine: NSObject {
         recordDrop(keepWatching: false)
         let failover = stalls.stalled(nowMs: Self.uptimeMs(), failoverAllowed: openedLive && !onBackup && onStartFailed != nil)
         DebugLog.add("Player: live stuck for \(Int(PlaybackRules.stallSeconds)) s (\(failover ? "failovers" : "reconnecting"))")
+        recover(failover: failover)
+    }
+
+    /// O direto no GoatCore, de segundo a segundo: os contadores dele para o FreezeWatch (a imagem ou o som parados com
+    /// a ligação a dar, bytes sem nada que se descodifique, a playlist do HLS parada). Como no Android: nunca em pausa,
+    /// atrás do direto no anel, a esconder uma falha de dados, nem fora do "a dar" (a abrir, à espera de voltar a ligar).
+    private func watchFreeze() {
+        freezeTask?.cancel()
+        freezeWatch.reset()
+        guard openedLive, backend == .goatcore else { return }
+        freezeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let self, self.state == .playing, self.openedLive, self.backend == .goatcore,
+                      let g = self.goatCorePlayback else { return }
+                let c = g.probe
+                let now = ProbeCounters.nowMs()
+                // A playlist só conta num HLS do leitor principal (o HlsReader dele, a ler diretamente ou pelo anel).
+                let hls = self.controlsDisplay && self.attempts.indices.contains(self.index) && self.attempts[self.index].candidate.isHLS
+                let kind = self.freezeWatch.tick(
+                    nowMs: now, videoFrames: -1, videoPtsMs: c.videoShownMs, audioFrames: c.audioPlayedMs, bytes: c.bytes,
+                    samples: c.samples, hasVideo: c.hasVideo && self.streamAudioOnly != true, hasAudio: c.hasAudio,
+                    hold: self.paused || !self.timeshift.atLive || c.concealing, buffering: c.waiting,
+                    playlistStuckMs: hls ? FreezeWatch.playlistStuckMs(now) : -1, playlistTargetMs: FreezeWatch.playlistTargetMs)
+                if kind != .none {
+                    self.frozeUp(kind)
+                    return
+                }
+            }
+        }
+    }
+
+    /// Congelou com a ligação a dar: volta a ligar à mesma fonte; se voltar a congelar pouco depois, os failovers (conta
+    /// como uma queda da fonte, como as paragens).
+    private func frozeUp(_ kind: FreezeWatch.Kind) {
+        // A paragem que esteja a contar não volta a ligar outra vez.
+        stallTask?.cancel()
+        recordDrop(keepWatching: false)
+        let failover = freezes.stalled(nowMs: Self.uptimeMs(), failoverAllowed: openedLive && !onBackup && onStartFailed != nil)
+        DebugLog.add("GoatFreeze: \(FreezeWatch.label(kind)) (\(failover ? "failovers" : "reconnecting"))")
+        recover(failover: failover)
+    }
+
+    /// Preso ou congelado: volta a ligar, ou ([failover]) procura os failovers do canal.
+    private func recover(failover: Bool) {
         if failover, let ask = onStartFailed {
             stopBackends()
             backupAsked = true
@@ -1038,6 +1090,7 @@ final class PlayerEngine: NSObject {
         watchdog?.cancel()
         state = .playing
         watchProgress()
+        watchFreeze()
         // A fonte abriu (uma vez por abertura; as religações depois de cair não contam) e passa-se a contar o tempo visto.
         if openedLive, let key = openedSource {
             if !wasPlaying { onSourceOpened?(key, true) }
