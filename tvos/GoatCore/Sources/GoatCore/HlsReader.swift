@@ -43,6 +43,8 @@ public final class HlsReader: @unchecked Sendable {
     private let headers: [String: String]
     private let session: URLSession
     private let stopped = OSAllocatedUnfairLock(initialState: false)
+    /// O canal principal: se a playlist do direto deixa de avançar (ver FreezeWatch, o PLAYLIST); posta em [start].
+    private var liveCheck: GoatShared.HlsLiveCheck?
 
     public init(url: URL, headers: [String: String]) {
         self.url = url
@@ -55,11 +57,17 @@ public final class HlsReader: @unchecked Sendable {
     }
 
     public func start() {
+        if primary {
+            let check = GoatShared.HlsLiveCheck()
+            liveCheck = check
+            GoatShared.HlsLiveStall.shared.current = check
+        }
         DispatchQueue.global(qos: .userInitiated).async { self.run() }
     }
 
     public func stop() {
         HlsQualityControl.shared.closed(owner: self)
+        if let check = liveCheck { GoatShared.HlsLiveStall.shared.release(check: check) }
         stopped.withLock { $0 = true }
         session.invalidateAndCancel()
     }
@@ -313,10 +321,16 @@ public final class HlsReader: @unchecked Sendable {
                 lane.nextSequence = segments[max(0, segments.count - 3)].sequence
             }
         }
+        let before = lane.pending.count
         for s in segments where s.sequence >= lane.nextSequence && !lane.pending.contains(where: { $0.sequence == s.sequence }) {
             lane.pending.append(s)
         }
         lane.lastReload = Date()
+        if lane.main, let check = liveCheck {
+            // O relógio é o do FreezeWatch (o uptime, em ms).
+            check.reloaded(nowMs: Int64(DispatchTime.now().uptimeNanoseconds / 1_000_000), added: Int32(lane.pending.count - before),
+                           targetMs: lane.targetMs, live: !lane.ended)
+        }
     }
 
     /// Por onde começar: num VOD o do ponto pedido; num direto três antes do fim (o áudio, à mesma distância).

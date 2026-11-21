@@ -19,6 +19,8 @@ import cc.slokker.itv.media.HlsRendition
 import cc.slokker.itv.media.HlsRange
 import cc.slokker.itv.media.HlsSegment
 import cc.slokker.itv.media.HlsVariant
+import cc.slokker.itv.playback.HlsLiveCheck
+import cc.slokker.itv.playback.HlsLiveStall
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -71,6 +73,9 @@ class HlsInputStream(
     private var subtitles: List<Lane> = emptyList()
     private var merger: HlsMerger? = null
     private val merged = ByteArrayOutputStream()
+
+    /** O canal principal: se a playlist do direto deixa de avançar (ver FreezeWatch, o PLAYLIST). */
+    private val liveCheck = if (primary) HlsLiveCheck().also { HlsLiveStall.current = it } else null
 
     private fun fetchBytes(u: String): ByteArray =
         DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { it.readBytes() }
@@ -167,8 +172,10 @@ class HlsInputStream(
                     nextSequence = segments[(segments.size - 3).coerceAtLeast(0)].sequence
                 }
             }
+            val before = pending.size
             for (s in segments) if (s.sequence >= nextSequence && pending.none { it.sequence == s.sequence }) pending.addLast(s)
             lastReload = SystemClock.elapsedRealtime()
+            if (main) liveCheck?.reloaded(lastReload, pending.size - before, targetMs, live = !ended)
         }
 
         /** Por onde começar: num VOD o do ponto pedido; num direto três antes do fim (o áudio, à mesma distância). */
@@ -361,6 +368,7 @@ class HlsInputStream(
 
     override fun close() {
         HlsQualityControl.closed(this)
+        liveCheck?.let(HlsLiveStall::release)
         runCatching { current?.close() }
         current = null
     }

@@ -172,6 +172,8 @@ class GoatCorePlayer(
         @Volatile var concealed = 0
         /** Os bytes que chegaram do stream (a rede, o HLS ou o anel da pausa): o débito de "Informação do stream". */
         @Volatile var bytesRead = 0L
+        /** As amostras do vídeo e do som escolhido que o demuxer tirou (ver FreezeWatch: bytes sem nada que se descodifique). */
+        @Volatile var samples = 0L
     }
 
     val stats = Stats()
@@ -324,6 +326,12 @@ class GoatCorePlayer(
 
     /** Imagens que não foram para o descodificador por faltarem dados (para o painel das estatísticas). */
     val concealedFrames: Int get() = stats.concealed
+
+    /** A esconder uma falha de dados agora (a última imagem fica): o FreezeWatch não julga a imagem parada. */
+    val concealing: Boolean get() = conceal.concealing
+
+    /** O tempo (ms) da última imagem mostrada, ou -1 antes da primeira (ver FreezeWatch). */
+    val shownPtsMs: Long get() = lastShownPtsUs.let { if (it == Long.MIN_VALUE) -1L else it / 1000 }
 
     /** Os conjuntos de parâmetros da última imagem-chave (Annex B), para configurar o descodificador. */
     @Volatile private var csd: List<ByteArray> = emptyList()
@@ -602,6 +610,7 @@ class GoatCorePlayer(
             recent.addLast(sample)
             if (recent.size > RECENT_TEXT) recent.removeFirst()
         }
+        if (track.pid == videoPid || track.pid == audioPid) stats.samples++
         when (track.pid) {
             videoPid -> video(sample)
             textPid -> text(sample)

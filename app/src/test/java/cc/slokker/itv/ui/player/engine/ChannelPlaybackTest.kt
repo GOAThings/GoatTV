@@ -83,6 +83,19 @@ class ChannelPlaybackTest {
         }
         override fun tick(programmeStart: (Long) -> Long?) = Unit
         override fun sampleNet() = Unit
+
+        // O FreezeWatch: cada leitura é um segundo de um canal a dar (a imagem só com [videoOn]).
+        var freezing = false
+        var videoOn = true
+        private var seconds = 0L
+        private var frames = 0L
+        override val watchesFreeze get() = freezing
+        override fun freezeSample(): FreezeSample {
+            seconds++
+            if (videoOn) frames += 25
+            return FreezeSample(frames, frames * 40, seconds * 47, seconds * 250_000, seconds * 72, hasVideo = true, hasAudio = true,
+                concealing = false, paused = false, playlistStuckMs = -1L, playlistTargetMs = 6_000L)
+        }
     }
 
     private class FakeHost : PlaybackHost {
@@ -292,6 +305,43 @@ class ChannelPlaybackTest {
         time.advance(12_000)
         assertEquals(listOf(ts, ts, backupTs), engine.opened)
         assertEquals("Reserva", p.onBackup?.backupName)
+    }
+
+    @Test
+    fun aImagemCongeladaVoltaALigarEDepoisVaiAoFailover() {
+        host.backup = backupStream()
+        val e = FakeEngine().also { it.freezing = true }
+        val p = playback(e = e)
+        p.tuneNow(live())
+        p.onState(e, Player.STATE_READY)
+        time.advance(15_000)
+        assertEquals(listOf(ts), e.opened)
+        // A imagem pára com o som a dar: ao fim de 6 s volta a ligar à mesma fonte (com a espera mínima).
+        e.videoOn = false
+        time.advance(6_000)
+        assertEquals(1, p.reconnects)
+        time.advance(1_000)
+        assertEquals(listOf(ts, ts), e.opened)
+        e.videoOn = true
+        p.onState(e, Player.STATE_READY)
+        time.advance(12_000)
+        assertEquals(listOf(ts, ts), e.opened)
+        // Congela outra vez pouco depois: vai ao failover.
+        e.videoOn = false
+        time.advance(7_000)
+        assertEquals(listOf(ts, ts, backupTs), e.opened)
+        assertEquals("Reserva", p.onBackup?.backupName)
+    }
+
+    @Test
+    fun umCanalBomNuncaCongela() {
+        val e = FakeEngine().also { it.freezing = true }
+        val p = playback(e = e)
+        p.tuneNow(live())
+        p.onState(e, Player.STATE_READY)
+        time.advance(600_000)
+        assertEquals(listOf(ts), e.opened)
+        assertEquals(0, p.reconnects)
     }
 
     @Test

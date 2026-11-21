@@ -155,6 +155,29 @@ internal class GoatCoreMediaPlayer(
     internal val streamInfo: VideoInfo? get() = videoInfo
     /** Os números do motor agora, para "Informação do stream"; null sem motor a dar. */
     internal fun coreSnapshot(): cc.slokker.itv.ui.player.goatcore.GoatCoreSnapshot? = core?.snapshot()
+
+    /**
+     * Os contadores do motor agora, para o FreezeWatch (ver ChannelPlayback): as imagens mostradas e o tempo da última,
+     * o som, os bytes e as amostras. A playlist do HLS em direto só no canal principal (é o leitor dele que a mede).
+     * null sem motor a dar.
+     */
+    internal fun freezeSample(): cc.slokker.itv.ui.player.engine.FreezeSample? {
+        val c = core ?: return null
+        val s = c.stats
+        return cc.slokker.itv.ui.player.engine.FreezeSample(
+            videoFrames = s.framesRendered.toLong(),
+            videoPtsMs = c.shownPtsMs,
+            audioFrames = s.audioFrames.toLong(),
+            bytes = s.bytesRead,
+            samples = s.samples,
+            hasVideo = c.hasVideo && !audioOnly,
+            hasAudio = c.selectedAudio >= 0,
+            concealing = c.concealing,
+            paused = !playWhenReady,
+            playlistStuckMs = if (primary) cc.slokker.itv.playback.HlsLiveStall.stuckMs(android.os.SystemClock.elapsedRealtime()) else -1L,
+            playlistTargetMs = cc.slokker.itv.playback.HlsLiveStall.targetMs(),
+        )
+    }
     @Volatile internal var firstFrameMs = -1L
     private var generation = 0
 

@@ -164,6 +164,10 @@ public final class MediaPipeline {
     private let conceal = ErrorConcealment(capTicks: ErrorConcealment.companion.CAP_TICKS)
     /// Imagens que não foram para o descodificador por faltarem dados (para o painel das estatísticas).
     public var concealedFrames: Int { Int(conceal.dropped) }
+    /// A esconder uma falha de dados agora (a última imagem fica): o FreezeWatch não julga a imagem parada.
+    public var concealing: Bool { conceal.concealing }
+    /// As amostras do vídeo e do som escolhido que o demuxer tirou (ver FreezeWatch: bytes sem nada que se descodifique).
+    public private(set) var samples: Int64 = 0
     private var audio: AudioFrameReader?
     private var audioReaderPid: Int?
     private var audioFormat: CMAudioFormatDescription?
@@ -342,8 +346,10 @@ public final class MediaPipeline {
             return
         }
         if pid == videoPid {
+            samples += 1
             video(sample)
         } else if pid == (audioPid ?? tracks.first { $0.kind == .audio }?.pid) {
+            samples += 1
             audio(track, sample)
         }
     }

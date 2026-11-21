@@ -560,6 +560,21 @@ enum CoreTests {
         try expect(idle.phase == .prompt, true)
         idle.tick(1 + 7_200_000 + 60_000, limitMs: 7_200_000, active: true)
         try expect(idle.phase == .stopped, true)
+        // O canal congelado (as regras do núcleo partilhado): a imagem pára aos 15 s com o som a dar, congela 6 s depois.
+        let freeze = FreezeWatch()
+        var frozenAt = 0
+        var frozen = FreezeWatch.Kind.none
+        for s in 1...30 {
+            let t = Int64(s) * 1000
+            let kind = freeze.tick(nowMs: t, videoFrames: -1, videoPtsMs: s <= 15 ? t : 15_000, audioFrames: t, bytes: t * 100, samples: t,
+                                   hasVideo: true, hasAudio: true, hold: false, buffering: false, playlistStuckMs: -1, playlistTargetMs: 6_000)
+            if kind != .none, frozen == .none {
+                frozen = kind
+                frozenAt = s
+            }
+        }
+        try expect(frozen == .video, true)
+        try expect(frozenAt, 21)
         try expect(AudioNames.labels([AudioNameInput(language: "Português", role: 0, channels: 6, codec: "AC-3")],
                                      words: AudioNameWords(original: "Original", audioDescription: "Audio description", hearingImpaired: "HI",
                                                            cleanEffects: "FX", mono: "Mono", stereo: "Stereo", audioN: "Audio %d")),
