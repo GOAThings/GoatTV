@@ -1028,4 +1028,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">बैकग्राउंड में सुनें</string>
     <string name="background_audio_sub">ऐप बैकग्राउंड में हो या स्क्रीन लॉक हो, तब चैनल केवल आवाज़ के साथ चलता रहता है, सूचना में चैनल और कार्यक्रम दिखते हैं। ऐप खोलने पर तस्वीर लौट आती है</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">टेलीटेक्स्ट</string>
+    <string name="teletext_waiting">पेज %1$s का इंतज़ार</string>
+    <string name="teletext_transparent">पारदर्शी बैकग्राउंड</string>
+    <string name="teletext_reveal">दिखाएँ</string>
+    <string name="teletext_page">पेज</string>
+    <string name="teletext_subpage">सब-पेज</string>
+    <string name="teletext_hint_tv">OK: कीपैड · ▲▼ पेज · ◀▶ सब-पेज</string>
 </resources>

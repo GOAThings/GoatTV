@@ -765,6 +765,12 @@ struct SettingsPanel: View {
                 .nav("subs", s.t("Subtitles", "Legendas"), value: trackName(player.subtitleTracks, player.currentSubtitle), to: .subtitles),
                 pickItem("aspect"),
                 .nav("info", s.t("Stream info", "Informação do stream"), subtitle: s.r("stats_info_sub"), to: .streamInfo),
+            ]
+            // O teletexto do canal (só quando o tem, e não só legendas): abre por cima do vídeo, as Definições fecham.
+            if player.teletextPages?.available == true {
+                list.append(.action("teletext", s.r("teletext")) { model.teletextRequest += 1 })
+            }
+            list += [
                 .action("probe", s.r("probe_test_channel"), subtitle: s.r("probe_test_channel_sub")) {
                     channelProbe.clear()
                     channelProbe.start(model.player, interlacedWord: s.r("probe_interlaced"), hdrWord: s.r("probe_hdr"))

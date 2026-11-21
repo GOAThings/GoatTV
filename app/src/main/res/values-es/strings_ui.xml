@@ -1030,4 +1030,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">Escuchar en segundo plano</string>
     <string name="background_audio_sub">Con la app en segundo plano o la pantalla bloqueada, el canal sigue sonando solo con el audio, con el canal y el programa en la notificación. La imagen vuelve al abrir la app</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teletexto</string>
+    <string name="teletext_waiting">Esperando la página %1$s</string>
+    <string name="teletext_transparent">Fondo transparente</string>
+    <string name="teletext_reveal">Revelar</string>
+    <string name="teletext_page">Página</string>
+    <string name="teletext_subpage">Subpágina</string>
+    <string name="teletext_hint_tv">OK: teclado · ▲▼ páginas · ◀▶ subpáginas</string>
 </resources>

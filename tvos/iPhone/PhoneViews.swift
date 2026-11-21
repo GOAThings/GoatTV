@@ -1098,7 +1098,7 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, aspect, quality, backup, sleep, background, sendTv, info, test
+    case audio, subtitles, aspect, quality, backup, sleep, background, sendTv, info, teletext, test
 
     var id: String { rawValue }
     var symbol: String {
@@ -1112,6 +1112,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .background: "headphones"
         case .sendTv: "tv"
         case .info: "info.circle"
+        case .teletext: "doc.plaintext"
         case .test: "stethoscope"
         }
     }
@@ -1126,6 +1127,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .background: "background_audio"
         case .sendTv: "send_to_tv"
         case .info: "stream_info"
+        case .teletext: "teletext"
         case .test: "probe_test_channel"
         }
     }
@@ -1136,12 +1138,14 @@ enum PlayerOption: String, CaseIterable, Identifiable {
     }
 
     /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva (ou, no Modo TV Pro, as fontes); a
-    /// qualidade só num HLS com mais de uma; o "Ouvir em segundo plano" não numa rádio (essa já continua).
+    /// qualidade só num HLS com mais de uma; o "Ouvir em segundo plano" não numa rádio (essa já continua); o teletexto
+    /// só num canal que o tem (e não só legendas).
     @MainActor static func shown(_ model: AppModel) -> [PlayerOption] {
         let backup = model.catchup == nil && (model.proMode || model.content.flatMap { model.backupOf($0.playlist.id) } != nil)
         let quality = model.player.hlsQuality.map { !$0.options.isEmpty } ?? false
         let radio = model.isRadio
-        return allCases.filter { ($0 != .backup || backup) && ($0 != .quality || quality) && ($0 != .background || !radio) }
+        let teletext = model.player.teletextPages?.available == true
+        return allCases.filter { ($0 != .backup || backup) && ($0 != .quality || quality) && ($0 != .background || !radio) && ($0 != .teletext || teletext) }
     }
 }
 
@@ -1163,6 +1167,8 @@ struct PlayerOptionsSheet: View {
             PhoneSendToTvSheet()
         } else if option == .info {
             PhoneStreamInfoSheet()
+        } else if option == .teletext {
+            PhoneTeletextSheet(player: player)
         } else if option == .test {
             PhoneChannelTestSheet(player: player)
         } else {
@@ -1221,7 +1227,7 @@ struct PlayerOptionsSheet: View {
                     } else {
                         Text(s.r("no_tracks")).foregroundStyle(Theme.textFaint)
                     }
-                case .backup, .sendTv, .info, .test:
+                case .backup, .sendTv, .info, .teletext, .test:
                     EmptyView()
                 case .background:
                     // Só nesta sessão (até a app fechar); para ficar sempre, nas Definições.

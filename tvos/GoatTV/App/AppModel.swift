@@ -68,6 +68,8 @@ final class AppModel {
     let nowPlaying = NowPlaying()
     /// Parado por um comando do sistema (pausa sem a pausa do direto): "reproduzir" volta ao direto.
     var remoteStopped = false
+    /// Muda quando se pede o teletexto (Canal atual → Teletexto): o ecrã do player abre-o por cima do vídeo.
+    var teletextRequest = 0
     /// Parar se ninguém estiver a ver (idle_stop): a fase da contagem, que o aviso e o ecrã de parado mostram.
     private(set) var idlePhase = IdleWatch.Phase.watching
     /// Os segundos que faltam no aviso "Ainda estás a ver?".

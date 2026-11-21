@@ -92,6 +92,7 @@ import cc.slokker.itv.ui.common.rememberNow
 import cc.slokker.itv.ui.glass.ItvIcons
 import cc.slokker.itv.ui.player.TuningPill
 import cc.slokker.itv.ui.i18n.LocalStrings
+import cc.slokker.itv.ui.player.rememberTeletextAvailable
 import cc.slokker.itv.ui.player.VideoView
 import cc.slokker.itv.ui.player.PictureSaver
 import cc.slokker.itv.ui.player.RadioView
@@ -578,7 +579,8 @@ internal fun VideoArea(
         val backup = catchup == null && vm.content.collectAsStateWithLifecycle().value?.playlist?.id?.let(vm::backupOf) != null
         val quality = hlsQualityShown()
         // Uma rádio já continua em segundo plano: o "Ouvir em segundo plano" é para os canais com imagem.
-        PlayerOption.entries.filter { (it != PlayerOption.BACKUP || backup) && (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) }.forEach { option ->
+        val teletext = rememberTeletextAvailable(playback.player)
+        PlayerOption.entries.filter { (it != PlayerOption.BACKUP || backup) && (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) && (it != PlayerOption.TELETEXT || teletext) }.forEach { option ->
                             ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
@@ -667,7 +669,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), BACKGROUND(ItvIcons.Headset), SEND_TV(ItvIcons.Tv), INFO(ItvIcons.Graph), TEST(ItvIcons.Info) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), BACKGROUND(ItvIcons.Headset), SEND_TV(ItvIcons.Tv), INFO(ItvIcons.Graph), TELETEXT(ItvIcons.Teletext), TEST(ItvIcons.Info) }
 
 /** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
 @Composable
@@ -686,6 +688,7 @@ private fun PlayerOption.label(): String {
         PlayerOption.BACKGROUND -> s.backgroundAudio
         PlayerOption.SEND_TV -> s.sendToTv
         PlayerOption.INFO -> s.streamInfo
+        PlayerOption.TELETEXT -> s.teletext
         PlayerOption.TEST -> s.probeTestChannel
     }
 }
@@ -796,6 +799,8 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                 }
                 PlayerOption.SEND_TV -> SendToTvSection(vm, onSent, onClose)
                 PlayerOption.INFO -> StreamInfoSection(vm, playback.player, option.label())
+                // Abre-se à parte (ver MobileApp), em ecrã inteiro.
+                PlayerOption.TELETEXT -> {}
                 PlayerOption.TEST -> ChannelTestSection(vm, playback.player, option.label())
             }
         }
@@ -843,7 +848,8 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
         }
         val quality = hlsQualityShown()
         val background = playback.backgroundAudio
-        PlayerOption.entries.filter { (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) }.forEach { option ->
+        val teletext = rememberTeletextAvailable(playback.player)
+        PlayerOption.entries.filter { (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) && (it != PlayerOption.TELETEXT || teletext) }.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
             val lit = (option == PlayerOption.SLEEP && sleepAt != null) || (option == PlayerOption.BACKGROUND && background)

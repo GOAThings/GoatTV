@@ -1059,6 +1059,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     internal var mainPlayback: cc.slokker.itv.ui.player.engine.ChannelPlayback? = null
 
+    /** O teletexto está aberto por cima do player da TV (abre-se em Canal atual → Teletexto). */
+    internal val teletextOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     /** O débito a rolar de "Informação do stream" (o painel lê-o de segundo a segundo enquanto está aberto). */
     internal val streamStats = cc.slokker.itv.ui.player.StreamStatsMeter()
 

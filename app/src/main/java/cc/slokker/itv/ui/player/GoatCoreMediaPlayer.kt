@@ -154,6 +154,8 @@ internal class GoatCoreMediaPlayer(
     internal val isHls: Boolean get() = hls
     internal val streamInfo: VideoInfo? get() = videoInfo
     /** Os números do motor agora, para "Informação do stream"; null sem motor a dar. */
+    /** O teletexto do canal a dar (sincronizado nele, ver GoatCorePlayer.teletextPages); null sem motor. */
+    internal val teletextPages: cc.slokker.itv.media.TeletextStore? get() = core?.teletextPages
     internal fun coreSnapshot(): cc.slokker.itv.ui.player.goatcore.GoatCoreSnapshot? = core?.snapshot()
 
     /**

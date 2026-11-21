@@ -1030,4 +1030,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">Écouter en arrière-plan</string>
     <string name="background_audio_sub">Avec l\'app en arrière-plan ou l\'écran verrouillé, la chaîne continue en son seul, avec la chaîne et le programme dans la notification. L\'image revient à l\'ouverture de l\'app</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Télétexte</string>
+    <string name="teletext_waiting">En attente de la page %1$s</string>
+    <string name="teletext_transparent">Fond transparent</string>
+    <string name="teletext_reveal">Révéler</string>
+    <string name="teletext_page">Page</string>
+    <string name="teletext_subpage">Sous-page</string>
+    <string name="teletext_hint_tv">OK : clavier · ▲▼ pages · ◀▶ sous-pages</string>
 </resources>

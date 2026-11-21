@@ -1026,4 +1026,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">Dengarkan di latar belakang</string>
     <string name="background_audio_sub">Saat aplikasi di latar belakang atau layar terkunci, saluran tetap berjalan hanya dengan suara, dengan saluran dan acara di notifikasi. Gambar kembali saat Anda membuka aplikasi</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teleteks</string>
+    <string name="teletext_waiting">Menunggu halaman %1$s</string>
+    <string name="teletext_transparent">Latar transparan</string>
+    <string name="teletext_reveal">Tampilkan</string>
+    <string name="teletext_page">Halaman</string>
+    <string name="teletext_subpage">Subhalaman</string>
+    <string name="teletext_hint_tv">OK: papan angka · ▲▼ halaman · ◀▶ subhalaman</string>
 </resources>

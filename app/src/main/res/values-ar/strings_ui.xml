@@ -1036,4 +1036,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">الاستماع في الخلفية</string>
     <string name="background_audio_sub">عندما يكون التطبيق في الخلفية أو الشاشة مقفلة، تستمر القناة بالصوت فقط، مع اسم القناة والبرنامج في الإشعار. تعود الصورة عند فتح التطبيق</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">تيليتكست</string>
+    <string name="teletext_waiting">بانتظار الصفحة %1$s</string>
+    <string name="teletext_transparent">خلفية شفافة</string>
+    <string name="teletext_reveal">إظهار</string>
+    <string name="teletext_page">الصفحة</string>
+    <string name="teletext_subpage">الصفحة الفرعية</string>
+    <string name="teletext_hint_tv">OK: لوحة الأرقام · ▲▼ الصفحات · ◀▶ الصفحات الفرعية</string>
 </resources>

@@ -303,6 +303,9 @@ private fun currentItems(vm: AppViewModel, player: Player?, playing: Channel?, n
         }
         add(nav.choice(SettingsCatalog.ASPECT, SettingValues(prefs, null), s))
         add(Item.Nav("info", s.streamInfo, subtitle = s.statsInfoSub) { push(Route.StreamInfo, "info") })
+        // O teletexto do canal (só quando o tem, e não só legendas): abre por cima do vídeo e as Definições fecham.
+        val teletext = cc.slokker.itv.ui.player.rememberTeletextAvailable(player)
+        if (teletext) add(Item.Action("teletext", s.teletext) { vm.teletextOpen.value = true })
         val net by vm.net.state.collectAsStateWithLifecycle()
         add(Item.Nav("net", s.connection, s.netShort(net.verdict)) { push(Route.Connection, "net") })
         add(

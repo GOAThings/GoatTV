@@ -1025,4 +1025,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">バックグラウンドで聴く</string>
     <string name="background_audio_sub">アプリがバックグラウンドにあるときや画面がロックされているときも、チャンネルは音声のみで再生を続け、通知にチャンネルと番組が表示されます。アプリを開くと映像が戻ります</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">テレテキスト</string>
+    <string name="teletext_waiting">ページ %1$s を待っています</string>
+    <string name="teletext_transparent">透明な背景</string>
+    <string name="teletext_reveal">表示</string>
+    <string name="teletext_page">ページ</string>
+    <string name="teletext_subpage">サブページ</string>
+    <string name="teletext_hint_tv">OK: テンキー · ▲▼ ページ · ◀▶ サブページ</string>
 </resources>

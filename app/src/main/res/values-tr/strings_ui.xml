@@ -1028,4 +1028,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">Arka planda dinle</string>
     <string name="background_audio_sub">Uygulama arka plandayken veya ekran kilitliyken kanal yalnızca sesle oynamaya devam eder; kanal ve program bildirimde görünür. Uygulamayı açınca görüntü geri gelir</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teletekst</string>
+    <string name="teletext_waiting">%1$s sayfası bekleniyor</string>
+    <string name="teletext_transparent">Saydam arka plan</string>
+    <string name="teletext_reveal">Göster</string>
+    <string name="teletext_page">Sayfa</string>
+    <string name="teletext_subpage">Alt sayfa</string>
+    <string name="teletext_hint_tv">OK: tuş takımı · ▲▼ sayfalar · ◀▶ alt sayfalar</string>
 </resources>

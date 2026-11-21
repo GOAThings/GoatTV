@@ -1025,4 +1025,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">后台收听</string>
     <string name="background_audio_sub">应用在后台或屏幕锁定时，频道仅以声音继续播放，通知中显示频道和节目。打开应用后画面立即恢复</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">图文电视</string>
+    <string name="teletext_waiting">正在等待第 %1$s 页</string>
+    <string name="teletext_transparent">透明背景</string>
+    <string name="teletext_reveal">显示隐藏内容</string>
+    <string name="teletext_page">页面</string>
+    <string name="teletext_subpage">子页面</string>
+    <string name="teletext_hint_tv">OK：数字键盘 · ▲▼ 翻页 · ◀▶ 子页面</string>
 </resources>

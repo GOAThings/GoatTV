@@ -258,7 +258,10 @@ fun PlayerScreen(vm: AppViewModel) {
     val extraPlayers = extraPlaybacks.map { it?.player }
     /** Fecha o canal extra com foco (com o foco no principal, o último que se abriu). */
     fun closeFocusedExtra() = vm.closeExtra(if (focusTile > 0) focusTile - 1 else extras.lastIndex)
-    val overlayOpen = showGuide || showSports || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
+    // O teletexto (Canal atual → Teletexto): por cima do vídeo, com as teclas todas para ele.
+    val teletextOpen by vm.teletextOpen.collectAsStateWithLifecycle()
+    val teletext = rememberTeletext(player, teletextOpen)
+    val overlayOpen = teletextOpen || showGuide || showSports || showSearch || showBackup || showRecordings || showSleep || trackPicker != null || showSecondPicker || netHint
 
     /** Um painel, as Definições ou uma janela tapam o vídeo (a informação e a barra completa ficam escondidas). */
     fun covered() = panel != Panel.None || showSettings || overlayOpen
@@ -706,6 +709,18 @@ fun PlayerScreen(vm: AppViewModel) {
         }
     }
 
+    LaunchedEffect(teletextOpen) {
+        if (!teletextOpen) return@LaunchedEffect
+        showSettings = false
+        // As teclas vão para o ecrã do player (as Definições, que tinham o foco, fecharam).
+        repeat(5) {
+            withFrameNanos { }
+            if (runCatching { rootFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
+    // Outro canal ou o player a fechar: o teletexto fecha.
+    DisposableEffect(Unit) { onDispose { vm.teletextOpen.value = false } }
+
     /** Voltar recua um nível (a ordem está em [tvBack]). */
     fun goBack() {
         val now = SystemClock.uptimeMillis()
@@ -786,6 +801,7 @@ fun PlayerScreen(vm: AppViewModel) {
                 .background(Color.Black)
                 .onPreviewKeyEvent { e ->
                     lastInput[0] = SystemClock.uptimeMillis()
+                    if (teletextOpen) return@onPreviewKeyEvent teletext.onTvKey(e) { vm.teletextOpen.value = false }
                     val code = e.key.nativeKeyCode
                     val ok = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER || code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
                     // O canal parou porque ninguém via (ecrã "Ver outra vez"): as teclas vão para o botão; Voltar sai como sempre.
@@ -1132,6 +1148,8 @@ fun PlayerScreen(vm: AppViewModel) {
             if (showSports) {
                 SportsHubTv(vm, onPlayed = { showSports = false })
             }
+
+            if (teletextOpen) TvTeletext(teletext)
 
             // Também enquanto espera pela próxima tentativa, com a última imagem ainda no ecrã.
             // Na pausa do direto, a gravar por trás, a cápsula de voltar a ligar não tapa a da pausa.

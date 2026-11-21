@@ -1025,4 +1025,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">백그라운드에서 듣기</string>
     <string name="background_audio_sub">앱이 백그라운드에 있거나 화면이 잠겨 있으면 채널이 소리만으로 계속 재생되고, 알림에 채널과 프로그램이 표시됩니다. 앱을 열면 화면이 돌아옵니다</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">텔레텍스트</string>
+    <string name="teletext_waiting">%1$s 페이지 기다리는 중</string>
+    <string name="teletext_transparent">투명 배경</string>
+    <string name="teletext_reveal">보이기</string>
+    <string name="teletext_page">페이지</string>
+    <string name="teletext_subpage">하위 페이지</string>
+    <string name="teletext_hint_tv">OK: 숫자 패드 · ▲▼ 페이지 · ◀▶ 하위 페이지</string>
 </resources>

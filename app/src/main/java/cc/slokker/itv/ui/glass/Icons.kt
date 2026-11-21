@@ -8,6 +8,11 @@ import androidx.compose.ui.unit.dp
 
 /** Ícones vetoriais (desenhos do Material Icons, Apache 2.0): centrados ao píxel, ao contrário de símbolos de texto. */
 object ItvIcons {
+    /** O teletexto (o "Article" do Material: uma folha com linhas). */
+    val Teletext: ImageVector by lazy {
+        icon("Teletext", "M19,3H5C3.9,3 3,3.9 3,5v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V5C21,3.9 20.1,3 19,3zM14,17H7v-2h7V17zM17,13H7v-2h10V13zM17,9H7V7h10V9z")
+    }
+
     val Settings: ImageVector by lazy {
         icon(
             "Settings",

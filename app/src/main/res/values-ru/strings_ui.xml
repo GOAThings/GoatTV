@@ -1032,4 +1032,13 @@
     <!-- Ouvir em segundo plano (background_audio) -->
     <string name="background_audio">Слушать в фоне</string>
     <string name="background_audio_sub">Когда приложение в фоне или экран заблокирован, канал продолжает играть только звуком, а канал и передача показаны в уведомлении. Изображение вернётся, когда вы откроете приложение</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Телетекст</string>
+    <string name="teletext_waiting">Ожидание страницы %1$s</string>
+    <string name="teletext_transparent">Прозрачный фон</string>
+    <string name="teletext_reveal">Показать скрытое</string>
+    <string name="teletext_page">Страница</string>
+    <string name="teletext_subpage">Подстраница</string>
+    <string name="teletext_hint_tv">OK: цифры · ▲▼ страницы · ◀▶ подстраницы</string>
 </resources>
