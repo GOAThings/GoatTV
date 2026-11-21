@@ -237,6 +237,7 @@ class PersistedFormatTest {
         "audioPassthrough" to (Prefs.Key.AUDIO_PASSTHROUGH to false),
         "surroundDefault" to (Prefs.Key.SURROUND_DEFAULT to true),
         "pipEnabled" to (Prefs.Key.PIP_ENABLED to true),
+        "backgroundAudio" to (Prefs.Key.BACKGROUND_AUDIO to true),
         "audioDecoder" to (Prefs.Key.AUDIO_DECODER to Prefs.Decoder.SOFTWARE),
         "hdr" to (Prefs.Key.HDR to Prefs.Hdr.SDR),
         "hlsQuality" to (Prefs.Key.HLS_QUALITY to Prefs.HlsQuality.DATA_SAVER),

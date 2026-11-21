@@ -1026,4 +1026,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Cortar barras pretas</string>
     <string name="auto_crop_sub">Aumenta só o preciso para esconder as barras pretas que vêm na imagem (programas 4:3, filmes com barras). Só com a Proporção em Ajustar</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Ouvir em segundo plano</string>
+    <string name="background_audio_sub">Com a app em segundo plano ou o ecrã bloqueado, o canal continua só com o som, com o canal e o programa na notificação. A imagem volta ao abrir a app</string>
 </resources>

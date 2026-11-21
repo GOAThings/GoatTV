@@ -1024,4 +1024,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Siyah bantları kaldır</string>
     <string name="auto_crop_sub">Görüntüdeki siyah bantları (4:3 programlar, bantlı filmler) gizlemeye yetecek kadar yakınlaştırır. Yalnızca En boy oranı Sığdır olduğunda</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Arka planda dinle</string>
+    <string name="background_audio_sub">Uygulama arka plandayken veya ekran kilitliyken kanal yalnızca sesle oynamaya devam eder; kanal ve program bildirimde görünür. Uygulamayı açınca görüntü geri gelir</string>
 </resources>

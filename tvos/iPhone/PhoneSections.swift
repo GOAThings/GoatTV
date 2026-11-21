@@ -78,8 +78,9 @@ struct NowStrip: View {
                         ForEach(PlayerOption.shown(model)) { option in
                             // Com o temporizador ligado, o botão diz quanto falta.
                             let sleeping = option == .sleep ? model.sleepAt : nil
+                            let lit = sleeping != nil || (option == .background && model.backgroundAudioOn)
                             pill(option.symbol, sleeping.map { "\(Int($0.timeIntervalSinceNow / 60) + 1) min" } ?? option.title(model),
-                                 tint: sleeping != nil ? Theme.sky : Theme.text) { onOption(option) }
+                                 tint: lit ? Theme.sky : Theme.text) { onOption(option) }
                         }
                         // A imagem do canal, sem os botões nem as legendas da app, para a fototeca.
                         if !model.isRadio {

@@ -1021,4 +1021,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">黒帯を除去</string>
     <string name="auto_crop_sub">映像に含まれる黒帯（4:3 の番組、レターボックスの映画）が隠れるだけ拡大します。アスペクト比が「フィット」のときのみ</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">バックグラウンドで聴く</string>
+    <string name="background_audio_sub">アプリがバックグラウンドにあるときや画面がロックされているときも、チャンネルは音声のみで再生を続け、通知にチャンネルと番組が表示されます。アプリを開くと映像が戻ります</string>
 </resources>

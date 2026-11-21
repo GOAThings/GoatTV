@@ -158,6 +158,13 @@ final class PlayerEngine: NSObject {
     @ObservationIgnored var upscale = "off"
     /// Cortar as barras pretas (Prefs.autoCrop; só o GoatCore, só na imagem principal). Vale no canal seguinte.
     @ObservationIgnored var autoCrop = false
+    /// Só o som ("Ouvir em segundo plano", o iPhone em segundo plano): no GoatCore a imagem pára e a ligação e o som
+    /// continuam (ver GoatCorePlayback.videoOff); vale já e nos canais seguintes, até se desligar.
+    @ObservationIgnored var soundOnly = false {
+        didSet { if soundOnly != oldValue { goatCorePlayback?.videoOff = soundOnly } }
+    }
+    /// O motor a dar continua só com o som sem a imagem (só o GoatCore o faz).
+    var canPlaySoundOnly: Bool { backend == .goatcore }
 
     /// A imagem que está no ecrã, sem nada da app por cima ("Guardar imagem", só no iPhone). nil se não houver, ou
     /// noutro motor que não o GoatCore (o leitor da Apple e o VLC, a reserva automática). A resposta vem noutra thread.
@@ -1373,6 +1380,7 @@ final class PlayerEngine: NSObject {
         g.adaptiveAtLive = atLive
         g.adaptiveDips = !(attempts.indices.contains(index) && attempts[index].candidate.isHLS)
         g.autoCrop = controlsDisplay && autoCrop
+        g.videoOff = soundOnly
         // Um ficheiro aberto a meio (gravação, catch-up do Stalker): o ponto pedido; o anel tem o seu.
         let hls = !ring && attempts.indices.contains(index) && attempts[index].candidate.isHLS
         let channel = attempts.indices.contains(index) ? attempts[index].candidate.url : nil

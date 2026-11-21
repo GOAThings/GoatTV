@@ -577,7 +577,8 @@ internal fun VideoArea(
                         // O canal de reserva só no direto, numa lista com reserva.
         val backup = catchup == null && vm.content.collectAsStateWithLifecycle().value?.playlist?.id?.let(vm::backupOf) != null
         val quality = hlsQualityShown()
-        PlayerOption.entries.filter { (it != PlayerOption.BACKUP || backup) && (it != PlayerOption.QUALITY || quality) }.forEach { option ->
+        // Uma rádio já continua em segundo plano: o "Ouvir em segundo plano" é para os canais com imagem.
+        PlayerOption.entries.filter { (it != PlayerOption.BACKUP || backup) && (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) }.forEach { option ->
                             ControlButton(option.icon, Modifier.size(40.dp).clip(CircleShape).background(PhoneColors.HudButton)) { onOption(option); touched++ }
                         }
                     }
@@ -666,7 +667,7 @@ private fun SeekButton(forward: Boolean, enabled: Boolean = true, onClick: () ->
 }
 
 /** O que se escolhe no canal a dar, cada um no seu botão. */
-internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), SEND_TV(ItvIcons.Tv), INFO(ItvIcons.Graph), TEST(ItvIcons.Info) }
+internal enum class PlayerOption(val icon: ImageVector) { AUDIO(ItvIcons.Audio), SUBTITLES(ItvIcons.Subtitles), ASPECT(ItvIcons.Aspect), QUALITY(ItvIcons.Tune), BACKUP(ItvIcons.SwapPlaylist), SLEEP(ItvIcons.Sleep), BACKGROUND(ItvIcons.Headset), SEND_TV(ItvIcons.Tv), INFO(ItvIcons.Graph), TEST(ItvIcons.Info) }
 
 /** O botão da qualidade só num HLS com mais de uma (ver HlsQualityControl). */
 @Composable
@@ -682,6 +683,7 @@ private fun PlayerOption.label(): String {
         PlayerOption.QUALITY -> s.hlsQuality
         PlayerOption.BACKUP -> s.backupChannel
         PlayerOption.SLEEP -> s.sleepTimer
+        PlayerOption.BACKGROUND -> s.backgroundAudio
         PlayerOption.SEND_TV -> s.sendToTv
         PlayerOption.INFO -> s.streamInfo
         PlayerOption.TEST -> s.probeTestChannel
@@ -787,6 +789,11 @@ internal fun PlayerOptionsSheet(vm: AppViewModel, playback: MobilePlayback, opti
                         }
                     }
                 }
+                // Só nesta sessão (até a app fechar); para ficar sempre, nas Definições.
+                PlayerOption.BACKGROUND -> Section(option.label()) {
+                    val session by vm.backgroundAudioSession.collectAsStateWithLifecycle()
+                    ToggleRow(s.backgroundAudio, session ?: prefs.backgroundAudio, subtitle = s.backgroundAudioSub) { vm.setBackgroundAudioSession(it) }
+                }
                 PlayerOption.SEND_TV -> SendToTvSection(vm, onSent, onClose)
                 PlayerOption.INFO -> StreamInfoSection(vm, playback.player, option.label())
                 PlayerOption.TEST -> ChannelTestSection(vm, playback.player, option.label())
@@ -835,10 +842,12 @@ internal fun PlayerActions(vm: AppViewModel, channel: Channel, playback: MobileP
             ActionPill(ItvIcons.Record, s.record, tint = PhoneColors.LiveRed) { vm.recordNow(channel, ts.feed) }
         }
         val quality = hlsQualityShown()
-        PlayerOption.entries.filter { it != PlayerOption.QUALITY || quality }.forEach { option ->
+        val background = playback.backgroundAudio
+        PlayerOption.entries.filter { (it != PlayerOption.QUALITY || quality) && (it != PlayerOption.BACKGROUND || !playback.radio) }.forEach { option ->
             // Com o temporizador ligado, o botão diz quanto falta.
             val label = if (option == PlayerOption.SLEEP && sleepAt != null) "${minutesLeft(sleepAt!!, System.currentTimeMillis())} min" else option.label()
-            ActionPill(option.icon, label, tint = if (option == PlayerOption.SLEEP && sleepAt != null) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
+            val lit = (option == PlayerOption.SLEEP && sleepAt != null) || (option == PlayerOption.BACKGROUND && background)
+            ActionPill(option.icon, label, tint = if (lit) LocalAccent.current.start else ItvColors.Text) { onOption(option) }
         }
         // A imagem do canal (sem os botões nem as legendas da app) para as Imagens do telemóvel.
         if (!playback.radio) {

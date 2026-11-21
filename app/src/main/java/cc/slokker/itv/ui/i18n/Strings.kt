@@ -1245,6 +1245,10 @@ class Strings(context: Context) {
     val autoCrop get() = s(R.string.auto_crop)
     val autoCropSub get() = s(R.string.auto_crop_sub)
 
+    // ---- Ouvir em segundo plano ----
+    val backgroundAudio get() = s(R.string.background_audio)
+    val backgroundAudioSub get() = s(R.string.background_audio_sub)
+
     companion object {
         /** As línguas da app, iguais às do site, pela ordem do seletor (o nome de cada uma na própria língua). */
         val LANGUAGES = listOf(

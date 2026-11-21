@@ -149,8 +149,9 @@ extension AppModel {
         }
     }
 
-    /// A pausa guarda o sítio: o catch-up, ou a pausa do direto neste canal.
-    private var remoteCanPause: Bool { catchup != nil || (extras.isEmpty && player.timeshift.available) }
+    /// A pausa guarda o sítio: o catch-up, ou a pausa do direto neste canal. Com a app em segundo plano não (ninguém a
+    /// vê e a ligação ficava aberta): pára o stream e liberta a ligação.
+    private var remoteCanPause: Bool { !backgrounded && (catchup != nil || (extras.isEmpty && player.timeshift.available)) }
 
     func remotePlay() {
         if remoteStopped, let current {

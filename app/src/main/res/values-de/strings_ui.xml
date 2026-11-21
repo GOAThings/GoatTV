@@ -1024,4 +1024,8 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Schwarze Balken entfernen</string>
     <string name="auto_crop_sub">Vergrößert nur so weit wie nötig, um schwarze Balken im Bild auszublenden (4:3-Sendungen, Filme mit Balken). Nur mit Seitenverhältnis Einpassen</string>
+
+    <!-- Ouvir em segundo plano (background_audio) -->
+    <string name="background_audio">Im Hintergrund hören</string>
+    <string name="background_audio_sub">Ist die App im Hintergrund oder der Bildschirm gesperrt, läuft der Sender nur mit Ton weiter, mit Sender und Sendung in der Benachrichtigung. Das Bild kommt zurück, wenn du die App öffnest</string>
 </resources>

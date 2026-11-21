@@ -545,6 +545,8 @@ enum CoreTests {
         try expect(Prefs().idleStop, "off")
         try expect(Prefs(settings: .object(["idle_stop": "4h"])).idleStop, "4h")
         try expect(Prefs(settings: .object(["idle_stop": "3h"])).idleStop, "off")
+        try expect(Prefs().backgroundAudio, false)
+        try expect(Prefs(settings: .object(["background_audio": true])).backgroundAudio, true)
         try expect(Prefs().mobileDataQuality, "auto")
         try expect(Prefs(settings: .object(["mobile_data_quality": "same"])).mobileDataQuality, "same")
         try expect(Prefs(settings: .object(["mobile_data_quality": "x"])).mobileDataQuality, "auto")

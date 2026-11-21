@@ -58,7 +58,7 @@ import java.util.concurrent.TimeUnit
  * e outra nova (como na Apple, nada do canal anterior chega ao seguinte).
  */
 class GoatCorePlayer(
-    private val surface: Surface,
+    surface: Surface,
     private val listener: Listener,
     /** Vídeo por software (Definições → Descodificador; sempre no emulador, onde o de hardware bloqueia em 1080p). */
     private val softwareVideo: Boolean = false,
@@ -219,7 +219,8 @@ class GoatCorePlayer(
     /** Quanto vídeo já chegou e ainda não se viu (ms): o buffer, para a página Ligação. */
     val bufferedMs: Long
         get() {
-            val shown = lastShownPtsUs
+            // Sem imagem, o que se ouve é que diz onde vai.
+            val shown = if (videoOff) nowPtsUs() else lastShownPtsUs
             val queued = lastQueuedPtsUs
             if (shown == Long.MIN_VALUE || queued == Long.MIN_VALUE) return 0
             return ((queued - shown) / 1000).coerceIn(0, 60_000)
@@ -287,7 +288,10 @@ class GoatCorePlayer(
         requestedText = pid
     }
 
-    /** A última imagem mostrada (ou, num canal só de som, o último som escrito): elapsedRealtime, 0 antes da primeira. */
+    /**
+     * A última imagem mostrada (ou, num canal só de som ou sem imagem, o último som escrito): elapsedRealtime, 0 antes
+     * da primeira.
+     */
     @Volatile private var lastOutputAt = 0L
 
     /** Há quanto tempo não sai imagem (ou som, sem vídeo): parado à espera de dados se for muito. 0 antes de começar. */
@@ -335,6 +339,39 @@ class GoatCorePlayer(
     @Volatile private var audioBasePtsUs = Long.MIN_VALUE
     @Volatile private var audioRate = 48000
     @Volatile private var firstFrameReported = false
+
+    /** Onde o vídeo desenha; troca-se em [setVideoOutput] (o telemóvel que volta do segundo plano traz uma nova). */
+    @Volatile private var surface: Surface = surface
+
+    /**
+     * Sem imagem (o telemóvel em segundo plano com "Ouvir em segundo plano"; ver [setVideoOutput]): o descodificador
+     * do vídeo está fechado, a rede e o som continuam, e o vídeo que chega fica na fila só até deixar de servir.
+     */
+    @Volatile var videoOff = false
+        private set
+
+    /** A thread do vídeo não tem nenhum descodificador a desenhar na superfície (antes de o configurar, ou parada). */
+    @Volatile private var videoParked = true
+
+    /**
+     * [surface] null: larga a imagem e fica só com o som (a ligação continua). Espera que o descodificador largue a
+     * superfície antiga (quem chama vai deixá-la ir). Com uma superfície: a imagem volta, a partir da imagem-chave do
+     * momento (as anteriores já passaram).
+     */
+    fun setVideoOutput(surface: Surface?) {
+        if (surface == null) {
+            if (videoOff) return
+            videoOff = true
+            Log.i(TAG, "video off (sound only)")
+            val since = SystemClock.elapsedRealtime()
+            while (running && !videoParked && SystemClock.elapsedRealtime() - since < 1_500) Thread.sleep(5)
+            return
+        }
+        this.surface = surface
+        if (!videoOff) return
+        Log.i(TAG, "video on")
+        videoOff = false
+    }
 
     fun open(input: () -> InputStream) {
         val net = Thread({ readLoop(input) }, "goatcore-net")
@@ -403,7 +440,7 @@ class GoatCorePlayer(
     val positionMs: Long
         get() {
             val shown = lastShownPtsUs
-            if (videoPid >= 0 && shown != Long.MIN_VALUE) return shown / 1000
+            if (videoPid >= 0 && shown != Long.MIN_VALUE && !videoOff) return shown / 1000
             val now = nowPtsUs()
             return if (now == Long.MIN_VALUE) -1 else now / 1000
         }
@@ -819,7 +856,47 @@ class GoatCorePlayer(
 
     // ---- Vídeo -------------------------------------------------------------------------------
 
+    /**
+     * O vídeo: descodifica até [videoOff]; aí fecha o descodificador e espera pela imagem de volta (ver [parkVideo]),
+     * e recomeça na imagem-chave do momento.
+     */
     private fun videoLoop() {
+        while (running) {
+            if (!decodeVideo()) return
+            parkVideo()
+        }
+    }
+
+    /**
+     * Sem imagem: o vídeo fica na fila só a partir da última imagem-chave que já passou no relógio do som (para a
+     * imagem voltar logo, sem esperar pela imagem-chave seguinte nem pelo buffer à frente); o resto sai. Com a fila
+     * cheia demais (um relógio que saltou, um canal sem imagens-chave), sai na mesma, para a rede (e o som) não parar.
+     */
+    private fun parkVideo() {
+        scans.clear()
+        afds.clear()
+        while (running && videoOff) {
+            val now = nowPtsUs()
+            var cut: VideoUnit? = null
+            var keys = 0
+            for (u in videoQueue) {
+                if (!u.keyframe) continue
+                keys++
+                if (now != Long.MIN_VALUE && u.ptsUs <= now) cut = u
+            }
+            val full = videoBytes.get() > MAX_VIDEO_BYTES / 2 || videoQueue.size > VIDEO_PARKED_UNITS
+            if (cut == null && full && keys > 1) cut = videoQueue.firstOrNull { it.keyframe && it !== videoQueue.peek() }
+            if (cut != null) {
+                while (running && videoQueue.peek() != null && videoQueue.peek() !== cut) takenVideo(videoQueue.poll())
+            } else if (full) {
+                repeat(50) { takenVideo(videoQueue.poll()) }
+            }
+            Thread.sleep(50)
+        }
+    }
+
+    /** Uma volta do descodificador do vídeo: true se parou por [videoOff] (a imagem saiu), false no fim ou numa falha. */
+    private fun decodeVideo(): Boolean {
         var codec: MediaCodec? = null
         try {
             // A primeira imagem-chave com os parâmetros: é com ela que se configura. Enquanto não chega (o canal apanhado
@@ -828,6 +905,7 @@ class GoatCorePlayer(
             var first: VideoUnit
             var earlyMime: String? = null
             while (true) {
+                if (videoOff) return true
                 val unit = takenVideo(videoQueue.poll(10, TimeUnit.MILLISECONDS))
                 if (unit == null) {
                     if (earlyMime == null && videoKnown) {
@@ -877,6 +955,9 @@ class GoatCorePlayer(
                 decoderFor(mime, softwareVideo).also { zap("decoder") { "${it.name}, created at the keyframe" } }
             }
             codec = c
+            // A partir daqui o descodificador vai desenhar na superfície: quem a larga ([setVideoOutput]) espera.
+            videoParked = false
+            if (videoOff) return true
             deinterlacer = gpuStageFor(c.name)
             c.configure(format, deinterlacer?.input ?: surface, null, 0)
             hdrToSdr(c, format)
@@ -886,6 +967,7 @@ class GoatCorePlayer(
             var pending: VideoUnit? = first
             val info = MediaCodec.BufferInfo()
             while (running) {
+                if (videoOff) return true
                 // Entrada: uma unidade por vez, sem bloquear a saída (a espera é a da saída; esperar na fila alocava).
                 val unit = pending ?: takenVideo(videoQueue.poll())
                 if (unit != null) {
@@ -932,13 +1014,17 @@ class GoatCorePlayer(
             }
         } catch (e: InterruptedException) {
             // stop()
+            return false
         } catch (e: Exception) {
             stats.decoderErrors++
             // Só não criar ou configurar o descodificador quer dizer formato que o aparelho não toca; depois disso é
             // uma falha como as outras (volta-se a tentar).
             // Sem ter saído uma única imagem, é o formato que este descodificador não faz (HEVC de 10 bits num que só faz
             // 8, um perfil a mais…): outro motor talvez sim (o ExoPlayer tem o FFmpeg).
+            // A imagem a sair a meio (a superfície largada): não é uma falha, volta quando a imagem voltar.
+            if (videoOff && running) return true
             fail("video decoder: ${e.javaClass.simpleName} ${e.message}", unsupported = !stats.configured || stats.codecOutputs == 0, cause = e)
+            return false
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
@@ -948,7 +1034,9 @@ class GoatCorePlayer(
                 runCatching { d.release() }
             }
             deinterlacer = null
+            videoParked = true
         }
+        return false
     }
 
     /** Entre o descodificador e o ecrã, nos canais entrelaçados e com ajustes da imagem (ver [gpuStageFor]). */
@@ -1138,7 +1226,11 @@ class GoatCorePlayer(
             firstFrame()
             return
         }
-        while (running && paused) Thread.sleep(20)
+        while (running && paused && !videoOff) Thread.sleep(20)
+        if (videoOff) {
+            c.releaseOutputBuffer(index, false)
+            return
+        }
         // Pelo relógio do sistema (sem som, ou em passthrough), uma paragem da rede não o pára: a primeira imagem
         // depois dela volta a acertá-lo, senão saíam todas atrasadas.
         if (audioTrack == null && clockBasePtsUs != Long.MIN_VALUE && SystemClock.elapsedRealtime() - lastOutputAt > RESYNC_AFTER_MS) {
@@ -1146,19 +1238,19 @@ class GoatCorePlayer(
         }
         var now = clockNow(ptsUs)
         // À espera do som (no máximo meio segundo): a imagem fica no descodificador.
-        while (running && now == Long.MIN_VALUE) {
+        while (running && now == Long.MIN_VALUE && !videoOff) {
             Thread.sleep(10)
             now = clockNow(ptsUs)
         }
         // A imagem vai para o ecrã até [RELEASE_AHEAD_US] antes da hora, com a hora marcada (como o ExoPlayer): uma
         // paragem desta thread depois disso (o GC da app no arranque chega a 150 ms) já não a atrasa.
         var early = ptsUs - now
-        while (running && early > RELEASE_AHEAD_US) {
+        while (running && early > RELEASE_AHEAD_US && !videoOff) {
             Thread.sleep(((early - RELEASE_AHEAD_US) / 1000).coerceIn(1, 200))
             early = ptsUs - videoNowUs()
         }
         val late = videoNowUs() - ptsUs
-        if (late > 50_000) {
+        if (late > 50_000 || videoOff) {
             stats.framesLate++
             c.releaseOutputBuffer(index, false)
         } else {
@@ -1569,7 +1661,7 @@ class GoatCorePlayer(
                     t.write(pcm, 0, processPcm(pcm, pcmRate, pcmChannels))
                     audioClock.sample(t, pcmRate)
                     stats.audioFrames++
-                    if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
+                    if (videoPid < 0 || videoOff) lastOutputAt = SystemClock.elapsedRealtime()
                 }
             }
             return false
@@ -1626,7 +1718,7 @@ class GoatCorePlayer(
                     t.write(pcm, 0, processPcm(pcm, dec.sampleRate, dec.channels))
                     audioClock.sample(t, dec.sampleRate)
                     stats.audioFrames++
-                    if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
+                    if (videoPid < 0 || videoOff) lastOutputAt = SystemClock.elapsedRealtime()
                 }
                 if (pending != null) Thread.sleep(2)
             }
@@ -1743,7 +1835,7 @@ class GoatCorePlayer(
                 // A latência que a saída declara (o carimbo aqui não serve): a imagem espera por ela (ver [videoOffsetUs]).
                 routeLatency.sample(t, f.sampleRate, -1, direct = true)
                 stats.audioFrames++
-                if (videoPid < 0) lastOutputAt = SystemClock.elapsedRealtime()
+                if (videoPid < 0 || videoOff) lastOutputAt = SystemClock.elapsedRealtime()
             }
             return false
         } finally {
@@ -1911,6 +2003,9 @@ class GoatCorePlayer(
 
         /** O máximo de vídeo à espera de ser descodificado (cerca de 8 s em 4K). */
         private const val MAX_VIDEO_BYTES = 24L * 1024 * 1024
+
+        /** Sem imagem ([videoOff]): até quantas imagens ficam na fila (a fila leva 600 e, cheia, pára a rede). */
+        private const val VIDEO_PARKED_UNITS = 400
 
         /** A marca na fila do som: mudou a faixa. */
         private val MARK = AudioUnit(ByteArray(0), -1, null)

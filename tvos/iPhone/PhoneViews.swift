@@ -457,9 +457,10 @@ struct PhoneMain: View {
                 if tab == .menu || stopped { model.player.stop() }
             }
         }
-        // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta (uma rádio continua, e ele também).
+        // Em segundo plano o vídeo já parou: o temporizador deixa de fazer falta (uma rádio, ou o som com "Ouvir em
+        // segundo plano", continua, e ele também).
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background, model.sleepAt != nil, !model.isRadio { model.setSleepTimer(nil, announce: false) }
+            if phase == .background, model.sleepAt != nil, !model.isRadio, !model.backgroundAudioOn { model.setSleepTimer(nil, announce: false) }
         }
         // Temporizador: aviso no último minuto; ao acabar, para e sai da app.
         .task(id: model.sleepAt) {
@@ -1097,7 +1098,7 @@ private struct PlayerBar: View {
 
 /// O que se escolhe no canal a dar, cada um no seu botão.
 enum PlayerOption: String, CaseIterable, Identifiable {
-    case audio, subtitles, aspect, quality, backup, sleep, sendTv, info, test
+    case audio, subtitles, aspect, quality, backup, sleep, background, sendTv, info, test
 
     var id: String { rawValue }
     var symbol: String {
@@ -1108,6 +1109,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .quality: "slider.horizontal.3"
         case .backup: "arrow.left.arrow.right.circle"
         case .sleep: "moon.fill"
+        case .background: "headphones"
         case .sendTv: "tv"
         case .info: "info.circle"
         case .test: "stethoscope"
@@ -1121,6 +1123,7 @@ enum PlayerOption: String, CaseIterable, Identifiable {
         case .quality: "hls_quality"
         case .backup: "backup_channel"
         case .sleep: "sleep_timer"
+        case .background: "background_audio"
         case .sendTv: "send_to_tv"
         case .info: "stream_info"
         case .test: "probe_test_channel"
@@ -1133,11 +1136,12 @@ enum PlayerOption: String, CaseIterable, Identifiable {
     }
 
     /// Os botões a mostrar: o canal de reserva só no direto, numa lista com reserva (ou, no Modo TV Pro, as fontes); a
-    /// qualidade só num HLS com mais de uma.
+    /// qualidade só num HLS com mais de uma; o "Ouvir em segundo plano" não numa rádio (essa já continua).
     @MainActor static func shown(_ model: AppModel) -> [PlayerOption] {
         let backup = model.catchup == nil && (model.proMode || model.content.flatMap { model.backupOf($0.playlist.id) } != nil)
         let quality = model.player.hlsQuality.map { !$0.options.isEmpty } ?? false
-        return allCases.filter { ($0 != .backup || backup) && ($0 != .quality || quality) }
+        let radio = model.isRadio
+        return allCases.filter { ($0 != .backup || backup) && ($0 != .quality || quality) && ($0 != .background || !radio) }
     }
 }
 
@@ -1219,6 +1223,15 @@ struct PlayerOptionsSheet: View {
                     }
                 case .backup, .sendTv, .info, .test:
                     EmptyView()
+                case .background:
+                    // Só nesta sessão (até a app fechar); para ficar sempre, nas Definições.
+                    Toggle(isOn: Binding(get: { model.backgroundAudioOn }, set: { model.setBackgroundAudioSession($0) })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.r("background_audio")).foregroundStyle(Theme.text)
+                            Text(s.r("background_audio_sub")).font(.caption).foregroundStyle(Theme.textFaint)
+                        }
+                    }
+                    .tint(Theme.sky)
                 case .sleep:
                     row(s.r("subtitles_off"), model.sleepAt == nil) { model.setSleepTimer(nil) }
                     ForEach([15, 30, 45, 60, 90, 120], id: \.self) { minutes in
@@ -2032,6 +2045,8 @@ private struct MenuTab: View {
             section(s.t("Picture and sound", "Imagem e som")) {
                 pick(s.r("aspect"), "aspect", p.aspect, [("fit", s.r("aspect_fit")), ("zoom", s.r("aspect_zoom")), ("fill", s.r("aspect_fill"))])
                 toggle(s.r("auto_crop"), "auto_crop", p.autoCrop)
+                // Com a app em segundo plano ou o ecrã bloqueado, qualquer canal continua só com o som.
+                toggle(s.r("background_audio"), "background_audio", p.backgroundAudio)
                 toggle(s.r("surround_default"), "surround_default", p.surroundDefault)
                 pick(s.r("audio_language"), "audio_language", .string(p.audioLanguage), [(.string(""), s.r("auto"))] + phoneLanguageOptions)
                 pick(s.r("audio_delay"), "audio_delay_ms", .number(Double(p.audioDelayMs)),
