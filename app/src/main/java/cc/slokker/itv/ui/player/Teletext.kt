@@ -381,10 +381,19 @@ private val KEY_COLOURS = listOf(Color(0xFFE53935), Color(0xFF43A047), Color(0xF
 internal fun TvTeletext(c: TeletextController) {
     val s = LocalStrings.current
     val screen = c.screen
-    Box(Modifier.fillMaxSize().background(if (c.transparent || screen?.boxed == true) Color.Transparent else Color.Black)) {
+    // A ajuda das teclas aparece só nos primeiros segundos (depois fica só a página e as cores).
+    var hint by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(8_000)
+        hint = false
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(if (c.transparent || screen?.boxed == true) Color.Transparent else Color.Black)) {
         TeletextCanvas(c, Modifier.fillMaxSize().padding(vertical = 16.dp))
+        // A coluna cabe na margem ao lado da página 4:3 (num ecrã 16:9 são uns 120 dp), para não a tapar.
+        val side = (maxWidth - (maxHeight - 32.dp) * 4f / 3f) / 2f
         Column(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp).width(150.dp),
+            // Com o teclado aberto, a coluna fica do tamanho dele (pode tapar o canto: foi pedido).
+            Modifier.align(Alignment.BottomEnd).padding(8.dp).then(if (c.pad) Modifier else Modifier.width((side - 16.dp).coerceIn(84.dp, 150.dp))),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.End,
         ) {
@@ -402,7 +411,7 @@ internal fun TvTeletext(c: TeletextController) {
                     }
                 }
             }
-            if (c.pad) TvPad(c) else Chip(s.teletextHintTv)
+            if (c.pad) TvPad(c) else if (hint) Chip(s.teletextHintTv)
         }
     }
 }

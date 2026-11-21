@@ -81,7 +81,7 @@ internal class StreamStatsMeter {
             hdrTransfer = transfer,
             audioCodec = audio?.codec?.name ?: readable(a?.sampleMimeType),
             audioChannels = audio?.channels ?: a?.channelCount?.takeIf { it > 0 } ?: 0,
-            audioSampleRate = audio?.sampleRate ?: a?.sampleRate?.takeIf { it > 0 } ?: 0,
+            audioSampleRate = snap?.audioOutputRate?.takeIf { it > 0 } ?: audio?.sampleRate ?: a?.sampleRate?.takeIf { it > 0 } ?: 0,
             audioTrack = tracks?.audioLabel().orEmpty(),
             bitrateKbps = bitrate.kbps(),
             bufferMs = snap?.bufferedMs ?: if (player is ExoPlayer) player.totalBufferedDuration else -1L,

@@ -1149,6 +1149,8 @@ class GoatCorePlayer(
             video = videoInfo,
             interlaced = interlacedVideo,
             audio = audioFormat,
+            // A frequência do som que sai (o HE-AAC diz no ADTS a do núcleo, metade da real); -1 sem PCM a tocar.
+            audioOutputRate = if (audioTrack != null) audioRate else -1,
             bytesRead = stats.bytesRead,
             mediaMs = if (queued == Long.MIN_VALUE) -1 else queued / 1000,
             bufferedMs = bufferedMs,
@@ -2057,6 +2059,7 @@ data class GoatCoreSnapshot(
     val video: VideoInfo?,
     val interlaced: Boolean,
     val audio: cc.slokker.itv.media.AudioFormat?,
+    val audioOutputRate: Int,
     val bytesRead: Long,
     val mediaMs: Long,
     val bufferedMs: Long,
