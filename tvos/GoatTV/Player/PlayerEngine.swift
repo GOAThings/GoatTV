@@ -1284,7 +1284,7 @@ final class PlayerEngine: NSObject {
         guard !hasPicture else { return }
         let since = movingSince ?? Date()
         movingSince = since
-        guard picturesShown > 0 || soundOnly || Date().timeIntervalSince(since) > 5 else { return }
+        guard picturesShown > 0 || vlcAudioOnly || Date().timeIntervalSince(since) > 5 else { return }
         hasPicture = true
         timeshift.seeking = false
         ringClock()
@@ -1300,7 +1300,7 @@ final class PlayerEngine: NSObject {
         }
     }
 
-    private var soundOnly: Bool {
+    private var vlcAudioOnly: Bool {
         let types = (vlc.media?.tracksInformation as? [[String: Any]] ?? []).compactMap { $0[VLCMediaTracksInformationType] as? String }
         return types.contains(VLCMediaTracksInformationTypeAudio) && !types.contains(VLCMediaTracksInformationTypeVideo)
     }
