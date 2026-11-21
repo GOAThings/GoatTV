@@ -1021,4 +1021,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">去除黑边</string>
     <string name="auto_crop_sub">仅放大到恰好隐藏画面中自带的黑边（4:3 节目、带黑边的电影）。仅在画面比例为“适应”时生效</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">图文电视</string>
+    <string name="teletext_waiting">正在等待第 %1$s 页</string>
+    <string name="teletext_transparent">透明背景</string>
+    <string name="teletext_reveal">显示隐藏内容</string>
+    <string name="teletext_page">页面</string>
+    <string name="teletext_subpage">子页面</string>
+    <string name="teletext_hint_tv">OK：数字键盘 · ▲▼ 翻页 · ◀▶ 子页面</string>
 </resources>

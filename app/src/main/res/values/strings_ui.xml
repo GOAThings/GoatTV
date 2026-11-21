@@ -1025,4 +1025,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Remove black bars</string>
     <string name="auto_crop_sub">Zooms in just enough to hide black bars that are part of the picture (4:3 programmes, letterboxed films). Only with Aspect ratio set to Fit</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teletext</string>
+    <string name="teletext_waiting">Waiting for page %1$s</string>
+    <string name="teletext_transparent">Transparent background</string>
+    <string name="teletext_reveal">Reveal</string>
+    <string name="teletext_page">Page</string>
+    <string name="teletext_subpage">Subpage</string>
+    <string name="teletext_hint_tv">OK: keypad · ▲▼ pages · ◀▶ subpages</string>
 </resources>

@@ -1352,6 +1352,15 @@ class Strings(context: Context) {
     val statsToneMapping get() = s(R.string.stats_tone_mapping)
     val statsFallback get() = s(R.string.stats_fallback)
     val statsFailover get() = s(R.string.stats_failover)
+
+    // Teletexto
+    val teletext get() = s(R.string.teletext)
+    fun teletextWaiting(page: Int) = s(R.string.teletext_waiting, page.toString())
+    val teletextTransparent get() = s(R.string.teletext_transparent)
+    val teletextReveal get() = s(R.string.teletext_reveal)
+    val teletextPage get() = s(R.string.teletext_page)
+    val teletextSubpage get() = s(R.string.teletext_subpage)
+    val teletextHintTv get() = s(R.string.teletext_hint_tv)
 }
 
 /** Textos atuais, para código fora do Compose (ViewModel, fontes de listas). Iniciado no ItvApp. */

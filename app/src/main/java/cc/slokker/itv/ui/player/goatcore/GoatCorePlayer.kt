@@ -30,6 +30,7 @@ import cc.slokker.itv.media.ClosedCaptions
 import cc.slokker.itv.media.CaptionDecoder
 import cc.slokker.itv.media.TeletextDecoder
 import cc.slokker.itv.media.TeletextPage
+import cc.slokker.itv.media.TeletextStore
 import cc.slokker.itv.media.TsListener
 import cc.slokker.itv.media.TsSample
 import cc.slokker.itv.media.TsTrack
@@ -282,6 +283,12 @@ class GoatCorePlayer(
     private val recentText = HashMap<Int, ArrayDeque<TsSample>>()
     private var allTracks: List<TsTrack> = emptyList()
 
+    /**
+     * O teletexto todo do canal (ver TeletextStore): lê-se sempre a faixa dele, com o limite da pré-cache, para a
+     * página 100 aparecer logo ao abrir. Usa-se sincronizado nele (a thread da rede escreve, o ecrã lê).
+     */
+    val teletextPages = TeletextStore()
+
     /** Mostra as legendas da faixa [pid] (DVB) ou da página de teletexto ([teletextKey]), ou nenhuma com -1. */
     fun selectText(pid: Int) {
         requestedText = pid
@@ -495,6 +502,7 @@ class GoatCorePlayer(
 
     private fun tracksChanged(tracks: List<TsTrack>) {
         allTracks = tracks
+        synchronized(teletextPages) { teletextPages.tracks(tracks) }
         zap("tracks") { tracks.joinToString(" ") { it.codec.name } + " (${demuxer?.replayedPackets ?: 0} early packets replayed)" }
         Log.i(TAG, "tracks " + tracks.joinToString { "${it.codec}${it.language?.let { l -> "/$l" } ?: ""}" })
         listener.onTracks(tracks)
@@ -559,6 +567,9 @@ class GoatCorePlayer(
         if (text != NO_CHANGE) {
             requestedText = NO_CHANGE
             switchText(text)
+        }
+        if (track.codec == Codec.TELETEXT && track.pid == teletextPages.pid) {
+            synchronized(teletextPages) { teletextPages.feed(track.pid, sample.data) }
         }
         if (track.kind == TrackKind.SUBTITLE) {
             val recent = recentText.getOrPut(track.pid) { ArrayDeque() }

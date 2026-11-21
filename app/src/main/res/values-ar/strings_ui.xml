@@ -1032,4 +1032,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">إزالة الأشرطة السوداء</string>
     <string name="auto_crop_sub">تكبير الصورة بالقدر اللازم فقط لإخفاء الأشرطة السوداء الموجودة داخل الصورة (برامج 4:3، أفلام بأشرطة). فقط عندما تكون نسبة العرض إلى الارتفاع على ملاءمة</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">تيليتكست</string>
+    <string name="teletext_waiting">بانتظار الصفحة %1$s</string>
+    <string name="teletext_transparent">خلفية شفافة</string>
+    <string name="teletext_reveal">إظهار</string>
+    <string name="teletext_page">الصفحة</string>
+    <string name="teletext_subpage">الصفحة الفرعية</string>
+    <string name="teletext_hint_tv">OK: لوحة الأرقام · ▲▼ الصفحات · ◀▶ الصفحات الفرعية</string>
 </resources>

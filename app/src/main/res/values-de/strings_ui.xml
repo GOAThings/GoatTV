@@ -1024,4 +1024,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Schwarze Balken entfernen</string>
     <string name="auto_crop_sub">Vergrößert nur so weit wie nötig, um schwarze Balken im Bild auszublenden (4:3-Sendungen, Filme mit Balken). Nur mit Seitenverhältnis Einpassen</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Videotext</string>
+    <string name="teletext_waiting">Warte auf Seite %1$s</string>
+    <string name="teletext_transparent">Transparenter Hintergrund</string>
+    <string name="teletext_reveal">Aufdecken</string>
+    <string name="teletext_page">Seite</string>
+    <string name="teletext_subpage">Unterseite</string>
+    <string name="teletext_hint_tv">OK: Ziffernblock · ▲▼ Seiten · ◀▶ Unterseiten</string>
 </resources>

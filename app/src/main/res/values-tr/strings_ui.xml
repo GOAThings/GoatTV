@@ -1024,4 +1024,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Siyah bantları kaldır</string>
     <string name="auto_crop_sub">Görüntüdeki siyah bantları (4:3 programlar, bantlı filmler) gizlemeye yetecek kadar yakınlaştırır. Yalnızca En boy oranı Sığdır olduğunda</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teletekst</string>
+    <string name="teletext_waiting">%1$s sayfası bekleniyor</string>
+    <string name="teletext_transparent">Saydam arka plan</string>
+    <string name="teletext_reveal">Göster</string>
+    <string name="teletext_page">Sayfa</string>
+    <string name="teletext_subpage">Alt sayfa</string>
+    <string name="teletext_hint_tv">OK: tuş takımı · ▲▼ sayfalar · ◀▶ alt sayfalar</string>
 </resources>

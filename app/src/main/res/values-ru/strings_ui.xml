@@ -1028,4 +1028,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Убирать чёрные полосы</string>
     <string name="auto_crop_sub">Увеличивает изображение ровно настолько, чтобы скрыть чёрные полосы в самой картинке (передачи 4:3, фильмы с полосами). Только при соотношении сторон «Вписать»</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Телетекст</string>
+    <string name="teletext_waiting">Ожидание страницы %1$s</string>
+    <string name="teletext_transparent">Прозрачный фон</string>
+    <string name="teletext_reveal">Показать скрытое</string>
+    <string name="teletext_page">Страница</string>
+    <string name="teletext_subpage">Подстраница</string>
+    <string name="teletext_hint_tv">OK: цифры · ▲▼ страницы · ◀▶ подстраницы</string>
 </resources>

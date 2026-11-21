@@ -1021,4 +1021,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">검은 띠 제거</string>
     <string name="auto_crop_sub">화면에 들어 있는 검은 띠(4:3 프로그램, 레터박스 영화)가 사라질 만큼만 확대합니다. 화면 비율이 맞춤일 때만</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">텔레텍스트</string>
+    <string name="teletext_waiting">%1$s 페이지 기다리는 중</string>
+    <string name="teletext_transparent">투명 배경</string>
+    <string name="teletext_reveal">보이기</string>
+    <string name="teletext_page">페이지</string>
+    <string name="teletext_subpage">하위 페이지</string>
+    <string name="teletext_hint_tv">OK: 숫자 패드 · ▲▼ 페이지 · ◀▶ 하위 페이지</string>
 </resources>

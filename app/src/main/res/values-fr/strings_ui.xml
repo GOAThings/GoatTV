@@ -1026,4 +1026,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Supprimer les bandes noires</string>
     <string name="auto_crop_sub">Agrandit juste assez pour masquer les bandes noires présentes dans l\'image (programmes 4:3, films au format cinéma). Uniquement avec le format d\'image sur Ajuster</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Télétexte</string>
+    <string name="teletext_waiting">En attente de la page %1$s</string>
+    <string name="teletext_transparent">Fond transparent</string>
+    <string name="teletext_reveal">Révéler</string>
+    <string name="teletext_page">Page</string>
+    <string name="teletext_subpage">Sous-page</string>
+    <string name="teletext_hint_tv">OK : clavier · ▲▼ pages · ◀▶ sous-pages</string>
 </resources>

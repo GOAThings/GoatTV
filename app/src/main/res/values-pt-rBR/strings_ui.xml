@@ -1026,4 +1026,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">Cortar barras pretas</string>
     <string name="auto_crop_sub">Aumenta só o preciso para esconder as barras pretas que vêm na imagem (programas 4:3, filmes com barras). Só com a Proporção em Ajustar</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">Teletexto</string>
+    <string name="teletext_waiting">À espera da página %1$s</string>
+    <string name="teletext_transparent">Fundo transparente</string>
+    <string name="teletext_reveal">Revelar</string>
+    <string name="teletext_page">Página</string>
+    <string name="teletext_subpage">Subpágina</string>
+    <string name="teletext_hint_tv">OK: teclado · ▲▼ páginas · ◀▶ subpáginas</string>
 </resources>

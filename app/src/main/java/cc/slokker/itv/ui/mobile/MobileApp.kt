@@ -260,7 +260,12 @@ fun MobileMain(vm: AppViewModel) {
         if (landscape) activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         nav = nav.sentToTv()
     }
-    options?.let { if (!pip) PlayerOptionsSheet(vm, playback, it, onSent = sentToTv) { options = null } }
+    options?.let {
+        if (pip) return@let
+        // O teletexto em ecrã inteiro, por cima de tudo (o resto das opções numa folha).
+        if (it == PlayerOption.TELETEXT) cc.slokker.itv.ui.player.PhoneTeletext(playback.player) { options = null }
+        else PlayerOptionsSheet(vm, playback, it, onSent = sentToTv) { options = null }
+    }
     homePinFor?.let { id ->
         PinDialog(LocalStrings.current.enterPin, onClose = { homePinFor = null }, rejected = vm::pinRejected) { pin ->
             vm.unlockGroup(id, pin).also { if (it) { nav = nav.openGroup(id); homePinFor = null } }

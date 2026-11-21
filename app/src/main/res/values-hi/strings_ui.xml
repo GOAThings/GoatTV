@@ -1024,4 +1024,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">काली पट्टियाँ हटाएँ</string>
     <string name="auto_crop_sub">तस्वीर में आने वाली काली पट्टियाँ छिपाने के लिए बस उतना ही ज़ूम करता है (4:3 कार्यक्रम, पट्टियों वाली फ़िल्में)। केवल आस्पेक्ट रेशियो फ़िट पर होने पर</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">टेलीटेक्स्ट</string>
+    <string name="teletext_waiting">पेज %1$s का इंतज़ार</string>
+    <string name="teletext_transparent">पारदर्शी बैकग्राउंड</string>
+    <string name="teletext_reveal">दिखाएँ</string>
+    <string name="teletext_page">पेज</string>
+    <string name="teletext_subpage">सब-पेज</string>
+    <string name="teletext_hint_tv">OK: कीपैड · ▲▼ पेज · ◀▶ सब-पेज</string>
 </resources>

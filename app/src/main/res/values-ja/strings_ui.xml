@@ -1021,4 +1021,13 @@
     <!-- Cortar barras pretas (auto_crop) -->
     <string name="auto_crop">黒帯を除去</string>
     <string name="auto_crop_sub">映像に含まれる黒帯（4:3 の番組、レターボックスの映画）が隠れるだけ拡大します。アスペクト比が「フィット」のときのみ</string>
+
+    <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
+    <string name="teletext">テレテキスト</string>
+    <string name="teletext_waiting">ページ %1$s を待っています</string>
+    <string name="teletext_transparent">透明な背景</string>
+    <string name="teletext_reveal">表示</string>
+    <string name="teletext_page">ページ</string>
+    <string name="teletext_subpage">サブページ</string>
+    <string name="teletext_hint_tv">OK: テンキー · ▲▼ ページ · ◀▶ サブページ</string>
 </resources>
