@@ -282,4 +282,38 @@ class ErrorConcealmentTest {
         assertTrue(c.pass(false, 14400))
         assertEquals(3, c.dropped)
     }
+
+    @Test
+    fun bFramesInDecodeOrderKeepHolding() {
+        // Depois da perda: P (tempo 10800), depois B (3600, 7200), pela ordem de descodificação. As B não são um salto.
+        val c = ErrorConcealment()
+        c.lost(false)
+        assertFalse(c.pass(false, 10800))
+        assertFalse(c.pass(false, 3600))
+        assertFalse(c.pass(false, 7200))
+        assertTrue(c.concealing)
+        assertEquals(0, c.capped)
+        assertTrue(c.pass(true, 21600))
+        // Um salto a sério para trás (mais de 1 s) acaba a espera.
+        c.lost(false)
+        assertFalse(c.pass(false, 500_000))
+        assertTrue(c.pass(false, 100_000))
+        assertEquals(1, c.capped)
+    }
+
+    @Test
+    fun repeatedLossDoesNotRestartTheCap() {
+        val c = ErrorConcealment()
+        c.lost(false)
+        var pts = 0L
+        var shown = -1
+        for (i in 0 until 100) {
+            if (i % 10 == 5) c.lost(false) // mais perdas a meio da espera
+            pts += 3600
+            if (c.pass(false, pts)) { shown = i; break }
+        }
+        // 2 s depois da primeira imagem segurada (25 imagens/s): volta à 51.ª, mesmo com perdas novas pelo meio.
+        assertEquals(50, shown)
+        assertEquals(1, c.capped)
+    }
 }

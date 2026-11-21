@@ -119,8 +119,13 @@ class GoatCoreLabActivity : Activity(), SurfaceHolder.Callback {
             surfaceSize = { surfaceView.holder.surfaceFrame.takeIf { it.width() > 0 }?.let { intArrayOf(it.width(), it.height()) } },
             audioLevel = intent.getStringExtra("level") ?: cc.slokker.itv.data.Prefs.AudioLevel.OFF, levelKey = current,
             audioDelayMs = intent.getIntExtra("delay", 0), audioDelayAuto = intent.getBooleanExtra("delayauto", true),
-            audioVoices = intent.getBooleanExtra("voices", false), stereoOutput = { cc.slokker.itv.ui.player.goatcore.AudioOutputs.stereoOnly(applicationContext) },
+            audioVoices = intent.getBooleanExtra("voices", false), autoCrop = intent.getBooleanExtra("crop", false), stereoOutput = { cc.slokker.itv.ui.player.goatcore.AudioOutputs.stereoOnly(applicationContext) },
             listener = object : GoatCorePlayer.Listener {
+            // Barras pretas ("crop"): como o GoatCoreMediaPlayer faria num quadro 4:3 num ecrã 16:9 (o laboratório estica o quadro).
+            override fun onActiveArea(area: cc.slokker.itv.media.CropRect) {
+                player?.crop = cc.slokker.itv.media.AutoCrop.window(area, intent.getFloatExtra("frameaspect", 16f / 9), 16f / 9)
+            }
+
             override fun onFirstFrame(ms: Long) {
                 firstMs = ms
             }

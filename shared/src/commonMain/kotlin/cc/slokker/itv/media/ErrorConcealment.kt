@@ -39,10 +39,14 @@ class ErrorConcealment(private val capTicks: Long = CAP_TICKS) {
     fun lost(onlyNonReference: Boolean) {
         dropped++
         if (onlyNonReference) return
-        if (!waiting) lastRun = 0
+        // Mais perdas durante a espera não recomeçam o limite: conta desde a primeira (senão, num canal que perde
+        // dados a toda a hora e com GOPs longos, a imagem ficava parada até à imagem-chave).
+        if (!waiting) {
+            lastRun = 0
+            since = NONE
+            held = 0
+        }
         waiting = true
-        since = NONE
-        held = 0
         floor = NONE
     }
 
@@ -56,8 +60,9 @@ class ErrorConcealment(private val capTicks: Long = CAP_TICKS) {
             }
             if (since == NONE && pts >= 0) since = pts
             held++
-            // Para trás no tempo (um salto) também acaba a espera pelo tempo: o limite contava-se do tempo de antes.
-            val late = pts >= 0 && since != NONE && (pts - since >= capTicks || pts < since)
+            // Para trás no tempo (um salto) também acaba a espera pelo tempo: o limite contava-se do tempo de antes. As
+            // imagens B vêm pela ordem de descodificação, com o tempo um pouco antes da anterior: isso não é um salto.
+            val late = pts >= 0 && since != NONE && (pts - since >= capTicks || pts < since - BACK_JUMP_TICKS)
             if (late || held >= CAP_FRAMES) {
                 waiting = false
                 floor = NONE
@@ -88,6 +93,9 @@ class ErrorConcealment(private val capTicks: Long = CAP_TICKS) {
     }
 
     companion object {
+        /** Quanto para trás conta como salto no tempo (1 s; as imagens B ficam muito aquém disto). */
+        const val BACK_JUMP_TICKS = 90_000L
+
         /** 2 s a 90 kHz. */
         const val CAP_TICKS = 2L * 90_000
         /** Sem tempos: um limite em imagens (uns 5 s a 60 imagens por segundo, ou campos a 50). */
