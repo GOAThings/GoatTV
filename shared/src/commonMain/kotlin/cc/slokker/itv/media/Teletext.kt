@@ -138,10 +138,7 @@ class TeletextDecoder(private val page: Int, language: String? = null) {
     }
 
     /** O alfabeto da página: o grupo com a variante do cabeçalho; se essa combinação não existir, o código do grupo. */
-    private fun chooseTable(): CharArray {
-        val group = currentGroup()
-        return G0[group * 8 + charset] ?: G0[group * 8] ?: G0[charset] ?: G0.getValue(0)
-    }
+    private fun chooseTable(): CharArray = alphabet(currentGroup(), charset)
 
     private fun currentGroup() = if (pageGroup >= 0) pageGroup else if (magazineGroup >= 0) magazineGroup else defaultGroup
 
@@ -251,6 +248,29 @@ class TeletextDecoder(private val page: Int, language: String? = null) {
         )
 
         private fun chars(vararg codes: Int) = CharArray(codes.size) { codes[it].toChar() }
+
+        /** O G0 do grupo [group] (tabela 32) com a variante nacional [national]; sem essa combinação, o do grupo. */
+        internal fun alphabet(group: Int, national: Int): CharArray =
+            G0[group * 8 + national] ?: G0[group * 8] ?: G0[national] ?: G0.getValue(0)
+
+        /** O G2 latino (EN 300 706, tabela 33), de 0x20 a 0x7F: os símbolos e as letras que o G0 não tem (por X/26). */
+        internal val LATIN_G2 = chars(
+            0x0020, 0x00A1, 0x00A2, 0x00A3, 0x0024, 0x00A5, 0x0023, 0x00A7, 0x00A4, 0x2018, 0x201C, 0x00AB, 0x2190, 0x2191, 0x2192, 0x2193,
+            0x00B0, 0x00B1, 0x00B2, 0x00B3, 0x00D7, 0x00B5, 0x00B6, 0x00B7, 0x00F7, 0x2019, 0x201D, 0x00BB, 0x00BC, 0x00BD, 0x00BE, 0x00BF,
+            0x0020, 0x0060, 0x00B4, 0x02C6, 0x02DC, 0x00AF, 0x02D8, 0x02D9, 0x00A8, 0x002E, 0x02DA, 0x00B8, 0x005F, 0x02DD, 0x02DB, 0x02C7,
+            0x2015, 0x00B9, 0x00AE, 0x00A9, 0x2122, 0x266A, 0x20A0, 0x2030, 0x03B1, 0x0020, 0x0020, 0x0020, 0x215B, 0x215C, 0x215D, 0x215E,
+            0x03A9, 0x00C6, 0x0110, 0x00AA, 0x0126, 0x0020, 0x0132, 0x013F, 0x0141, 0x00D8, 0x0152, 0x00BA, 0x00DE, 0x0166, 0x014A, 0x0149,
+            0x0138, 0x00E6, 0x0111, 0x00F0, 0x0127, 0x0131, 0x0133, 0x0140, 0x0142, 0x00F8, 0x0153, 0x00DF, 0x00FE, 0x0167, 0x014B, 0x0020,
+        )
+
+        /**
+         * Os acentos que X/26 junta a uma letra do G0 (modos 0x11–0x1F: a coluna 4 do G2), como marcas Unicode que se
+         * combinam com a letra anterior (o sistema desenha-as por cima, ou usa a letra já acentuada).
+         */
+        internal val DIACRITICS = charArrayOf(
+            ' ', '\u0300', '\u0301', '\u0302', '\u0303', '\u0304', '\u0306', '\u0307', '\u0308', '\u0323', '\u030A', '\u0327',
+            '\u0332', '\u030B', '\u0328', '\u030C',
+        )
 
         /**
          * As formas de apresentação (FE80–FEFC, e as das letras persas do G2) na letra de base, para o texto do sistema
