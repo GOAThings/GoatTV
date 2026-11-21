@@ -17,6 +17,7 @@ import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.data.StreamCandidate
 import cc.slokker.itv.playback.AttemptFailure
+import cc.slokker.itv.playback.FreezeWatch
 import cc.slokker.itv.playback.NextStep
 import cc.slokker.itv.playback.PlaybackRules
 import cc.slokker.itv.playback.StallCounter
@@ -156,6 +157,13 @@ internal class ChannelPlayback(
     /** As vezes que o direto deste canal ficou preso (à segunda em pouco tempo, vai-se aos failovers). */
     private val stalls = StallCounter()
 
+    /** O canal "congelado" (a imagem ou o som parados com a ligação a dar; ver [FreezeWatch] e [checkFreeze]). */
+    private val freezeWatch = FreezeWatch()
+
+    /** As vezes que congelou (à segunda em pouco tempo, como as paragens, vai-se aos failovers). */
+    private val freezes = StallCounter()
+    private var freezeJob: Job? = null
+
     /** A dar o canal da lista de reserva no lugar do da principal (o aviso e o painel "canal de reserva"); null na principal. */
     var onBackup by mutableStateOf<BackupOrigin?>(null)
         private set
@@ -198,6 +206,16 @@ internal class ChannelPlayback(
         player = engine.player
         tickJob?.cancel()
         tickJob = null
+        freezeJob?.cancel()
+        freezeJob = null
+        if (engine.watchesFreeze) {
+            freezeJob = scope.launch {
+                while (true) {
+                    wait(FREEZE_TICK_MS)
+                    checkFreeze(engine)
+                }
+            }
+        }
         if (timeshift == null && net == null) return
         tickJob = scope.launch {
             var ticks = 0
@@ -221,6 +239,8 @@ internal class ChannelPlayback(
             player = null
             tickJob?.cancel()
             tickJob = null
+            freezeJob?.cancel()
+            freezeJob = null
         }
     }
 
@@ -233,6 +253,7 @@ internal class ChannelPlayback(
         openJob?.cancel()
         linkJob?.cancel()
         tickJob?.cancel()
+        freezeJob?.cancel()
         engine?.let { detach(it) }
         timeshift?.onReconnect = null
         timeshift?.onConnected = null
@@ -298,6 +319,7 @@ internal class ChannelPlayback(
         stallJob?.cancel()
         openJob?.cancel()
         stalls.clear()
+        freezes.clear()
         // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
         onBackup = null
         reconnects = 0
@@ -464,6 +486,8 @@ internal class ChannelPlayback(
             else -> timeshift?.yieldConnection()
         }
         ZapTrace.mark("O", "${candidate.format} #$index${if (ring) " ring" else ""}")
+        // Uma ligação nova: o FreezeWatch recomeça (com o tempo de arranque).
+        freezeWatch.reset()
         engine.open(
             candidate, req.channel,
             OpenOptions(
@@ -615,6 +639,43 @@ internal class ChannelPlayback(
         recordDrop()
         val failover = stalls.stalled(now(), canFailOver(req))
         Log.w(TAG, "Direto preso a carregar há ${PlaybackRules.STALL_MS / 1000} s: ${if (failover) "failovers" else "volta a ligar"}")
+        recover(req, failover)
+    }
+
+    /**
+     * De segundo a segundo, com o GoatCore: os contadores dele para o [FreezeWatch]. Só no direto a dar, no direto do
+     * anel e sem pausa; nunca à espera de voltar a ligar, à procura dos failovers, nem a esconder uma falha de dados.
+     */
+    private fun checkFreeze(source: StreamEngine) {
+        val req = request ?: return
+        if (source !== engine || !req.live) return
+        val sample = source.freezeSample() ?: return
+        val hold = !ready || held || failure != null || nextTryAt != 0L || backupJob?.isActive == true ||
+            sample.paused || timeshift?.atLive == false || timeshift?.seeking == true || sample.concealing
+        val kind = freezeWatch.tick(
+            now(), sample.videoFrames, sample.videoPtsMs, sample.audioFrames, sample.bytes, sample.samples,
+            sample.hasVideo, sample.hasAudio, hold, buffering,
+            // A playlist só conta num HLS (a do leitor do canal principal, a ler diretamente ou pelo anel).
+            if (currentCandidate?.isHls == true) sample.playlistStuckMs else -1L, sample.playlistTargetMs,
+        )
+        if (kind != FreezeWatch.NONE) onFreeze(req, kind)
+    }
+
+    /**
+     * O canal congelou com a ligação a dar ([FreezeWatch]): volta a ligar à mesma fonte, como numa paragem; se voltar a
+     * congelar pouco depois, os failovers. Conta como uma queda da fonte (SourceHistory).
+     */
+    private fun onFreeze(req: PlaybackRequest, kind: Int) {
+        // A paragem que esteja a contar (no GoatCore, a imagem parada também é "a carregar") não volta a ligar outra vez.
+        stallJob?.cancel()
+        recordDrop()
+        val failover = freezes.stalled(now(), canFailOver(req))
+        Log.w(FREEZE_TAG, "${FreezeWatch.label(kind)}: ${if (failover) "failovers" else "reconnecting"}")
+        recover(req, failover)
+    }
+
+    /** Preso ou congelado: volta a ligar, ou ([failover]) dá o primeiro failover (sem nenhum, volta a ligar). */
+    private fun recover(req: PlaybackRequest, failover: Boolean) {
         if (failover) {
             backupJob = scope.launch {
                 val backups = runCatching { host.backupsFor(req) }.getOrDefault(emptyList())
@@ -837,6 +898,12 @@ internal class ChannelPlayback(
         const val TICK_MS = 500L
 
         const val TAG = "GoatTV.Playback"
+
+        /** O registo do [FreezeWatch]. */
+        const val FREEZE_TAG = "GoatFreeze"
+
+        /** O [FreezeWatch] lê os contadores a este ritmo. */
+        const val FREEZE_TICK_MS = 1_000L
 
         /** Ver [onDrop]. */
         const val DROP_WINDOW_MS = 60_000L

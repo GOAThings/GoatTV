@@ -154,6 +154,10 @@ internal class PlayerEngine(
     override fun sampleNet() {
         net?.sample(player, timeshift?.recordedMs)
     }
+
+    override val watchesFreeze: Boolean get() = player is GoatCoreMediaPlayer
+
+    override fun freezeSample(): FreezeSample? = (player as? GoatCoreMediaPlayer)?.freezeSample()
 }
 
 /**

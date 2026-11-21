@@ -359,7 +359,30 @@ internal interface StreamEngine {
 
     /** De segundo a segundo: a medição da ligação. */
     fun sampleNet()
+
+    /** O motor dá os contadores para o [cc.slokker.itv.playback.FreezeWatch] (só o GoatCore). */
+    val watchesFreeze: Boolean get() = false
+
+    /** Os contadores agora (ver [FreezeSample]); null sem motor a dar. */
+    fun freezeSample(): FreezeSample? = null
 }
+
+/** Os contadores do motor de um segundo, para o [cc.slokker.itv.playback.FreezeWatch.tick] (o mesmo nome em cada um). */
+internal class FreezeSample(
+    val videoFrames: Long,
+    val videoPtsMs: Long,
+    val audioFrames: Long,
+    val bytes: Long,
+    val samples: Long,
+    val hasVideo: Boolean,
+    val hasAudio: Boolean,
+    /** A esconder uma falha de dados (ErrorConcealment): a imagem parada é de propósito. */
+    val concealing: Boolean,
+    /** Em pausa (o player não está para dar). */
+    val paused: Boolean,
+    val playlistStuckMs: Long,
+    val playlistTargetMs: Long,
+)
 
 /** O que obriga a criar um player novo (o resto das definições lê-se a cada tentativa). */
 internal data class PlayerBuild(
