@@ -383,6 +383,8 @@ final class GoatCorePlayback: NSObject {
     /// Os números da ligação a dar, e os bytes de todas as ligações desde o primeiro canal (a soma das que já fecharam
     /// e da atual: uma ligação que cai e volta a abrir não os perde). Ver ChannelProbe.
     var probe: ProbeCounters { session?.probe ?? ProbeCounters() }
+    /// O teletexto do canal a dar (novo em cada canal); nil sem ligação.
+    var teletextPages: TeletextFeed? { session?.teletextPages }
     var probeTotalBytes: Int64 { closedBytes + (session?.probe.bytes ?? 0) }
     /// As imagens que não se mostraram depois de faltarem dados (ver ErrorConcealment), na ligação a dar.
     var concealedFrames: Int { session?.probe.concealed ?? 0 }
@@ -735,6 +737,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
     private let synchronizer: AVSampleBufferRenderSynchronizer
     private let queue = DispatchQueue(label: "cc.slokker.goattv.goatcore", qos: .userInteractive)
     private let pipeline = MediaPipeline()
+    /// Ver MediaPipeline.teletextPages (com o seu lock: lê-se da fila principal).
+    var teletextPages: TeletextFeed { pipeline.teletextPages }
     /// Ver [ProbeCounters]; escreve-se das filas da rede e do vídeo, lê-se da principal.
     private let probeLock = OSAllocatedUnfairLock(initialState: ProbeCounters())
     var probe: ProbeCounters { probeLock.withLock { $0 } }

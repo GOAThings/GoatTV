@@ -19,6 +19,8 @@ struct PlayerScreen: View {
         case second
         /// O canal de reserva do canal a ver (ver BackupChannelPanel).
         case backup
+        /// O teletexto do canal, por cima do vídeo (ver TeletextTv).
+        case teletext
         case settings(SettingsPanel.Page)
     }
 
@@ -480,6 +482,11 @@ struct PlayerScreen: View {
             // "Ainda estás a ver?" e o ecrã de parado (definição idle_stop).
             IdleOverlay()
 
+            if panel == .teletext {
+                TeletextTv(onClose: closePanel)
+                    .transition(.opacity)
+            }
+
             if case .settings(let page) = panel {
                 // À esquerda, como as listas, em todos os temas.
                 HStack {
@@ -503,6 +510,10 @@ struct PlayerScreen: View {
         .animation(.easeOut(duration: 0.25), value: tileCount)
         // Só tem som o canal com foco.
         .onChange(of: focusTile) { _, _ in applyAudio() }
+        .onChange(of: model.teletextRequest) { _, _ in
+            guard model.player.teletextPages != nil else { return }
+            panel = .teletext
+        }
         .onChange(of: model.extras.map(\.channel.key)) { _, _ in
             // Um canal extra fechou: o foco e a imagem grande não podem ficar num lugar que já não existe.
             if focusTile >= tileCount { focusTile = tileCount - 1 }
@@ -547,6 +558,8 @@ struct PlayerScreen: View {
         .task(id: activity) {
             // A barra com os botões fecha ao fim de 8 s; os painéis no tempo das definições.
             guard hud || (panel != .none && model.prefs.panelTimeout > 0) else { return }
+            // O teletexto lê-se devagar: não fecha sozinho.
+            if panel == .teletext { return }
             if typing, case .settings = panel { return }
             try? await Task.sleep(for: .seconds(hud && panel == .none ? 8 : model.prefs.panelTimeout))
             guard !Task.isCancelled else { return }

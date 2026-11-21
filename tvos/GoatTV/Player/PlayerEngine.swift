@@ -2105,6 +2105,9 @@ extension PlayerEngine {
         }
     }
 
+    /// O teletexto do canal a dar (só no GoatCore, que lê o TS; ver TeletextFeed); nil nos outros motores.
+    var teletextPages: TeletextFeed? { backend == .goatcore ? goatCorePlayback?.teletextPages : nil }
+
     /// Inclui "Desligadas" (id -1) em primeiro.
     var subtitleTracks: [Track] {
         switch backend {

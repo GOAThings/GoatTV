@@ -142,6 +142,9 @@ public final class MediaPipeline {
     /// A faixa de áudio a tocar (o PID); nil = a primeira.
     public var audioPid: Int?
 
+    /// O teletexto todo do canal (ver TeletextFeed): a faixa dele lê-se sempre, para a página 100 aparecer logo.
+    public let teletextPages = TeletextFeed()
+
     private let listener = Listener()
     /// TS ou MP4 fragmentado (o fMP4 do HLS), escolhido pelos primeiros bytes.
     private var demuxer: StreamDemuxer
@@ -293,6 +296,7 @@ public final class MediaPipeline {
                               role: Int(t.role), channels: Int(t.channels), name: t.name)
         }
         rawTracks = list
+        teletextPages.tracks(list)
         let hadCaptions = textTracks.contains { $0.isCaptions }
         textTracks = list.flatMap { t -> [TextTrack] in
             if t.codec.name == "DVB_SUBTITLE" {
@@ -334,6 +338,7 @@ public final class MediaPipeline {
     private func sample(_ track: TsTrack, _ sample: TsSample) {
         let pid = Int(track.pid)
         if track.kind.name == "SUBTITLE" {
+            if pid == teletextPages.pid, track.codec.name == "TELETEXT" { teletextPages.feed(pid: pid, data: sample.data) }
             var recent = recentText[pid] ?? []
             recent.append(sample)
             if recent.count > Self.recentTextCount { recent.removeFirst(recent.count - Self.recentTextCount) }
