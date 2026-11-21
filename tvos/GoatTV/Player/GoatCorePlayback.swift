@@ -1540,7 +1540,8 @@ private final class StreamSession: NSObject, URLSessionDataDelegate {
         let samples = pipeline.samples
         let concealing = pipeline.concealing
         let waiting = stalled
-        let video = hasVideo
+        // Sem vídeo de propósito (só o som, em segundo plano): para o FreezeWatch é como uma rádio.
+        let video = hasVideo && !videoOff
         let sound = hasAudio
         probeLock.withLock {
             if lead.isFinite { $0.bufferMs = Int64(max(0, lead) * 1000) }

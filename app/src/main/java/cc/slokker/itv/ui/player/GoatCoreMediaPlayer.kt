@@ -170,7 +170,8 @@ internal class GoatCoreMediaPlayer(
             audioFrames = s.audioFrames.toLong(),
             bytes = s.bytesRead,
             samples = s.samples,
-            hasVideo = c.hasVideo && !audioOnly,
+            // Sem vídeo de propósito (só o som, com a app em segundo plano): a imagem parada não é um canal congelado.
+            hasVideo = c.hasVideo && !audioOnly && !c.videoOff,
             hasAudio = c.selectedAudio >= 0,
             concealing = c.concealing,
             paused = !playWhenReady,
