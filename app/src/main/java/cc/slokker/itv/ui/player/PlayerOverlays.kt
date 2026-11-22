@@ -26,6 +26,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
@@ -222,6 +224,7 @@ internal fun ProgrammeTimes(current: EpgEntry, now: Long, modifier: Modifier = M
 private fun WideProgress(progress: Float?, onClick: (() -> Unit)?, focus: FocusRequester?) {
     val brush = LocalAccent.current.brush
     var focused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     Spacer(
         Modifier
             .fillMaxWidth()
@@ -234,6 +237,11 @@ private fun WideProgress(progress: Float?, onClick: (() -> Unit)?, focus: FocusR
                         .onKeyEvent { e ->
                             when (e.key.nativeKeyCode) {
                                 AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                                // ↓ vai aos botões aqui mesmo: sem isto, a tecla subia ao player e mudava de canal.
+                                AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                    if (e.type == KeyEventType.KeyDown) focusManager.moveFocus(FocusDirection.Down)
+                                    true
+                                }
                                 AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                     if (e.type == KeyEventType.KeyUp) onClick()
                                     true
