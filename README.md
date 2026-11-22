@@ -13,9 +13,20 @@ Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 
 | | |
 |---|---|
-| ![TV guide](docs/screenshots/guide.jpg) | ![Channel guide](docs/screenshots/channel-guide.jpg) |
+| ![TV guide](docs/screenshots/guide.jpg) | ![Now playing](docs/screenshots/player-hud.jpg) |
+| ![Split screen](docs/screenshots/multiview-split.jpg) | ![Picture in picture](docs/screenshots/multiview-pip.jpg) |
 | ![Search](docs/screenshots/search.jpg) | ![Groups](docs/screenshots/groups.jpg) |
 | ![Settings](docs/screenshots/settings.jpg) | ![Welcome](docs/screenshots/welcome.jpg) |
+
+### Themes
+
+Settings → Appearance → Theme.
+
+| Glass | Shadow | Solid |
+|---|---|---|
+| ![Glass](docs/screenshots/channels-glass.jpg) | ![Shadow](docs/screenshots/channels-shadow.jpg) | ![Solid](docs/screenshots/channels-solid.jpg) |
+
+![Theme settings](docs/screenshots/themes.jpg)
 
 ### Phone
 
@@ -23,8 +34,8 @@ Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 |---|---|---|
 | ![Home](docs/screenshots/phone-home.jpg) | ![Guide](docs/screenshots/phone-guide.jpg) | ![Channel](docs/screenshots/phone-channel.jpg) |
 
-Screenshots use a demo playlist with made-up channels. Video: Big Buck Bunny, © Blender Foundation
-(CC BY 3.0), [peach.blender.org](https://peach.blender.org).
+Screenshots use a demo playlist with made-up channels. Video: Big Buck Bunny and Tears of Steel, © Blender
+Foundation (CC BY 3.0), [peach.blender.org](https://peach.blender.org), [mango.blender.org](https://mango.blender.org).
 
 ## Install
 
