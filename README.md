@@ -14,9 +14,9 @@ Xtream Codes or M3U lists, either on the TV or in a GOAT account.
 | | |
 |---|---|
 | ![TV guide](docs/screenshots/guide.jpg) | ![Now playing](docs/screenshots/player-hud.jpg) |
-| ![Split screen](docs/screenshots/multiview-split.jpg) | ![Search](docs/screenshots/search.jpg) |
-| ![Groups](docs/screenshots/groups.jpg) | ![Settings](docs/screenshots/settings.jpg) |
-| ![Theme settings](docs/screenshots/themes.jpg) | ![Welcome](docs/screenshots/welcome.jpg) |
+| ![Split screen](docs/screenshots/multiview-split.jpg) | ![Picture in picture](docs/screenshots/multiview-pip.jpg) |
+| ![Search](docs/screenshots/search.jpg) | ![Groups](docs/screenshots/groups.jpg) |
+| ![Settings](docs/screenshots/settings.jpg) | ![Welcome](docs/screenshots/welcome.jpg) |
 
 ### Themes
 
@@ -25,6 +25,8 @@ Settings → Appearance → Theme.
 | Glass | Shadow | Solid |
 |---|---|---|
 | ![Glass](docs/screenshots/channels-glass.jpg) | ![Shadow](docs/screenshots/channels-shadow.jpg) | ![Solid](docs/screenshots/channels-solid.jpg) |
+
+![Theme settings](docs/screenshots/themes.jpg)
 
 ### Phone
 
