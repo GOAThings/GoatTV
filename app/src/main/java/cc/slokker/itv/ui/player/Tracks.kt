@@ -131,8 +131,8 @@ internal fun codecName(mime: String?): String? = when (mime) {
     MimeTypes.AUDIO_MPEG -> "MP3"
     MimeTypes.APPLICATION_DVBSUBS -> "DVB"
     // As legendas em teletexto do GoatCore (ver GoatCoreMediaPlayer.TELETEXT_MIME).
-    "text/x-dvb-teletext" -> "Teletext"
-    MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> "Closed captions"
+    "text/x-dvb-teletext" -> I18n.s.teletext
+    MimeTypes.APPLICATION_CEA608, MimeTypes.APPLICATION_CEA708 -> I18n.s.closedCaptions
     MimeTypes.TEXT_VTT -> "WebVTT"
     // O VLC não diz o formato (audio/x-unknown…): sem etiqueta, em vez de "X-UNKNOWN".
     null, MimeTypes.VIDEO_UNKNOWN, MimeTypes.AUDIO_UNKNOWN, MimeTypes.TEXT_UNKNOWN -> null
@@ -141,7 +141,7 @@ internal fun codecName(mime: String?): String? = when (mime) {
 
 internal fun channelsLabel(n: Int): String? = when {
     n <= 0 -> null
-    n == 1 -> "Mono"
+    n == 1 -> I18n.s.mono
     n == 2 -> I18n.s.stereo
     n == 6 -> "5.1"
     n == 8 -> "7.1"

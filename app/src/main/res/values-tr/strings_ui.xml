@@ -509,6 +509,8 @@
     <string name="type">Tür</string>
     <string name="name">Ad</string>
     <string name="server">Sunucu</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://sunucu:8080</string>
     <string name="username">Kullanıcı adı</string>
     <string name="password">Şifre</string>
     <string name="epg_url">Yayın akışı URL\'si (XMLTV)</string>
@@ -1031,6 +1033,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">Teletekst</string>
+    <string name="closed_captions">Altyazı (CC)</string>
     <string name="teletext_waiting">%1$s sayfası bekleniyor</string>
     <string name="teletext_transparent">Saydam arka plan</string>
     <string name="teletext_reveal">Göster</string>

@@ -509,6 +509,8 @@
     <string name="type">类型</string>
     <string name="name">名称</string>
     <string name="server">服务器</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">用户名</string>
     <string name="password">密码</string>
     <string name="epg_url">节目指南 URL（XMLTV）</string>
@@ -1028,6 +1030,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">图文电视</string>
+    <string name="closed_captions">隐藏式字幕</string>
     <string name="teletext_waiting">正在等待第 %1$s 页</string>
     <string name="teletext_transparent">透明背景</string>
     <string name="teletext_reveal">显示隐藏内容</string>

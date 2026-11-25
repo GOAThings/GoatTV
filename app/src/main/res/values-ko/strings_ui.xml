@@ -509,6 +509,8 @@
     <string name="type">유형</string>
     <string name="name">이름</string>
     <string name="server">서버</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">사용자 이름</string>
     <string name="password">비밀번호</string>
     <string name="epg_url">편성표 URL(XMLTV)</string>
@@ -1028,6 +1030,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">텔레텍스트</string>
+    <string name="closed_captions">폐쇄 자막</string>
     <string name="teletext_waiting">%1$s 페이지 기다리는 중</string>
     <string name="teletext_transparent">투명 배경</string>
     <string name="teletext_reveal">보이기</string>

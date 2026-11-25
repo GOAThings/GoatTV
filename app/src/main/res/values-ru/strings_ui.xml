@@ -509,6 +509,8 @@
     <string name="type">Тип</string>
     <string name="name">Название</string>
     <string name="server">Сервер</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">Имя пользователя</string>
     <string name="password">Пароль</string>
     <string name="epg_url">Ссылка на телепрограмму (XMLTV)</string>
@@ -559,7 +561,9 @@
     <string name="countries_clear">Показать все страны</string>
     <plurals name="groups_count">
         <item quantity="one">%d группа</item>
-        <item quantity="other">%d групп</item>
+        <item quantity="few">%d группы</item>
+        <item quantity="many">%d групп</item>
+        <item quantity="other">%d группы</item>
     </plurals>
     <string name="reorder_groups">Упорядочить группы</string>
     <string name="reorder_groups_sub">OK — взять группу, ↑/↓ — переместить, OK — отпустить</string>
@@ -1035,6 +1039,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">Телетекст</string>
+    <string name="closed_captions">Скрытые субтитры</string>
     <string name="teletext_waiting">Ожидание страницы %1$s</string>
     <string name="teletext_transparent">Прозрачный фон</string>
     <string name="teletext_reveal">Показать скрытое</string>

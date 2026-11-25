@@ -61,11 +61,31 @@ struct Strings {
         return Strings.fill(text, args)
     }
 
-    /// Um plural do Android (`streams_limit`): "one" com 1, senão "other".
+    /// Um plural do Android (`streams_limit`), com a forma da língua (as regras do Android/CLDR para o russo e o
+    /// árabe; nas outras, "one" com 1, senão "other"). Uma forma que a língua não tenha cai no "other".
     func plural(_ key: String, _ n: Int) -> String {
         let table = AndroidStrings.table[lang] ?? AndroidStrings.table["en"] ?? [:]
-        let text = (n == 1 ? table[key + "_one"] : nil) ?? table[key + "_other"] ?? table[key + "_one"] ?? key
+        let text = table[key + "_" + Strings.pluralCategory(lang, n)] ?? table[key + "_other"] ?? table[key + "_one"] ?? key
         return Strings.fill(text, ["\(n)"])
+    }
+
+    static func pluralCategory(_ lang: String, _ n: Int) -> String {
+        let n10 = n % 10, n100 = n % 100
+        switch lang {
+        case "ru":
+            if n10 == 1 && n100 != 11 { return "one" }
+            if (2...4).contains(n10) && !(12...14).contains(n100) { return "few" }
+            return "many"
+        case "ar":
+            if n == 0 { return "zero" }
+            if n == 1 { return "one" }
+            if n == 2 { return "two" }
+            if (3...10).contains(n100) { return "few" }
+            if (11...99).contains(n100) { return "many" }
+            return "other"
+        default:
+            return n == 1 ? "one" : "other"
+        }
     }
 
     static func fill(_ text: String, _ args: [String]) -> String {

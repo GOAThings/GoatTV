@@ -509,6 +509,8 @@
     <string name="type">Jenis</string>
     <string name="name">Nama</string>
     <string name="server">Server</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">Nama pengguna</string>
     <string name="password">Sandi</string>
     <string name="epg_url">URL panduan (XMLTV)</string>
@@ -1029,6 +1031,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">Teleteks</string>
+    <string name="closed_captions">Teks tertutup (CC)</string>
     <string name="teletext_waiting">Menunggu halaman %1$s</string>
     <string name="teletext_transparent">Latar transparan</string>
     <string name="teletext_reveal">Tampilkan</string>

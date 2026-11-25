@@ -1135,6 +1135,8 @@ class Strings(context: Context) {
     val noTracks get() = s(R.string.no_tracks)
     fun track(n: Int) = s(R.string.track, n)
     val stereo get() = s(R.string.stereo)
+    val mono get() = s(R.string.audio_label_mono)
+    val closedCaptions get() = s(R.string.closed_captions)
     fun channelsAudio(n: Int) = s(R.string.channels_audio, n)
     val resolution get() = s(R.string.resolution)
     val dynamicRange get() = s(R.string.dynamic_range)

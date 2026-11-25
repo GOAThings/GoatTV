@@ -509,6 +509,8 @@
     <string name="type">Tipo</string>
     <string name="name">Nome</string>
     <string name="server">Server</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">Nome utente</string>
     <string name="password">Password</string>
     <string name="epg_url">URL della guida (XMLTV)</string>
@@ -1033,6 +1035,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">Televideo</string>
+    <string name="closed_captions">Sottotitoli (CC)</string>
     <string name="teletext_waiting">In attesa della pagina %1$s</string>
     <string name="teletext_transparent">Sfondo trasparente</string>
     <string name="teletext_reveal">Rivela</string>

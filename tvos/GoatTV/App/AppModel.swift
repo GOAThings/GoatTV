@@ -462,7 +462,10 @@ final class AppModel {
 
     /// Cria ([id] nil) ou altera uma lista: na conta, ou nesta TV. Devolve o erro a mostrar, ou nil.
     func savePlaylist(id: String?, form: PlaylistForm) async -> String? {
-        if let problem = form.problem { return formProblem(problem) }
+        if let problem = form.problem {
+            // Numa Stalker o servidor é o URL do portal (como no Android: PlaylistProblem.PORTAL).
+            return problem == .server && form.type == .stalker ? strings.r("missing_portal") : formProblem(problem)
+        }
         let first = content == nil
         if isLocal || !hasAccount {
             let playlist = form.playlist(id: id ?? "local" + String(UUID().uuidString.prefix(12)).lowercased())
@@ -536,11 +539,11 @@ final class AppModel {
 
     private func formProblem(_ p: PlaylistForm.Problem) -> String {
         switch p {
-        case .server: return strings.t("Enter the server", "Falta o servidor")
-        case .username: return strings.t("Enter the username", "Falta o utilizador")
-        case .password: return strings.t("Enter the password", "Falta a password")
-        case .url: return strings.t("Enter the playlist address", "Falta o endereço da lista")
-        case .mac: return strings.t("Enter a valid MAC address", "Escreve um endereço MAC válido")
+        case .server: return strings.r("missing_server")
+        case .username: return strings.r("missing_username")
+        case .password: return strings.r("missing_password")
+        case .url: return strings.r("missing_url")
+        case .mac: return strings.r("invalid_mac")
         }
     }
 

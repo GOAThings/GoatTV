@@ -509,6 +509,8 @@
     <string name="type">النوع</string>
     <string name="name">الاسم</string>
     <string name="server">الخادم</string>
+    <!-- Apple TV: o exemplo no ecrã de escrever o servidor (o Android não o usa). -->
+    <string name="server_hint">http://server:8080</string>
     <string name="username">اسم المستخدم</string>
     <string name="password">كلمة المرور</string>
     <string name="epg_url">URL الدليل (XMLTV)</string>
@@ -558,8 +560,12 @@
     <string name="countries_none">بلا بلد</string>
     <string name="countries_clear">عرض كل البلدان</string>
     <plurals name="groups_count">
+        <item quantity="zero">%d مجموعة</item>
         <item quantity="one">%d مجموعة</item>
-        <item quantity="other">%d مجموعات</item>
+        <item quantity="two">%d مجموعتان</item>
+        <item quantity="few">%d مجموعات</item>
+        <item quantity="many">%d مجموعةً</item>
+        <item quantity="other">%d مجموعة</item>
     </plurals>
     <string name="reorder_groups">إعادة ترتيب المجموعات</string>
     <string name="reorder_groups_sub">OK لالتقاط مجموعة، ↑/↓ لنقلها، OK لإفلاتها</string>
@@ -1039,6 +1045,7 @@
 
     <!-- Teletexto: ver as páginas do canal por cima do vídeo -->
     <string name="teletext">تيليتكست</string>
+    <string name="closed_captions">ترجمة مغلقة (CC)</string>
     <string name="teletext_waiting">بانتظار الصفحة %1$s</string>
     <string name="teletext_transparent">خلفية شفافة</string>
     <string name="teletext_reveal">إظهار</string>

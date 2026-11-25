@@ -340,7 +340,7 @@ struct SettingsPanel: View {
                 stack[stack.count - 2] = .epgPick(key, logo, q)
             }
         case .formField(let key):
-            textPage(placeholder: key == "server" ? "http://servidor:8080" : (key == "url" || key == "epg" ? "http://…" : ""),
+            textPage(placeholder: key == "server" ? (form.type == .stalker ? "http://…" : s.r("server_hint")) : (key == "url" || key == "epg" ? "http://…" : ""),
                      hint: "", initial: fieldValue(key), secure: key == "pass") { value in
                 setField(key, value)
             }
@@ -1545,14 +1545,21 @@ struct SettingsPanel: View {
         }
     }
 
+    /// Os mesmos recursos do formulário do Android (SettingsScreen, Route.PlaylistEdit), em todas as línguas.
     private func fieldTitle(_ key: String) -> String {
+        let stalker = form.type == .stalker
         switch key {
-        case "name": return s.t("Name", "Nome")
-        case "server": return s.t("Server", "Servidor")
-        case "user": return s.t("Username", "Utilizador")
-        case "pass": return s.t("Password", "Password")
-        case "url": return s.t("Playlist address (M3U)", "Endereço da lista (M3U)")
-        default: return s.t("Guide address (XMLTV)", "Endereço do guia (XMLTV)")
+        case "name": return s.r("name")
+        case "server": return s.r(stalker ? "portal_url" : "server")
+        case "user": return s.r(stalker ? "mac_address" : "username")
+        case "pass": return s.r("password")
+        case "url": return s.r("playlist_url")
+        // Os nomes dos campos do portal Stalker ficam como o fornecedor os escreve.
+        case "serial": return "Serial"
+        case "device": return "Device ID"
+        case "device2": return "Device ID 2"
+        case "signature": return "Signature"
+        default: return s.r("epg_url")
         }
     }
 

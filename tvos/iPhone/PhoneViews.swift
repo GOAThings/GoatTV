@@ -1874,7 +1874,7 @@ private struct MenuTab: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("OK") { managingGroups = false } } }
             }
         }
-        .alert(s.t("User agent", "User agent"), isPresented: $editingAgent) {
+        .alert(s.r("user_agent"), isPresented: $editingAgent) {
             TextField("", text: $agentText).textInputAutocapitalization(.never).autocorrectionDisabled()
             Button("OK") {
                 let text = agentText.trimmingCharacters(in: .whitespaces)
@@ -2105,7 +2105,7 @@ private struct MenuTab: View {
                 pick(s.t("Stream format", "Formato do stream"), "stream_format", p.streamFormat.map { .string($0) }, formatOptions)
                 pick(s.t("Video decoder (VLC)", "Descodificador de vídeo (VLC)"), "decoder", p.decoder, [("hw", "Hardware"), ("sw", s.t("Software (compatibility)", "Software (compatibilidade)"))])
                 pick(s.r("deinterlace"), "deinterlace", p.deinterlace, [("yadif2x", s.r("deinterlace_smooth")), ("yadif", s.r("deinterlace_normal")), ("off", s.r("off"))])
-                MenuRow(s.t("User agent", "User agent"), value: p.userAgent.isEmpty ? s.t("Default", "Normal") : p.userAgent, chevron: true) {
+                MenuRow(s.r("user_agent"), value: p.userAgent.isEmpty ? s.r("user_agent_default") : p.userAgent, chevron: true) {
                     agentText = p.userAgent
                     editingAgent = true
                 }
