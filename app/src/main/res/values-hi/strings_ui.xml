@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">प्लेलिस्ट में इसे चलाने के लिए ज़रूरी कुंजी नहीं है।</string>
     <string name="err_drm_widevine">यह Widevine इस्तेमाल करता है, जिसे GoatTV अभी नहीं चला सकता।</string>
     <string name="err_drm_playready">यह PlayReady इस्तेमाल करता है, जिसे GoatTV नहीं चला सकता।</string>
+    <string name="err_drm_license">लाइसेंस सर्वर ने इसे अनलॉक नहीं किया।</string>
+    <string name="err_drm_widevine_apple">यह Widevine इस्तेमाल करता है, जिसे Apple TV और iPhone सपोर्ट नहीं करते।</string>
     <string name="err_drm_ask">अपने प्रदाता से चैनल कुंजियों (ClearKey) वाली प्लेलिस्ट माँगें।</string>
     <string name="err_video_decoder">यह डिवाइस यह वीडियो नहीं चला सकता</string>
     <string name="err_video_decoder_2">चैनल %1$s इस्तेमाल करता है, जिसे सॉफ़्टवेयर डिकोडर सपोर्ट नहीं करता (जैसे पुराने डिवाइस पर 4K या HEVC)।</string>

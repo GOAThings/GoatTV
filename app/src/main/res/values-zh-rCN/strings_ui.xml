@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">播放列表中没有播放它所需的密钥。</string>
     <string name="err_drm_widevine">它使用 Widevine，GoatTV 暂时无法播放。</string>
     <string name="err_drm_playready">它使用 PlayReady，GoatTV 无法播放。</string>
+    <string name="err_drm_license">许可证服务器没有解锁它。</string>
+    <string name="err_drm_widevine_apple">它使用 Widevine，Apple TV 和 iPhone 不支持。</string>
     <string name="err_drm_ask">请向提供商索取包含频道密钥（ClearKey）的播放列表。</string>
     <string name="err_video_decoder">此设备无法播放此视频</string>
     <string name="err_video_decoder_2">此频道使用了软件解码器不支持的 %1$s（例如旧设备上的 4K 或 HEVC）。</string>

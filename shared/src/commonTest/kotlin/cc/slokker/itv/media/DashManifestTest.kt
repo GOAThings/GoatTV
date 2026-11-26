@@ -136,9 +136,46 @@ class DashManifestTest {
     }
 
     @Test
-    fun segmentBaseIsNotYet() {
-        val mpd = """<MPD type="static" mediaPresentationDuration="PT5S"><Period><AdaptationSet contentType="video"><Representation id="v" bandwidth="1"><BaseURL>v.mp4</BaseURL><SegmentBase indexRange="800-1000"/></Representation></AdaptationSet></Period></MPD>"""
-        assertEquals("DASH SegmentBase", HlsPlaylist.parseAny(mpd, "https://x/a.mpd#goatdash=v0", 0).unsupported)
+    fun segmentBaseByTheIndex() {
+        val mpd = """<MPD type="static" mediaPresentationDuration="PT10S"><Period><AdaptationSet contentType="video"><Representation id="v" bandwidth="1"><BaseURL>v.mp4</BaseURL><SegmentBase indexRange="800-855" timescale="1000"><Initialization range="0-799"/></SegmentBase></Representation></AdaptationSet>
+            <AdaptationSet contentType="text" mimeType="text/vtt" lang="en"><Representation id="s" bandwidth="256"><BaseURL>s-en.webvtt</BaseURL></Representation></AdaptationSet></Period></MPD>"""
+        val p = HlsPlaylist.parseAny(mpd, "https://x/a.mpd#goatdash=v0", 0)
+        assertNull(p.unsupported)
+        val idx = p.dashIndex!!
+        assertEquals(800L, idx.range.offset)
+        assertEquals(56L, idx.range.length)
+        // Um sidx v0 (56 bytes): timescale 1000, earliest 0, first_offset 10, dois pedaços de 4 s e 6 s.
+        fun u32(v: Long) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
+        val body = byteArrayOf(0, 0, 0, 0) + u32(1) + u32(1000) + u32(0) + u32(10) + byteArrayOf(0, 0, 0, 2) +
+            u32(5000) + u32(4000) + u32(0x90000000) + u32(7000) + u32(6000) + u32(0x90000000)
+        val sidx = u32(8L + body.size) + "sidx".encodeToByteArray() + body
+        val full = DashManifest.withIndex(p, sidx)
+        assertEquals(2, full.segments.size)
+        // O primeiro pedaço começa a seguir ao sidx (800 + 56) mais o first_offset.
+        assertEquals(866L, full.segments[0].range.offset)
+        assertEquals(5000L, full.segments[0].range.length)
+        assertEquals(5866L, full.segments[1].range.offset)
+        assertEquals(listOf(0L, 4000L), full.segments.map { it.sequence })
+        assertEquals("https://x/v.mp4", full.segments[0].uri)
+        assertEquals(800L, full.segments[0].map?.length)
+        assertTrue(full.ended)
+        // As legendas WebVTT: um ficheiro só.
+        val master = HlsPlaylist.parseAny(mpd, "https://x/a.mpd", 0)
+        assertEquals(listOf("en"), master.variants[0].subtitles.map { it.language })
+        val t = HlsPlaylist.parseAny(mpd, master.variants[0].subtitles[0].uri, 0)
+        assertEquals(listOf("https://x/s-en.webvtt"), t.segments.map { it.uri })
+        assertEquals(10.0, t.segments[0].duration)
+    }
+
+    @Test
+    fun utcTiming() {
+        val mpd = """<MPD type="dynamic"><UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="https://time.example.com/now"/><Period/></MPD>"""
+        val t = DashManifest.timing(mpd)!!
+        assertEquals("http", t.kind)
+        assertEquals("https://time.example.com/now", t.value)
+        assertEquals(DashManifest.dateTime("2024-05-01T10:00:00Z"), DashManifest.serverTimeMs("2024-05-01T10:00:00.000Z\n"))
+        assertEquals("direct", DashManifest.timing("""<MPD><UTCTiming schemeIdUri="urn:mpeg:dash:utc:direct:2014" value="2024-05-01T10:00:00Z"/></MPD>""")?.kind)
+        assertNull(DashManifest.timing("""<MPD><UTCTiming schemeIdUri="urn:mpeg:dash:utc:ntp:2014" value="pool.ntp.org"/></MPD>"""))
     }
 
     @Test

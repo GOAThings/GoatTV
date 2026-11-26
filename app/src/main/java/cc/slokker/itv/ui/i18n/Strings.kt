@@ -614,6 +614,8 @@ class Strings(context: Context) {
     fun errDrm(why: String) = ErrorInfo(
         s(R.string.err_drm),
         when {
+            // O ExoPlayer (Widevine/PlayReady) não recebeu a licença: o servidor recusou ou não respondeu.
+            !why.startsWith("GoatCore") -> s(R.string.err_drm_license)
             "Widevine" in why -> s(R.string.err_drm_widevine)
             "PlayReady" in why -> s(R.string.err_drm_playready)
             else -> s(R.string.err_drm_no_key)

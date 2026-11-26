@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">Listede bu kanalı oynatmak için gereken anahtar yok.</string>
     <string name="err_drm_widevine">Widevine kullanıyor; GoatTV bunu henüz oynatamıyor.</string>
     <string name="err_drm_playready">PlayReady kullanıyor; GoatTV bunu oynatamıyor.</string>
+    <string name="err_drm_license">Lisans sunucusu kanalın kilidini açmadı.</string>
+    <string name="err_drm_widevine_apple">Widevine kullanıyor; Apple TV ve iPhone bunu desteklemiyor.</string>
     <string name="err_drm_ask">Sağlayıcınızdan kanal anahtarlarını (ClearKey) içeren bir liste isteyin.</string>
     <string name="err_video_decoder">Bu cihaz bu videoyu oynatamıyor</string>
     <string name="err_video_decoder_2">Kanal, yazılım kod çözücünün desteklemediği %1$s kullanıyor (ör. eski bir cihazda 4K veya HEVC).</string>

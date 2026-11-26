@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">プレイリストに再生に必要なキーが含まれていません。</string>
     <string name="err_drm_widevine">Widevine を使用しており、GoatTV はまだ再生できません。</string>
     <string name="err_drm_playready">PlayReady を使用しており、GoatTV は再生できません。</string>
+    <string name="err_drm_license">ライセンスサーバーがロックを解除しませんでした。</string>
+    <string name="err_drm_widevine_apple">Widevine を使用しており、Apple TV と iPhone では対応していません。</string>
     <string name="err_drm_ask">チャンネルのキー（ClearKey）を含むプレイリストをプロバイダーに依頼してください。</string>
     <string name="err_video_decoder">このデバイスではこの映像を再生できません</string>
     <string name="err_video_decoder_2">このチャンネルは、ソフトウェアデコーダーが対応していない %1$s を使用しています（例：古いデバイスでの 4K や HEVC）。</string>

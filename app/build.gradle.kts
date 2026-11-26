@@ -103,6 +103,8 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    // Os canais com Widevine/PlayReady: o ExoPlayer com o DRM do sistema (o GoatCore decifra só o ClearKey).
+    implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.ui)
     // A sessão de media: teclas de media, "OK Google, pausa", e a notificação da rádio no telemóvel.
     implementation(libs.media3.session)

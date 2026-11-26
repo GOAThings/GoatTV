@@ -33,6 +33,8 @@ import androidx.media3.exoplayer.audio.AudioCapabilities
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
@@ -49,6 +51,8 @@ import cc.slokker.itv.data.Channel
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.SafeInput
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.data.StreamDrm
+import cc.slokker.itv.data.StreamFormat
 import cc.slokker.itv.media.PictureLook
 import cc.slokker.itv.media.AudioRole
 import cc.slokker.itv.playback.TrackMemory
@@ -369,6 +373,12 @@ internal fun Player.loadStream(
             val direct = httpFactory(channel, userAgent, transfer)
             // Uma ligação de cada vez: a desta tentativa só abre depois de fechar a anterior (ver StreamGate).
             val http = gate?.factory(direct, exclusive = !candidate.isHls) ?: direct
+            // Widevine/PlayReady: o DRM do sistema, sem o anel da pausa (gravava-se cifrado).
+            channel?.drm?.takeIf { systemDrm(it) }?.let { drm ->
+                val source = drmMediaSource(candidate, nearLive, http, direct, drm)
+                if (startMs > 0) setMediaSource(source, startMs) else setMediaSource(source)
+                return
+            }
             val source = timeshift?.open(candidate, direct, gate ?: StreamGate(), tsExtractors(), reconnectMs) ?: mediaSourceFor(candidate, nearLive, http)
             if (startMs > 0) setMediaSource(source, startMs) else setMediaSource(source)
         }
@@ -435,6 +445,34 @@ private fun tsExtractors() = DefaultExtractorsFactory().setTsExtractorFlags(
     DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
         DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
 )
+
+/**
+ * Um canal com Widevine ou PlayReady ([drm], da lista): o DASH (ou o HLS) do ExoPlayer com o DRM do sistema
+ * (MediaDrm), a licença pedida ao servidor da lista com os cabeçalhos dela, pela ligação [license].
+ */
+private fun drmMediaSource(candidate: StreamCandidate, nearLive: Boolean, http: DataSource.Factory, license: DataSource.Factory, drm: StreamDrm): MediaSource {
+    val uuid = if (drm.system == StreamDrm.PLAYREADY) C.PLAYREADY_UUID else C.WIDEVINE_UUID
+    val config = MediaItem.DrmConfiguration.Builder(uuid)
+        .apply { drm.licenseUrl?.let { setLicenseUri(it) } }
+        .setLicenseRequestHeaders(drm.licenseHeaders.orEmpty())
+        .setMultiSession(true)
+        .build()
+    val dash = candidate.format == StreamFormat.DASH || candidate.url.substringBefore('?').endsWith(".mpd", ignoreCase = true)
+    val item = MediaItem.Builder()
+        .setUri(candidate.url)
+        .setMimeType(if (dash) MimeTypes.APPLICATION_MPD else MimeTypes.APPLICATION_M3U8)
+        .setDrmConfiguration(config)
+        .apply {
+            if (nearLive) setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(NEAR_LIVE_OFFSET_MS).build())
+        }
+        .build()
+    val sessions = DefaultDrmSessionManagerProvider().apply { setDrmHttpDataSourceFactory(license) }
+    return if (dash) {
+        DashMediaSource.Factory(http).setDrmSessionManagerProvider(sessions).createMediaSource(item)
+    } else {
+        HlsMediaSource.Factory(http).setDrmSessionManagerProvider(sessions).createMediaSource(item)
+    }
+}
 
 /** [nearLive]: nas streams HLS, tocar o mais perto possível do direto. */
 private fun mediaSourceFor(candidate: StreamCandidate, nearLive: Boolean, http: DataSource.Factory): MediaSource {

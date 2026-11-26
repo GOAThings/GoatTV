@@ -12,10 +12,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import cc.slokker.itv.IPTV_USER_AGENT
 import cc.slokker.itv.data.Prefs
 import cc.slokker.itv.data.ProviderOutage
 import cc.slokker.itv.data.StreamCandidate
+import cc.slokker.itv.data.StreamDrm
 import cc.slokker.itv.playback.AttemptFailure
 import cc.slokker.itv.playback.FreezeWatch
 import cc.slokker.itv.playback.NextStep
@@ -103,6 +105,10 @@ internal class ChannelPlayback(
     var vlcFor by mutableStateOf<String?>(null)
         private set
 
+    /** Canal com Widevine/PlayReady (a lista diz): toca com o ExoPlayer e o DRM do sistema (só nesse). */
+    var exoFor by mutableStateOf<String?>(null)
+        private set
+
     var request: PlaybackRequest? = null
         private set
     var candidates: List<StreamCandidate> = emptyList()
@@ -188,9 +194,12 @@ internal class ChannelPlayback(
 
     val currentCandidate: StreamCandidate? get() = candidates.getOrNull(attempt)
 
-    /** O motor para [prefsEngine] no canal [channelKey]: o VLC se este canal passou para ele. */
-    fun engineFor(channelKey: String?, prefsEngine: String): String =
-        if (channelKey != null && vlcFor == channelKey) Prefs.Engine.VLC else prefsEngine
+    /** O motor para [prefsEngine] no canal [channelKey]: o ExoPlayer num canal com Widevine, o VLC se o canal passou para ele. */
+    fun engineFor(channelKey: String?, prefsEngine: String): String = when {
+        channelKey != null && exoFor == channelKey -> Prefs.Engine.EXO
+        channelKey != null && vlcFor == channelKey -> Prefs.Engine.VLC
+        else -> prefsEngine
+    }
 
     /** Catch-up: onde vai o vídeo, em ms desde o início do programa; null em direto. */
     fun programmePositionMs(): Long? {
@@ -303,6 +312,11 @@ internal class ChannelPlayback(
     }
 
     private fun open(request: PlaybackRequest) {
+        // Widevine/PlayReady: só o ExoPlayer (o DRM do sistema). O player recria-se e o canal volta a abrir com ele.
+        if (systemDrm(request.channel.drm) && engine?.player !is ExoPlayer && exoFor != request.shownKey && policy.vlcFallback) {
+            exoFor = request.shownKey
+            return
+        }
         flushWatched()
         held = false
         this.request = request
@@ -910,3 +924,6 @@ internal class ChannelPlayback(
         const val DROPS_TO_FAIL_OVER = 3
     }
 }
+
+/** O DRM do sistema (Widevine, PlayReady): o GoatCore não o decifra, só o ExoPlayer com o MediaDrm. */
+internal fun systemDrm(drm: StreamDrm?): Boolean = drm?.system == StreamDrm.WIDEVINE || drm?.system == StreamDrm.PLAYREADY

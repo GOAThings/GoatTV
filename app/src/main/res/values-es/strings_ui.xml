@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">La lista no incluye la clave necesaria para verlo.</string>
     <string name="err_drm_widevine">Usa Widevine, que GoatTV aún no puede reproducir.</string>
     <string name="err_drm_playready">Usa PlayReady, que GoatTV no puede reproducir.</string>
+    <string name="err_drm_license">El servidor de licencias no lo desbloqueó.</string>
+    <string name="err_drm_widevine_apple">Usa Widevine, que el Apple TV y el iPhone no admiten.</string>
     <string name="err_drm_ask">Pide a tu proveedor una lista con las claves de los canales (ClearKey).</string>
     <string name="err_video_decoder">Este dispositivo no puede reproducir este vídeo</string>
     <string name="err_video_decoder_2">El canal usa %1$s, que el decodificador por software no admite (p. ej., 4K o HEVC en un dispositivo antiguo).</string>

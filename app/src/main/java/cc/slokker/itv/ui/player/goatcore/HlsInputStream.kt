@@ -13,6 +13,7 @@ import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import cc.slokker.itv.media.Cenc
+import cc.slokker.itv.media.DashManifest
 import cc.slokker.itv.media.HlsMerger
 import cc.slokker.itv.media.HlsPlaylist
 import cc.slokker.itv.media.HlsQuality
@@ -116,8 +117,32 @@ class HlsInputStream(
             bytes.decodeToString()
         }
 
-    /** A playlist ou o MPD de [u], lidos (o DASH com o relógio de agora, para os diretos sem linha do tempo). */
-    private fun playlist(u: String): HlsPlaylist = HlsPlaylist.parseAny(fetch(u), u, System.currentTimeMillis())
+    /** O acerto do relógio dos diretos DASH pelo servidor (UTCTiming): ms a somar ao do aparelho; null = ainda por ver. */
+    private var clockOffsetMs: Long? = null
+
+    /**
+     * A playlist ou o MPD de [u], lidos: o DASH com o relógio de agora (acertado pelo servidor, se o MPD diz como),
+     * para os diretos sem linha do tempo; num SegmentBase, os segmentos vêm do índice do ficheiro (o sidx).
+     */
+    private fun playlist(u: String): HlsPlaylist {
+        val text = fetch(u)
+        val offset = clockOffsetMs ?: (if (DashManifest.isManifest(text)) clockOffset(text, u) else 0L).also { clockOffsetMs = it }
+        var p = HlsPlaylist.parseAny(text, u, System.currentTimeMillis() + offset)
+        p.dashIndex?.let { idx -> p = DashManifest.withIndex(p, open(idx.range).use { it.readBytes() }) }
+        return p
+    }
+
+    /** Quanto o relógio do servidor do MPD em [u] está à frente deste (0 se o MPD não diz, ou se falhar). */
+    private fun clockOffset(text: String, u: String): Long {
+        val timing = DashManifest.timing(text) ?: return 0L
+        return runCatching {
+            val before = System.currentTimeMillis()
+            val server = if (timing.kind == "direct") DashManifest.serverTimeMs(timing.value)
+            else DashManifest.serverTimeMs(fetchBytes(HlsPlaylist.resolve(HlsPlaylist.fetchUrl(u), timing.value)).decodeToString())
+            val local = (before + System.currentTimeMillis()) / 2
+            (server?.minus(local) ?: 0L).also { if (kotlin.math.abs(it) > 1000) Log.i("GoatCore", "DASH clock: server ${it} ms ahead") }
+        }.getOrDefault(0L)
+    }
 
     /**
      * As chaves ClearKey que faltam ([kids]), pedidas ao servidor de licenças do canal (W3C: um JSON com os KID, e

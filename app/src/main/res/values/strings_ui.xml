@@ -264,6 +264,8 @@
     <string name="err_drm_no_key">The playlist doesn\'t include the key needed to play it.</string>
     <string name="err_drm_widevine">It uses Widevine, which GoatTV can\'t play yet.</string>
     <string name="err_drm_playready">It uses PlayReady, which GoatTV can\'t play.</string>
+    <string name="err_drm_license">The licence server didn\'t unlock it.</string>
+    <string name="err_drm_widevine_apple">It uses Widevine, which Apple TV and iPhone don\'t support.</string>
     <string name="err_drm_ask">Ask your provider for a playlist with the channel keys (ClearKey).</string>
     <string name="err_video_decoder">This device can\'t play this video</string>
     <string name="err_video_decoder_2">The channel uses %1$s that the software decoder doesn\'t support (e.g. 4K or HEVC on an older device).</string>

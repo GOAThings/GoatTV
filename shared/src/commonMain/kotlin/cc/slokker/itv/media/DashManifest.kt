@@ -10,11 +10,15 @@ import kotlin.time.Instant
  * - sem marca no endereço, é a "playlist principal": as qualidades do vídeo (`#goatdash=v0`, `v1`…) e o áudio de cada
  *   língua (`#goatdash=a0`…), cada um apontando para o mesmo MPD;
  * - com a marca, os segmentos dessa faixa: o `SegmentTemplate` (com ou sem `SegmentTimeline`, `$Number$`/`$Time$`)
- *   ou a `SegmentList`, de todos os períodos, com o segmento de inicialização em [HlsSegment.map].
+ *   ou a `SegmentList`, de todos os períodos, com o segmento de inicialização em [HlsSegment.map];
+ * - o `SegmentBase` (um ficheiro só, VOD): a playlist diz onde está o índice ([HlsPlaylist.dashIndex]); o leitor lê
+ *   esses bytes (o `sidx`) e [withIndex] dá os segmentos;
+ * - as legendas WebVTT (`text/vtt`, um ficheiro ou aos segmentos) são legendas à parte (`#goatdash=t0`…).
  * Os números dos segmentos são o tempo de início em ms (igual em todas as qualidades, de recarga em recarga e de um
  * período para o outro), e [HlsSegment.next] é onde acaba. Num direto (`type="dynamic"`) sem linha do tempo, os
  * segmentos que já existem contam-se pelo relógio ([nowMs]) e pelo `availabilityStartTime`.
- * O `SegmentBase` (um ficheiro só, com o índice `sidx`) e as legendas ainda não: dão [HlsPlaylist.unsupported].
+ * O relógio dos diretos pode vir do servidor ([timing], o `UTCTiming`): o leitor acerta o [nowMs] com ele.
+ * As legendas TTML (`stpp`) e o WebVTT dentro de MP4 (`wvtt`) ainda não.
  */
 object DashManifest {
     /** A marca que diz a faixa no endereço do MPD (não vai ao servidor: ver [fetchUrl]). */
@@ -71,7 +75,7 @@ object DashManifest {
 
     // ---- a playlist principal ----
 
-    private class Sets(val video: List<XmlNode>, val audio: List<XmlNode>)
+    private class Sets(val video: List<XmlNode>, val audio: List<XmlNode>, val text: List<XmlNode>)
 
     private fun kind(set: XmlNode): String {
         val type = set["contentType"] ?: set["mimeType"]?.substringBefore('/')
@@ -93,7 +97,12 @@ object DashManifest {
         }
         val video = all.filter { kind(it) == "video" }
         val audio = all.filter { kind(it) == "audio" }
-        return Sets(video, audio)
+        // As legendas: só o WebVTT em texto (o TTML e o WebVTT dentro de MP4 ainda não).
+        val text = all.filter { set ->
+            val mime = set["mimeType"] ?: set.child("Representation")?.get("mimeType")
+            mime == "text/vtt"
+        }
+        return Sets(video, audio, text)
     }
 
     /** O vídeo: as qualidades do primeiro conjunto (as de outro codec não se misturam). */
@@ -111,13 +120,18 @@ object DashManifest {
             val label = (rep.child("Label") ?: set.child("Label"))?.text?.ifEmpty { null }
             HlsRendition("$mpdUrl${MARK}a$i", lang, role(set), channels, label ?: lang)
         }
+        val subtitles = sets.text.mapIndexed { i, set ->
+            val lang = set["lang"] ?: set.child("Representation")?.get("lang")
+            val label = set.child("Label")?.text?.ifEmpty { null }
+            HlsRendition("$mpdUrl${MARK}t$i", lang, name = label ?: lang)
+        }
         val video = videoReps(sets)
         if (video.isEmpty()) {
             // Só áudio (uma rádio em DASH): o áudio é a "qualidade".
             if (audio.isEmpty()) return failed("DASH without video or audio")
             val a = audio.first()
             val rep = audioRep(sets.audio.first())
-            return HlsPlaylist(listOf(HlsVariant(a.uri, rep?.get("bandwidth")?.toLongOrNull() ?: 0, 0, rep?.get("codecs"))), emptyList(), 6.0, false, null)
+            return HlsPlaylist(listOf(HlsVariant(a.uri, rep?.get("bandwidth")?.toLongOrNull() ?: 0, 0, rep?.get("codecs"), subtitles = subtitles)), emptyList(), 6.0, false, null)
         }
         val set = sets.video.first()
         val variants = video.mapIndexed { i, rep ->
@@ -128,6 +142,7 @@ object DashManifest {
                 listOfNotNull(rep["codecs"] ?: set["codecs"], sets.audio.firstOrNull()?.let { audioRep(it)?.get("codecs") ?: it["codecs"] }).joinToString(",").ifEmpty { null },
                 audioGroup = if (audio.isEmpty()) null else "dash-audio",
                 audio = audio,
+                subtitles = subtitles,
                 frameRate = (rep["frameRate"] ?: set["frameRate"])?.let { frameRate(it) } ?: 0.0,
             )
         }
@@ -151,6 +166,7 @@ object DashManifest {
         val segments = ArrayList<HlsSegment>()
         var unsupported: String? = null
         var maxDuration = 0.0
+        var dashIndex: DashIndex? = null
         for ((p, period) in periods.withIndex()) {
             val sets = sets(period.node)
             val (set, rep) = when (kindChar) {
@@ -164,11 +180,18 @@ object DashManifest {
                     val s = sets.audio[index.coerceIn(0, sets.audio.lastIndex)]
                     s to (audioRep(s) ?: continue)
                 }
+                't' -> {
+                    if (sets.text.isEmpty()) continue
+                    val s = sets.text[index.coerceIn(0, sets.text.lastIndex)]
+                    s to (s.child("Representation") ?: continue)
+                }
                 else -> return failed("bad DASH track")
             }
             val end = period.durationMs?.let { period.startMs + it } ?: periods.getOrNull(p + 1)?.startMs ?: totalMs
             val before = segments.size
-            val why = representation(period, set, rep, end, clock, segments)
+            val why = representation(period, set, rep, end, clock, segments, text = kindChar == 't') { found ->
+                if (periods.size > 1) unsupported = unsupported ?: "DASH SegmentBase with several periods" else dashIndex = found
+            }
             if (why != null) unsupported = unsupported ?: why
             // Um período novo: o que vem depois é outro conteúdo (outro moov, outros tempos).
             if (before > 0 && segments.size > before) {
@@ -184,12 +207,20 @@ object DashManifest {
             if (clock.windowMs > 0) list = list.filter { it.next >= nowMedia - clock.windowMs - 1000 }
             list = list.takeLast(LIVE_WINDOW)
         }
+        dashIndex?.let { if (unsupported == null) return HlsPlaylist(emptyList(), emptyList(), 6.0, true, null, dashIndex = it) }
         if (list.isEmpty() && unsupported == null) unsupported = if (clock.dynamic) null else "DASH without segments"
         return HlsPlaylist(emptyList(), list, if (maxDuration > 0) maxDuration else 6.0, !clock.dynamic, unsupported)
     }
 
-    /** Os segmentos de [rep] em [period] (até [endMs], o fim do período, se se sabe), juntos a [out]. */
-    private fun representation(period: Period, set: XmlNode, rep: XmlNode, endMs: Long?, clock: Clock, out: MutableList<HlsSegment>): String? {
+    /**
+     * Os segmentos de [rep] em [period] (até [endMs], o fim do período, se se sabe), juntos a [out]. Um `SegmentBase`
+     * vai para [onIndex] (os segmentos estão no índice do ficheiro); umas legendas ([text]) sem segmentos são um
+     * ficheiro só.
+     */
+    private fun representation(
+        period: Period, set: XmlNode, rep: XmlNode, endMs: Long?, clock: Clock, out: MutableList<HlsSegment>,
+        text: Boolean = false, onIndex: (DashIndex) -> Unit = {},
+    ): String? {
         val base = baseUrl(baseUrl(period.base, set), rep)
         val id = rep["id"].orEmpty()
         val bandwidth = rep["bandwidth"]?.toLongOrNull() ?: 0
@@ -197,9 +228,106 @@ object DashManifest {
         if (template != null) return fromTemplate(template, base, id, bandwidth, period, endMs, clock, out)
         val list = rep.child("SegmentList") ?: set.child("SegmentList") ?: period.node.child("SegmentList")
         if (list != null) return fromList(list, base, period, out)
-        if (rep.child("SegmentBase") != null || set.child("SegmentBase") != null || period.node.child("SegmentBase") != null) return "DASH SegmentBase"
+        val segmentBase = rep.child("SegmentBase") ?: set.child("SegmentBase") ?: period.node.child("SegmentBase")
+        if (text) {
+            // Um ficheiro .vtt inteiro: o período todo.
+            val end = endMs ?: (period.startMs + 6 * 3_600_000L)
+            out += HlsSegment(HlsRange(base, 0, -1), period.startMs, (end - period.startMs) / 1000.0, false, null, null, end)
+            return null
+        }
+        if (segmentBase != null) {
+            val indexRange = segmentBase["indexRange"] ?: return "DASH SegmentBase without indexRange"
+            val a = indexRange.substringBefore('-').trim().toLongOrNull() ?: return "DASH bad indexRange"
+            val b = indexRange.substringAfter('-', "").trim().toLongOrNull() ?: return "DASH bad indexRange"
+            val init = segmentBase.child("Initialization")?.let { range(it["sourceURL"]?.let { u -> HlsPlaylist.resolve(base, u) } ?: base, it["range"]) }
+                ?: HlsRange(base, 0, a)
+            val timescale = segmentBase["timescale"]?.toLongOrNull()?.takeIf { it > 0 } ?: 1L
+            val pto = segmentBase["presentationTimeOffset"]?.toLongOrNull() ?: 0L
+            onIndex(DashIndex(HlsRange(base, a, b - a + 1), init, period.startMs, floorDiv(pto * 1000, timescale)))
+            return null
+        }
         return "DASH without segment information"
     }
+
+    /**
+     * Os segmentos de um `SegmentBase` ([playlist] com [HlsPlaylist.dashIndex]), pelo `sidx` em [sidx] (os bytes do
+     * `indexRange`). Um índice que aponta para outros índices ainda não.
+     */
+    fun withIndex(playlist: HlsPlaylist, sidx: ByteArray): HlsPlaylist {
+        val idx = playlist.dashIndex ?: return playlist
+        var at = 0
+        while (at + 8 <= sidx.size) {
+            val size = u32(sidx, at)
+            val type = sidx.copyOfRange(at + 4, at + 8).decodeToString()
+            if (size < 8 || at + size > sidx.size) break
+            if (type == "sidx") return fromSidx(idx, sidx, at + 8, (at + size).toInt())
+            at += size.toInt()
+        }
+        return failed("DASH index without sidx")
+    }
+
+    private fun fromSidx(idx: DashIndex, d: ByteArray, from: Int, end: Int): HlsPlaylist {
+        val version = d[from].toInt()
+        var p = from + 4 + 4 // versão/flags, reference_ID
+        val timescale = u32(d, p).takeIf { it > 0 } ?: return failed("DASH sidx without timescale")
+        p += 4
+        val earliest: Long
+        val firstOffset: Long
+        if (version == 0) {
+            earliest = u32(d, p); firstOffset = u32(d, p + 4); p += 8
+        } else {
+            earliest = (u32(d, p) shl 32) or u32(d, p + 4); firstOffset = (u32(d, p + 8) shl 32) or u32(d, p + 12); p += 16
+        }
+        p += 2 // reserved
+        val count = ((d[p].toInt() and 0xFF) shl 8) or (d[p + 1].toInt() and 0xFF)
+        p += 2
+        // Os pedaços contam a partir do fim do sidx (no ficheiro: o início do indexRange mais o que se leu até lá).
+        var offset = idx.range.offset + end + firstOffset
+        var time = earliest
+        val segments = ArrayList<HlsSegment>(count)
+        fun ms(t: Long) = idx.periodStartMs + floorDiv(t * 1000, timescale) - idx.ptoMs
+        for (i in 0 until count) {
+            if (p + 12 > d.size) break
+            val ref = u32(d, p)
+            if (ref ushr 31 == 1L) return failed("DASH hierarchical sidx")
+            val size = ref and 0x7FFFFFFF
+            val duration = u32(d, p + 4)
+            segments += HlsSegment(HlsRange(idx.range.uri, offset, size), ms(time), duration.toDouble() / timescale, false, null, idx.map, ms(time + duration))
+            offset += size
+            time += duration
+            p += 12
+        }
+        val target = segments.maxOfOrNull { it.duration } ?: 6.0
+        return HlsPlaylist(emptyList(), segments, target, true, if (segments.isEmpty()) "DASH empty sidx" else null)
+    }
+
+    /**
+     * De onde vem a hora certa dos diretos (`UTCTiming`): "direct" (a hora vem no valor) ou "http" (o valor é um
+     * endereço que responde com a hora, `http-xsdate`/`http-iso`). null se o MPD não diz, ou diz de outra forma.
+     */
+    fun timing(text: String): DashTiming? {
+        val root = Xml.parse(text)?.takeIf { it.name == "MPD" } ?: return null
+        for (t in root.all("UTCTiming")) {
+            val scheme = t["schemeIdUri"].orEmpty()
+            val value = t["value"]?.trim()?.ifEmpty { null } ?: continue
+            when {
+                scheme.startsWith("urn:mpeg:dash:utc:direct:") -> return DashTiming("direct", value)
+                scheme.startsWith("urn:mpeg:dash:utc:http-xsdate:") || scheme.startsWith("urn:mpeg:dash:utc:http-iso:") ->
+                    return DashTiming("http", value.split(' ').first())
+            }
+        }
+        return null
+    }
+
+    /** A hora que um servidor de `UTCTiming` respondeu (ISO 8601, ou ms desde 1970), em ms; null se não se percebe. */
+    fun serverTimeMs(body: String): Long? {
+        val t = body.trim().removeSurrounding("\"")
+        t.toLongOrNull()?.let { return if (it < 100_000_000_000L) it * 1000 else it }
+        return dateTime(t)
+    }
+
+    private fun u32(d: ByteArray, at: Int): Long =
+        ((d[at].toLong() and 0xFF) shl 24) or ((d[at + 1].toLong() and 0xFF) shl 16) or ((d[at + 2].toLong() and 0xFF) shl 8) or (d[at + 3].toLong() and 0xFF)
 
     /** Um `SegmentTemplate` com os atributos e a linha do tempo herdados (o mais de dentro ganha). */
     private class Template(val attrs: Map<String, String>, val timeline: XmlNode?)
@@ -381,3 +509,12 @@ object DashManifest {
 
     private const val MAX_SEGMENTS = 20_000
 }
+
+/**
+ * Onde está o índice (`sidx`) de um DASH com `SegmentBase`: os bytes a ler ([range]), o segmento de inicialização
+ * ([map]), e o início do período e o presentationTimeOffset (ms) para os tempos (ver [DashManifest.withIndex]).
+ */
+class DashIndex(val range: HlsRange, val map: HlsRange?, val periodStartMs: Long, val ptoMs: Long)
+
+/** O `UTCTiming` de um MPD (ver [DashManifest.timing]): [kind] "direct" ou "http", e o valor. */
+class DashTiming(val kind: String, val value: String)

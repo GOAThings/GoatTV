@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">В плейлисте нет ключа для его воспроизведения.</string>
     <string name="err_drm_widevine">Он использует Widevine, который GoatTV пока не поддерживает.</string>
     <string name="err_drm_playready">Он использует PlayReady, который GoatTV не поддерживает.</string>
+    <string name="err_drm_license">Сервер лицензий не разблокировал его.</string>
+    <string name="err_drm_widevine_apple">Он использует Widevine, который Apple TV и iPhone не поддерживают.</string>
     <string name="err_drm_ask">Попросите у провайдера плейлист с ключами каналов (ClearKey).</string>
     <string name="err_video_decoder">Устройство не может воспроизвести это видео</string>
     <string name="err_video_decoder_2">Канал использует %1$s, который программный декодер не поддерживает (например, 4K или HEVC на старом устройстве).</string>

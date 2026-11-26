@@ -129,7 +129,8 @@ extension Strings {
 
     /// Um canal cifrado (DRM) que não se toca; [why] é a mensagem do GoatCore (diz se é Widevine, PlayReady…).
     func errDrm(_ why: String) -> ErrorInfo {
-        let cause = why.contains("Widevine") ? r("err_drm_widevine") : why.contains("PlayReady") ? r("err_drm_playready") : r("err_drm_no_key")
+        // Na Apple não há Widevine (só FairPlay): não é "ainda", é nunca.
+        let cause = why.contains("Widevine") ? r("err_drm_widevine_apple") : why.contains("PlayReady") ? r("err_drm_playready") : r("err_drm_no_key")
         return ErrorInfo(title: r("err_drm"), cause: cause, fixes: [r("err_drm_ask"), r("err_stream_format_5")])
     }
 

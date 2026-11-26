@@ -263,6 +263,8 @@
     <string name="err_drm_no_key">La playlist ne contient pas la clé nécessaire pour la lire.</string>
     <string name="err_drm_widevine">Elle utilise Widevine, que GoatTV ne sait pas encore lire.</string>
     <string name="err_drm_playready">Elle utilise PlayReady, que GoatTV ne sait pas lire.</string>
+    <string name="err_drm_license">Le serveur de licences ne l\'a pas déverrouillée.</string>
+    <string name="err_drm_widevine_apple">Elle utilise Widevine, que l\'Apple TV et l\'iPhone ne prennent pas en charge.</string>
     <string name="err_drm_ask">Demandez à votre fournisseur une playlist avec les clés des chaînes (ClearKey).</string>
     <string name="err_video_decoder">Cet appareil ne peut pas lire cette vidéo</string>
     <string name="err_video_decoder_2">La chaîne utilise %1$s que le décodeur logiciel ne prend pas en charge (ex. 4K ou HEVC sur un appareil plus ancien).</string>

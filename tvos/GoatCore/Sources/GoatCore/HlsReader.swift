@@ -420,9 +420,41 @@ public final class HlsReader: @unchecked Sendable {
         return 0
     }
 
-    /// A playlist ou o MPD de [uri], lidos (o DASH com o relógio de agora, para os diretos sem linha do tempo).
+    /// O acerto do relógio dos diretos DASH pelo servidor (UTCTiming): ms a somar ao do aparelho; nil = ainda por ver.
+    private var clockOffsetMs: Int64?
+
+    /// A playlist ou o MPD de [uri], lidos: o DASH com o relógio de agora (acertado pelo servidor, se o MPD diz como),
+    /// para os diretos sem linha do tempo; num SegmentBase, os segmentos vêm do índice do ficheiro (o sidx).
     private func parsed(_ uri: String) throws -> HlsPlaylist {
-        HlsPlaylist.companion.parseAny(text: try text(uri), base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+        let body = try text(uri)
+        let offset: Int64
+        if let known = clockOffsetMs {
+            offset = known
+        } else {
+            offset = DashManifest.shared.isManifest(text: body) ? clockOffset(body, uri) : 0
+            clockOffsetMs = offset
+        }
+        var playlist = HlsPlaylist.companion.parseAny(text: body, base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000) + offset)
+        if let idx = playlist.dashIndex {
+            let bytes = try fetch(idx.range.uri, offset: idx.range.offset, length: idx.range.length)
+            playlist = GoatShared.AppleDash.shared.withIndex(playlist: playlist, data: bytes)
+        }
+        return playlist
+    }
+
+    /// Quanto o relógio do servidor do MPD em [uri] está à frente deste (0 se o MPD não diz, ou se falhar).
+    private func clockOffset(_ body: String, _ uri: String) -> Int64 {
+        guard let timing = DashManifest.shared.timing(text: body) else { return 0 }
+        let before = Date()
+        var server: Int64?
+        if timing.kind == "direct" {
+            server = DashManifest.shared.serverTimeMs(body: timing.value)?.int64Value
+        } else if let answer = try? fetch(HlsPlaylist.companion.resolve(base: HlsPlaylist.companion.fetchUrl(uri: uri), ref: timing.value), offset: 0, length: -1) {
+            server = DashManifest.shared.serverTimeMs(body: String(decoding: answer, as: UTF8.self))?.int64Value
+        }
+        guard let server else { return 0 }
+        let local = Int64((before.timeIntervalSince1970 + Date().timeIntervalSince1970) / 2 * 1000)
+        return server - local
     }
 
     private func keyFor(_ uri: String) throws -> Data {
