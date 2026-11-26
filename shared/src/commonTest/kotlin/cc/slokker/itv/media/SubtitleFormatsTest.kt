@@ -82,30 +82,4 @@ class SubtitleFormatsTest {
         assertEquals("Absolute", WebVtt.text(samples.single().data))
     }
 
-    @Test
-    fun nestedSidx() {
-        val mpd = """<MPD type="static" mediaPresentationDuration="PT20S"><Period><AdaptationSet contentType="video"><Representation id="v" bandwidth="1"><BaseURL>v.mp4</BaseURL><SegmentBase indexRange="1000-1055" timescale="1000"/></Representation></AdaptationSet>
-            <AdaptationSet contentType="text" mimeType="application/mp4" codecs="stpp" lang="hi"><Representation id="s" bandwidth="1"><BaseURL>s.mp4</BaseURL></Representation></AdaptationSet></Period></MPD>"""
-        fun sidx(earliest: Long, firstOffset: Long, refs: List<Triple<Boolean, Long, Long>>): ByteArray {
-            var body = full(0, 0) + u32(1) + u32(1000) + u32(earliest) + u32(firstOffset) + byteArrayOf(0, 0, 0, refs.size.toByte())
-            for ((child, size, dur) in refs) body += u32((if (child) 0x80000000L else 0L) or size) + u32(dur) + u32(0x90000000L)
-            return box("sidx", body)
-        }
-        // O de topo (56 bytes): dois filhos, cada um com um sidx de 56 bytes e dois pedaços de 100 bytes (256).
-        val top = sidx(0, 0, listOf(Triple(true, 256, 10_000), Triple(true, 256, 10_000)))
-        assertEquals(56, top.size)
-        var p = HlsPlaylist.parseAny(mpd, "https://x/a.mpd#goatdash=v0", 0)
-        p = DashManifest.withIndex(p, top)
-        val first = p.dashIndex!!
-        assertEquals(1056L, first.range.offset)
-        p = DashManifest.withIndex(p, sidx(0, 0, listOf(Triple(false, 100, 5_000), Triple(false, 100, 5_000))))
-        assertEquals(1056L + 256, p.dashIndex!!.range.offset)
-        p = DashManifest.withIndex(p, sidx(10_000, 0, listOf(Triple(false, 100, 5_000), Triple(false, 100, 5_000))))
-        assertEquals(null, p.dashIndex)
-        assertEquals(listOf(0L, 5000L, 10_000L, 15_000L), p.segments.map { it.sequence })
-        assertEquals(listOf(1112L, 1212L, 1368L, 1468L), p.segments.map { it.range.offset })
-        // As legendas stpp num MP4 (sem segmentos): um ficheiro só.
-        val master = HlsPlaylist.parseAny(mpd, "https://x/a.mpd", 0)
-        assertEquals(listOf("hi"), master.variants[0].subtitles.map { it.language })
-    }
 }

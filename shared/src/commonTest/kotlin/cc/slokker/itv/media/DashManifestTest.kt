@@ -136,35 +136,25 @@ class DashManifestTest {
     }
 
     @Test
-    fun segmentBaseByTheIndex() {
-        val mpd = """<MPD type="static" mediaPresentationDuration="PT10S"><Period><AdaptationSet contentType="video"><Representation id="v" bandwidth="1"><BaseURL>v.mp4</BaseURL><SegmentBase indexRange="800-855" timescale="1000"><Initialization range="0-799"/></SegmentBase></Representation></AdaptationSet>
-            <AdaptationSet contentType="text" mimeType="text/vtt" lang="en"><Representation id="s" bandwidth="256"><BaseURL>s-en.webvtt</BaseURL></Representation></AdaptationSet></Period></MPD>"""
-        val p = HlsPlaylist.parseAny(mpd, "https://x/a.mpd#goatdash=v0", 0)
-        assertNull(p.unsupported)
-        val idx = p.dashIndex!!
-        assertEquals(800L, idx.range.offset)
-        assertEquals(56L, idx.range.length)
-        // Um sidx v0 (56 bytes): timescale 1000, earliest 0, first_offset 10, dois pedaços de 4 s e 6 s.
-        fun u32(v: Long) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
-        val body = byteArrayOf(0, 0, 0, 0) + u32(1) + u32(1000) + u32(0) + u32(10) + byteArrayOf(0, 0, 0, 2) +
-            u32(5000) + u32(4000) + u32(0x90000000) + u32(7000) + u32(6000) + u32(0x90000000)
-        val sidx = u32(8L + body.size) + "sidx".encodeToByteArray() + body
-        val full = DashManifest.withIndex(p, sidx)
-        assertEquals(2, full.segments.size)
-        // O primeiro pedaço começa a seguir ao sidx (800 + 56) mais o first_offset.
-        assertEquals(866L, full.segments[0].range.offset)
-        assertEquals(5000L, full.segments[0].range.length)
-        assertEquals(5866L, full.segments[1].range.offset)
-        assertEquals(listOf(0L, 4000L), full.segments.map { it.sequence })
-        assertEquals("https://x/v.mp4", full.segments[0].uri)
-        assertEquals(800L, full.segments[0].map?.length)
-        assertTrue(full.ended)
-        // As legendas WebVTT: um ficheiro só.
-        val master = HlsPlaylist.parseAny(mpd, "https://x/a.mpd", 0)
+    fun segmentBaseIsVodAndStaysOut() {
+        // A GoatTV não tem VOD: um ficheiro só com o índice (SegmentBase) não se lê.
+        val mpd = """<MPD type="static" mediaPresentationDuration="PT10S"><Period><AdaptationSet contentType="video"><Representation id="v" bandwidth="1"><BaseURL>v.mp4</BaseURL><SegmentBase indexRange="800-855"/></Representation></AdaptationSet></Period></MPD>"""
+        assertEquals("DASH SegmentBase", HlsPlaylist.parseAny(mpd, "https://x/a.mpd#goatdash=v0", 0).unsupported)
+    }
+
+    @Test
+    fun liveSubtitleSegments() {
+        val mpd = """<MPD type="dynamic" availabilityStartTime="1970-01-01T00:00:00Z"><Period start="PT0S">
+            <AdaptationSet contentType="video"><SegmentTemplate timescale="1" duration="2" media="v_${'$'}Number${'$'}.m4s" initialization="v.mp4"/><Representation id="v" bandwidth="1"/></AdaptationSet>
+            <AdaptationSet contentType="text" mimeType="application/mp4" lang="en"><SegmentTemplate timescale="1" duration="2" media="t_${'$'}Number${'$'}.m4s" initialization="t.mp4"/><Representation id="t" bandwidth="1" codecs="stpp"/></AdaptationSet>
+            <AdaptationSet contentType="text" mimeType="application/mp4" lang="fr"><SegmentTemplate timescale="1" duration="2" media="i_${'$'}Number${'$'}.m4s"/><Representation id="i" bandwidth="1" codecs="stpp.ttml.im1i"/></AdaptationSet>
+            </Period></MPD>"""
+        val master = HlsPlaylist.parseAny(mpd, "https://x/live.mpd", 10_000)
+        // As legendas em imagem (im1i) ficam de fora.
         assertEquals(listOf("en"), master.variants[0].subtitles.map { it.language })
-        val t = HlsPlaylist.parseAny(mpd, master.variants[0].subtitles[0].uri, 0)
-        assertEquals(listOf("https://x/s-en.webvtt"), t.segments.map { it.uri })
-        assertEquals(10.0, t.segments[0].duration)
+        val t = HlsPlaylist.parseAny(mpd, master.variants[0].subtitles[0].uri, 10_000)
+        assertEquals("https://x/t_5.m4s", t.segments.last().uri)
+        assertEquals("https://x/t.mp4", t.segments.last().map?.uri)
     }
 
     @Test

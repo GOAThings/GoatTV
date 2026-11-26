@@ -424,7 +424,7 @@ public final class HlsReader: @unchecked Sendable {
     private var clockOffsetMs: Int64?
 
     /// A playlist ou o MPD de [uri], lidos: o DASH com o relógio de agora (acertado pelo servidor, se o MPD diz como),
-    /// para os diretos sem linha do tempo; num SegmentBase, os segmentos vêm do índice do ficheiro (o sidx).
+    /// para os diretos sem linha do tempo.
     private func parsed(_ uri: String) throws -> HlsPlaylist {
         let body = try text(uri)
         let offset: Int64
@@ -434,12 +434,7 @@ public final class HlsReader: @unchecked Sendable {
             offset = DashManifest.shared.isManifest(text: body) ? clockOffset(body, uri) : 0
             clockOffsetMs = offset
         }
-        var playlist = HlsPlaylist.companion.parseAny(text: body, base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000) + offset)
-        while let idx = playlist.dashIndex {
-            let bytes = try fetch(idx.range.uri, offset: idx.range.offset, length: idx.range.length)
-            playlist = GoatShared.AppleDash.shared.withIndex(playlist: playlist, data: bytes)
-        }
-        return playlist
+        return HlsPlaylist.companion.parseAny(text: body, base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000) + offset)
     }
 
     /// Quanto o relógio do servidor do MPD em [uri] está à frente deste (0 se o MPD não diz, ou se falhar).

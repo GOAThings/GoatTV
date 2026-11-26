@@ -77,8 +77,6 @@ class HlsPlaylist(
     val targetDuration: Double,
     val ended: Boolean,
     val unsupported: String?,
-    /** DASH com `SegmentBase`: os segmentos estão no índice do ficheiro; o leitor lê-o e chama [DashManifest.withIndex]. */
-    val dashIndex: DashIndex? = null,
 ) {
     val isMaster: Boolean get() = variants.isNotEmpty()
 

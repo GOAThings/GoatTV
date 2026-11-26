@@ -122,18 +122,12 @@ class HlsInputStream(
 
     /**
      * A playlist ou o MPD de [u], lidos: o DASH com o relógio de agora (acertado pelo servidor, se o MPD diz como),
-     * para os diretos sem linha do tempo; num SegmentBase, os segmentos vêm do índice do ficheiro (o sidx).
+     * para os diretos sem linha do tempo.
      */
     private fun playlist(u: String): HlsPlaylist {
         val text = fetch(u)
         val offset = clockOffsetMs ?: (if (DashManifest.isManifest(text)) clockOffset(text, u) else 0L).also { clockOffsetMs = it }
-        var p = HlsPlaylist.parseAny(text, u, System.currentTimeMillis() + offset)
-        // Um índice com outros índices dentro: lê-se o seguinte até não haver (DashManifest.withIndex).
-        while (true) {
-            val idx = p.dashIndex ?: break
-            p = DashManifest.withIndex(p, open(idx.range).use { it.readBytes() })
-        }
-        return p
+        return HlsPlaylist.parseAny(text, u, System.currentTimeMillis() + offset)
     }
 
     /** Quanto o relógio do servidor do MPD em [u] está à frente deste (0 se o MPD não diz, ou se falhar). */
