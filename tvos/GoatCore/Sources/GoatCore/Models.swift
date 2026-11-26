@@ -113,13 +113,17 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
     /// A lista diz que é rádio (M3U `radio="true"`, Xtream `radio_streams`; ver RadioRules); nil nas listas
     /// guardadas antes desta versão.
     public var radio: Bool?
+    /// M3U: cabeçalhos HTTP a mais que a lista pede (`#EXTHTTP`, `|Cookie=…`); nil = nenhum.
+    public var headers: [String: String]?
+    /// M3U: o DRM do canal (`#KODIPROP`), como no Android (StreamDrm); nil se a lista não disser nada.
+    public var drm: StreamDrm?
 
     public var id: Int { uid }
 
     public init(uid: Int, key: String, num: Int, name: String, logo: String?, categoryId: String,
                 streamId: String? = nil, url: String? = nil, userAgent: String? = nil, referrer: String? = nil,
                 epgId: String? = nil, archiveDays: Int = 0, catchupType: String? = nil, catchupSource: String? = nil,
-                radio: Bool? = nil) {
+                radio: Bool? = nil, headers: [String: String]? = nil, drm: StreamDrm? = nil) {
         self.uid = uid
         self.key = key
         self.num = num
@@ -135,7 +139,27 @@ public struct Channel: Codable, Equatable, Hashable, Sendable, Identifiable {
         self.catchupType = catchupType
         self.catchupSource = catchupSource
         self.radio = radio
+        self.headers = headers
+        self.drm = drm
     }
+}
+
+/// O DRM de um canal, como a lista o diz (o StreamDrm do núcleo partilhado): o sistema ("clearkey", "widevine",
+/// "playready"), as chaves ClearKey (KID → chave, em hexadecimal) e o servidor das licenças.
+public struct StreamDrm: Codable, Equatable, Hashable, Sendable {
+    public var system: String
+    public var keys: [String: String]?
+    public var licenseUrl: String?
+    public var licenseHeaders: [String: String]?
+
+    public init(system: String, keys: [String: String]? = nil, licenseUrl: String? = nil, licenseHeaders: [String: String]? = nil) {
+        self.system = system
+        self.keys = keys
+        self.licenseUrl = licenseUrl
+        self.licenseHeaders = licenseHeaders
+    }
+
+    public var isClearKey: Bool { system == "clearkey" }
 }
 
 public struct XtreamAccount: Codable, Equatable, Sendable {
@@ -272,6 +296,8 @@ public struct EpgEntry: Codable, Equatable, Hashable, Sendable {
 public enum StreamFormat {
     public static let ts = "ts"
     public static let hls = "m3u8"
+    /// MPEG-DASH (.mpd): lido pelo mesmo leitor do HLS.
+    public static let dash = "mpd"
 }
 
 public func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

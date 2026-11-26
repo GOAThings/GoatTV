@@ -410,12 +410,12 @@ internal const val FREEZE_HEIGHT = 720
 /** O formato do vídeo a tocar (o ExoPlayer e o GoatCore dão-no; com o VLC não há AFR nem a cadência do vidro). */
 internal fun Player.videoFormat(): Format? = (this as? ExoPlayer)?.videoFormat ?: (this as? GoatCoreMediaPlayer)?.videoFormat
 
-/** A ligação HTTP ao servidor do canal. */
+/** A ligação HTTP ao servidor do canal (com os cabeçalhos que a lista pede para ele: o cookie, o Origin…). */
 private fun httpFactory(channel: Channel?, userAgent: String, transfer: TransferListener?): DefaultHttpDataSource.Factory =
-    providerHttp(channel?.userAgent ?: userAgent, channel?.referrer, transfer)
+    providerHttp(channel?.userAgent ?: userAgent, channel?.referrer, transfer, channel?.headers)
 
-/** A ligação HTTP a um servidor IPTV com [userAgent] e [referrer] (também a das gravações sem player). */
-internal fun providerHttp(userAgent: String, referrer: String?, transfer: TransferListener? = null): DefaultHttpDataSource.Factory {
+/** A ligação HTTP a um servidor IPTV com [userAgent], [referrer] e os [headers] a mais (também a das gravações sem player). */
+internal fun providerHttp(userAgent: String, referrer: String?, transfer: TransferListener? = null, headers: Map<String, String>? = null): DefaultHttpDataSource.Factory {
     // Muitos servidores redirecionam de http para https ou para outro host.
     val http = DefaultHttpDataSource.Factory()
         .setUserAgent(SafeInput.stripControl(userAgent))
@@ -423,7 +423,10 @@ internal fun providerHttp(userAgent: String, referrer: String?, transfer: Transf
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(20_000)
         .setTransferListener(transfer)
-    referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { http.setDefaultRequestProperties(mapOf("Referer" to it)) }
+    val extra = LinkedHashMap<String, String>()
+    headers?.forEach { (k, v) -> SafeInput.stripControl(v).takeIf { it.isNotEmpty() && k.isNotBlank() }?.let { extra[SafeInput.stripControl(k)] = it } }
+    referrer?.let(SafeInput::stripControl)?.takeIf { it.isNotEmpty() }?.let { extra["Referer"] = it }
+    if (extra.isNotEmpty()) http.setDefaultRequestProperties(extra)
     return http
 }
 

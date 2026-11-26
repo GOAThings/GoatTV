@@ -444,6 +444,8 @@ internal class GoatCoreMediaPlayer(
                 val code = when {
                     // Pediu-se como HLS e não é: o outro formato (ts ⇄ m3u8) no GoatCore, não o VLC.
                     cause is cc.slokker.itv.ui.player.goatcore.NotHlsPlaylist -> PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED
+                    // Cifrado sem a chave (ou Widevine): o VLC também não o decifra, por isso é o erro do DRM e não o VLC.
+                    why.startsWith("DRM:") -> PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR
                     unsupported -> PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
                     cause is HttpDataSource.InvalidResponseCodeException -> PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
                     cause is IOException -> PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED

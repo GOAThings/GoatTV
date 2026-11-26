@@ -63,7 +63,8 @@ extension Channel {
         GoatShared.Channel(uid: Int32(clamping: uid), key: key, num: Int32(clamping: num), name: name, logo: logo, categoryId: categoryId,
                            streamId: streamId, url: url, userAgent: userAgent, referrer: referrer, epgId: epgId,
                            archiveDays: Int32(clamping: archiveDays), catchupType: catchupType, catchupSource: catchupSource,
-                           radio: radio == true ? KotlinBoolean(bool: true) : nil)
+                           radio: radio == true ? KotlinBoolean(bool: true) : nil, headers: headers,
+                           drm: drm.map { GoatShared.StreamDrm(system: $0.system, keys: $0.keys, licenseUrl: $0.licenseUrl, licenseHeaders: $0.licenseHeaders) })
     }
 
     /// Um canal que o núcleo partilhado devolveu.
@@ -71,6 +72,7 @@ extension Channel {
         self.init(uid: Int(c.uid), key: c.key, num: Int(c.num), name: c.name, logo: c.logo, categoryId: c.categoryId,
                   streamId: c.streamId, url: c.url, userAgent: c.userAgent, referrer: c.referrer, epgId: c.epgId,
                   archiveDays: Int(c.archiveDays), catchupType: c.catchupType, catchupSource: c.catchupSource,
-                  radio: c.radio?.boolValue == true ? true : nil)
+                  radio: c.radio?.boolValue == true ? true : nil, headers: c.headers,
+                  drm: c.drm.map { StreamDrm(system: $0.system, keys: $0.keys, licenseUrl: $0.licenseUrl, licenseHeaders: $0.licenseHeaders) })
     }
 }

@@ -10,6 +10,8 @@ import os
 /// - os segmentos cifrados com AES-128 decifram-se aqui;
 /// - nos fMP4, o segmento de inicialização vai à frente sempre que muda.
 /// - com o áudio numa playlist à parte, lê-se um segmento de cada, à vez, e sai um TS só com os dois (HlsMerger).
+/// - um manifesto DASH (.mpd) lê-se igual (o DashManifest do núcleo partilhado), e o fMP4 com CENC decifra-se com as
+///   chaves ClearKey do canal (GoatShared.AppleCenc / StreamKeys), pedidas ao servidor de licenças se a lista o disser.
 /// As outras cifras (SAMPLE-AES…) dão [Failure.unsupported] e o leitor passa a outro motor.
 public final class HlsReader: @unchecked Sendable {
     public enum Failure: Error, CustomStringConvertible {
@@ -48,7 +50,10 @@ public final class HlsReader: @unchecked Sendable {
 
     public init(url: URL, headers: [String: String]) {
         self.url = url
-        self.headers = headers
+        // Os cabeçalhos que a lista pede para este canal (o cookie, o Origin…), além do User-Agent e do Referer.
+        var all = GoatShared.StreamKeys.shared.headersFor(url: url.absoluteString)
+        for (k, v) in headers { all[k] = v }
+        self.headers = all
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 15
@@ -97,6 +102,8 @@ public final class HlsReader: @unchecked Sendable {
         var resync = false
         /// Num direto: quanto antes do fim se começou (ms), para o áudio começar no mesmo ponto que o vídeo.
         var liveOffsetMs: Int64 = -1
+        /// O CENC dos segmentos fMP4 desta faixa (as chaves do canal); criado no primeiro segmento.
+        var cenc: GoatShared.AppleCenc?
 
         init(_ url: String, main: Bool, language: String? = nil, rendition: GoatShared.HlsRendition? = nil) {
             mediaUrl = url
@@ -203,7 +210,7 @@ public final class HlsReader: @unchecked Sendable {
             // A definição ou a escolha à mão mudaram: refaz-se o plano (pode mudar já de qualidade).
             if lane.main, replan() { continue }
             let segment = lane.pending.removeFirst()
-            lane.nextSequence = segment.sequence + 1
+            lane.nextSequence = segment.next
             // O moov antes dos segmentos que o usam.
             var map: Data?
             if let m = segment.map, !m.sameAs(other: lane.sentMap) {
@@ -222,10 +229,60 @@ public final class HlsReader: @unchecked Sendable {
                 }
                 data = plain
             }
-            if let map { return map + data }
-            return data
+            let out = map.map { $0 + data } ?? data
+            return try decrypted(out, lane)
         }
         return nil
+    }
+
+    /// CENC (DASH ou HLS em fMP4): decifrado com as chaves do canal; as que faltam pedem-se ao servidor de licenças
+    /// (quando chega um moov novo). Sem a chave, o stream não toca.
+    private func decrypted(_ data: Data, _ lane: Lane) throws -> Data {
+        let cenc = lane.cenc ?? GoatShared.AppleCenc(url: url.absoluteString)
+        lane.cenc = cenc
+        let kids = cenc.missingKids(data: data)
+        if !kids.isEmpty, let server = cenc.licenseUrl {
+            do {
+                var headers = cenc.licenseHeaders
+                if !headers.keys.contains(where: { $0.caseInsensitiveCompare("Content-Type") == .orderedSame }) {
+                    headers["Content-Type"] = "application/json"
+                }
+                let answer = try post(server, body: Data(cenc.licenseBody().utf8), headers: headers)
+                let n = cenc.licenseAnswer(json: String(decoding: answer, as: UTF8.self))
+                os_log("GoatCore: ClearKey licence: %{public}@ key(s) for %{public}@ KID(s)", "\(n)", "\(kids.count)")
+            } catch {
+                os_log("GoatCore: ClearKey licence: %{public}@", "\(error)")
+            }
+        }
+        let clear = cenc.process(data: data)
+        if let why = cenc.problem() { throw Failure.unsupported(why) }
+        return clear
+    }
+
+    /// Um POST (o pedido ao servidor de licenças), à espera da resposta.
+    private func post(_ uri: String, body: Data, headers: [String: String]) throws -> Data {
+        guard let u = URL(string: uri) else { throw Failure.network("bad URL") }
+        var request = URLRequest(url: u)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
+        let done = DispatchSemaphore(value: 0)
+        let box = OSAllocatedUnfairLock<Result<Data, Error>?>(initialState: nil)
+        session.dataTask(with: request) { data, response, error in
+            let result: Result<Data, Error>
+            if let error {
+                result = .failure(Failure.network(error.localizedDescription))
+            } else if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                result = .failure(Failure.http(http.statusCode))
+            } else {
+                result = .success(data ?? Data())
+            }
+            box.withLock { $0 = result }
+            done.signal()
+        }.resume()
+        done.wait()
+        guard let result = box.withLock({ $0 }) else { throw Failure.network("no answer") }
+        return try result.get()
     }
 
     /// Um segmento de [duration] s chegou em [seconds]: a rede não chega (mais do que dura, ou mais de 80 % duas
@@ -284,7 +341,7 @@ public final class HlsReader: @unchecked Sendable {
 
     private func reload(_ lane: Lane) throws {
         var base = lane.mediaUrl
-        var playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
+        var playlist = try parsed(base)
         if playlist.isMaster {
             if let why = playlist.unsupported { throw Failure.unsupported(why) }
             // Começa onde o plano diz (no Automático, a mais alta: uma TV, ou um telemóvel na Wi-Fi de casa); desce e
@@ -305,7 +362,7 @@ public final class HlsReader: @unchecked Sendable {
             if !audios.isEmpty || !subtitles.isEmpty {
                 merger = GoatShared.HlsMergeBuffer(audioInVideo: audios.isEmpty)
             }
-            playlist = HlsPlaylist.companion.parse(text: try text(base), base: base)
+            playlist = try parsed(base)
         }
         lane.mediaUrl = base
         if let why = playlist.unsupported { throw Failure.unsupported(why) }
@@ -363,6 +420,11 @@ public final class HlsReader: @unchecked Sendable {
         return 0
     }
 
+    /// A playlist ou o MPD de [uri], lidos (o DASH com o relógio de agora, para os diretos sem linha do tempo).
+    private func parsed(_ uri: String) throws -> HlsPlaylist {
+        HlsPlaylist.companion.parseAny(text: try text(uri), base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+    }
+
     private func keyFor(_ uri: String) throws -> Data {
         if uri == keyUri, let keyBytes { return keyBytes }
         let bytes = try fetch(uri, offset: 0, length: -1)
@@ -375,7 +437,7 @@ public final class HlsReader: @unchecked Sendable {
     /// Uma playlist. Se os primeiros bytes não são "#EXTM3U" (uma rádio MP3/AAC sem extensão, um TS…) desiste-se
     /// logo, em vez de esperar pelo fim de um direto que não acaba; o canal passa ao formato seguinte.
     private func text(_ uri: String) throws -> String {
-        guard let u = URL(string: uri) else { throw Failure.network("bad URL") }
+        guard let u = URL(string: HlsPlaylist.companion.fetchUrl(uri: uri)) else { throw Failure.network("bad URL") }
         var request = URLRequest(url: u)
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         let req = request
@@ -392,12 +454,12 @@ public final class HlsReader: @unchecked Sendable {
                 var data = Data()
                 for try await byte in bytes {
                     data.append(byte)
-                    if data.count == HlsReader.sniffBytes, !HlsReader.looksLikePlaylist(data) {
+                    if data.count == HlsReader.sniffBytes, !HlsReader.looksLikePlaylist(data), !HlsReader.looksLikeXml(data) {
                         throw Failure.network("not an HLS playlist")
                     }
                     if data.count > HlsReader.maxPlaylistBytes { throw Failure.network("HLS playlist too big") }
                 }
-                guard HlsReader.looksLikePlaylist(data) else { throw Failure.network("not an HLS playlist") }
+                guard HlsReader.looksLikePlaylist(data) || HlsReader.looksLikeXml(data) else { throw Failure.network("not an HLS playlist") }
                 result = .success(data)
             } catch let failure as Failure {
                 result = .failure(failure)
@@ -424,9 +486,17 @@ public final class HlsReader: @unchecked Sendable {
         return bytes.starts(with: Array("#EXTM3U".utf8))
     }
 
+    /// O início de um XML (um manifesto DASH; o DashManifest confirma que é um MPD).
+    static func looksLikeXml(_ data: Data) -> Bool {
+        var bytes = [UInt8](data.prefix(sniffBytes + 16))
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes.removeFirst(3) }
+        while let first = bytes.first, first == 0x20 || first == 0x09 || first == 0x0D || first == 0x0A { bytes.removeFirst() }
+        return bytes.first == UInt8(ascii: "<")
+    }
+
     /// [uri] inteiro, ou [length] bytes a partir de [offset] ([length] -1 = até ao fim), à espera da resposta.
     private func fetch(_ uri: String, offset: Int64, length: Int64) throws -> Data {
-        guard let u = URL(string: uri) else { throw Failure.network("bad URL") }
+        guard let u = URL(string: HlsPlaylist.companion.fetchUrl(uri: uri)) else { throw Failure.network("bad URL") }
         var request = URLRequest(url: u)
         for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
         if length >= 0 {

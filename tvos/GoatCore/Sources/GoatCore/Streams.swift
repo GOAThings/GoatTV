@@ -5,7 +5,8 @@ import GoatShared
 public struct StreamCandidate: Equatable, Sendable {
     public var url: String
     public var format: String
-    public var isHLS: Bool { format == StreamFormat.hls }
+    /// Um stream aos segmentos (HLS ou DASH), lido pelo leitor de playlists.
+    public var isHLS: Bool { format == StreamFormat.hls || format == StreamFormat.dash }
 
     public init(url: String, format: String) {
         self.url = url
@@ -29,7 +30,13 @@ public func streamCandidates(playlist: Playlist, channel: Channel, preferred: St
     }
 
     guard let url = channel.url else { return [] }
-    return StreamRules.shared.m3uCandidates(url: url, preferred: preferred).map { StreamCandidate(url: $0.url, format: $0.format) }
+    // Um canal com DRM é DASH ou HLS (o TS não tem DRM): o leitor de playlists primeiro.
+    let shared = channel.shared
+    return StreamRules.shared.m3uCandidates(url: url, preferred: channel.drm != nil ? StreamFormat.hls : preferred).map {
+        // O DRM e os cabeçalhos do canal ficam à mão dos leitores (HlsReader, GoatCore) pelo endereço.
+        GoatShared.StreamKeys.shared.remember(url: $0.url, drm: shared.drm, extra: shared.headers)
+        return StreamCandidate(url: $0.url, format: $0.format)
+    }
 }
 
 /// Um programa que já passou (ou o atual desde o início), a ver em catch-up a partir de [positionMs].
@@ -96,5 +103,18 @@ public func catchupCandidates(playlist: Playlist, catchup: Catchup, timezone: St
         return candidates.isEmpty ? nil : CatchupStart(startMs: start, candidates: candidates)
     default:
         return nil
+    }
+}
+
+/// Os cabeçalhos HTTP a mais que a lista pede para um stream (`#EXTHTTP`, `|Cookie=…`): os que [streamCandidates]
+/// guardou para o endereço, para quem abre a ligação (o GoatCore num TS, a pausa do direto).
+public enum StreamHeaders {
+    public static func extra(for url: String) -> [String: String] {
+        GoatShared.StreamKeys.shared.headersFor(url: url)
+    }
+
+    /// A lista diz que o canal deste endereço tem DRM (KODIPROP): só o GoatCore o toca.
+    public static func hasDrm(for url: String) -> Bool {
+        GoatShared.StreamKeys.shared.drmFor(url: url) != nil
     }
 }

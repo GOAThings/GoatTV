@@ -23,6 +23,8 @@ object StreamRules {
         val path = url.substringBefore('?').substringBefore('#')
         fun swap(from: String, to: String) = path.dropLast(from.length) + to + url.substring(path.length)
         return when {
+            // DASH: não há outro formato no mesmo endereço.
+            path.endsWith(".mpd", ignoreCase = true) -> listOf(StreamCandidate(url, StreamFormat.DASH))
             path.endsWith(".m3u8", ignoreCase = true) ->
                 listOf(StreamCandidate(url, StreamFormat.HLS), StreamCandidate(swap(".m3u8", ".ts"), StreamFormat.TS))
             path.endsWith(".ts", ignoreCase = true) ->

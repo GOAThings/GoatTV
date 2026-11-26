@@ -11,6 +11,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceInputStream
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultHttpDataSource
+import cc.slokker.itv.media.Cenc
 import cc.slokker.itv.media.HlsMerger
 import cc.slokker.itv.media.HlsPlaylist
 import cc.slokker.itv.media.HlsQuality
@@ -19,6 +21,7 @@ import cc.slokker.itv.media.HlsRendition
 import cc.slokker.itv.media.HlsRange
 import cc.slokker.itv.media.HlsSegment
 import cc.slokker.itv.media.HlsVariant
+import cc.slokker.itv.media.StreamKeys
 import cc.slokker.itv.playback.HlsLiveCheck
 import cc.slokker.itv.playback.HlsLiveStall
 import java.io.ByteArrayOutputStream
@@ -40,7 +43,8 @@ class NotHlsPlaylist : UnsupportedStream("not an HLS playlist")
  * fim e vai relendo a playlist. Nos fMP4, o segmento de inicialização vai à frente sempre que muda (fica um MP4
  * fragmentado seguido). Os segmentos cifrados com AES-128 decifram-se aqui; as outras cifras (SAMPLE-AES…) não:
  * [UnsupportedStream]. Com o áudio numa playlist à parte, lê-se um segmento de cada, à vez, e sai um TS só com os dois
- * ([HlsMerger]).
+ * ([HlsMerger]). Um manifesto DASH (.mpd) lê-se igual (ver DashManifest), e o fMP4 com CENC decifra-se aqui ([Cenc])
+ * com as chaves ClearKey do canal ([StreamKeys]), pedidas ao servidor de licenças se a lista o disser.
  */
 class HlsInputStream(
     private val source: DataSource.Factory,
@@ -77,20 +81,23 @@ class HlsInputStream(
     /** O canal principal: se a playlist do direto deixa de avançar (ver FreezeWatch, o PLAYLIST). */
     private val liveCheck = if (primary) HlsLiveCheck().also { HlsLiveStall.current = it } else null
 
+    /** O DRM do canal (da lista), se disse algum: as chaves ClearKey e o servidor das licenças. */
+    private val drm = StreamKeys.drmFor(url)
+
     private fun fetchBytes(u: String): ByteArray =
-        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { it.readBytes() }
+        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(HlsPlaylist.fetchUrl(u)))).use { it.readBytes() }
 
     private fun open(r: HlsRange): InputStream {
-        val spec = DataSpec.Builder().setUri(Uri.parse(r.uri)).setPosition(r.offset).setLength(if (r.length < 0) C.LENGTH_UNSET.toLong() else r.length).build()
+        val spec = DataSpec.Builder().setUri(Uri.parse(HlsPlaylist.fetchUrl(r.uri))).setPosition(r.offset).setLength(if (r.length < 0) C.LENGTH_UNSET.toLong() else r.length).build()
         return DataSourceInputStream(source.createDataSource(), spec).also { it.open() }
     }
 
     /**
-     * Uma playlist: se os primeiros bytes não são "#EXTM3U" (uma rádio MP3/AAC sem extensão, um TS…) desiste-se logo,
-     * em vez de ler um direto sem fim até o tempo de abrir acabar; o canal passa ao formato seguinte.
+     * Uma playlist (ou um MPD): se os primeiros bytes não são "#EXTM3U" nem XML (uma rádio MP3/AAC sem extensão, um
+     * TS…) desiste-se logo, em vez de ler um direto sem fim até o tempo de abrir acabar; o canal passa ao formato seguinte.
      */
     private fun fetch(u: String): String =
-        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(u))).use { input ->
+        DataSourceInputStream(source.createDataSource(), DataSpec(Uri.parse(HlsPlaylist.fetchUrl(u)))).use { input ->
             val out = ByteArrayOutputStream()
             val buf = ByteArray(16 * 1024)
             var checked = false
@@ -99,15 +106,36 @@ class HlsInputStream(
                 if (n < 0) break
                 out.write(buf, 0, n)
                 if (!checked && out.size() >= HlsPlaylist.SNIFF_BYTES) {
-                    if (!HlsPlaylist.looksLikePlaylist(out.toByteArray())) throw NotHlsPlaylist()
+                    if (!HlsPlaylist.looksLikeAny(out.toByteArray())) throw NotHlsPlaylist()
                     checked = true
                 }
                 if (out.size() > MAX_PLAYLIST_BYTES) throw java.io.IOException("HLS playlist too big")
             }
             val bytes = out.toByteArray()
-            if (!HlsPlaylist.looksLikePlaylist(bytes)) throw NotHlsPlaylist()
+            if (!HlsPlaylist.looksLikeAny(bytes)) throw NotHlsPlaylist()
             bytes.decodeToString()
         }
+
+    /** A playlist ou o MPD de [u], lidos (o DASH com o relógio de agora, para os diretos sem linha do tempo). */
+    private fun playlist(u: String): HlsPlaylist = HlsPlaylist.parseAny(fetch(u), u, System.currentTimeMillis())
+
+    /**
+     * As chaves ClearKey que faltam ([kids]), pedidas ao servidor de licenças do canal (W3C: um JSON com os KID, e
+     * vem um JSON com as chaves). Sem servidor, ou se falhar, ficam a faltar e o stream não toca.
+     */
+    private fun license(kids: Set<String>) {
+        val server = StreamKeys.licenseUrl(drm) ?: return
+        val headers = HashMap<String, String>()
+        drm?.licenseHeaders?.let { headers.putAll(it) }
+        if (headers.keys.none { it.equals("Content-Type", ignoreCase = true) }) headers["Content-Type"] = "application/json"
+        runCatching {
+            val http = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true).setConnectTimeoutMs(10_000).setReadTimeoutMs(10_000)
+            val spec = DataSpec.Builder().setUri(Uri.parse(server)).setHttpMethod(DataSpec.HTTP_METHOD_POST)
+                .setHttpBody(StreamKeys.licenseRequest(kids).encodeToByteArray()).setHttpRequestHeaders(headers).build()
+            val body = DataSourceInputStream(http.createDataSource(), spec).use { it.readBytes() }.decodeToString()
+            Log.i("GoatCore", "ClearKey licence: ${StreamKeys.licenseResponse(body)} key(s) for ${kids.size} KID(s)")
+        }.onFailure { Log.w("GoatCore", "ClearKey licence: ${it.message}") }
+    }
 
     private fun keyFor(uri: String): ByteArray {
         if (uri != keyUri) {
@@ -134,12 +162,14 @@ class HlsInputStream(
         var seconds = 0.0
         /** Mudou-se de qualidade: se a nova não continuar a numeração, volta-se ao ponto do direto. */
         var resync = false
+        /** O CENC dos segmentos fMP4 desta faixa (as chaves do canal; sem cifra não faz nada). */
+        val cenc = Cenc({ StreamKeys.key(it, drm) }, { license(it) })
         /** Num direto: quanto antes do fim se começou (ms), para o áudio começar no mesmo ponto que o vídeo. */
         var liveOffsetMs = -1L
 
         fun reload() {
             var base = mediaUrl
-            var playlist = HlsPlaylist.parse(fetch(base), base)
+            var playlist = playlist(base)
             if (playlist.isMaster) {
                 playlist.unsupported?.let { throw UnsupportedStream("HLS: $it") }
                 // Começa onde o plano diz (no Automático, a mais alta: é uma TV); desce e sobe com a rede (ver [measured]).
@@ -156,7 +186,7 @@ class HlsInputStream(
                 if (audios.isNotEmpty() || subtitles.isNotEmpty()) {
                     merger = HlsMerger(audioInVideo = audios.isEmpty()) { merged.write(it) }
                 }
-                playlist = HlsPlaylist.parse(fetch(base), base)
+                playlist = playlist(base)
             }
             mediaUrl = base
             playlist.unsupported?.let { throw UnsupportedStream("HLS: $it") }
@@ -228,7 +258,7 @@ class HlsInputStream(
                 // A definição ou a escolha à mão mudaram: refaz-se o plano (pode mudar já de qualidade).
                 if (main && replan()) continue
                 val segment = pending.removeFirst()
-                nextSequence = segment.sequence + 1
+                nextSequence = segment.next
                 // O moov antes dos segmentos que o usam (lido inteiro: é pequeno, e a ligação é uma de cada vez).
                 val map = segment.map?.takeIf { !it.sameAs(sentMap) }?.let { m ->
                     sentMap = m
@@ -246,7 +276,12 @@ class HlsInputStream(
                 if (main) measured(raw.size, SystemClock.elapsedRealtime() - started, segment.duration)
                 seconds += segment.duration
                 val data = cipher?.doFinal(raw) ?: raw
-                return if (map != null) map + data else data
+                val out = if (map != null) map + data else data
+                // CENC (DASH ou HLS em fMP4): decifra-se no lugar; sem a chave, o stream não toca.
+                cenc.process(out)
+                cenc.unsupported?.let { throw UnsupportedStream(it) }
+                if (cenc.encrypted && cenc.missing.isNotEmpty()) throw UnsupportedStream("DRM: ${StreamKeys.why(drm)}")
+                return out
             }
         }
     }

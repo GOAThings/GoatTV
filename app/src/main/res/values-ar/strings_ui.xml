@@ -259,6 +259,11 @@
     <string name="err_stream_format_3">اضغط OK لإعادة المحاولة.</string>
     <string name="err_stream_format_4">غيّر الصيغة في %1$s (الحالية: %2$s).</string>
     <string name="err_stream_format_5">جرّب قناة أخرى.</string>
+    <string name="err_drm">هذه القناة محمية (DRM)</string>
+    <string name="err_drm_no_key">لا تتضمن قائمة التشغيل المفتاح اللازم لتشغيلها.</string>
+    <string name="err_drm_widevine">تستخدم Widevine، ولا يستطيع GoatTV تشغيله بعد.</string>
+    <string name="err_drm_playready">تستخدم PlayReady، ولا يستطيع GoatTV تشغيله.</string>
+    <string name="err_drm_ask">اطلب من مزوّدك قائمة تشغيل تحتوي على مفاتيح القنوات (ClearKey).</string>
     <string name="err_video_decoder">لا يستطيع هذا الجهاز تشغيل هذا الفيديو</string>
     <string name="err_video_decoder_2">تستخدم القناة %1$s لا تدعمها وحدة فك الترميز البرمجية (مثلًا 4K أو HEVC على جهاز قديم).</string>
     <string name="err_video_decoder_3">تستخدم القناة %1$s لا تدعمها وحدة فك الترميز في الجهاز (مثلًا 4K أو HEVC على جهاز قديم).</string>

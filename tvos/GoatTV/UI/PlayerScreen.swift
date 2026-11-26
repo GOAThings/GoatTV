@@ -1493,7 +1493,7 @@ struct Hud<Bar: View, Buttons: View>: View {
     var body: some View {
         let _ = model.guideVersion
         let pair = Guide.nowNext(model.programmes(for: channel), now: now)
-        let badges = [model.player.resolution, model.player.format.map { $0 == StreamFormat.hls ? "HLS" : "TS" }].compactMap { $0 }
+        let badges = [model.player.resolution, model.player.format.map { $0 == StreamFormat.dash ? "DASH" : $0 == StreamFormat.hls ? "HLS" : "TS" }].compactMap { $0 }
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .bottom, spacing: 40) {
                 if model.prefs.showLogos {

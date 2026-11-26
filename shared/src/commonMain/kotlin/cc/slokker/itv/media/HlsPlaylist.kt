@@ -58,6 +58,11 @@ class HlsSegment(
     val discontinuity: Boolean,
     val key: HlsKey?,
     val map: HlsRange?,
+    /**
+     * O número do segmento que vem a seguir a este: no HLS o seguinte ([sequence] + 1); no DASH os números são o
+     * tempo (ms) e o seguinte começa onde este acaba (ver DashManifest).
+     */
+    val next: Long = sequence + 1,
 ) {
     val uri: String get() = range.uri
 }
@@ -88,6 +93,19 @@ class HlsPlaylist(
             if (head.size - i < tag.length) return false
             return tag.indices.all { head[i + it] == tag[it].code.toByte() }
         }
+
+        /** O início de uma playlist HLS ou de um manifesto DASH (ver [DashManifest.looksLike]). */
+        fun looksLikeAny(head: ByteArray): Boolean = looksLikePlaylist(head) || DashManifest.looksLike(head)
+
+        /**
+         * Uma playlist HLS ou um manifesto DASH, lido para a mesma forma (o DASH em [DashManifest.parse], com o relógio
+         * [nowMs] para os diretos sem linha do tempo).
+         */
+        fun parseAny(text: String, base: String, nowMs: Long): HlsPlaylist =
+            if (DashManifest.isManifest(text)) DashManifest.parse(text, base, nowMs) else parse(text, base)
+
+        /** O endereço a pedir ao servidor (sem a marca que o DASH junta para dizer a faixa). */
+        fun fetchUrl(uri: String): String = DashManifest.fetchUrl(uri)
 
         /** Lê [text] (a playlist em [base], para os endereços relativos). */
         fun parse(text: String, base: String): HlsPlaylist {

@@ -41,8 +41,8 @@ object M3uParser {
         // O número do canal anterior: um canal sem tvg-chno fica com o seguinte (sem nenhum, 1, 2, 3…).
         private var lastNum = 0
         private var group: String? = null
-        private var userAgent: String? = null
-        private var referrer: String? = null
+        // O User-Agent, os cabeçalhos e o DRM do canal (as linhas desde o URL do anterior).
+        private val props = M3uStreamProps()
 
         fun line(raw: String) {
             val line = raw.trim().removePrefix("\uFEFF")
@@ -57,22 +57,14 @@ object M3uParser {
                 line.startsWith("#EXTINF") -> {
                     pending = parseExtinf(line)
                     group = null
-                    userAgent = null
-                    referrer = null
                 }
                 line.startsWith("#EXTGRP:") -> group = line.substringAfter(':').trim()
-                line.startsWith("#EXTVLCOPT:") -> {
-                    val opt = line.substringAfter(':')
-                    when {
-                        opt.startsWith("http-user-agent=") -> userAgent = opt.substringAfter('=').trim()
-                        opt.startsWith("http-referrer=") -> referrer = opt.substringAfter('=').trim()
-                    }
-                }
-                line.startsWith("#") -> Unit
+                line.startsWith("#") -> props.line(line)
                 else -> {
+                    val stream = props.take(line)
                     val info = pending ?: return
                     pending = null
-                    if (isVod(line)) return
+                    if (isVod(stream.url)) return
 
                     // group-title; vazio ou em falta, o último #EXTGRP deste canal; sem nenhum, "Outros" (como o site).
                     val category = info.attrs["group-title"]?.trim()?.takeIf { it.isNotEmpty() }
@@ -96,14 +88,16 @@ object M3uParser {
                         name = info.name.ifEmpty { info.attrs["tvg-name"].orEmpty() }.ifEmpty { channelName(index + 1) },
                         logo = info.attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
                         categoryId = category,
-                        url = line,
-                        userAgent = userAgent,
-                        referrer = referrer,
+                        url = stream.url,
+                        userAgent = stream.userAgent,
+                        referrer = stream.referrer,
                         epgId = tvgId.ifEmpty { null },
                         archiveDays = catchup?.days ?: 0,
                         catchupType = catchup?.type,
                         catchupSource = catchup?.source,
                         radio = RadioRules.m3uHint(info.attrs).takeIf { it },
+                        headers = stream.headers,
+                        drm = stream.drm,
                     )
                 }
             }

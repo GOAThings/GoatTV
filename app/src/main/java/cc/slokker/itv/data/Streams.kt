@@ -1,6 +1,7 @@
 package cc.slokker.itv.data
 
 import cc.slokker.itv.data.m3u.M3uCatchup
+import cc.slokker.itv.media.StreamKeys
 import cc.slokker.itv.data.xtream.XtreamSource
 
 /**
@@ -23,7 +24,9 @@ fun streamCandidates(
         return StreamRules.xtreamFormats(preferred, allowedFormats).map { StreamCandidate(XtreamSource.streamUrl(playlist, id, it), it) }
     }
 
-    return StreamRules.m3uCandidates(channel.url ?: return emptyList(), preferred)
+    // Um canal com DRM é DASH ou HLS (o TS não tem DRM): o leitor de playlists primeiro, e ele encontra as chaves.
+    return StreamRules.m3uCandidates(channel.url ?: return emptyList(), if (channel.drm != null) StreamFormat.HLS else preferred)
+        .onEach { StreamKeys.remember(it.url, channel.drm, channel.headers) }
 }
 
 /**

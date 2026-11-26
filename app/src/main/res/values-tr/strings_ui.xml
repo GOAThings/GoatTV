@@ -259,6 +259,11 @@
     <string name="err_stream_format_3">Tekrar denemek için OK\'a basın.</string>
     <string name="err_stream_format_4">%1$s bölümünde biçimi değiştirin (şu an: %2$s).</string>
     <string name="err_stream_format_5">Başka bir kanal deneyin.</string>
+    <string name="err_drm">Bu kanal korumalı (DRM)</string>
+    <string name="err_drm_no_key">Listede bu kanalı oynatmak için gereken anahtar yok.</string>
+    <string name="err_drm_widevine">Widevine kullanıyor; GoatTV bunu henüz oynatamıyor.</string>
+    <string name="err_drm_playready">PlayReady kullanıyor; GoatTV bunu oynatamıyor.</string>
+    <string name="err_drm_ask">Sağlayıcınızdan kanal anahtarlarını (ClearKey) içeren bir liste isteyin.</string>
     <string name="err_video_decoder">Bu cihaz bu videoyu oynatamıyor</string>
     <string name="err_video_decoder_2">Kanal, yazılım kod çözücünün desteklemediği %1$s kullanıyor (ör. eski bir cihazda 4K veya HEVC).</string>
     <string name="err_video_decoder_3">Kanal, cihazın kod çözücüsünün desteklemediği %1$s kullanıyor (ör. eski bir cihazda 4K veya HEVC).</string>

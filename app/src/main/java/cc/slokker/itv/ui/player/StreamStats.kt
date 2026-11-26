@@ -48,6 +48,7 @@ internal class StreamStatsMeter {
         fun readable(mime: String?) = codecName(mime)?.substringBefore(" (").orEmpty()
         val videoCodec = snap?.videoCodec?.takeIf { it.isNotEmpty() } ?: readable(v?.sampleMimeType)
         val container = when {
+            playback?.currentCandidate?.format == StreamFormat.DASH -> "DASH"
             core != null -> if (core.isHls) "HLS" else "TS"
             else -> when (playback?.currentCandidate?.format) {
                 StreamFormat.HLS -> "HLS"

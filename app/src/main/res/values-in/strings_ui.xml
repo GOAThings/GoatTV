@@ -259,6 +259,11 @@
     <string name="err_stream_format_3">Tekan OK untuk mencoba lagi.</string>
     <string name="err_stream_format_4">Ganti format di %1$s (saat ini: %2$s).</string>
     <string name="err_stream_format_5">Coba saluran lain.</string>
+    <string name="err_drm">Saluran ini dilindungi (DRM)</string>
+    <string name="err_drm_no_key">Playlist tidak menyertakan kunci untuk memutarnya.</string>
+    <string name="err_drm_widevine">Saluran ini memakai Widevine, yang belum bisa diputar GoatTV.</string>
+    <string name="err_drm_playready">Saluran ini memakai PlayReady, yang tidak bisa diputar GoatTV.</string>
+    <string name="err_drm_ask">Minta penyedia Anda playlist dengan kunci saluran (ClearKey).</string>
     <string name="err_video_decoder">Perangkat ini tidak dapat memutar video ini</string>
     <string name="err_video_decoder_2">Saluran memakai %1$s yang tidak didukung decoder software (mis. 4K atau HEVC di perangkat lama).</string>
     <string name="err_video_decoder_3">Saluran memakai %1$s yang tidak didukung decoder perangkat (mis. 4K atau HEVC di perangkat lama).</string>

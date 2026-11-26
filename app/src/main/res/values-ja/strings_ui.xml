@@ -259,6 +259,11 @@
     <string name="err_stream_format_3">OK を押して再試行してください。</string>
     <string name="err_stream_format_4">%1$s で形式を変更してください（現在：%2$s）。</string>
     <string name="err_stream_format_5">別のチャンネルをお試しください。</string>
+    <string name="err_drm">このチャンネルは保護されています（DRM）</string>
+    <string name="err_drm_no_key">プレイリストに再生に必要なキーが含まれていません。</string>
+    <string name="err_drm_widevine">Widevine を使用しており、GoatTV はまだ再生できません。</string>
+    <string name="err_drm_playready">PlayReady を使用しており、GoatTV は再生できません。</string>
+    <string name="err_drm_ask">チャンネルのキー（ClearKey）を含むプレイリストをプロバイダーに依頼してください。</string>
     <string name="err_video_decoder">このデバイスではこの映像を再生できません</string>
     <string name="err_video_decoder_2">このチャンネルは、ソフトウェアデコーダーが対応していない %1$s を使用しています（例：古いデバイスでの 4K や HEVC）。</string>
     <string name="err_video_decoder_3">このチャンネルは、デバイスのデコーダーが対応していない %1$s を使用しています（例：古いデバイスでの 4K や HEVC）。</string>

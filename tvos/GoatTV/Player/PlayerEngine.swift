@@ -70,6 +70,8 @@ final class PlayerEngine: NSObject {
     private(set) var retryDelay: TimeInterval = 0
     /// O código HTTP da última falha, quando se sabe (leitor da Apple).
     private(set) var lastHTTPStatus: Int?
+    /// O GoatCore não decifrou o canal (DRM sem a chave, Widevine…): a mensagem dele, para o cartão do erro.
+    private(set) var drmFailure: String?
 
     /// Não abriu (ou caiu): quem usa o leitor explica o erro.
     @ObservationIgnored var onFailed: (() -> Void)?
@@ -461,7 +463,10 @@ final class PlayerEngine: NSObject {
         // toca: MPEG-2, SAMPLE-AES…), o HLS no da Apple e o resto no VLC.
         if engine == "goatcore" {
             return candidates.enumerated().flatMap { i, c -> [Attempt] in
-                c.isHLS
+                // Um canal com DRM (ou DASH): só o GoatCore o decifra e lê; o da Apple e o VLC não.
+                StreamHeaders.hasDrm(for: c.url) || c.format == StreamFormat.dash
+                    ? [Attempt(candidate: c, backend: .goatcore, candidateIndex: i)]
+                    : c.isHLS
                     ? [Attempt(candidate: c, backend: .goatcore, candidateIndex: i), Attempt(candidate: c, backend: .apple, candidateIndex: i)]
                     : [Attempt(candidate: c, backend: .goatcore, candidateIndex: i), Attempt(candidate: c, backend: .vlc, candidateIndex: i)]
             }
@@ -545,6 +550,7 @@ final class PlayerEngine: NSObject {
         reconnects = 0
         nextTryAt = nil
         lastHTTPStatus = nil
+        drmFailure = nil
         // Outro canal (ou o mesmo outra vez) começa sempre pela lista principal.
         onBackup = false
         backupFailed = false
@@ -1414,6 +1420,8 @@ final class PlayerEngine: NSObject {
     private func startGoatCore(_ url: URL, ring: Bool = false, atLive: Bool = true) {
         var headers: [String: String] = [:]
         if !ring {
+            // Os cabeçalhos que a lista pede para o canal (o cookie, o Origin…), e depois o User-Agent e o Referer.
+            headers = StreamHeaders.extra(for: url.absoluteString)
             headers["User-Agent"] = userAgent
             if let referrer, !referrer.isEmpty { headers["Referer"] = referrer }
         }
@@ -1470,7 +1478,7 @@ final class PlayerEngine: NSObject {
         // O GoatCore é o motor; os outros só tocam o que ele não consegue.
         m.fallback = backend != .goatcore
         m.reconnects = sessionReconnects
-        m.container = format.map { $0 == StreamFormat.hls ? "HLS" : "TS" } ?? ""
+        m.container = format.map { $0 == StreamFormat.dash ? "DASH" : $0 == StreamFormat.hls ? "HLS" : "TS" } ?? ""
         if let q = hlsQuality, q.labels.count > 1, let label = q.label {
             m.hlsVariant = label
             m.hlsPinned = q.pinned >= 0
@@ -1537,6 +1545,7 @@ final class PlayerEngine: NSObject {
             // Pelo anel pode ser só o fim de uma ligação (há outra a seguir): continua no sítio certo.
             if continueRing() { return }
             lastHTTPStatus = goatCorePlayback?.httpStatus
+            if let why = goatCorePlayback?.failure, why.contains("DRM:") { drmFailure = why }
             DebugLog.add("Player: GoatCore \(event == .ended ? "ended" : "failed") (HTTP \(lastHTTPStatus.map(String.init) ?? "-"))")
             if state == .playing { fail() } else { next() }
         }

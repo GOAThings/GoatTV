@@ -61,6 +61,7 @@ final class ChannelFeed {
             return nil
         }
         var request = URLRequest(url: url)
+        for (k, v) in StreamHeaders.extra(for: url.absoluteString) { request.setValue(v, forHTTPHeaderField: k) }
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let referrer, !referrer.isEmpty { request.setValue(referrer, forHTTPHeaderField: "Referer") }
         let recorder = TimeshiftRecorder(ring: ring, request: request, reconnectSeconds: reconnectSeconds, previous: last, hls: hls)

@@ -259,6 +259,11 @@
     <string name="err_stream_format_3">Carrega em OK para tentar de novo.</string>
     <string name="err_stream_format_4">Muda o formato em %1$s (atual: %2$s).</string>
     <string name="err_stream_format_5">Experimenta outro canal.</string>
+    <string name="err_drm">Este canal está protegido (DRM)</string>
+    <string name="err_drm_no_key">A lista não traz a chave para o ver.</string>
+    <string name="err_drm_widevine">Usa Widevine, que o GoatTV ainda não consegue tocar.</string>
+    <string name="err_drm_playready">Usa PlayReady, que o GoatTV não consegue tocar.</string>
+    <string name="err_drm_ask">Pede ao fornecedor uma lista com as chaves dos canais (ClearKey).</string>
     <string name="err_video_decoder">A box não consegue mostrar este vídeo</string>
     <string name="err_video_decoder_2">O canal usa %1$s que o descodificador de software não aceita (ex.: 4K ou HEVC numa box mais antiga).</string>
     <string name="err_video_decoder_3">O canal usa %1$s que o descodificador da box não aceita (ex.: 4K ou HEVC numa box mais antiga).</string>

@@ -42,11 +42,39 @@ data class Channel(
      * igual nos canais de TV; e nas listas guardadas antes desta versão).
      */
     val radio: Boolean? = null,
+    /**
+     * M3U: cabeçalhos HTTP a mais que a lista pede para este canal (`#EXTHTTP`, `|Cookie=…` no fim do URL,
+     * `inputstream.adaptive.stream_headers`), além do [userAgent] e do [referrer]. null = nenhum.
+     */
+    val headers: Map<String, String>? = null,
+    /** M3U: o DRM do canal (`#KODIPROP:inputstream.adaptive.license_type`…), ou null se a lista não disser nada. */
+    val drm: StreamDrm? = null,
 )
+
+/**
+ * O DRM de um canal, como a lista o diz (ver M3uStreamProps). [system]: [CLEARKEY], [WIDEVINE] ou [PLAYREADY].
+ * [keys]: no ClearKey, as chaves dadas na lista (KID → chave, 32 hexadecimais em minúsculas cada); [licenseUrl]: o
+ * servidor das licenças (ClearKey ou Widevine), com os [licenseHeaders] que a lista pede.
+ */
+data class StreamDrm(
+    val system: String,
+    val keys: Map<String, String>? = null,
+    val licenseUrl: String? = null,
+    val licenseHeaders: Map<String, String>? = null,
+) {
+    val isClearKey: Boolean get() = system == CLEARKEY
+
+    companion object {
+        const val CLEARKEY = "clearkey"
+        const val WIDEVINE = "widevine"
+        const val PLAYREADY = "playready"
+    }
+}
 
 /** Uma forma de abrir um canal. O player tenta-as por ordem (fallback ts ⇄ m3u8). */
 data class StreamCandidate(val url: String, val format: String) {
-    val isHls: Boolean get() = format == StreamFormat.HLS
+    /** Um stream aos segmentos (HLS ou DASH), lido pelo leitor de playlists em vez de numa ligação só. */
+    val isHls: Boolean get() = format == StreamFormat.HLS || format == StreamFormat.DASH
 
     /** Uma gravação no disco (`file://`): não é uma ligação ao fornecedor. */
     val isLocal: Boolean get() = url.startsWith("file:")
@@ -68,4 +96,6 @@ data class RingEntry(val mediaMs: Long, val offset: Long) {
 object StreamFormat {
     const val TS = "ts"
     const val HLS = "m3u8"
+    /** MPEG-DASH (.mpd): lido pelo mesmo leitor do HLS (ver DashManifest). */
+    const val DASH = "mpd"
 }

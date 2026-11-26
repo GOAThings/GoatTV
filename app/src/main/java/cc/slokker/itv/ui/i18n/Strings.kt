@@ -610,6 +610,17 @@ class Strings(context: Context) {
         ),
     )
 
+    /** Um canal cifrado (DRM) que não se toca; [why] é a mensagem do motor (diz se é Widevine, PlayReady…). */
+    fun errDrm(why: String) = ErrorInfo(
+        s(R.string.err_drm),
+        when {
+            "Widevine" in why -> s(R.string.err_drm_widevine)
+            "PlayReady" in why -> s(R.string.err_drm_playready)
+            else -> s(R.string.err_drm_no_key)
+        },
+        listOf(s(R.string.err_drm_ask), s(R.string.err_stream_format_5)),
+    )
+
     fun errVideoDecoder(codec: String?, software: Boolean) = ErrorInfo(
         s(R.string.err_video_decoder),
         if (software) {

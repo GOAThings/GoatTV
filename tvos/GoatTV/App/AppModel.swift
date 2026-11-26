@@ -344,6 +344,7 @@ final class AppModel {
         let retrying = player.state == .failed && player.retries > 0 && player.retries <= PlayerEngine.maxStartRetries && prefs.reconnectSeconds > 0
         let retries = player.retries
         let http = player.lastHTTPStatus
+        let drm = player.drmFailure
         let inCatchup = catchup != nil
         Task { [weak self] in
             let connections = playlist.type == .xtream ? await loader.connections(playlist) : nil
@@ -351,7 +352,10 @@ final class AppModel {
             let busy = playlist.type == .xtream && connections.map { $0.active >= $0.max } == true
             let limit = connections?.max ?? content.account?.maxConnections
             var info: ErrorInfo
-            if inCatchup, !busy {
+            if let drm, !busy {
+                // Cifrado sem a chave (ou Widevine): como no Android.
+                info = self.strings.errDrm(drm)
+            } else if inCatchup, !busy {
                 info = self.strings.errCatchup
             } else if busy {
                 info = self.strings.errAccountBusy(limit: limit, sure: true)

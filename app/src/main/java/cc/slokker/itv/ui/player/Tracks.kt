@@ -173,6 +173,7 @@ internal fun qualityBadges(stream: StreamState, container: String?): List<String
         when (container) {
             StreamFormat.TS -> "TS"
             StreamFormat.HLS -> "HLS"
+            StreamFormat.DASH -> "DASH"
             else -> null
         },
     )

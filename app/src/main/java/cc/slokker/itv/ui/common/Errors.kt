@@ -60,6 +60,8 @@ fun explainPlaybackError(
         isXtream && isNetwork -> s.errAccountBusy(limit, sure = false)
         isNetwork -> s.errChannelUnreachable
         error.errorCode in 3000..3999 -> s.errStreamFormat(format)
+        // Cifrado (DRM): o sistema vem na mensagem do motor (StreamKeys.why).
+        error.errorCode in 6000..6999 -> s.errDrm(error.message.orEmpty())
         error.errorCode in 5000..5999 || mime?.startsWith("audio/") == true ->
             s.errAudio(codecName(mime), prefs.audioPassthrough, prefs.audioDecoder == Prefs.Decoder.SOFTWARE)
         error.errorCode in 4000..4999 -> s.errVideoDecoder(codecName(mime), prefs.decoder == Prefs.Decoder.SOFTWARE)
