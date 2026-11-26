@@ -13,12 +13,12 @@ import kotlin.time.Instant
  *   ou a `SegmentList`, de todos os períodos, com o segmento de inicialização em [HlsSegment.map];
  * - o `SegmentBase` (um ficheiro só, VOD): a playlist diz onde está o índice ([HlsPlaylist.dashIndex]); o leitor lê
  *   esses bytes (o `sidx`) e [withIndex] dá os segmentos;
- * - as legendas WebVTT (`text/vtt`, um ficheiro ou aos segmentos) são legendas à parte (`#goatdash=t0`…).
+ * - as legendas (WebVTT, TTML) são legendas à parte (`#goatdash=t0`…), lidas pelo WebVttDemuxer.
  * Os números dos segmentos são o tempo de início em ms (igual em todas as qualidades, de recarga em recarga e de um
  * período para o outro), e [HlsSegment.next] é onde acaba. Num direto (`type="dynamic"`) sem linha do tempo, os
  * segmentos que já existem contam-se pelo relógio ([nowMs]) e pelo `availabilityStartTime`.
  * O relógio dos diretos pode vir do servidor ([timing], o `UTCTiming`): o leitor acerta o [nowMs] com ele.
- * As legendas TTML (`stpp`) e o WebVTT dentro de MP4 (`wvtt`) ainda não.
+ * As legendas em texto: WebVTT e TTML, num ficheiro, aos segmentos ou dentro de MP4 (`wvtt`, `stpp`).
  */
 object DashManifest {
     /** A marca que diz a faixa no endereço do MPD (não vai ao servidor: ver [fetchUrl]). */
@@ -97,10 +97,14 @@ object DashManifest {
         }
         val video = all.filter { kind(it) == "video" }
         val audio = all.filter { kind(it) == "audio" }
-        // As legendas: só o WebVTT em texto (o TTML e o WebVTT dentro de MP4 ainda não).
+        // As legendas em texto: WebVTT e TTML, em ficheiro ou dentro de MP4 (wvtt, stpp); as de imagem (im1i…) não.
         val text = all.filter { set ->
-            val mime = set["mimeType"] ?: set.child("Representation")?.get("mimeType")
-            mime == "text/vtt"
+            val rep = set.child("Representation")
+            val mime = set["mimeType"] ?: rep?.get("mimeType")
+            val codecs = (set["codecs"] ?: rep?.get("codecs")).orEmpty()
+            val image = "im1i" in codecs || "im2i" in codecs
+            !image && (mime == "text/vtt" || mime == "application/ttml+xml" ||
+                ((mime == "application/mp4" || kind(set) == "text") && (codecs.startsWith("stpp") || codecs.startsWith("wvtt"))))
         }
         return Sets(video, audio, text)
     }
@@ -251,7 +255,8 @@ object DashManifest {
 
     /**
      * Os segmentos de um `SegmentBase` ([playlist] com [HlsPlaylist.dashIndex]), pelo `sidx` em [sidx] (os bytes do
-     * `indexRange`). Um índice que aponta para outros índices ainda não.
+     * `indexRange`). Um índice que aponta para outros índices (`reference_type` 1) devolve outra vez uma playlist com
+     * [HlsPlaylist.dashIndex]: o seguinte a ler (o leitor repete até não haver; os segmentos já lidos vão nela).
      */
     fun withIndex(playlist: HlsPlaylist, sidx: ByteArray): HlsPlaylist {
         val idx = playlist.dashIndex ?: return playlist
@@ -285,21 +290,38 @@ object DashManifest {
         var offset = idx.range.offset + end + firstOffset
         var time = earliest
         val segments = ArrayList<HlsSegment>(count)
+        val children = ArrayList<HlsRange>()
         fun ms(t: Long) = idx.periodStartMs + floorDiv(t * 1000, timescale) - idx.ptoMs
         for (i in 0 until count) {
             if (p + 12 > d.size) break
             val ref = u32(d, p)
-            if (ref ushr 31 == 1L) return failed("DASH hierarchical sidx")
             val size = ref and 0x7FFFFFFF
             val duration = u32(d, p + 4)
-            segments += HlsSegment(HlsRange(idx.range.uri, offset, size), ms(time), duration.toDouble() / timescale, false, null, idx.map, ms(time + duration))
+            if (ref ushr 31 == 1L) {
+                // Outro sidx (o dos pedaços desta parte): lê-se o início dele, que é onde está o índice.
+                children += HlsRange(idx.range.uri, offset, minOf(size, MAX_SIDX_BYTES))
+            } else {
+                segments += HlsSegment(HlsRange(idx.range.uri, offset, size), ms(time), duration.toDouble() / timescale, false, null, idx.map, ms(time + duration))
+            }
             offset += size
             time += duration
             p += 12
         }
-        val target = segments.maxOfOrNull { it.duration } ?: 6.0
-        return HlsPlaylist(emptyList(), segments, target, true, if (segments.isEmpty()) "DASH empty sidx" else null)
+        val done = idx.done + segments
+        val queue = children + idx.queue
+        if (queue.isNotEmpty()) {
+            if (idx.depth >= MAX_SIDX_READS) return failed("DASH sidx too deep")
+            val next = DashIndex(queue.first(), idx.map, idx.periodStartMs, idx.ptoMs, done, queue.drop(1), idx.depth + 1)
+            return HlsPlaylist(emptyList(), emptyList(), 6.0, true, null, dashIndex = next)
+        }
+        val target = done.maxOfOrNull { it.duration } ?: 6.0
+        return HlsPlaylist(emptyList(), done, target, true, if (done.isEmpty()) "DASH empty sidx" else null)
     }
+
+    /** Um sidx filho lê-se até aqui (chega para uns 5000 pedaços). */
+    private const val MAX_SIDX_BYTES = 64L * 1024
+    /** Quantos sidx se leem, no máximo, num ficheiro. */
+    const val MAX_SIDX_READS = 256
 
     /**
      * De onde vem a hora certa dos diretos (`UTCTiming`): "direct" (a hora vem no valor) ou "http" (o valor é um
@@ -514,7 +536,16 @@ object DashManifest {
  * Onde está o índice (`sidx`) de um DASH com `SegmentBase`: os bytes a ler ([range]), o segmento de inicialização
  * ([map]), e o início do período e o presentationTimeOffset (ms) para os tempos (ver [DashManifest.withIndex]).
  */
-class DashIndex(val range: HlsRange, val map: HlsRange?, val periodStartMs: Long, val ptoMs: Long)
+class DashIndex(
+    val range: HlsRange,
+    val map: HlsRange?,
+    val periodStartMs: Long,
+    val ptoMs: Long,
+    /** Num índice com outros índices: os segmentos já lidos, os índices que faltam e quantos já se leram. */
+    val done: List<HlsSegment> = emptyList(),
+    val queue: List<HlsRange> = emptyList(),
+    val depth: Int = 0,
+)
 
 /** O `UTCTiming` de um MPD (ver [DashManifest.timing]): [kind] "direct" ou "http", e o valor. */
 class DashTiming(val kind: String, val value: String)

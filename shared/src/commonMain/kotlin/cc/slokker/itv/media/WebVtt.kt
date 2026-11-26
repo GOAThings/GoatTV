@@ -82,9 +82,18 @@ object WebVtt {
 class WebVttDemuxer(private val listener: TsListener, private val language: String?) {
     private var announced = false
     private val seen = ArrayDeque<String>()
+    /** As legendas em MP4 (`wvtt`/`stpp`, do DASH ou do HLS com EXT-X-MAP): o que o init segment disse. */
+    private val mp4 = Mp4Text()
 
+    /** Um segmento: WebVTT em texto, TTML em texto, ou um MP4 com WebVTT ou TTML (as falas no tempo da faixa). */
     fun feed(segment: ByteArray) {
-        val file = WebVtt.parse(segment.decodeToString())
+        val file = when {
+            Mp4Text.looksLike(segment) -> WebVtt.File(mp4.cues(segment), null, 0)
+            else -> {
+                val text = segment.decodeToString()
+                if (Ttml.looksLike(text)) WebVtt.File(Ttml.parse(text), null, 0) else WebVtt.parse(text)
+            }
+        }
         val track = TsTrack(1, 0x06, Codec.WEBVTT, TrackKind.SUBTITLE, language)
         if (!announced) {
             announced = true

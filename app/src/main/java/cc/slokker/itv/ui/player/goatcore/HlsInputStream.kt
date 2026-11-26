@@ -128,7 +128,11 @@ class HlsInputStream(
         val text = fetch(u)
         val offset = clockOffsetMs ?: (if (DashManifest.isManifest(text)) clockOffset(text, u) else 0L).also { clockOffsetMs = it }
         var p = HlsPlaylist.parseAny(text, u, System.currentTimeMillis() + offset)
-        p.dashIndex?.let { idx -> p = DashManifest.withIndex(p, open(idx.range).use { it.readBytes() }) }
+        // Um índice com outros índices dentro: lê-se o seguinte até não haver (DashManifest.withIndex).
+        while (true) {
+            val idx = p.dashIndex ?: break
+            p = DashManifest.withIndex(p, open(idx.range).use { it.readBytes() })
+        }
         return p
     }
 

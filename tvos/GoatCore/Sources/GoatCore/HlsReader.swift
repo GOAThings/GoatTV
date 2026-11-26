@@ -435,7 +435,7 @@ public final class HlsReader: @unchecked Sendable {
             clockOffsetMs = offset
         }
         var playlist = HlsPlaylist.companion.parseAny(text: body, base: uri, nowMs: Int64(Date().timeIntervalSince1970 * 1000) + offset)
-        if let idx = playlist.dashIndex {
+        while let idx = playlist.dashIndex {
             let bytes = try fetch(idx.range.uri, offset: idx.range.offset, length: idx.range.length)
             playlist = GoatShared.AppleDash.shared.withIndex(playlist: playlist, data: bytes)
         }
