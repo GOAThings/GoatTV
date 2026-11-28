@@ -1464,19 +1464,17 @@ fun PlayerScreen(vm: AppViewModel) {
             }
 
             // Estilo Sombra: sem painel, uma sombra à esquerda do ecrã por baixo das listas (só aparece e desaparece).
-            AnimatedVisibility(
+            BuiltFirstVisibility(
                 visible = panel != Panel.None && Prefs.PanelStyles.isShadow(LocalPanelStyle.current),
                 modifier = Modifier.fillMaxSize(),
-                enter = fadeIn(),
-                exit = fadeOut(),
+                slide = 0f,
             ) {
                 Box(Modifier.fillMaxSize().background(PanelShadow))
             }
-            AnimatedVisibility(
+            BuiltFirstVisibility(
                 visible = panel != Panel.None,
                 modifier = Modifier.align(Alignment.CenterStart),
-                enter = fadeIn() + slideInHorizontally { -it / 4 },
-                exit = fadeOut() + slideOutHorizontally { -it / 4 },
+                slide = -0.25f,
             ) {
                 SidePanel(
                     mode = if (panel == Panel.None) lastPanel else panel,

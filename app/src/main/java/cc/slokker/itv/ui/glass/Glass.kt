@@ -1,19 +1,17 @@
 package cc.slokker.itv.ui.glass
 
+import kotlinx.coroutines.delay
+import android.os.SystemClock
+import androidx.compose.runtime.produceState
 import cc.slokker.itv.ui.theme.ItvShapes
 import cc.slokker.itv.ui.theme.LocalOutlineBrush
 import cc.slokker.itv.ui.theme.LocalPanelStyle
 import cc.slokker.itv.data.Prefs
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -50,6 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -211,17 +211,27 @@ fun Modifier.glass(
         .graphicsLayer()
 }
 
+/** O vaivém das manchas da aurora (ida ou volta) e o passo entre posições. */
+private const val AURORA_MS = 18_000L
+private const val AURORA_STEP_MS = 100L
+
 /** Fundo dos ecrãs sem vídeo: manchas de cor desfocadas a mexer devagar. O conteúdo fica dentro das margens de TV. */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val t by rememberInfiniteTransition(label = "aurora").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(18_000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "t",
-    )
+    // As manchas andam ~10 px por segundo: com um relógio de animação o ecrã inteiro redesenhava-se 60 vezes por
+    // segundo para isso, enquanto se mexia nas Definições. Um passo a cada 100 ms (~1 px, em manchas desfocadas) vê-se
+    // igual e deixa os frames livres para o que mexe de verdade (o destaque, as páginas).
+    val t by produceState(0f) {
+        val start = SystemClock.uptimeMillis()
+        while (true) {
+            val phase = ((SystemClock.uptimeMillis() - start) % (2 * AURORA_MS)) / AURORA_MS.toFloat()
+            value = if (phase <= 1f) phase else 2f - phase
+            delay(AURORA_STEP_MS)
+        }
+    }
     Box(modifier.fillMaxSize().background(ItvColors.Background)) {
-        Canvas(Modifier.fillMaxSize()) {
+        // Numa camada sua: cada passo só redesenha as manchas, não o que está por cima.
+        Canvas(Modifier.fillMaxSize().graphicsLayer()) {
             fun blob(color: Color, x: Float, y: Float, r: Float) = drawCircle(
                 brush = Brush.radialGradient(listOf(color, Color.Transparent), center = Offset(x * size.width, y * size.height), radius = r * size.width),
                 radius = r * size.width,
@@ -235,13 +245,26 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScop
     }
 }
 
+/**
+ * Com foco, cresce para [target] (1 = tamanho normal), mas só no desenho. Com a escala do Surface da tv-material (a da
+ * camada), o deslize que traz o elemento à vista numa lista media-o já crescido, e a meio do crescer pedia um bocado
+ * diferente em cada tecla: as listas saltavam uns píxeis (visto no GoatLauncher). Numa camada sua: crescer só
+ * redesenha o elemento.
+ */
+@Composable
+fun Modifier.drawnScale(target: Float, durationMs: Int = 150): Modifier {
+    val s by animateFloatAsState(target, tween(durationMs), label = "drawnScale")
+    return graphicsLayer().drawWithContent { scale(s, s) { this@drawWithContent.drawContent() } }
+}
+
 /** Botão em cápsula de vidro; com foco fica claro, como no tvOS. */
 @Composable
 fun GlassButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = ItvShapes.Control
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.drawnScale(if (focused) 1.06f else 1f).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.White.copy(alpha = 0.14f),
@@ -251,7 +274,7 @@ fun GlassButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Text(text, Modifier.padding(horizontal = 28.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall)
     }
@@ -350,7 +373,7 @@ fun GlassRow(
         onClick = onClick,
         onLongClick = onLongClick,
         enabled = enabled,
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.hasFocus },
+        modifier = modifier.drawnScale(if (focused && growOnFocus && !slidingFocus) 1.02f else 1f).fillMaxWidth().onFocusChanged { focused = it.hasFocus },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = rest,
@@ -362,7 +385,7 @@ fun GlassRow(
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = if (slidingFocus || !growOnFocus) 1f else 1.02f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         CompositionLocalProvider(LocalRowFocused provides focused) {
         Row(
@@ -423,10 +446,11 @@ fun GlassRow(
 @Composable
 fun GlassIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     // Redondo, translúcido; com foco fica branco com o ícone escuro (como o menu em cápsula).
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(40.dp),
+        modifier = modifier.drawnScale(if (focused) 1.1f else 1f).size(40.dp).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.White.copy(alpha = 0.14f),
@@ -438,7 +462,7 @@ fun GlassIconButton(icon: ImageVector, contentDescription: String, onClick: () -
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp))
@@ -458,9 +482,10 @@ fun Modifier.capsuleBar(): Modifier = background(Color.White.copy(alpha = 0.14f)
  */
 @Composable
 fun GlassChipButton(icon: ImageVector, text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.drawnScale(if (focused) 1.05f else 1f).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(CircleShape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
@@ -470,7 +495,7 @@ fun GlassChipButton(icon: ImageVector, text: String, onClick: () -> Unit, modifi
             pressedContainerColor = Color.White.copy(alpha = 0.8f),
             pressedContentColor = Color.Black,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
         Row(Modifier.padding(start = 14.dp, end = 18.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
